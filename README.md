@@ -4,7 +4,7 @@ A dispatcher-first operations dashboard inspired by the feature breadth of Hera,
 
 ## Live hosting
 
-This repository includes an automatic GitHub Pages deployment. Every push to `main` publishes the current dashboard through the workflow in `.github/workflows/deploy-pages.yml`.
+GitHub Pages publishes this static dashboard directly from the root of `main`. Every push to `main` updates the public site automatically.
 
 ## Local preview
 
