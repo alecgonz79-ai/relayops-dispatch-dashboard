@@ -240,10 +240,6 @@ tbody tr:last-child td { border-bottom:0; }
 .ops-sheet .wave-time-row td { height:25px; padding:3px 7px; background:#fff; font-size:10px; text-align:left; font-weight:900; }
 .ops-sheet .wave-time-row td:first-child { text-align:center; border-right:1px solid #6b716d; }
 .ops-sheet .dsp-label { vertical-align:bottom; }
-.legacy-logo { margin:0 auto 5px; width:48px; display:grid; justify-items:center; gap:0; transform:rotate(180deg); writing-mode:horizontal-tb; }
-.legacy-cube { width:24px; height:24px; display:grid; place-items:center; color:#4d9ac7; border:1px solid #ccd8de; font-size:18px; line-height:1; }
-.legacy-logo b { font-size:8px; line-height:1; font-style:italic; }
-.legacy-logo small { font-size:5px; line-height:1; font-weight:900; }
 .sheet-check { appearance:none; width:15px; height:15px; margin:0; border:2px solid #8d938f; border-radius:3px; background:#fff; vertical-align:middle; position:relative; }
 .sheet-check:checked { background:#818682; border-color:#818682; }
 .sheet-check:checked:after { content:"✓"; position:absolute; left:1px; top:-4px; color:#fff; font-size:14px; font-weight:900; }
