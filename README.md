@@ -1,6 +1,6 @@
-# RelayOps prototype
+# LLOLDispatchOpeningOperations
 
-A dispatcher-first operations dashboard inspired by the feature breadth of Hera, with original branding and interaction design.
+A dispatcher-first opening operations dashboard for LLOL dispatchers, with original branding and interaction design.
 
 ## Live hosting
 
@@ -13,8 +13,9 @@ Serve this folder with any static web server, then open `index.html` through tha
 ## Included
 
 - Opening roster, live routes, rescue log, drivers, fleet/devices, performance, coaching, checklists, inbox, inventory, reports, and owner controls
-- Spreadsheet-style morning operations board grouped by earliest wave with staging-location and pad filters
-- DSP-only route filtering plus a demo Slack day-of-operations file picker
+- Screenshot-matched morning operations board with WAVE 1–5, ADHOC's, HELPERS, and DSP sections
+- Yellow/purple input zones, edit mode, planned RTS import, and light-red RTS flags for review
+- DSP-only route filtering plus visual Slack Import and Cortex Import choices
 - Working CSV and `.xlsx` roster import with flexible Amazon-style column mapping
 - Working CSV and Excel-compatible `.xls` export
 - Tab-separated copy for Google Sheets
