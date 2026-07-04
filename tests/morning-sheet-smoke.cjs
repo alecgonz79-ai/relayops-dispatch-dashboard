@@ -51,6 +51,13 @@ const checks = `
   if (state.morningRoutes.length !== 2) throw new Error('DSP filter failed');
   if (state.lastImportExcluded !== 1) throw new Error('Excluded count failed');
   if (state.morningRoutes[0].wave !== '11:15 AM') throw new Error('Imported wave ordering failed');
+  state.modal = 'import';
+  const uploadHtml = modal();
+  if (!uploadHtml.includes('Make my morning sheet')) throw new Error('Simple upload heading missing');
+  if (!uploadHtml.includes('Create my wave & pad sheet')) throw new Error('Simple upload action missing');
+  if (!uploadHtml.includes('Assign pads A → B → C')) throw new Error('Pad matching explanation missing');
+  const morningHtml = morningSheetPage();
+  if (!morningHtml.includes('Three easy steps') || !morningHtml.includes('Wave time + staging + pad')) throw new Error('Quick start guide missing');
   globalThis.__parseXlsx = parseXlsxArrayBuffer;
 `;
 

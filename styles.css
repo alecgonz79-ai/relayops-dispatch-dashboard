@@ -191,6 +191,15 @@ tbody tr:last-child td { border-bottom:0; }
 .morning-command h2 { margin:4px 0 3px; font:800 15px "Manrope"; letter-spacing:-.3px; }
 .morning-command p { margin:0; color:var(--muted); font-size:9px; }
 .morning-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.easy-upload-button { min-height:42px; padding:0 17px; font-size:10px; }
+.quick-start { display:grid; grid-template-columns:1fr 26px 1fr 26px 1fr; align-items:center; gap:8px; margin:0 0 12px; padding:12px; border:1px solid var(--line); border-radius:14px; background:#fff; }
+.quick-step { display:flex; align-items:center; gap:10px; min-width:0; }
+.quick-step b { flex:0 0 30px; width:30px; height:30px; display:grid; place-items:center; border-radius:10px; color:#172019; background:#e9f1e8; font-size:12px; }
+.quick-step.done b { background:var(--lime); }
+.quick-step span, .quick-step strong, .quick-step small { display:block; min-width:0; }
+.quick-step strong { font-size:10px; }
+.quick-step small { margin-top:2px; color:var(--muted); font-size:8px; }
+.quick-arrow { color:#9aa59d; font-size:16px; text-align:center; }
 .demo-tag { display:inline-flex; align-items:center; border-radius:5px; padding:2px 5px; color:#6348a5; background:#eee9ff; font-size:7px; font-weight:800; letter-spacing:.06em; }
 .sheet-toolbar { display:flex; align-items:flex-end; flex-wrap:wrap; gap:8px; padding:11px 12px; background:#1a211c; border-radius:14px 14px 0 0; }
 .sheet-filter { min-width:125px; }
@@ -232,6 +241,13 @@ tbody tr:last-child td { border-bottom:0; }
 .source-tab svg { width:14px; }
 .source-tab.active { color:#152019; border-color:#b1db48; background:#f6ffdf; box-shadow:inset 0 0 0 1px #c8ed6a; }
 .import-modal { width:min(620px,100%); }
+.upload-progress { display:grid; grid-template-columns:auto 1fr auto 1fr auto; align-items:start; gap:8px; margin:0 4px 18px; }
+.upload-progress > i { height:2px; margin-top:15px; background:#dfe5de; }
+.upload-progress-step { display:grid; justify-items:center; gap:5px; color:#8a958e; font-style:normal; }
+.upload-progress-step b { width:30px; height:30px; display:grid; place-items:center; border-radius:50%; background:#edf0ec; font-size:11px; }
+.upload-progress-step span { font-size:8px; font-weight:800; white-space:nowrap; }
+.upload-progress-step.active { color:#243026; }
+.upload-progress-step.active b { background:var(--lime); }
 .slack-panel { border:1px solid var(--line); border-radius:14px; overflow:hidden; }
 .slack-brand { padding:12px; display:flex; align-items:center; gap:10px; background:#f7f5fb; border-bottom:1px solid var(--line); }
 .slack-logo { width:34px; height:34px; border-radius:10px; display:grid; place-items:center; color:#fff; background:#4a154b; font-weight:900; }
@@ -250,6 +266,10 @@ tbody tr:last-child td { border-bottom:0; }
 .import-preview strong, .import-preview span { display:block; }
 .import-preview strong { font-size:10px; }
 .import-preview span { color:#587061; font-size:8px; margin-top:3px; }
+.auto-match { margin-top:11px; padding:12px; border-radius:12px; background:#f6f7f5; }
+.auto-match > strong { display:block; margin-bottom:8px; font-size:10px; }
+.auto-match > div { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
+.auto-match span { padding:8px; border-radius:8px; color:#31513a; background:#e6f4e9; font-size:8px; font-weight:800; text-align:center; }
 
 .fleet-grid, .team-grid, .report-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
 .entity-card { padding:16px; }
@@ -306,18 +326,24 @@ tbody tr:last-child td { border-bottom:0; }
 .modal-head h2 { margin:0; font:800 16px "Manrope"; }
 .modal-head p { margin:5px 0 0; color:var(--muted); font-size:9px; }
 .modal-body { padding:18px 20px 20px; }
-.drop-zone { border:1.5px dashed #cbd3ca; border-radius:15px; background:#fafcf8; min-height:160px; display:grid; place-items:center; text-align:center; padding:20px; transition:.2s; }
+.drop-zone { border:2px dashed #b9c5bb; border-radius:15px; background:#fafcf8; min-height:190px; display:grid; place-items:center; text-align:center; padding:22px; transition:.2s; }
 .drop-zone.drag { border-color:#8fb438; background:#f7ffe5; }
+.drop-zone.has-file { border-style:solid; border-color:#a9d6b6; background:#f2faf4; }
 .drop-zone .drop-icon { width:44px; height:44px; margin:0 auto 10px; border-radius:13px; display:grid; place-items:center; background:var(--lime); }
 .drop-zone .drop-icon svg { width:18px; }
-.drop-zone strong { display:block; font-size:11px; }
-.drop-zone span { display:block; color:var(--muted); font-size:8px; margin:5px 0 13px; }
+.drop-zone strong { display:block; font-size:14px; }
+.drop-zone span { display:block; max-width:440px; color:var(--muted); font-size:10px; line-height:1.5; margin:7px auto 15px; }
+.upload-choice { min-height:44px; padding:0 20px; font-size:11px; }
 .import-note { margin-top:12px; border-radius:11px; background:#f1f4f0; padding:11px; font-size:8px; color:#637067; line-height:1.5; }
 .mapping { margin-top:14px; }
 .mapping-row { display:grid; grid-template-columns:1fr 24px 1fr; gap:8px; align-items:center; margin-bottom:8px; }
 .mapping-col { padding:9px 10px; border:1px solid var(--line); border-radius:9px; font-size:9px; }
 .mapping-arrow { color:var(--muted); text-align:center; }
 .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+.easy-actions { align-items:center; }
+.create-sheet-button { min-height:44px; min-width:230px; font-size:11px; }
+.sample-button { margin-right:auto; }
+.upload-help { margin:10px 0 0; color:#77827a; font-size:8px; line-height:1.5; text-align:center; }
 
 .toast-stack { position:fixed; z-index:100; right:20px; bottom:20px; display:grid; gap:8px; }
 .toast { min-width:260px; max-width:360px; padding:12px 14px; border-radius:13px; color:#fff; background:#18221b; box-shadow:0 12px 35px rgba(0,0,0,.22); display:flex; align-items:center; gap:10px; font-size:10px; animation:toastIn .25s ease; }
@@ -362,6 +388,11 @@ tbody tr:last-child td { border-bottom:0; }
   .phase-strip { grid-template-columns:1fr 1fr; }
   .fleet-grid, .team-grid, .report-grid, .field-grid { grid-template-columns:1fr; }
   .morning-command { align-items:flex-start; flex-direction:column; }
+  .quick-start { grid-template-columns:1fr; align-items:stretch; }
+  .quick-arrow { transform:rotate(90deg); }
+  .auto-match > div { grid-template-columns:1fr; }
+  .easy-actions { align-items:stretch; flex-direction:column-reverse; }
+  .easy-actions .btn { width:100%; margin:0; }
   .filter-note { width:100%; margin-left:0; padding:2px 0; }
   .sheet-scroll { max-height:calc(100vh - 350px); }
 }
