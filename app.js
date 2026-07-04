@@ -267,12 +267,18 @@ function blankMorningRow(section,index) {
   return {dsp:state.dspCode,driver:'',route:`__blank_${section.label}_${index}`,service:'',wave:section.wave,staging:'',pad:section.rows[0]?.pad||'',padOverride:section.rows[0]?.padOverride||'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true};
 }
 
+function createManualMorningRoute(seed={}) {
+  const route={dsp:state.dspCode,driver:'',route:seed.route||`MANUAL-${Date.now().toString().slice(-6)}`,service:'Manual opening edit',wave:seed.wave||'Manual',staging:'',duration:0,zones:0,packages:0,commercial:0,stops:0,eta:'',bags:0,overflow:0,parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
+  state.morningRoutes.push(route);
+  return route;
+}
+
 function morningWaveGroup(section) {
   const rows=[...section.rows];
   while(rows.length<section.minRows) rows.push(blankMorningRow(section,rows.length));
   const edit=state.editMode;
   const blankEditable=(r,field,value,cls='')=>`<td class="sheet-edit-cell ${cls} ${r.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" ${edit?`contenteditable="true" data-edit-route="${esc(r.route)}" data-edit-field="${field}" data-edit-wave="${esc(r.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''}>${esc(value??'')}</td>`;
-  const check=(r,field,value)=>`<input class="sheet-check" type="checkbox" data-check-route="${esc(r.route)}" data-check-field="${field}" ${value?'checked':''} ${r._blank?'disabled':''}>`;
+  const check=(r,field,value)=>`<input class="sheet-check" type="checkbox" data-check-route="${esc(r.route)}" data-check-wave="${esc(r.wave||section.wave||'')}" data-check-field="${field}" ${value?'checked':''}>`;
   const label=section.dsp?`<div class="legacy-logo"><span class="legacy-cube">▣</span><b>LEGACY</b><small>LOGISTICS</small></div><span>DSP</span>`:`<span>${esc(section.label)}</span>`;
   const timeRow=section.wave?`<tr class="wave-time-row"><td>${esc(String(section.wave).replace(/\s*[AP]M/i,''))} (${section.rows.length})</td><td colspan="19"></td></tr>`:'';
   return `<tr class="wave-separator"><td colspan="20"></td></tr>${rows.map((r,i)=>`<tr class="ops-row ${r._blank?'blank-row':''}">${i===0?`<td class="wave-label ${section.dsp?'dsp-label':''}" rowspan="${rows.length}">${label}</td>`:''}${blankEditable(r,'driver',r.driver,'driver-name')}${blankEditable(r,'route',r._blank?'':r.route,'route-id')}${blankEditable(r,'staging',r.staging,'staging-code')}${i===0?`<td class="pad-label sheet-edit-cell ${edit?'editable-cell':''}" rowspan="${rows.length}" ${edit?`contenteditable="true" data-edit-wave="${esc(section.wave)}" data-edit-field="padOverride"`:''}>${esc(section.rows[0]?.padOverride||section.rows[0]?.pad||'')}</td>`:''}${blankEditable(r,'ev',r.ev||'')}${blankEditable(r,'deviceName',r.deviceName||'')}${blankEditable(r,'portable',r.portable||'')}<td>${check(r,'preDvic',r.preDvic)}</td><td>${check(r,'preWhip',r.preWhip)}</td><td>${check(r,'postDvic',r.postDvic)}</td><td>${check(r,'postWhip',r.postWhip)}</td><td>${check(r,'rescued',r.rescued)}</td>${blankEditable(r,'stops',r.stops,'count-cell')}${blankEditable(r,'packages',r.packages,'count-cell')}${blankEditable(r,'packageReturns',r.packageReturns||'')}${blankEditable(r,'endTime',r.endTime||'')}${blankEditable(r,'rtsTime',r.rtsTime||'')}${blankEditable(r,'plannedRts',r.plannedRts||'','planned-rts-cell')}${blankEditable(r,'clockOutTime',r.clockOutTime||'')}</tr>`).join('')}${timeRow}`;
@@ -380,10 +386,7 @@ function bind() {
     if(el.dataset.editWave&&field==='padOverride') state.morningRoutes.filter(r=>r.wave===el.dataset.editWave).forEach(r=>r[field]=value.toUpperCase());
     else {
       let route=state.morningRoutes.find(r=>r.route===el.dataset.editRoute);
-      if(!route&&value) {
-        route={dsp:state.dspCode,driver:'',route:field==='route'?value:`MANUAL-${Date.now().toString().slice(-6)}`,service:'Manual opening edit',wave:el.dataset.editWave||'Manual',staging:'',duration:0,zones:0,packages:0,commercial:0,stops:0,eta:'',bags:0,overflow:0,parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
-        state.morningRoutes.push(route);
-      }
+      if(!route&&value) route=createManualMorningRoute({route:field==='route'?value:'',wave:el.dataset.editWave||'Manual'});
       if(route) {
         route[field]=['stops','packages'].includes(field)?Number(value)||0:value;
         if(field==='plannedRts') route.plannedRtsIssue=isIrregularPlannedRts(value,route.wave);
@@ -391,7 +394,7 @@ function bind() {
     }
     persist();render();
   }));
-  document.querySelectorAll('[data-check-field]').forEach(el=>el.addEventListener('change',()=>{const route=state.morningRoutes.find(r=>r.route===el.dataset.checkRoute);if(route){route[el.dataset.checkField]=el.checked;persist();}}));
+  document.querySelectorAll('[data-check-field]').forEach(el=>el.addEventListener('change',()=>{let route=state.morningRoutes.find(r=>r.route===el.dataset.checkRoute);if(!route&&el.checked)route=createManualMorningRoute({wave:el.dataset.checkWave||'Manual'});if(route){route[el.dataset.checkField]=el.checked;persist();}}));
   const search = document.getElementById('global-search');
   if (search) search.addEventListener('input',e=>{state.search=e.target.value;if(['roster','live'].includes(state.page)){const pos=e.target.selectionStart;render();const s=document.getElementById('global-search');s.focus();s.setSelectionRange(pos,pos);}});
   const dz=document.getElementById('drop-zone');
