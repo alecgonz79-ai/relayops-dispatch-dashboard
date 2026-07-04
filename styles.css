@@ -221,9 +221,9 @@ tbody tr:last-child td { border-bottom:0; }
 .ops-sheet th:nth-child(5) { width:54px; }
 .ops-sheet th:nth-child(6), .ops-sheet th:nth-child(7) { width:50px; }
 .ops-sheet th:nth-child(8) { width:66px; }
-.ops-sheet th:nth-child(n+9):nth-child(-n+12) { width:56px; }
-.ops-sheet th:nth-child(13), .ops-sheet th:nth-child(14), .ops-sheet th:nth-child(15) { width:76px; }
-.ops-sheet th:nth-child(16) { width:88px; }
+.ops-sheet th:nth-child(n+9):nth-child(-n+13) { width:62px; }
+.ops-sheet th:nth-child(14), .ops-sheet th:nth-child(15), .ops-sheet th:nth-child(16) { width:76px; }
+.ops-sheet th:nth-child(17) { width:88px; }
 .ops-sheet td { height:31px; padding:4px 6px; border:1px solid #6b716d; background:#fff; font-size:9px; font-weight:700; text-align:center; }
 .ops-sheet .driver-name { text-align:center; font-weight:800; }
 .ops-sheet .route-id, .ops-sheet .staging-code { font-weight:800; }
@@ -236,6 +236,9 @@ tbody tr:last-child td { border-bottom:0; }
 .sheet-check { appearance:none; width:15px; height:15px; margin:0; border:2px solid #8d938f; border-radius:3px; background:#fff; vertical-align:middle; position:relative; }
 .sheet-check:checked { background:#818682; border-color:#818682; }
 .sheet-check:checked:after { content:"✓"; position:absolute; left:1px; top:-4px; color:#fff; font-size:14px; font-weight:900; }
+.edit-help { margin:0; padding:10px 13px; color:#294532; background:#eaf7ed; border:1px solid #badfc3; font-size:9px; font-weight:700; }
+.editable-cell { background:#fffbe3 !important; outline:2px solid transparent; outline-offset:-2px; cursor:text; }
+.editable-cell:focus { outline-color:#d2a800; background:#fff7bf !important; }
 .source-tabs { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:14px; }
 .source-tab { min-height:40px; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink-2); display:flex; align-items:center; justify-content:center; gap:7px; font-size:10px; font-weight:800; }
 .source-tab svg { width:14px; }
@@ -322,6 +325,9 @@ tbody tr:last-child td { border-bottom:0; }
 
 .modal-backdrop { position:fixed; inset:0; background:rgba(9,15,11,.54); backdrop-filter:blur(4px); z-index:50; display:grid; place-items:center; padding:20px; animation:fade .16s ease; }
 .modal { width:min(560px,100%); max-height:90vh; overflow:auto; background:#fff; border-radius:20px; box-shadow:0 22px 80px rgba(0,0,0,.25); animation:lift .2s ease; }
+.screenshot-modal { width:min(960px,100%); }
+.jpeg-preview { max-height:62vh; overflow:auto; border:1px solid var(--line); border-radius:12px; background:#eef1ed; padding:12px; }
+.jpeg-preview img { display:block; width:100%; height:auto; background:#fff; }
 .modal-head { display:flex; justify-content:space-between; align-items:flex-start; gap:15px; padding:20px 20px 14px; border-bottom:1px solid var(--line); }
 .modal-head h2 { margin:0; font:800 16px "Manrope"; }
 .modal-head p { margin:5px 0 0; color:var(--muted); font-size:9px; }

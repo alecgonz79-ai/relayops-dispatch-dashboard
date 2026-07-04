@@ -118,7 +118,9 @@ let state = {
   rosterPublished: localStorage.getItem('relayops_published') === 'true',
   search: '',
   modal: null,
-  importedFile: null
+  importedFile: null,
+  editMode: false,
+  screenshotPreview: null
 };
 
 const app = document.getElementById('app');
@@ -224,7 +226,7 @@ function stagingArea(value='') { const m=String(value).toUpperCase().match(/^STG
 function morningWaveList() { return [...new Set(state.morningRoutes.filter(r=>r.dsp===state.dspCode).map(r=>r.wave))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)); }
 function padForWave(wave) { const pads=['A','B','C','A','B','C']; const i=morningWaveList().indexOf(wave); return pads[Math.max(0,i)%pads.length]; }
 function filteredMorningRows() {
-  return state.morningRoutes.filter(r=>r.dsp===state.dspCode).map(r=>({...r,pad:padForWave(r.wave)})).filter(r=>
+  return state.morningRoutes.filter(r=>r.dsp===state.dspCode).map(r=>({...r,pad:r.padOverride||padForWave(r.wave)})).filter(r=>
     (state.morningFilters.wave==='all'||r.wave===state.morningFilters.wave)&&
     (state.morningFilters.staging==='all'||r.staging===state.morningFilters.staging)&&
     (state.morningFilters.pad==='all'||r.pad===state.morningFilters.pad)
@@ -236,16 +238,19 @@ function morningSheetPage() {
   const excluded=state.lastImportExcluded;
   const groups=[...new Set(rows.map(r=>r.wave))].map(w=>[w,rows.filter(r=>r.wave===w)]);
   return `${contextBar(`<span class="status blue">Earliest waves first</span>`)}
-  <div class="morning-command card"><div><span class="eyebrow">DAY OF OPERATIONS</span><h2>Make today’s wave and pad sheet</h2><p>Upload one Amazon file. RelayOps keeps only ${state.dspCode}, sorts the earliest waves first, and matches pads A → B → C.</p></div><div class="morning-actions"><button class="btn" data-action="slack-import">${ICONS.inbox} Use Slack file <span class="demo-tag">DEMO</span></button><button class="btn primary easy-upload-button" data-action="import">${ICONS.upload} 1. Choose today’s file</button></div></div>
+  <div class="morning-command card"><div><span class="eyebrow">DAY OF OPERATIONS</span><h2>Make today’s wave and pad sheet</h2><p>Upload DAYOFOPSPLAN and ROUTE_DJT6 together. RelayOps joins them by CX route, adds driver names and stops, then sorts earliest waves first.</p></div><div class="morning-actions"><button class="btn" data-action="slack-import">${ICONS.inbox} Use Slack file <span class="demo-tag">DEMO</span></button><button class="btn primary easy-upload-button" data-action="import">${ICONS.upload} Upload Amazon files</button></div></div>
   <div class="quick-start" aria-label="Three easy steps"><div class="quick-step done"><b>1</b><span><strong>Upload</strong><small>Excel or CSV</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>2</b><span><strong>We match it</strong><small>Wave time + staging + pad</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>3</b><span><strong>Use your sheet</strong><small>Check boxes or export</small></span></div></div>
-  <div class="sheet-toolbar"><div class="sheet-filter"><label>DSP</label><select data-morning-filter="dsp"><option>${state.dspCode}</option></select></div><div class="sheet-filter"><label>Wave</label><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Staging location</label><select data-morning-filter="staging"><option value="all">All staging</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Pad</label><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></div><button class="btn small" data-action="clear-morning-filters">Clear filters</button><span class="filter-note">Sorted ${ICONS.chevron} earliest launch first</span><button class="btn small" data-action="export-morning">${ICONS.download} Export sheet</button></div>
+  <div class="sheet-toolbar"><div class="sheet-filter"><label>DSP</label><select data-morning-filter="dsp"><option>${state.dspCode}</option></select></div><div class="sheet-filter"><label>Wave</label><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Staging location</label><select data-morning-filter="staging"><option value="all">All staging</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Pad</label><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></div><button class="btn small" data-action="clear-morning-filters">Clear filters</button><span class="filter-note">Sorted ${ICONS.chevron} earliest launch first</span><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Done editing':'✎ Edit sheet'}</button><button class="btn small" data-action="preview-wave-screenshot">${ICONS.download} Preview JPEG</button><button class="btn small" data-action="export-morning">${ICONS.download} Export sheet</button></div>
   <div class="sheet-kpis"><span><strong>${groups.length}</strong> waves</span><span><strong>${rows.reduce((n,r)=>n+r.packages,0).toLocaleString()}</strong> packages</span><span><strong>${rows.reduce((n,r)=>n+r.stops,0).toLocaleString()}</strong> stops</span><span><strong>${rows.filter(r=>r.checkedIn).length}/${rows.length}</strong> checked in</span></div>
-  <article class="card morning-board"><div class="sheet-scroll"><table class="ops-sheet"><thead><tr><th>Wave</th><th>Driver / helper</th><th>Route</th><th>Staging</th><th>Pad</th><th>Bags</th><th>OV</th><th>Parking</th><th>In</th><th>Van</th><th>Device</th><th>Loaded</th><th>Stops</th><th>Packages</th><th>Commercial</th><th>ETA</th></tr></thead><tbody>${groups.length?groups.map(([wave,items],gi)=>morningWaveGroup(wave,items,gi)).join(''):`<tr><td colspan="16"><div class="empty-state"><h3>No routes match these filters</h3><p>Clear a filter or upload a new day-of-operations file.</p></div></td></tr>`}</tbody></table></div></article>`;
+  ${state.editMode?`<div class="edit-help">Editing is on. Click a driver, route, staging location, stop count, or pad to type a correction. Checkboxes save automatically.</div>`:''}
+  <article class="card morning-board"><div class="sheet-scroll"><table class="ops-sheet"><thead><tr><th>Wave</th><th>Driver / helper</th><th>Route</th><th>Staging</th><th>Pad</th><th>Bags</th><th>OV</th><th>Parking</th><th>In</th><th>EV</th><th>Device</th><th>Portable</th><th>Loaded</th><th>Stops</th><th>Packages</th><th>Commercial</th><th>ETA</th></tr></thead><tbody>${groups.length?groups.map(([wave,items],gi)=>morningWaveGroup(wave,items,gi)).join(''):`<tr><td colspan="17"><div class="empty-state"><h3>No routes match these filters</h3><p>Clear a filter or upload a new day-of-operations file.</p></div></td></tr>`}</tbody></table></div></article>`;
 }
 
 function morningWaveGroup(wave,items,groupIndex) {
-  const pad=padForWave(wave);
-  return `<tr class="wave-separator"><td colspan="16"></td></tr>${items.map((r,i)=>`<tr class="ops-row">${i===0?`<td class="wave-label" rowspan="${items.length}"><span>WAVE ${groupIndex+1}</span></td>`:''}<td class="driver-name">${esc(r.driver)}</td><td class="route-id">${esc(r.route)}</td><td class="staging-code">${esc(r.staging)}</td>${i===0?`<td class="pad-label" rowspan="${items.length}">${pad}</td>`:''}<td>${r.bags}</td><td>${r.overflow}</td><td>${esc(r.parking)}</td><td><input class="sheet-check" type="checkbox" ${r.checkedIn?'checked':''}></td><td><input class="sheet-check" type="checkbox" ${r.vanReady?'checked':''}></td><td><input class="sheet-check" type="checkbox" ${r.deviceReady?'checked':''}></td><td><input class="sheet-check" type="checkbox" ${r.loadReady?'checked':''}></td><td>${r.stops}</td><td>${r.packages}</td><td>${r.commercial}</td><td class="eta-cell">${esc(r.eta)}</td></tr>`).join('')}<tr class="wave-footer"><td>${wave.replace(/\s*[AP]M/i,'')} (${items.length})</td><td colspan="15"></td></tr>`;
+  const pad=items[0]?.padOverride||padForWave(wave), edit=state.editMode;
+  const cell=(r,field,value,cls='')=>`<td class="${cls} ${edit?'editable-cell':''}" ${edit?`contenteditable="true" data-edit-route="${esc(r.route)}" data-edit-field="${field}"`:''}>${esc(value)}</td>`;
+  const check=(r,field,value)=>`<input class="sheet-check" type="checkbox" data-check-route="${esc(r.route)}" data-check-field="${field}" ${value?'checked':''}>`;
+  return `<tr class="wave-separator"><td colspan="17"></td></tr>${items.map((r,i)=>`<tr class="ops-row">${i===0?`<td class="wave-label" rowspan="${items.length}"><span>WAVE ${groupIndex+1}</span></td>`:''}${cell(r,'driver',r.driver,'driver-name')}${cell(r,'route',r.route,'route-id')}${cell(r,'staging',r.staging,'staging-code')}${i===0?`<td class="pad-label ${edit?'editable-cell':''}" rowspan="${items.length}" ${edit?`contenteditable="true" data-edit-wave="${esc(wave)}" data-edit-field="padOverride"`:''}>${esc(pad)}</td>`:''}<td>${r.bags}</td><td>${r.overflow}</td>${cell(r,'parking',r.parking)}<td>${check(r,'checkedIn',r.checkedIn)}</td><td>${check(r,'vanReady',r.vanReady)}</td><td>${check(r,'deviceReady',r.deviceReady)}</td><td>${check(r,'portableReady',r.portableReady)}</td><td>${check(r,'loadReady',r.loadReady)}</td>${cell(r,'stops',r.stops)}<td>${r.packages}</td><td>${r.commercial}</td><td class="eta-cell">${esc(r.eta)}</td></tr>`).join('')}<tr class="wave-footer"><td>${wave.replace(/\s*[AP]M/i,'')} (${items.length})</td><td colspan="16"></td></tr>`;
 }
 
 function livePage() {
@@ -312,6 +317,7 @@ function adminPage() {
 
 function importPreviewStats() {
   if(!state.importedFile)return null;
+  if(state.importedFile.kind==='details') return {included:state.importedFile.routeDetailsCount||0,excluded:0};
   const norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
   const dsp=state.importedFile.headers.findIndex(h=>['dsp','dspcode','company'].includes(norm(h)));
   const included=dsp<0?state.importedFile.rows.length:state.importedFile.rows.filter(r=>String(r[dsp]).trim().toUpperCase()===state.dspCode).length;
@@ -322,10 +328,11 @@ function modal() {
   if (!state.modal) return '';
   if (state.modal === 'import') {
     const stats=importPreviewStats();
-    const source=state.importSource==='slack'?`<div class="slack-panel"><div class="slack-brand"><div class="slack-logo">S</div><div><strong>Dispatch Ops workspace</strong><span>#morning-operations · demo connection</span></div><span class="demo-tag">DEMO</span></div><button class="slack-file" data-action="load-slack-demo"><span class="file-type">CSV</span><span><strong>Today’s operations file</strong><small>Shared by Operations Bot · ready to use</small></span><span class="btn small">Choose this file</span></button><div class="import-note">For this demo, RelayOps will keep only ${state.dspCode} routes from the Slack file.</div></div>`:`<div class="drop-zone ${state.importedFile?'has-file':''}" id="drop-zone"><div><div class="drop-icon">${state.importedFile?ICONS.check:ICONS.upload}</div><strong>${state.importedFile?`Great! ${esc(state.importedFile.name)} is ready.`:'Click the big button and choose today’s Amazon file'}</strong><span>${state.importedFile?`${state.importedFile.rows.length} rows found. Your original file will not be changed.`:'You can use an Excel (.xlsx) or CSV file. You can also drag it into this box.'}</span><button class="btn primary upload-choice" data-action="choose-file">${state.importedFile?'Choose a different file':'Choose Excel or CSV file'}</button></div></div>`;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">EASY UPLOAD</span><h2 id="import-title">Make my morning sheet</h2><p>Choose one file. RelayOps does the sorting and matching for you.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="upload-progress"><div class="upload-progress-step active"><b>1</b><span>Choose file</span></div><i></i><div class="upload-progress-step ${state.importedFile?'active':''}"><b>${state.importedFile?'✓':'2'}</b><span>Check matches</span></div><i></i><div class="upload-progress-step"><b>3</b><span>Make sheet</span></div></div><div class="source-tabs"><button class="source-tab ${state.importSource==='computer'?'active':''}" data-action="set-import-source" data-source="computer">${ICONS.upload} From this computer</button><button class="source-tab ${state.importSource==='slack'?'active':''}" data-action="set-import-source" data-source="slack">${ICONS.inbox} From Slack <span class="demo-tag">DEMO</span></button></div>${source}${state.importedFile?`<div class="import-preview"><span class="preview-check">✓</span><div><strong>${stats.included} ${state.dspCode} routes matched</strong><span>${stats.excluded} routes from other DSPs will be left out automatically.</span></div></div><div class="auto-match"><strong>RelayOps will do these 3 things:</strong><div><span>✓ Earliest wave time first</span><span>✓ Keep staging locations</span><span>✓ Assign pads A → B → C</span></div></div>`:''}<div class="modal-actions easy-actions"><button class="btn sample-button" data-action="template-csv">Need an example file?</button><button class="btn primary create-sheet-button" data-action="apply-import" ${state.importedFile?'':'disabled'}>${state.importedFile?'Create my wave & pad sheet →':'Choose a file first'}</button></div><p class="upload-help">Nothing is sent to Amazon. RelayOps reads the file in this browser and keeps your original file unchanged.</p></div></div></div>`;
+    const source=state.importSource==='slack'?`<div class="slack-panel"><div class="slack-brand"><div class="slack-logo">S</div><div><strong>Dispatch Ops workspace</strong><span>#morning-operations · demo connection</span></div><span class="demo-tag">DEMO</span></div><button class="slack-file" data-action="load-slack-demo"><span class="file-type">CSV</span><span><strong>Today’s operations file</strong><small>Shared by Operations Bot · ready to use</small></span><span class="btn small">Choose this file</span></button><div class="import-note">For this demo, RelayOps will keep only ${state.dspCode} routes from the Slack file.</div></div>`:`<div class="drop-zone ${state.importedFile?'has-file':''}" id="drop-zone"><div><div class="drop-icon">${state.importedFile?ICONS.check:ICONS.upload}</div><strong>${state.importedFile?`Great! ${esc(state.importedFile.name)} is ready.`:'Choose DAYOFOPSPLAN and ROUTE_DJT6'}</strong><span>${state.importedFile?`${state.importedFile.rows.length} plan rows found${state.importedFile.routeDetailsCount?` · ${state.importedFile.routeDetailsCount} driver/stop rows matched`:''}.`:'Select both files at the same time. Excel (.xlsx) and CSV are supported.'}</span><button class="btn primary upload-choice" data-action="choose-file">${state.importedFile?'Choose different files':'Choose Amazon files'}</button></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">EASY UPLOAD</span><h2 id="import-title">Make my morning sheet</h2><p>Choose the plan and route files. RelayOps joins them by CX route.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="upload-progress"><div class="upload-progress-step active"><b>1</b><span>Choose files</span></div><i></i><div class="upload-progress-step ${state.importedFile?'active':''}"><b>${state.importedFile?'✓':'2'}</b><span>Match CX routes</span></div><i></i><div class="upload-progress-step"><b>3</b><span>Make sheet</span></div></div><div class="source-tabs"><button class="source-tab ${state.importSource==='computer'?'active':''}" data-action="set-import-source" data-source="computer">${ICONS.upload} From this computer</button><button class="source-tab ${state.importSource==='slack'?'active':''}" data-action="set-import-source" data-source="slack">${ICONS.inbox} From Slack <span class="demo-tag">DEMO</span></button></div>${source}${state.importedFile?`<div class="import-preview"><span class="preview-check">✓</span><div><strong>${stats.included} ${state.dspCode} routes matched</strong><span>${stats.excluded} routes from other DSPs will be left out automatically.</span></div></div><div class="auto-match"><strong>RelayOps will do these things:</strong><div><span>✓ Earliest wave time first</span><span>✓ CX + staging + pad</span><span>✓ Driver names + stops</span></div></div>`:''}<div class="modal-actions easy-actions"><button class="btn sample-button" data-action="template-csv">Need an example file?</button><button class="btn primary create-sheet-button" data-action="apply-import" ${state.importedFile?'':'disabled'}>${state.importedFile?'Create my wave & pad sheet →':'Choose files first'}</button></div><p class="upload-help">Nothing is sent to Amazon. RelayOps reads the files in this browser and keeps the originals unchanged.</p></div></div></div>`;
   }
   if (state.modal === 'export') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()"><div class="modal-head"><div><h2>Export route data</h2><p>Ready for Excel or your Google Sheets template</p></div><button class="icon-button" data-action="close-modal">×</button></div><div class="modal-body"><div class="connection"><div class="connection-logo">CSV</div><div class="connection-copy"><strong>CSV file</strong><span>Fastest option for Google Sheets</span></div><button class="btn small" data-action="export-csv">Download</button></div><div class="connection"><div class="connection-logo" style="background:#1c6e44">XLS</div><div class="connection-copy"><strong>Excel workbook</strong><span>Styled table that opens in Excel</span></div><button class="btn small" data-action="export-excel">Download</button></div><div class="connection"><div class="connection-logo" style="background:#2866b4">TAB</div><div class="connection-copy"><strong>Copy for Google Sheets</strong><span>Paste directly into cell A1</span></div><button class="btn small" data-action="copy">Copy</button></div></div></div></div>`;
+  if (state.modal === 'screenshot' && state.screenshotPreview) return `<div class="modal-backdrop" data-action="close-modal"><div class="modal screenshot-modal" role="dialog" aria-modal="true" aria-labelledby="screenshot-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">APPROVAL REQUIRED</span><h2 id="screenshot-title">Approve GroupMe JPEG</h2><p>Only Wave, Driver/Helper, Route, Staging, Pad, EV, Device, and Portable are included.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="jpeg-preview"><img src="${state.screenshotPreview}" alt="Wave sheet JPEG preview"></div><div class="modal-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="save-wave-screenshot">Approve & save JPEG</button></div></div></div></div>`;
   return '';
 }
 
@@ -343,13 +350,20 @@ function bind() {
   document.querySelectorAll('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
   document.querySelectorAll('[data-phase]').forEach(el=>el.addEventListener('click',()=>{state.phase=Number(el.dataset.phase);persist();render();}));
   document.querySelectorAll('[data-morning-filter]').forEach(el=>el.addEventListener('change',()=>{const key=el.dataset.morningFilter;if(key!=='dsp')state.morningFilters[key]=el.value;render();}));
+  document.querySelectorAll('[data-edit-field]').forEach(el=>el.addEventListener('blur',()=>{
+    const value=el.textContent.trim(), field=el.dataset.editField;
+    if(el.dataset.editWave) state.morningRoutes.filter(r=>r.wave===el.dataset.editWave).forEach(r=>r[field]=value.toUpperCase());
+    else { const route=state.morningRoutes.find(r=>r.route===el.dataset.editRoute); if(route) route[field]=field==='stops'?Number(value)||0:value; }
+    persist();render();
+  }));
+  document.querySelectorAll('[data-check-field]').forEach(el=>el.addEventListener('change',()=>{const route=state.morningRoutes.find(r=>r.route===el.dataset.checkRoute);if(route){route[el.dataset.checkField]=el.checked;persist();}}));
   const search = document.getElementById('global-search');
   if (search) search.addEventListener('input',e=>{state.search=e.target.value;if(['roster','live'].includes(state.page)){const pos=e.target.selectionStart;render();const s=document.getElementById('global-search');s.focus();s.setSelectionRange(pos,pos);}});
   const dz=document.getElementById('drop-zone');
   if (dz) {
     ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
     ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
-    dz.addEventListener('drop',e=>{if(e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]);});
+    dz.addEventListener('drop',e=>{if(e.dataTransfer.files.length) readFiles([...e.dataTransfer.files]);});
   }
 }
 
@@ -364,7 +378,7 @@ function action(name,el) {
   if (name==='slack-import') { state.modal='import'; state.importSource='slack'; state.importedFile=null; return render(); }
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal') { state.modal=null; return render(); }
+  if (name==='close-modal') { state.modal=null;state.screenshotPreview=null;return render(); }
   if (name==='choose-file') return fileInput.click();
   if (name==='apply-import') return applyImport();
   if (name==='export-menu') { state.modal='export'; return render(); }
@@ -373,6 +387,9 @@ function action(name,el) {
   if (name==='copy') return copyRows();
   if (name==='template-csv') return downloadTemplate();
   if (name==='clear-morning-filters') { state.morningFilters={wave:'all',staging:'all',pad:'all'};render();return; }
+  if (name==='toggle-morning-edit') { state.editMode=!state.editMode;render();return toast(state.editMode?'Editing is on — click any highlighted cell':'Edits saved'); }
+  if (name==='preview-wave-screenshot') return previewWaveScreenshot();
+  if (name==='save-wave-screenshot') return saveWaveScreenshot();
   if (name==='export-morning') return exportMorningSheet();
   if (name==='publish') { state.rosterPublished=true;persist();render();return toast('Roster published to the team'); }
   if (name==='phase-next') { state.phase=Math.min(3,state.phase+1);persist();render();return toast(`Shift advanced to ${['Roster','Load-out','On road','Closeout'][state.phase]}`); }
@@ -388,21 +405,46 @@ function action(name,el) {
   toast('Action captured in this prototype');
 }
 
-fileInput.addEventListener('change',e=>{if(e.target.files[0])readFile(e.target.files[0]);e.target.value='';});
+fileInput.addEventListener('change',e=>{if(e.target.files.length)readFiles([...e.target.files]);e.target.value='';});
 
-async function readFile(file) {
-  const name=file.name.toLowerCase();
+const headerKey=value=>String(value??'').toLowerCase().replace(/[^a-z0-9]/g,'');
+function findImportHeader(rows,groups) {
+  return rows.findIndex(row=>{const keys=row.map(headerKey);return groups.every(group=>group.some(name=>keys.includes(headerKey(name))));});
+}
+function routeDetailsFromRows(rows) {
+  const header=findImportHeader(rows,[['route','routecode','routeid','cx','cxnumber','cxroute','blockid'],['driver','drivername','transportername','employeename','daname','associatename','name','deliveryassociate','stops','stopcount','plannedstops','numstops']]);
+  if(header<0)return {};
+  const headers=rows[header].map(headerKey), index=(...names)=>headers.findIndex(h=>names.map(headerKey).includes(h));
+  const routeIx=index('route','routecode','routeid','cx','cxnumber','cxroute','blockid','routeidentifier'), driverIx=index('driver','drivername','transportername','transporter','employeename','daname','associatename','name','deliveryassociate','associate'), firstIx=index('firstname','driverfirstname'), lastIx=index('lastname','driverlastname'), stopsIx=index('stops','stopcount','plannedstops','stopsplanned','numstops','totalstops');
+  const details={};
+  rows.slice(header+1).forEach(row=>{const route=String(row[routeIx]||'').trim().toUpperCase();if(!route)return;const combined=[row[firstIx],row[lastIx]].filter(Boolean).join(' ').trim();const stops=Number(row[stopsIx]);details[route]={driver:String(row[driverIx]||combined||'').trim(),stops:Number.isFinite(stops)?stops:null};});
+  return details;
+}
+async function parseUploadedFile(file) {
+  const name=file.name.toLowerCase(); let rows;
+  if(name.endsWith('.csv')) rows=parseCSV(await file.text());
+  else if(name.endsWith('.xlsx')) rows=await parseXlsxArrayBuffer(await file.arrayBuffer());
+  else throw new Error('unsupported');
+  if(rows.length<2) throw new Error('empty');
+  return {name:file.name,rows};
+}
+async function readFiles(files) {
   try {
-    let rows;
-    if(name.endsWith('.csv')) rows=parseCSV(await file.text());
-    else if(name.endsWith('.xlsx')) rows=await parseXlsxArrayBuffer(await file.arrayBuffer());
-    else return toast('Please choose a CSV or XLSX file','error');
-    if(rows.length<2) return toast('No data rows were found in this file','error');
-    state.importedFile={name:file.name,headers:rows[0],rows:rows.slice(1)}; render(); toast(`${rows.length-1} operation rows detected from ${name.endsWith('.xlsx')?'Excel':'CSV'}`);
+    const parsed=await Promise.all(files.map(parseUploadedFile));
+    const plan=parsed.find(f=>/day\s*of\s*ops\s*plan/i.test(f.name)||findImportHeader(f.rows,[['route','routecode','cxnumber','cxroute','blockid'],['wave','wavetime','starttime'],['staging','staginglocation']])>=0);
+    const routeFile=parsed.find(f=>/route[_\s-]*djt6/i.test(f.name))||parsed.find(f=>f!==plan&&Object.keys(routeDetailsFromRows(f.rows)).length);
+    const details=routeFile?routeDetailsFromRows(routeFile.rows):{};
+    const primary=plan||routeFile;
+    if(!primary)throw new Error('unrecognized');
+    const planHeader=plan?findImportHeader(plan.rows,[['route','routecode','cxnumber','cxroute','blockid'],['wave','wavetime','starttime'],['staging','staginglocation']]):findImportHeader(primary.rows,[['route','routecode','routeid','cx','cxnumber','cxroute','blockid']]);
+    const rows=primary.rows.slice(Math.max(0,planHeader));
+    state.importedFile={name:parsed.map(f=>f.name).join(' + '),headers:rows[0],rows:rows.slice(1),kind:plan?'plan':'details',routeDetails:details,routeDetailsCount:Object.keys(details).length};
+    render();toast(`${parsed.length} file${parsed.length===1?'':'s'} ready · CX routes will be matched automatically`);
   } catch(error) {
-    console.error(error); toast('This spreadsheet could not be read. Check that it is a valid CSV or XLSX file.','error');
+    console.error(error);toast('These files could not be read. Choose DAYOFOPSPLAN and ROUTE_DJT6 as CSV or XLSX.','error');
   }
 }
+async function readFile(file) { return readFiles([file]); }
 
 function parseCSV(text) {
   const rows=[]; let row=[],cell='',quoted=false;
@@ -463,16 +505,22 @@ async function parseXlsxArrayBuffer(buffer) {
 
 function applyImport() {
   const f=state.importedFile;if(!f)return;
+  if(f.kind==='details') {
+    let matched=0;
+    state.morningRoutes.forEach(route=>{const detail=f.routeDetails?.[String(route.route).toUpperCase()];if(!detail)return;matched++;if(detail.driver)route.driver=detail.driver;if(detail.stops!==null)route.stops=detail.stops;});
+    state.modal=null;state.page='morning';state.editMode=false;persist();render();return toast(`${matched} CX routes updated with driver names and stop counts`);
+  }
   const norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
   const index=(...names)=>{const n=names.map(norm);return f.headers.findIndex(h=>n.includes(norm(h)));};
-  const ix={dsp:index('dsp','dspcode','company'),route:index('route','routecode','blockid'),driver:index('driver','drivername','transportername','da'),service:index('servicetype','service'),wave:index('wave','wave time','starttime'),staging:index('staging','staginglocation'),duration:index('routeduration','duration'),zones:index('numzones','zones'),commercial:index('numcommercialpkgs','commercialpackages','commercial'),van:index('van','vehicle','vehicleid'),device:index('device','deviceid'),stops:index('stops','stopcount'),packages:index('packages','packagecount','numpackages')};
+  const ix={dsp:index('dsp','dspcode','company'),route:index('route','routecode','cxnumber','cxroute','blockid'),driver:index('driver','drivername','transportername','employeename','daname','associatename','da'),service:index('servicetype','service'),wave:index('wave','wave time','wavetime','starttime'),staging:index('staging','staginglocation'),duration:index('routeduration','duration'),zones:index('numzones','zones'),commercial:index('numcommercialpkgs','commercialpackages','commercial'),van:index('van','vehicle','vehicleid'),device:index('device','deviceid'),stops:index('stops','stopcount','plannedstops','stopsplanned','numstops'),packages:index('packages','packagecount','numpackages')};
   if(ix.wave>=0&&ix.staging>=0) {
     const candidates=f.rows.filter(r=>ix.dsp<0||String(r[ix.dsp]).trim().toUpperCase()===state.dspCode);
     const excluded=f.rows.length-candidates.length;
     state.morningRoutes=candidates.map((r,i)=>{
-      const route=r[ix.route]||`IMP-${i+1}`, known=morningSeed.find(x=>x.route===route);
+      const route=r[ix.route]||`IMP-${i+1}`, known=morningSeed.find(x=>x.route===route), detail=f.routeDetails?.[String(route).trim().toUpperCase()];
       const packages=Number(r[ix.packages])||known?.packages||0, zones=Number(r[ix.zones])||known?.zones||0;
-      return {dsp:ix.dsp>=0?String(r[ix.dsp]).trim().toUpperCase():state.dspCode,driver:(ix.driver>=0&&r[ix.driver])||known?.driver||'Unassigned driver',route,service:(ix.service>=0&&r[ix.service])||known?.service||'Standard Parcel',wave:r[ix.wave]||'Wave pending',staging:r[ix.staging]||'—',duration:Number(r[ix.duration])||known?.duration||0,zones,packages,commercial:Number(r[ix.commercial])||known?.commercial||0,stops:Number(r[ix.stops])||known?.stops||Math.round(135+zones*2.2),eta:known?.eta||'—',bags:known?.bags||Math.max(1,Math.round(packages/13)),overflow:known?.overflow||Math.max(0,Math.round(packages/24)),parking:known?.parking||'',checkedIn:Boolean(known?.checkedIn),vanReady:Boolean(known?.vanReady),deviceReady:Boolean(known?.deviceReady),loadReady:false};
+      const importedStops=Number(r[ix.stops]);
+      return {dsp:ix.dsp>=0?String(r[ix.dsp]).trim().toUpperCase():state.dspCode,driver:detail?.driver||(ix.driver>=0&&r[ix.driver])||known?.driver||'Unassigned driver',route,service:(ix.service>=0&&r[ix.service])||known?.service||'Standard Parcel',wave:r[ix.wave]||'Wave pending',staging:r[ix.staging]||'—',duration:Number(r[ix.duration])||known?.duration||0,zones,packages,commercial:Number(r[ix.commercial])||known?.commercial||0,stops:detail?.stops!==null&&detail?.stops!==undefined?detail.stops:(Number.isFinite(importedStops)&&importedStops?importedStops:known?.stops||Math.round(135+zones*2.2)),eta:known?.eta||'—',bags:known?.bags||Math.max(1,Math.round(packages/13)),overflow:known?.overflow||Math.max(0,Math.round(packages/24)),parking:known?.parking||'',checkedIn:Boolean(known?.checkedIn),vanReady:Boolean(known?.vanReady),deviceReady:Boolean(known?.deviceReady),portableReady:Boolean(known?.portableReady),loadReady:false};
     }).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||a.staging.localeCompare(b.staging,undefined,{numeric:true}));
     state.routes=state.morningRoutes.map((r,i)=>({route:r.route,driver:r.driver,id:`DA-${1100+i}`,wave:r.wave,staging:r.staging,van:'Unassigned',device:'Unassigned',stops:r.stops,packages:r.packages,progress:0,delta:0,status:r.driver==='Unassigned driver'?'Needs review':'Assigned',rescue:'—'}));
     state.lastImportExcluded=excluded;state.modal=null;state.page='morning';state.morningFilters={wave:'all',staging:'all',pad:'all'};state.rosterPublished=false;persist();render();return toast(`${state.morningRoutes.length} ${state.dspCode} routes loaded · ${excluded} other-DSP routes excluded`);
@@ -498,7 +546,22 @@ function loadSlackDemo(){
   rows.splice(5,0,['OTHER','Other DSP Driver','ZZ101','Standard Parcel','11:10 AM','STG.A.1',390,19,301,11,172],['OTHER','Another DSP Driver','ZZ102','Standard Parcel','11:15 AM','STG.A.2',405,22,344,16,181],['TEST','Test DSP Driver','ZZ103','Standard Parcel','11:20 AM','STG.B.1',420,23,355,9,185]);
   state.importedFile={name:'day-of-operations-07-02.csv',headers,rows};render();toast('Slack demo file selected · DSP filter preview ready');
 }
-function exportMorningSheet(){const h=['Wave','Driver','Route','Staging','Pad','Bags','Overflow','Parking','Checked In','Van Ready','Device Ready','Loaded','Stops','Packages','Commercial','ETA'];const rows=filteredMorningRows().map(r=>[r.wave,r.driver,r.route,r.staging,r.pad,r.bags,r.overflow,r.parking,r.checkedIn?'Yes':'No',r.vanReady?'Yes':'No',r.deviceReady?'Yes':'No',r.loadReady?'Yes':'No',r.stops,r.packages,r.commercial,r.eta]);downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8',`${state.dspCode}-morning-operations.csv`);toast('Morning operations sheet downloaded');}
+function exportMorningSheet(){const h=['Wave','Driver','Route','Staging','Pad','Bags','Overflow','Parking','Checked In','EV Ready','Device Ready','Portable Ready','Loaded','Stops','Packages','Commercial','ETA'];const rows=filteredMorningRows().map(r=>[r.wave,r.driver,r.route,r.staging,r.pad,r.bags,r.overflow,r.parking,r.checkedIn?'Yes':'No',r.vanReady?'Yes':'No',r.deviceReady?'Yes':'No',r.portableReady?'Yes':'No',r.loadReady?'Yes':'No',r.stops,r.packages,r.commercial,r.eta]);downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8',`${state.dspCode}-morning-operations.csv`);toast('Morning operations sheet downloaded');}
+function buildWaveScreenshot(rows) {
+  const columns=[['Wave',170],['Driver / Helper',390],['Route',150],['Staging',210],['Pad',100],['EV',130],['Device',150],['Portable',150]], rowHeight=48, headerHeight=58, separator=12;
+  const groups=[...new Set(rows.map(r=>r.wave))].map(w=>[w,rows.filter(r=>r.wave===w)]), width=columns.reduce((n,c)=>n+c[1],0), height=headerHeight+groups.reduce((n,g)=>n+g[1].length*rowHeight+separator,0);
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,width,height);ctx.textBaseline='middle';ctx.strokeStyle='#555b57';ctx.lineWidth=1;
+  let x=0;columns.forEach(([label,w])=>{ctx.fillStyle='#303733';ctx.fillRect(x,0,w,headerHeight);ctx.strokeRect(x,0,w,headerHeight);ctx.fillStyle='#ffffff';ctx.font='bold 18px Arial';ctx.textAlign='center';ctx.fillText(label,x+w/2,headerHeight/2);x+=w;});
+  let y=headerHeight;
+  const value=(r,key)=>key==='Wave'?'':key==='Driver / Helper'?r.driver:key==='Route'?r.route:key==='Staging'?r.staging:key==='Pad'?r.pad:key==='EV'?(r.vanReady?'✓':''):key==='Device'?(r.deviceReady?'✓':''):(r.portableReady?'✓':'');
+  groups.forEach(([wave,items],groupIndex)=>{ctx.fillStyle='#050505';ctx.fillRect(0,y,width,separator);y+=separator;items.forEach(r=>{let cx=0;columns.forEach(([label,w])=>{ctx.fillStyle=label==='Pad'?'#fbfbfa':'#ffffff';ctx.fillRect(cx,y,w,rowHeight);ctx.strokeStyle='#656b67';ctx.strokeRect(cx,y,w,rowHeight);if(label!=='Wave'){ctx.fillStyle='#111411';ctx.font=label==='Driver / Helper'?'bold 17px Arial':'bold 18px Arial';ctx.textAlign='center';const raw=String(value(r,label)||'');const max=Math.max(3,Math.floor(w/10));ctx.fillText(raw.length>max?raw.slice(0,max-1)+'…':raw,cx+w/2,y+rowHeight/2);}cx+=w;});y+=rowHeight;});
+    const waveHeight=items.length*rowHeight, waveY=y-waveHeight;ctx.fillStyle='#ffffff';ctx.fillRect(0,waveY,columns[0][1],waveHeight);ctx.strokeStyle='#656b67';ctx.strokeRect(0,waveY,columns[0][1],waveHeight);ctx.fillStyle='#090b09';ctx.textAlign='center';ctx.font='bold 25px Arial';ctx.fillText(`WAVE ${groupIndex+1}`,columns[0][1]/2,waveY+waveHeight/2-16);ctx.font='bold 18px Arial';ctx.fillText(`${String(wave).replace(/\s*[AP]M/i,'')} (${items.length})`,columns[0][1]/2,waveY+waveHeight/2+18);
+  });
+  return canvas.toDataURL('image/jpeg',0.92);
+}
+function previewWaveScreenshot(){const rows=filteredMorningRows();if(!rows.length)return toast('No wave rows are visible to capture','error');state.screenshotPreview=buildWaveScreenshot(rows);state.modal='screenshot';render();}
+function saveWaveScreenshot(){if(!state.screenshotPreview)return;const a=document.createElement('a');a.href=state.screenshotPreview;a.download=`${state.dspCode}-${state.morningFilters.wave==='all'?'all-waves':state.morningFilters.wave.replace(/[^a-z0-9]+/gi,'-')}.jpg`;document.body.appendChild(a);a.click();a.remove();state.modal=null;state.screenshotPreview=null;render();toast('Approved JPEG saved — ready for GroupMe');}
 function downloadTemplate(){const h=['DSP','Driver','Route Code','Service Type','Wave','Staging Location','Route Duration','Num Zones','Num Packages','Num Commercial Pkgs','Stops'];const a=['LLOL','Maya Collins','CX249','Standard Parcel Electric','11:15 AM','STG.V.1','420','21','332','12','188'];const b=['OTHER','Other DSP Driver','ZZ101','Standard Parcel','11:10 AM','STG.A.1','390','19','301','11','172'];downloadBlob(`${h.join(',')}\r\n${a.join(',')}\r\n${b.join(',')}\r\n`,'text/csv','day-of-operations-import-template.csv');toast('Day-of-operations template downloaded');}
 
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}

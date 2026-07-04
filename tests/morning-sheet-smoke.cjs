@@ -55,9 +55,26 @@ const checks = `
   const uploadHtml = modal();
   if (!uploadHtml.includes('Make my morning sheet')) throw new Error('Simple upload heading missing');
   if (!uploadHtml.includes('Create my wave & pad sheet')) throw new Error('Simple upload action missing');
-  if (!uploadHtml.includes('Assign pads A → B → C')) throw new Error('Pad matching explanation missing');
+  if (!uploadHtml.includes('CX + staging + pad')) throw new Error('Pad matching explanation missing');
   const morningHtml = morningSheetPage();
   if (!morningHtml.includes('Three easy steps') || !morningHtml.includes('Wave time + staging + pad')) throw new Error('Quick start guide missing');
+  const details = routeDetailsFromRows([
+    ['Route Code','Driver Name','Stop Count'],
+    ['CX901','Taylor Driver','177']
+  ]);
+  if (details.CX901.driver !== 'Taylor Driver' || details.CX901.stops !== 177) throw new Error('ROUTE_DJT6 detail parsing failed');
+  state.importedFile = {
+    name: 'DAYOFOPSPLAN.xlsx + ROUTE_DJT6.xlsx', kind: 'plan', routeDetails: details, routeDetailsCount: 1,
+    headers: ['DSP','Route Code','Wave','Staging Location','Num Zones','Num Packages'],
+    rows: [['LLOL','CX901','11:15 AM','STG.V.1','21','340']]
+  };
+  applyImport();
+  if (state.morningRoutes[0].driver !== 'Taylor Driver' || state.morningRoutes[0].stops !== 177) throw new Error('CX route merge failed');
+  state.editMode = true;
+  const editableHtml = morningSheetPage();
+  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('<th>Portable</th>') || !editableHtml.includes('Preview JPEG')) throw new Error('Editable sheet or JPEG control missing');
+  state.screenshotPreview = 'data:image/jpeg;base64,demo'; state.modal = 'screenshot';
+  if (!modal().includes('Approve & save JPEG') || !modal().includes('Driver/Helper')) throw new Error('JPEG approval dialog missing');
   globalThis.__parseXlsx = parseXlsxArrayBuffer;
 `;
 
