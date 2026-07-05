@@ -72,7 +72,11 @@ const checks = `
   if (state.morningRoutes[0].driver !== 'Taylor Driver' || state.morningRoutes[0].stops !== 177) throw new Error('CX route merge failed');
   state.editMode = true;
   const editableHtml = morningSheetPage();
-  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('Copy for Sheets') || !editableHtml.includes('Preview JPEG')) throw new Error('Editable sheet or JPEG control missing');
+  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Preview JPEG')) throw new Error('Editable sheet or JPEG control missing');
+  const tsv = morningSheetTsv();
+  if (!tsv.startsWith('WAVE\\tDRIVER\\tROUTE') || !tsv.includes('11:15 (1)')) throw new Error('Google Sheets TSV output missing headers or wave count');
+  state.sheetCopyText = tsv; state.modal = 'sheets-helper';
+  if (!modal().includes('Paste-ready morning sheet') || !modal().includes('sheets-copy-text')) throw new Error('Google Sheets paste helper missing');
   state.screenshotPreview = 'data:image/jpeg;base64,demo'; state.modal = 'screenshot';
   if (!modal().includes('Approve & save JPEG') || !modal().includes('Driver/Helper')) throw new Error('JPEG approval dialog missing');
   globalThis.__parseXlsx = parseXlsxArrayBuffer;

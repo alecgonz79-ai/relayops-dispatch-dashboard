@@ -210,6 +210,12 @@ tbody tr:last-child td { border-bottom:0; }
 .filter-note svg { width:11px; transform:rotate(90deg); }
 .sheet-kpis { padding:8px 12px; display:flex; gap:18px; flex-wrap:wrap; color:#58645c; background:#f1f3ef; border-left:1px solid var(--line); border-right:1px solid var(--line); font-size:8px; }
 .sheet-kpis strong { color:#172019; font-size:10px; margin-right:3px; }
+.sheets-helper { margin:0; padding:13px 14px; border-radius:0; display:grid; grid-template-columns:minmax(220px,1fr) auto auto; gap:14px; align-items:center; border-left:1px solid var(--line); border-right:1px solid var(--line); box-shadow:none; background:#fbfff1; }
+.sheets-helper h3 { margin:3px 0 4px; font:800 13px "Manrope"; }
+.sheets-helper p { margin:0; color:#58645c; font-size:9px; line-height:1.45; }
+.sheets-helper-steps { display:flex; flex-wrap:wrap; gap:6px; }
+.sheets-helper-steps span { padding:7px 9px; border-radius:999px; background:#e8f6c7; color:#2f4728; font-size:8px; font-weight:900; white-space:nowrap; }
+.sheets-helper-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
 .morning-board { border-radius:0 0 16px 16px; box-shadow:none; overflow:hidden; }
 .sheet-scroll { width:100%; overflow:auto; max-height:calc(100vh - 278px); }
 .ops-sheet { min-width:1920px; width:100%; table-layout:fixed; border-collapse:collapse; font-family:Arial,sans-serif; color:#0b0d0c; user-select:text; }
@@ -344,8 +350,14 @@ tbody tr:last-child td { border-bottom:0; }
 .modal-backdrop { position:fixed; inset:0; background:rgba(9,15,11,.54); backdrop-filter:blur(4px); z-index:50; display:grid; place-items:center; padding:20px; animation:fade .16s ease; }
 .modal { width:min(560px,100%); max-height:90vh; overflow:auto; background:#fff; border-radius:20px; box-shadow:0 22px 80px rgba(0,0,0,.25); animation:lift .2s ease; }
 .screenshot-modal { width:min(960px,100%); }
+.sheets-modal { width:min(880px,100%); }
 .jpeg-preview { max-height:62vh; overflow:auto; border:1px solid var(--line); border-radius:12px; background:#eef1ed; padding:12px; }
 .jpeg-preview img { display:block; width:100%; height:auto; background:#fff; }
+.paste-guide { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+.paste-guide span { padding:10px; border-radius:11px; background:#f4f7f2; font-size:9px; font-weight:800; text-align:center; }
+.paste-guide b { display:inline-grid; place-items:center; width:20px; height:20px; margin-right:5px; border-radius:7px; background:var(--lime); color:#172019; }
+.sheets-copy-text { width:100%; height:330px; resize:vertical; padding:12px; border:1px solid var(--line); border-radius:12px; font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; white-space:pre; overflow:auto; outline:0; }
+.sheets-copy-text:focus { border-color:#9ec94a; box-shadow:0 0 0 3px rgba(216,255,114,.28); }
 .modal-head { display:flex; justify-content:space-between; align-items:flex-start; gap:15px; padding:20px 20px 14px; border-bottom:1px solid var(--line); }
 .modal-head h2 { margin:0; font:800 16px "Manrope"; }
 .modal-head p { margin:5px 0 0; color:var(--muted); font-size:9px; }
@@ -388,6 +400,8 @@ tbody tr:last-child td { border-bottom:0; }
   .user-card { justify-content:center; }
   .dashboard-grid, .page-grid, .settings-grid { grid-template-columns:1fr; }
   .fleet-grid, .team-grid, .report-grid { grid-template-columns:repeat(2,1fr); }
+  .sheets-helper { grid-template-columns:1fr; align-items:start; }
+  .sheets-helper-actions { justify-content:flex-start; }
 }
 
 @media (max-width:760px) {
@@ -412,6 +426,8 @@ tbody tr:last-child td { border-bottom:0; }
   .phase-strip { grid-template-columns:1fr 1fr; }
   .fleet-grid, .team-grid, .report-grid, .field-grid { grid-template-columns:1fr; }
   .morning-command { align-items:flex-start; flex-direction:column; }
+  .sheets-helper-steps, .sheets-helper-actions { flex-direction:column; align-items:stretch; }
+  .paste-guide { grid-template-columns:1fr; }
   .quick-start { grid-template-columns:1fr; align-items:stretch; }
   .quick-arrow { transform:rotate(90deg); }
   .auto-match > div { grid-template-columns:1fr; }
