@@ -78,14 +78,20 @@ const checks = `
     ['21','3','-']
   ]);
   if (equipmentRows['21'].device !== '3' || equipmentRows['21'].portable !== '-') throw new Error('EV/device row parsing failed');
+  const splitEquipmentRows = equipmentDetailsFromRows([
+    ['EV/VAN','DEVICE','Portable','EV/VAN','DEVICE','Portable'],
+    ['21','3','-','37','8','P1'],
+    ['F33','4','P2','H1','9','-']
+  ]);
+  if (splitEquipmentRows['37'].device !== '8' || splitEquipmentRows.F33.portable !== 'P2' || splitEquipmentRows.H1.device !== '9') throw new Error('Split VAN/DEV/PORT table parsing failed');
   state.equipmentImport = { name: 'device list', details: equipment };
   applyEquipmentImport();
   if (state.morningRoutes[0].deviceName !== '3' || state.morningRoutes[0].portable !== '-') throw new Error('EV/device assignment failed');
   state.modal = 'equipment';
-  if (!modal().includes('Match vans to devices') || !modal().includes('equipment-paste-text')) throw new Error('EV/device import modal missing');
+  if (!modal().includes('VAN/DEV/PORT IMPORT') || !modal().includes('Upload any file type') || !modal().includes('equipment-paste-text')) throw new Error('EV/device import modal missing');
   state.editMode = true;
   const editableHtml = morningSheetPage();
-  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG')) throw new Error('Editable sheet or JPEG control missing');
+  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('VAN/DEV/PORT Import') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG')) throw new Error('Editable sheet or JPEG control missing');
   const tsv = morningSheetTsv();
   if (!tsv.startsWith('WAVE\\tDRIVER\\tROUTE') || !tsv.includes('11:15 (1)')) throw new Error('Google Sheets TSV output missing headers or wave count');
   if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 14) throw new Error('Template row padding missing');
