@@ -140,6 +140,7 @@ let state = {
   expandedFleetVin: localStorage.getItem('relayops_expanded_fleet_vin') || '',
   fleetLastRefresh: localStorage.getItem('relayops_fleet_refresh') || 'Not refreshed yet',
   fleetImport: JSON.parse(localStorage.getItem('relayops_fleet_import') || 'null'),
+  fleetSourceUploads: JSON.parse(localStorage.getItem('relayops_fleet_source_uploads') || 'null') || {},
   fleetChangedVins: {},
   fleetUpdateSummary: null,
   fitMorningRows: localStorage.getItem('relayops_fit_rows') === 'true',
@@ -158,6 +159,7 @@ let state = {
   rating: Number(localStorage.getItem('relayops_rating') || 0)
 };
 
+if(Object.keys(state.fleetSourceUploads||{}).length) state.fleetImport=fleetImportFromSourceUploads();
 if(state.fleetImport?.vehicles?.length) applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
 
 const app = document.getElementById('app');
@@ -404,6 +406,37 @@ function fleetPortalMatchStrip() {
   const missingAmazon=stats.fleetosOnly.slice(0,3).join(', ')||'None';
   const missingFleetos=stats.amazonOnly.slice(0,3).join(', ')||'None';
   return `<div class="fleet-portal-match ${status}"><div><strong>Full EV portal check</strong><span>${status==='ok'?'Every uploaded VIN matched between Amazon names and FleetOS battery rows.':'Some VINs only appeared in one upload — use Needs data to review.'}</span></div><div class="portal-match-grid"><span><b>${stats.amazon.size}</b>Amazon named EVs</span><span><b>${stats.fleetos.size}</b>FleetOS battery EVs</span><span><b>${stats.both.length}</b>matched both</span><span class="${stats.amazonOnly.length?'warn':'ok'}"><b>${stats.amazonOnly.length}</b>missing FleetOS</span><span class="${stats.fleetosOnly.length?'warn':'ok'}"><b>${stats.fleetosOnly.length}</b>missing Amazon</span></div><small>Missing FleetOS: ${esc(missingFleetos)} · Missing Amazon: ${esc(missingAmazon)}</small><button class="btn small" data-action="fleet-filter-quick" data-filter="needs-data">Review needs data</button></div>`;
+}
+
+function fleetSourceKey(source='') {
+  const value=String(source||'').toLowerCase();
+  if(value.includes('amazon fleet list'))return 'amazon';
+  if(value.includes('fleetos tracker')||value.includes('rivian'))return 'fleetos';
+  return 'other';
+}
+
+function fleetImportFromSourceUploads() {
+  const uploads=Object.values(state.fleetSourceUploads||{}).filter(u=>u?.vehicles?.length);
+  const vehicles=uploads.flatMap(u=>u.vehicles||[]);
+  const uploadDates=uploads.map(u=>u.uploadedAt).filter(Boolean).sort();
+  const uploadedAt=uploadDates[uploadDates.length-1]||new Date().toISOString();
+  const names=[...new Set(uploads.map(u=>u.name).filter(Boolean))];
+  return {name:names.join(' + ')||'Latest fleet source uploads',vehicles,uploadedAt};
+}
+
+function rememberFleetSourceUpload(vehicles=[],name='Fleet upload',uploadedAt=new Date().toISOString()) {
+  const grouped={};
+  vehicles.forEach(vehicle=>{
+    const key=fleetSourceKey(vehicle.source);
+    if(!grouped[key])grouped[key]=[];
+    grouped[key].push(vehicle);
+  });
+  state.fleetSourceUploads=state.fleetSourceUploads||{};
+  Object.entries(grouped).forEach(([key,rows])=>{
+    state.fleetSourceUploads[key]={name,vehicles:rows,uploadedAt};
+  });
+  state.fleetImport=fleetImportFromSourceUploads();
+  return state.fleetImport.vehicles;
 }
 
 function fleetCoverageStats() {
@@ -968,8 +1001,8 @@ async function readFiles(files) {
     if(state.importPurpose==='fleet') {
       const vehicles=parsed.flatMap(f=>fleetDetailsFromRows(f.rows||[],f.name));
       if(!vehicles.length) throw new Error('no fleet rows');
-      state.fleetImport={name:parsed.map(f=>f.name).join(' + '),vehicles,uploadedAt:new Date().toISOString()};
-      const total=applyFleetVehicles(vehicles);
+      const combinedVehicles=rememberFleetSourceUpload(vehicles,parsed.map(f=>f.name).join(' + '),new Date().toISOString());
+      const total=applyFleetVehicles(combinedVehicles);
       state.modal=null; state.page='fleet';
       persist(); render();
       return toast(`${vehicles.length} fleet rows read · ${state.fleetUpdateSummary.updated} changed · ${total} EV cards tracked`);
@@ -1224,8 +1257,8 @@ function parseFleetPasteAction() {
   const rows=rowsFromPastedTable(state.fleetPasteText);
   const vehicles=fleetDetailsFromRows(rows,'Pasted Amazon/FleetOS fleet table');
   if(!vehicles.length) return toast('No VIN rows found. Paste the header row plus vehicle rows from FleetOS or Amazon.','error');
-  state.fleetImport={name:'Pasted Amazon/FleetOS fleet table',vehicles,uploadedAt:new Date().toISOString()};
-  const total=applyFleetVehicles(vehicles);
+  const combinedVehicles=rememberFleetSourceUpload(vehicles,'Pasted Amazon/FleetOS fleet table',new Date().toISOString());
+  const total=applyFleetVehicles(combinedVehicles);
   state.modal=null; state.page='fleet';
   persist(); render();
   toast(`${vehicles.length} pasted fleet rows read · ${state.fleetUpdateSummary.updated} changed · ${total} EV cards tracked`);
@@ -1295,6 +1328,7 @@ function refreshFleetStatus() {
 function resetFleetDemo() {
   rivianFleet.splice(0,rivianFleet.length,...demoRivianFleet.map(v=>normalizeFleetVehicle(v)));
   state.fleetImport=null;
+  state.fleetSourceUploads={};
   state.fleetUpdateSummary=null;
   state.fleetChangedVins={};
   state.fleetSearch='';
@@ -1404,7 +1438,7 @@ function downloadFleetTemplate(){const h=['Source','Vehicle Name','VIN','License
 
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function persist(){localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));}
+function persist(){localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));}
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
 render();

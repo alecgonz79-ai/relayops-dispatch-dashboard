@@ -100,6 +100,19 @@ const checks = `
   if (amazonOnlyVehicle.battery !== currentBattery || !fleetPage().includes('Amazon only') || !fleetPage().includes('Needs: FleetOS battery') || !fleetPage().includes('Updated') || !fleetPage().includes('Changed: name, plate, active status, operational state')) throw new Error('Amazon fleet import should preserve battery and flag status changes');
   if (!fleetSourceStatus().hasAmazon || fleetSourceStatus().hasFleetos) throw new Error('Fleet source status should detect Amazon-only import');
   if (rivianFleet.length !== 1 || fleetCoverageStats().demo !== 0 || !fleetPage().includes('not in upload')) throw new Error('Real fleet import should replace demo-only EV rows');
+  resetFleetDemo();
+  let combinedSourceVehicles = rememberFleetSourceUpload(fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),'amazon fleet list.csv','2026-07-05T12:00:00.000Z');
+  applyFleetVehicles(combinedSourceVehicles,{silent:true});
+  const fleetOsFreshRows = [
+    ['VIN','State of Charge','Estimated Range'],
+    ['7FCEHEB79PN014816','38%','59 mi']
+  ];
+  combinedSourceVehicles = rememberFleetSourceUpload(fleetDetailsFromRows(fleetOsFreshRows,'FleetOS tracker.xlsx'),'FleetOS tracker.xlsx','2026-07-05T12:10:00.000Z');
+  applyFleetVehicles(combinedSourceVehicles,{silent:true});
+  const sourceMemoryEv = rivianFleet.find(v => v.vin === '7FCEHEB79PN014816');
+  const sourceMemoryStats = fleetPortalMatchStats();
+  if (state.fleetImport.vehicles.length !== 2 || sourceMemoryEv.name !== 'LLOL EV 21' || sourceMemoryEv.plate !== '9ABC123' || sourceMemoryEv.battery !== 38 || !fleetSourceStatus().hasAmazon || !fleetSourceStatus().hasFleetos || sourceMemoryStats.both.length !== 1) throw new Error('Separate Amazon and FleetOS uploads should combine by VIN and preserve latest source data');
+  resetFleetDemo();
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet, uploadedAt: '2026-07-05T12:34:00.000Z' };
   applyFleetVehicles(mergedFleet,{silent:true});
   state.expandedFleetVin = '7FCEHEB79PN014816';
@@ -163,7 +176,7 @@ const checks = `
   state.expandedFleetVin = '7FCTGAAA1PN000184';
   if (!fleetPage().includes('LLOL EV 22') || !fleetPage().includes('88%') || !fleetPage().includes('9XYZ222')) throw new Error('Fleet pasted table did not update cards');
   resetFleetDemo();
-  if (rivianFleet.length !== demoRivianFleet.length || state.fleetImport !== null || state.fleetUpdateSummary !== null || state.fleetLastRefresh !== 'Not refreshed yet' || !fleetPage().includes('EDV-014816') || !fleetPage().includes('Needs: real upload')) throw new Error('Fleet clear upload should restore demo board');
+  if (rivianFleet.length !== demoRivianFleet.length || state.fleetImport !== null || Object.keys(state.fleetSourceUploads||{}).length || state.fleetUpdateSummary !== null || state.fleetLastRefresh !== 'Not refreshed yet' || !fleetPage().includes('EDV-014816') || !fleetPage().includes('Needs: real upload')) throw new Error('Fleet clear upload should restore demo board');
   state.fleetPasteText = 'Vehicle Name\\tVIN\\tLicense Plate\\tActive\\tOperational Status\\tBattery %\\tRange Miles\\nLLOL EV 22\\t7FCTGAAA1PN000184\\t9XYZ222\\tActive\\tOperational\\t88%\\t137 mi';
   parseFleetPasteAction();
   state.expandedFleetVin = '7FCTGAAA1PN000184';
