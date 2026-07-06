@@ -103,7 +103,10 @@ const checks = `
   applyEquipmentImport();
   if (state.morningRoutes[0].deviceName !== '31' || state.morningRoutes[0].portable !== '-') throw new Error('Filled screenshot EV/device assignment failed');
   state.modal = 'equipment';
-  if (!modal().includes('VAN/DEV/PORT IMPORT') || !modal().includes('PDF with selectable text') || !modal().includes('Upload any file type') || !modal().includes('equipment-paste-text')) throw new Error('EV/device import modal missing');
+  if (!modal().includes('VAN/DEV/PORT IMPORT') || !modal().includes('Drop screenshot, JPEG, PDF, CSV, or XLSX here') || !modal().includes('equipment-drop') || !modal().includes('equipment-paste-text')) throw new Error('EV/device import modal missing');
+  state.modal = 'equipment';
+  handleEquipmentPaste({ preventDefault(){}, clipboardData:{ files:[], getData:()=> '1 40 31 37 31 -' } });
+  if (!state.equipmentImport || state.equipmentImport.details['37'].device !== '31') throw new Error('Equipment paste shortcut failed');
   state.editMode = true;
   const editableHtml = morningSheetPage();
   if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('data-sheet-cell="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('VAN/DEV/PORT Import') || !editableHtml.includes('EV 1-57 Low → High') || !editableHtml.includes('Randomize EVs') || !editableHtml.includes('Assign Gas Vehicles') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG')) throw new Error('Editable sheet or JPEG control missing');

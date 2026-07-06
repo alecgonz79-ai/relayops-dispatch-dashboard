@@ -382,7 +382,7 @@ function modal() {
   if (state.modal === 'sheets-helper') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="sheets-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS PASTE BOX</span><h2 id="sheets-title">Paste-ready morning sheet</h2><p>If one-click copy does not work, click Select all, copy, then paste into Google Sheets cell A1.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="paste-guide"><span><b>1</b> Select all</span><span><b>2</b> Copy</span><span><b>3</b> Paste in A1</span></div><textarea id="sheets-copy-text" class="sheets-copy-text" readonly>${esc(state.sheetCopyText||morningSheetTsv())}</textarea><div class="modal-actions"><button class="btn" data-action="select-sheets-text">Select all text</button><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy again</button></div></div></div></div>`;
   if (state.modal === 'equipment') {
     const count=state.equipmentImport?Object.keys(state.equipmentImport.details||{}).length:0;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="equipment-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">VAN/DEV/PORT IMPORT</span><h2 id="equipment-title">Match vans to devices</h2><p>Upload the screenshot/table or paste the list. RelayOps matches EV/VAN number to the EV cell, then fills Device and Portable.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="equipment-drop"><button class="btn primary" data-action="choose-file">${ICONS.upload} Upload any file type</button><span>Best results: clear screenshot/JPEG, PDF with selectable text, CSV, XLSX, TXT, Numbers-exported file, or pasted text. If image OCR is blocked by the browser, paste the detected text here.</span></div><label class="equipment-text-label" for="equipment-paste-text">Paste VAN/DEV/PORT list here</label><textarea id="equipment-paste-text" class="equipment-paste-text" placeholder="Example: 1 40 31 37 31 -">${esc(state.equipmentText)}</textarea>${state.equipmentImport?`<div class="import-preview ${count?'':'import-warning'}"><span class="preview-check">${count?'✓':'!'}</span><div><strong>${count} EV/VAN assignments found</strong><span>${count?(state.equipmentImport.name?esc(state.equipmentImport.name):'Ready to match against the EV column.'):'Try a clearer screenshot/PDF or paste the copied text from the image.'}</span></div></div><div class="equipment-preview">${Object.entries(state.equipmentImport.details||{}).slice(0,6).map(([van,d])=>`<span><b>${esc(van)}</b> Device ${esc(d.device||'')} · Portable ${esc(d.portable||'')}</span>`).join('')}</div>`:''}<div class="modal-actions"><button class="btn" data-action="parse-equipment-text">Read list</button><button class="btn primary" data-action="apply-equipment-import" ${count?'':'disabled'}>Fill Device + Portable cells</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="equipment-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">VAN/DEV/PORT IMPORT</span><h2 id="equipment-title">Match vans to devices</h2><p>Upload the screenshot/table or paste the list. RelayOps matches EV/VAN number to the EV cell, then fills Device and Portable.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="equipment-drop" id="equipment-drop" tabindex="0"><div class="equipment-drop-copy"><strong>Drop screenshot, JPEG, PDF, CSV, or XLSX here</strong><span>Or press ⌘V after copying a screenshot/file. Best results: clear screenshot/JPEG, PDF with selectable text, CSV, XLSX, TXT, Numbers-exported file, or pasted text.</span></div><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose file</button></div><label class="equipment-text-label" for="equipment-paste-text">Paste VAN/DEV/PORT list here</label><textarea id="equipment-paste-text" class="equipment-paste-text" placeholder="Example: 1 40 31 37 31 -">${esc(state.equipmentText)}</textarea>${state.equipmentImport?`<div class="import-preview ${count?'':'import-warning'}"><span class="preview-check">${count?'✓':'!'}</span><div><strong>${count} EV/VAN assignments found</strong><span>${count?(state.equipmentImport.name?esc(state.equipmentImport.name):'Ready to match against the EV column.'):'Try a clearer screenshot/PDF or paste the copied text from the image.'}</span></div></div><div class="equipment-preview">${Object.entries(state.equipmentImport.details||{}).slice(0,6).map(([van,d])=>`<span><b>${esc(van)}</b> Device ${esc(d.device||'')} · Portable ${esc(d.portable||'')}</span>`).join('')}</div>`:''}<div class="modal-actions"><button class="btn" data-action="parse-equipment-text">Read list</button><button class="btn primary" data-action="apply-equipment-import" ${count?'':'disabled'}>Fill Device + Portable cells</button></div></div></div></div>`;
   }
   if (state.modal === 'screenshot' && state.screenshotPreview) return `<div class="modal-backdrop" data-action="close-modal"><div class="modal screenshot-modal" role="dialog" aria-modal="true" aria-labelledby="screenshot-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">APPROVAL REQUIRED</span><h2 id="screenshot-title">Approve GroupMe JPEG</h2><p>Only Wave, Driver/Helper, Route, Staging, Pad, EV, Device, and Portable are included.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="jpeg-preview"><img src="${state.screenshotPreview}" alt="Wave sheet JPEG preview"></div><div class="modal-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="save-wave-screenshot">Approve & save JPEG</button></div></div></div></div>`;
   return '';
@@ -398,6 +398,7 @@ function render() {
 }
 
 function bind() {
+  document.removeEventListener?.('paste',handleEquipmentPaste);
   document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>go(el.dataset.page)));
   document.querySelectorAll('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
   document.querySelectorAll('[data-phase]').forEach(el=>el.addEventListener('click',()=>{state.phase=Number(el.dataset.phase);persist();render();}));
@@ -420,6 +421,34 @@ function bind() {
   }
   const equipmentText=document.getElementById('equipment-paste-text');
   if(equipmentText) equipmentText.addEventListener('input',e=>{state.equipmentText=e.target.value;state.equipmentImport=null;});
+  const equipmentDrop=document.getElementById('equipment-drop');
+  if(equipmentDrop) {
+    ['dragenter','dragover'].forEach(ev=>equipmentDrop.addEventListener(ev,e=>{e.preventDefault();equipmentDrop.classList.add('drag');}));
+    ['dragleave','drop'].forEach(ev=>equipmentDrop.addEventListener(ev,e=>{e.preventDefault();equipmentDrop.classList.remove('drag');}));
+    equipmentDrop.addEventListener('drop',e=>{const files=[...e.dataTransfer.files];if(files.length) readEquipmentFiles(files);});
+    equipmentDrop.addEventListener('paste',e=>handleEquipmentPaste(e));
+  }
+  if(state.modal==='equipment') document.addEventListener?.('paste',handleEquipmentPaste);
+}
+
+function readEquipmentFiles(files) {
+  state.importPurpose='equipment';
+  return readFiles(files);
+}
+
+function handleEquipmentPaste(e) {
+  if(state.modal!=='equipment')return;
+  const files=[...(e.clipboardData?.files||[])];
+  if(files.length){e.preventDefault();return readEquipmentFiles(files);}
+  const text=e.clipboardData?.getData('text/plain')||'';
+  if(text&&document.activeElement?.id!=='equipment-paste-text') {
+    e.preventDefault();
+    state.equipmentText=text;
+    const details=equipmentDetailsFromText(text);
+    state.equipmentImport={name:'Pasted VAN/DEV/PORT text',details};
+    render();
+    toast(`${Object.keys(details).length} EV/VAN assignments found`);
+  }
 }
 
 function saveMorningEditCell(el) {
