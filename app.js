@@ -720,7 +720,8 @@ function modal() {
   }
   if (state.modal === 'fleet-refresh' && state.fleetRefreshPreview) {
     const p=state.fleetRefreshPreview, missing=p.missingSources||[], tone=missing.length?'warn':'ok';
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-refresh-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">REVIEW BEFORE REFRESH</span><h2 id="fleet-refresh-title">Approve fleet refresh</h2><p>RelayOps found saved portal data. Review the counts, then approve to update the EV grid.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="fleet-refresh-preview ${tone}"><span><b>${p.input}</b>source rows read</span><span><b>${p.total}</b>EV cards after refresh</span><span><b>${p.updated}</b>cards will change</span><span><b>${p.newCount}</b>new EVs</span><span><b>${p.duplicates}</b>duplicate VINs</span><span><b>${missing.length?missing.join(' + '):'Ready'}</b>${missing.length?'missing source':'both sources matched'}</span></div>${p.changedPreview?.length?`<div class="fleet-refresh-change-list"><strong>First changes to review</strong>${p.changedPreview.map(x=>`<span><b>${esc(x.name)}</b>${esc(x.fields.join(', '))}</span>`).join('')}</div>`:''}<p class="upload-help">Nothing changes until you approve. If the counts look wrong, go back and upload the latest Amazon + FleetOS files first.</p><div class="modal-actions"><button class="btn" data-action="fleet-import">Upload newer files</button><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="approve-fleet-refresh">Approve refresh</button></div></div></div></div>`;
+    const impact=(p.sourceImpact||[]).map(x=>`<span class="${x.ready?'ok':'warn'}"><b>${esc(x.source)}</b>${esc(x.fields)}<em>${x.ready?`${x.count} card${x.count===1?'':'s'} changing`:'missing upload'}</em></span>`).join('');
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-refresh-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">REVIEW BEFORE REFRESH</span><h2 id="fleet-refresh-title">Approve fleet refresh</h2><p>RelayOps found saved portal data. Review the counts, then approve to update the EV grid.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="fleet-refresh-preview ${tone}"><span><b>${p.input}</b>source rows read</span><span><b>${p.total}</b>EV cards after refresh</span><span><b>${p.updated}</b>cards will change</span><span><b>${p.newCount}</b>new EVs</span><span><b>${p.duplicates}</b>duplicate VINs</span><span><b>${missing.length?missing.join(' + '):'Ready'}</b>${missing.length?'missing source':'both sources matched'}</span></div><div class="fleet-refresh-impact"><strong>Refresh will update</strong>${impact}</div>${p.changedPreview?.length?`<div class="fleet-refresh-change-list"><strong>First changes to review</strong>${p.changedPreview.map(x=>`<span><b>${esc(x.name)}</b>${esc(x.fields.join(', '))}</span>`).join('')}</div>`:''}<p class="upload-help">Nothing changes until you approve. If the counts look wrong, go back and upload the latest Amazon + FleetOS files first.</p><div class="modal-actions"><button class="btn" data-action="fleet-import">Upload newer files</button><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="approve-fleet-refresh">Approve refresh</button></div></div></div></div>`;
   }
   if (state.modal === 'screenshot' && state.screenshotPreview) return `<div class="modal-backdrop" data-action="close-modal"><div class="modal screenshot-modal" role="dialog" aria-modal="true" aria-labelledby="screenshot-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">APPROVAL REQUIRED</span><h2 id="screenshot-title">Approve GroupMe JPEG</h2><p>Only Wave, Driver/Helper, Route, Staging, Pad, EV, Device, and Portable are included.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="jpeg-preview"><img src="${state.screenshotPreview}" alt="Wave sheet JPEG preview"></div><div class="modal-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="save-wave-screenshot">Approve & save JPEG</button></div></div></div></div>`;
   return '';
@@ -1312,6 +1313,11 @@ function fleetRefreshPreviewFromVehicles(vehicles=[]) {
   const missingSources=[];
   if(!stats.amazon.size)missingSources.push('Amazon fleet list');
   if(!stats.fleetos.size)missingSources.push('FleetOS tracker');
+  const changed=merged.filter(v=>v.updated), amazonFields=new Set(['name','plate','active status','operational state']), fleetosFields=new Set(['battery','range']);
+  const sourceImpact=[
+    {source:'Amazon fleet list',fields:'names, plates, Active/Inactive, Operational/Grounded',count:changed.filter(v=>(v.changedFields||[]).some(f=>amazonFields.has(f))).length,ready:stats.amazon.size>0},
+    {source:'FleetOS tracker',fields:'battery %, range miles, charge readiness',count:changed.filter(v=>(v.changedFields||[]).some(f=>fleetosFields.has(f))).length,ready:stats.fleetos.size>0}
+  ];
   return {
     input:merged.summary?.input||vehicles.length,
     total:merged.length,
@@ -1320,6 +1326,7 @@ function fleetRefreshPreviewFromVehicles(vehicles=[]) {
     duplicates:merged.summary?.duplicates||0,
     duplicateVins:merged.summary?.duplicateVins||[],
     missingSources,
+    sourceImpact,
     changedPreview:merged.filter(v=>v.updated).slice(0,5).map(v=>({name:v.name,vin:v.vin,fields:v.changedFields||[]}))
   };
 }
