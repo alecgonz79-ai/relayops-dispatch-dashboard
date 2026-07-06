@@ -349,6 +349,7 @@ tbody tr:last-child td { border-bottom:0; }
 .portal-match-grid b { display:block; color:#172019; font-size:14px; line-height:1; margin-bottom:2px; }
 .portal-match-grid .warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
 .portal-match-grid .ok { background:#eef7ea; border-color:#cfe8c7; color:#275c1f; }
+.portal-match-actions { display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
 .fleet-refresh-readiness { display:grid; grid-template-columns:1.1fr 1.4fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:10px 11px; border-radius:13px; border:1px solid #dfe7dd; background:#fbfcfa; }
 .fleet-refresh-readiness.ok { background:#f3fbef; border-color:#cfe8c7; }
 .fleet-refresh-readiness.warn { background:#fff8e6; border-color:#ebcf83; }

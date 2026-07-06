@@ -405,7 +405,8 @@ function fleetPortalMatchStrip() {
   const status=stats.amazonOnly.length||stats.fleetosOnly.length?'warn':'ok';
   const missingAmazon=stats.fleetosOnly.slice(0,3).join(', ')||'None';
   const missingFleetos=stats.amazonOnly.slice(0,3).join(', ')||'None';
-  return `<div class="fleet-portal-match ${status}"><div><strong>Full EV portal check</strong><span>${status==='ok'?'Every uploaded VIN matched between Amazon names and FleetOS battery rows.':'Some VINs only appeared in one upload — use Needs data to review.'}</span></div><div class="portal-match-grid"><span><b>${stats.amazon.size}</b>Amazon named EVs</span><span><b>${stats.fleetos.size}</b>FleetOS battery EVs</span><span><b>${stats.both.length}</b>matched both</span><span class="${stats.amazonOnly.length?'warn':'ok'}"><b>${stats.amazonOnly.length}</b>missing FleetOS</span><span class="${stats.fleetosOnly.length?'warn':'ok'}"><b>${stats.fleetosOnly.length}</b>missing Amazon</span></div><small>Missing FleetOS: ${esc(missingFleetos)} · Missing Amazon: ${esc(missingAmazon)}</small><button class="btn small" data-action="fleet-filter-quick" data-filter="needs-data">Review needs data</button></div>`;
+  const actionButtons=status==='ok'?'<button class="btn small" data-action="fleet-filter-quick" data-filter="verified">Show verified</button>':`<div class="portal-match-actions">${stats.amazonOnly.length?'<button class="btn small" data-action="fleet-filter-quick" data-filter="missing-fleetos">Review missing FleetOS</button>':''}${stats.fleetosOnly.length?'<button class="btn small" data-action="fleet-filter-quick" data-filter="missing-amazon">Review missing Amazon</button>':''}</div>`;
+  return `<div class="fleet-portal-match ${status}"><div><strong>Full EV portal check</strong><span>${status==='ok'?'Every uploaded VIN matched between Amazon names and FleetOS battery rows.':'Some VINs only appeared in one upload — review the exact missing side below.'}</span></div><div class="portal-match-grid"><span><b>${stats.amazon.size}</b>Amazon named EVs</span><span><b>${stats.fleetos.size}</b>FleetOS battery EVs</span><span><b>${stats.both.length}</b>matched both</span><span class="${stats.amazonOnly.length?'warn':'ok'}"><b>${stats.amazonOnly.length}</b>missing FleetOS</span><span class="${stats.fleetosOnly.length?'warn':'ok'}"><b>${stats.fleetosOnly.length}</b>missing Amazon</span></div><small>Missing FleetOS: ${esc(missingFleetos)} · Missing Amazon: ${esc(missingAmazon)}</small>${actionButtons}</div>`;
 }
 
 function fleetSourceKey(source='') {
@@ -510,6 +511,8 @@ function sortedRivianFleet() {
     if(state.fleetFilter==='needs-data')return fleetMissingFields(v).length>0;
     if(state.fleetFilter==='amazon-only')return fleetConfidence(v).label==='Amazon only';
     if(state.fleetFilter==='fleetos-only')return fleetConfidence(v).label==='FleetOS only';
+    if(state.fleetFilter==='missing-fleetos')return fleetConfidence(v).label==='Amazon only';
+    if(state.fleetFilter==='missing-amazon')return fleetConfidence(v).label==='FleetOS only';
     if(state.fleetFilter==='demo-only')return fleetConfidence(v).label==='Demo';
     return true;
   }).filter(v=>{
