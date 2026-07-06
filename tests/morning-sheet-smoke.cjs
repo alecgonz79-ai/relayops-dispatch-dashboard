@@ -140,7 +140,7 @@ const checks = `
   if (!fleetCoverageStats().verified) throw new Error('Fleet coverage counters should show verified EVs after Amazon + FleetOS import');
   const fleetRows = fleetExportRows();
   const exportedEv = fleetRows.find(row => row[1] === '7FCEHEB79PN014816');
-  if (!exportedEv || exportedEv[0] !== 'LLOL EV 21' || exportedEv[7] !== 'Verified' || exportedEv[8] !== '' || !exportedEv[10] || !exportedEv[11] || !exportedEv[12] || !exportedEv[13].includes('Amazon fleet list')) throw new Error('Fleet CSV export rows missing verified EV data');
+  if (!exportedEv || exportedEv[0] !== 'LLOL EV 21' || !String(exportedEv[7]).startsWith('Battery') || exportedEv[8] !== 'Verified' || exportedEv[9] !== 'VIN matched both portals' || exportedEv[10] !== '✓ Amazon row found' || exportedEv[11] !== '✓ FleetOS row found' || exportedEv[12] !== '' || !exportedEv[14] || !exportedEv[15] || !exportedEv[16] || !exportedEv[17].includes('Amazon fleet list')) throw new Error('Fleet CSV export rows missing verified EV data');
   const duplicateFleetRows = [
     ['Vehicle Name','VIN','License Plate','Active','Operational Status'],
     ['LLOL EV 21','7FCEHEB79PN014816','9ABC123','Active','Operational'],

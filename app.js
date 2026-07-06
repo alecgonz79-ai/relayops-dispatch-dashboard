@@ -1527,10 +1527,11 @@ function exportCSV(){const csv=[exportHeaders,...exportRows()].map(r=>r.map(csvE
 function fleetExportRows() {
   return sortedRivianFleet().map(v=>{
     const confidence=fleetConfidence(v), missing=fleetMissingFields(v), changes=state.fleetChangedVins?.[v.vin]||v.changedFields||[];
-    return [v.name,v.vin,v.plate||'',v.active||'',v.operational||'',v.battery,v.miles,confidence.label,missing.join('; '),changes.join('; '),v.updatedAt||'',fleetSourceUploadedAt('amazon','iso'),fleetSourceUploadedAt('fleetos','iso'),v.source||'Demo data'];
+    const batteryFreshness=fleetBatteryFreshness(v), audit=fleetSourceAudit(v);
+    return [v.name,v.vin,v.plate||'',v.active||'',v.operational||'',v.battery,v.miles,batteryFreshness.label,confidence.label,audit.summary,audit.amazon,audit.fleetos,missing.join('; '),changes.join('; '),v.updatedAt||'',fleetSourceUploadedAt('amazon','iso'),fleetSourceUploadedAt('fleetos','iso'),v.source||'Demo data'];
   });
 }
-function exportFleetCSV(){const h=['Vehicle Name','VIN','License Plate','Active','Operational Status','Battery %','Range Miles','Confidence','Needs','Changed Fields','Last Changed At','Amazon Uploaded At','FleetOS Uploaded At','Source'];const rows=fleetExportRows();downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8','relayops-ev-fleet-board.csv');toast(`${rows.length} EV rows downloaded`);}
+function exportFleetCSV(){const h=['Vehicle Name','VIN','License Plate','Active','Operational Status','Battery %','Range Miles','Battery Freshness','Confidence','VIN Source Audit','Amazon Row','FleetOS Row','Needs','Changed Fields','Last Changed At','Amazon Uploaded At','FleetOS Uploaded At','Source'];const rows=fleetExportRows();downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8','relayops-ev-fleet-board.csv');toast(`${rows.length} EV rows downloaded`);}
 function fleetGapRows() {
   const stats=fleetPortalMatchStats(), byVin=new Map(rivianFleet.map(v=>[cleanVin(v.vin),v])), rows=[];
   const vehicleRow=(issue,vin,fix)=>{
