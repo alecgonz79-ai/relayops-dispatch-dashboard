@@ -88,7 +88,7 @@ const checks = `
   state.fleetFilter = 'all';
   state.modal = 'fleet-import';
   const fleetImportHtml = modal();
-  if (!fleetImportHtml.includes('Or paste the copied FleetOS/Amazon table here') || !fleetImportHtml.includes('Read pasted table')) throw new Error('Fleet paste modal missing');
+  if (!fleetImportHtml.includes('Or paste the copied FleetOS/Amazon table here') || !fleetImportHtml.includes('Read pasted table') || !fleetImportHtml.includes('Need fleet example?')) throw new Error('Fleet paste modal missing');
   state.fleetPasteText = 'Vehicle Name\\tVIN\\tLicense Plate\\tActive\\tOperational Status\\tBattery %\\tRange Miles\\nLLOL EV 22\\t7FCTGAAA1PN000184\\t9XYZ222\\tActive\\tOperational\\t88%\\t137 mi';
   parseFleetPasteAction();
   state.expandedFleetVin = '7FCTGAAA1PN000184';
