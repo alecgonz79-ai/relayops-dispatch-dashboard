@@ -344,7 +344,7 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-portal-match strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
 .fleet-portal-match span, .fleet-portal-match small { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
 .fleet-portal-match small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.portal-match-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; }
+.portal-match-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:6px; }
 .portal-match-grid span { padding:7px 8px; border-radius:9px; background:#fff; border:1px solid #e2e8e3; color:#546159; font-size:7px; font-weight:1000; text-transform:uppercase; letter-spacing:.04em; }
 .portal-match-grid b { display:block; color:#172019; font-size:14px; line-height:1; margin-bottom:2px; }
 .portal-match-grid .warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }

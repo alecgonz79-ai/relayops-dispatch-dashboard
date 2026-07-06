@@ -396,7 +396,8 @@ function fleetPortalMatchStats() {
   const both=[...amazon].filter(vin=>fleetos.has(vin));
   const amazonOnly=[...amazon].filter(vin=>!fleetos.has(vin));
   const fleetosOnly=[...fleetos].filter(vin=>!amazon.has(vin));
-  return {rows,amazon,fleetos,both,amazonOnly,fleetosOnly};
+  const uniqueVins=new Set([...amazon,...fleetos]);
+  return {rows,amazon,fleetos,both,amazonOnly,fleetosOnly,uniqueVins};
 }
 
 function fleetPortalMatchStrip() {
@@ -406,7 +407,7 @@ function fleetPortalMatchStrip() {
   const missingAmazon=stats.fleetosOnly.slice(0,3).join(', ')||'None';
   const missingFleetos=stats.amazonOnly.slice(0,3).join(', ')||'None';
   const actionButtons=status==='ok'?'<button class="btn small" data-action="fleet-filter-quick" data-filter="verified">Show verified</button>':`<div class="portal-match-actions">${stats.amazonOnly.length?'<button class="btn small" data-action="fleet-filter-quick" data-filter="missing-fleetos">Review missing FleetOS</button>':''}${stats.fleetosOnly.length?'<button class="btn small" data-action="fleet-filter-quick" data-filter="missing-amazon">Review missing Amazon</button>':''}</div>`;
-  return `<div class="fleet-portal-match ${status}"><div><strong>Full EV portal check</strong><span>${status==='ok'?'Every uploaded VIN matched between Amazon names and FleetOS battery rows.':'Some VINs only appeared in one upload — review the exact missing side below.'}</span></div><div class="portal-match-grid"><span><b>${stats.amazon.size}</b>Amazon named EVs</span><span><b>${stats.fleetos.size}</b>FleetOS battery EVs</span><span><b>${stats.both.length}</b>matched both</span><span class="${stats.amazonOnly.length?'warn':'ok'}"><b>${stats.amazonOnly.length}</b>missing FleetOS</span><span class="${stats.fleetosOnly.length?'warn':'ok'}"><b>${stats.fleetosOnly.length}</b>missing Amazon</span></div><small>Missing FleetOS: ${esc(missingFleetos)} · Missing Amazon: ${esc(missingAmazon)}</small>${actionButtons}</div>`;
+  return `<div class="fleet-portal-match ${status}"><div><strong>Full EV portal check</strong><span>${status==='ok'?'Every uploaded VIN matched between Amazon names and FleetOS battery rows.':'Some VINs only appeared in one upload — review the exact missing side below.'}</span></div><div class="portal-match-grid"><span><b>${stats.uniqueVins.size}</b>unique VINs accounted</span><span><b>${stats.amazon.size}</b>Amazon named EVs</span><span><b>${stats.fleetos.size}</b>FleetOS battery EVs</span><span><b>${stats.both.length}</b>matched both</span><span class="${stats.amazonOnly.length?'warn':'ok'}"><b>${stats.amazonOnly.length}</b>missing FleetOS</span><span class="${stats.fleetosOnly.length?'warn':'ok'}"><b>${stats.fleetosOnly.length}</b>missing Amazon</span></div><small>Missing FleetOS: ${esc(missingFleetos)} · Missing Amazon: ${esc(missingAmazon)}</small>${actionButtons}</div>`;
 }
 
 function fleetSourceKey(source='') {

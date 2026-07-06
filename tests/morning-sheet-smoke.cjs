@@ -88,7 +88,7 @@ const checks = `
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet, uploadedAt: '2026-07-05T12:34:00.000Z' };
   applyFleetVehicles(mergedFleet,{silent:true});
   const matchedFleetStats = fleetPortalMatchStats();
-  if (state.fleetUpdateSummary.duplicates !== 0 || matchedFleetStats.amazon.size !== 1 || matchedFleetStats.fleetos.size !== 1 || matchedFleetStats.both.length !== 1 || matchedFleetStats.amazonOnly.length || matchedFleetStats.fleetosOnly.length || !fleetPortalMatchStrip().includes('matched both')) throw new Error('FleetOS/Amazon matched VINs should reconcile without duplicate warnings');
+  if (state.fleetUpdateSummary.duplicates !== 0 || matchedFleetStats.uniqueVins.size !== 1 || matchedFleetStats.amazon.size !== 1 || matchedFleetStats.fleetos.size !== 1 || matchedFleetStats.both.length !== 1 || matchedFleetStats.amazonOnly.length || matchedFleetStats.fleetosOnly.length || !fleetPortalMatchStrip().includes('unique VINs accounted') || !fleetPortalMatchStrip().includes('matched both')) throw new Error('FleetOS/Amazon matched VINs should reconcile without duplicate warnings');
   resetFleetDemo();
   const messyFleetRows = [
     ['Asset ID','Vehicle Identification Number','Registration Number','Availability Status','Grounding Status','State of Charge %','Estimated Range (mi)'],
@@ -113,7 +113,7 @@ const checks = `
   applyFleetVehicles(combinedSourceVehicles,{silent:true});
   const sourceMemoryEv = rivianFleet.find(v => v.vin === '7FCEHEB79PN014816');
   const sourceMemoryStats = fleetPortalMatchStats();
-  if (state.fleetImport.vehicles.length !== 2 || sourceMemoryEv.name !== 'LLOL EV 21' || sourceMemoryEv.plate !== '9ABC123' || sourceMemoryEv.battery !== 38 || !fleetSourceStatus().hasAmazon || !fleetSourceStatus().hasFleetos || sourceMemoryStats.both.length !== 1 || !fleetRefreshReadinessStrip().includes('Refresh readiness') || !fleetRefreshReadinessStrip().includes('Refresh now')) throw new Error('Separate Amazon and FleetOS uploads should combine by VIN and preserve latest source data');
+  if (state.fleetImport.vehicles.length !== 2 || sourceMemoryEv.name !== 'LLOL EV 21' || sourceMemoryEv.plate !== '9ABC123' || sourceMemoryEv.battery !== 38 || !fleetSourceStatus().hasAmazon || !fleetSourceStatus().hasFleetos || sourceMemoryStats.uniqueVins.size !== 1 || sourceMemoryStats.both.length !== 1 || !fleetRefreshReadinessStrip().includes('Refresh readiness') || !fleetRefreshReadinessStrip().includes('Refresh now')) throw new Error('Separate Amazon and FleetOS uploads should combine by VIN and preserve latest source data');
   resetFleetDemo();
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet, uploadedAt: '2026-07-05T12:34:00.000Z' };
   applyFleetVehicles(mergedFleet,{silent:true});
