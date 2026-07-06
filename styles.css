@@ -352,6 +352,11 @@ tbody tr:last-child td { border-bottom:0; }
 .portal-match-grid em { display:block; margin-top:2px; color:#6c7770; font-style:normal; font-size:6px; line-height:1.2; }
 .portal-match-grid .warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
 .portal-match-grid .ok { background:#eef7ea; border-color:#cfe8c7; color:#275c1f; }
+.portal-coverage-meter { margin-top:7px; display:grid; gap:3px; max-width:220px; }
+.portal-coverage-meter span { display:block; height:9px; padding:0; border-radius:999px; background:#e6ebe5; border:1px solid #d6dfd4; overflow:hidden; position:relative; }
+.portal-coverage-meter span b { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#172019; font-size:5px; font-weight:1000; letter-spacing:.08em; text-transform:uppercase; z-index:1; }
+.portal-coverage-meter span i { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#72c456,#1f8f44); }
+.portal-coverage-meter em { color:#516158; font-style:normal; font-size:7px; font-weight:950; line-height:1.2; }
 .portal-match-actions { display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
 .fleet-gap-audit { display:grid; grid-template-columns:1fr 1.8fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
 .fleet-gap-audit strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
