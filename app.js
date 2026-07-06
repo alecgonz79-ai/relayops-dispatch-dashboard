@@ -508,7 +508,8 @@ function fleetGapAuditStrip() {
   if(!rows.length)return '';
   const preview=rows.slice(0,5).map(row=>{
     const [priority,issue,vin,name,,,,,,,,,,fix]=row;
-    return `<span><b>${esc(priority)} · ${esc(issue)}</b>${esc(vin||name||'Expected count issue')}<em>${esc(fix)}</em></span>`;
+    const tone=String(priority||'').toLowerCase();
+    return `<span><i class="gap-priority ${esc(tone)}">${esc(priority)}</i><b>${esc(issue)}</b>${esc(vin||name||'Expected count issue')}<em>${esc(fix)}</em></span>`;
   }).join('');
   const more=Math.max(0,rows.length-5);
   const stats=fleetPortalMatchStats();

@@ -367,6 +367,9 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-gap-preview span { min-width:0; padding:7px 8px; border-radius:9px; background:#fff; border:1px solid #e2e8e3; color:#566159; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .fleet-gap-preview b { display:inline; margin-right:5px; color:#8a5d08; font-size:8px; }
 .fleet-gap-preview em { display:block; margin-top:2px; color:#6c7770; font-style:normal; font-size:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gap-priority { display:inline-flex; align-items:center; margin-right:5px; padding:2px 4px; border-radius:999px; background:#fff2cf; color:#8a5d08; font-style:normal; font-size:6px; font-weight:1000; letter-spacing:.06em; vertical-align:1px; }
+.gap-priority.high { background:#ffe7e2; color:#a8372a; }
+.gap-priority.med { background:#fff2cf; color:#8a5d08; }
 .fleet-refresh-readiness { display:grid; grid-template-columns:1.1fr 1.4fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:10px 11px; border-radius:13px; border:1px solid #dfe7dd; background:#fbfcfa; }
 .fleet-refresh-readiness.ok { background:#f3fbef; border-color:#cfe8c7; }
 .fleet-refresh-readiness.warn { background:#fff8e6; border-color:#ebcf83; }
