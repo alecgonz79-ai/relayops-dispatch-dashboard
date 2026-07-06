@@ -616,6 +616,17 @@ function fleetSourcePill(key='',label='') {
   const status=!has?'Missing':age.stale?'Stale':'Fresh';
   return `<span class="${tone}"><b>${esc(label)}</b>${esc(fleetSourceUploadLabel(key))}<em>${esc(status)} · ${esc(age.label)}</em></span>`;
 }
+function fleetSourceFreshnessSummary() {
+  const amazon=fleetSourceAge('amazon'), fleetos=fleetSourceAge('fleetos');
+  const amazonWhen=fleetSourceUploadedAt('amazon');
+  const fleetosWhen=fleetSourceUploadedAt('fleetos');
+  const problems=[
+    !amazon.hasUpload?'Amazon missing':amazon.stale?'Amazon stale':'',
+    !fleetos.hasUpload?'FleetOS missing':fleetos.stale?'FleetOS stale':''
+  ].filter(Boolean);
+  const status=problems.length?`Check: ${problems.join(' · ')}`:'Both sources fresh enough for review';
+  return `<div class="refresh-freshness-summary ${problems.length?'warn':'ok'}"><strong>Saved upload freshness</strong><span>Amazon ${esc(amazonWhen)} · ${esc(amazon.label)} | FleetOS ${esc(fleetosWhen)} · ${esc(fleetos.label)}</span><em>${esc(status)}</em></div>`;
+}
 
 function fleetLegend() {
   return `<div class="fleet-legend" aria-label="Fleet card legend"><span class="verified"><b>Green</b> VIN matched both portals</span><span class="partial"><b>Yellow</b> upload missing Amazon or FleetOS</span><span class="demo"><b>Gray</b> demo until real upload</span><span class="charge"><b>Battery colors</b> red/orange need charge first</span></div>`;
@@ -646,7 +657,7 @@ function fleetRefreshReadinessStrip() {
   const hasAmazon=stats.amazon.size>0, hasFleetos=stats.fleetos.size>0;
   const tone=hasAmazon&&hasFleetos?'ok':'warn';
   const message=hasAmazon&&hasFleetos?'Refresh will rebuild the board from the latest saved Amazon names and FleetOS battery data.':`Refresh can run, but upload the ${hasAmazon?'FleetOS tracker':'Amazon fleet list'} next for full accuracy.`;
-  return `<div class="fleet-refresh-readiness ${tone}"><div><strong>Refresh readiness</strong><span>${esc(message)}</span></div><div><div class="refresh-source-pills">${fleetSourcePill('amazon','Amazon')}${fleetSourcePill('fleetos','FleetOS')}</div><div class="refresh-update-map"><span><b>Amazon</b>name + plate + active/grounded</span><span><b>FleetOS</b>battery % + range</span><span><b>VIN</b>match key</span></div></div><button class="btn small ${hasAmazon&&hasFleetos?'lime':'primary'}" data-action="${hasAmazon&&hasFleetos?'refresh-fleet':'fleet-import'}">${hasAmazon&&hasFleetos?'Review refresh':'Upload missing source'}</button></div>`;
+  return `<div class="fleet-refresh-readiness ${tone}"><div><strong>Refresh readiness</strong><span>${esc(message)}</span>${fleetSourceFreshnessSummary()}</div><div><div class="refresh-source-pills">${fleetSourcePill('amazon','Amazon')}${fleetSourcePill('fleetos','FleetOS')}</div><div class="refresh-update-map"><span><b>Amazon</b>name + plate + active/grounded</span><span><b>FleetOS</b>battery % + range</span><span><b>VIN</b>match key</span></div></div><button class="btn small ${hasAmazon&&hasFleetos?'lime':'primary'}" data-action="${hasAmazon&&hasFleetos?'refresh-fleet':'fleet-import'}">${hasAmazon&&hasFleetos?'Review refresh':'Upload missing source'}</button></div>`;
 }
 
 function fleetCoverageStats() {

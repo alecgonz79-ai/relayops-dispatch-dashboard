@@ -370,6 +370,13 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-refresh-readiness.warn { background:#fff8e6; border-color:#ebcf83; }
 .fleet-refresh-readiness strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
 .fleet-refresh-readiness span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
+.refresh-freshness-summary { margin-top:7px; padding:7px 8px; border-radius:10px; border:1px solid #dfe7dd; background:#fff; }
+.refresh-freshness-summary.ok { background:#eef7ea; border-color:#cfe8c7; }
+.refresh-freshness-summary.warn { background:#fff2cf; border-color:#ebcf83; }
+.refresh-freshness-summary strong { font-size:8px; margin-bottom:2px; text-transform:uppercase; letter-spacing:.06em; }
+.refresh-freshness-summary span, .refresh-freshness-summary em { display:block; color:#516158; font-size:7px; font-weight:950; line-height:1.25; }
+.refresh-freshness-summary em { margin-top:2px; color:#275c1f; font-style:normal; }
+.refresh-freshness-summary.warn em { color:#8a5d08; }
 .refresh-source-pills { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
 .refresh-source-pills span { padding:7px 8px; border-radius:9px; background:#fff; border:1px solid #e2e8e3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .refresh-source-pills b { display:block; color:#172019; font-size:8px; text-transform:uppercase; letter-spacing:.06em; }
