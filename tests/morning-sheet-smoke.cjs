@@ -166,7 +166,7 @@ const checks = `
     ['LLOL EV 21 duplicate','7FCEHEB79PN014816','9ABC123','Active','Operational']
   ];
   applyFleetVehicles(fleetDetailsFromRows(duplicateFleetRows,'amazon fleet list.csv'),{silent:true});
-  if (state.fleetUpdateSummary.duplicates !== 1 || !state.fleetUpdateSummary.duplicateVins.includes('7FCEHEB79PN014816') || !fleetPage().includes('duplicate VINs') || !fleetTrustStrip().includes('1 duplicate VIN in upload') || !fleetDispatchChecklist().includes('No duplicate VINs') || !fleetDispatchChecklist().includes('1 duplicate VIN') || !fleetAccuracyGate().includes('1 duplicate VIN') || !fleetPage().includes('7FCEHEB79PN014816') || !fleetGapRows().some(row => row[0] === 'Duplicate VIN in upload' && row[1] === '7FCEHEB79PN014816')) throw new Error('Fleet duplicate VIN warning failed');
+  if (state.fleetUpdateSummary.duplicates !== 1 || !state.fleetUpdateSummary.duplicateVins.includes('7FCEHEB79PN014816') || !fleetPage().includes('duplicate VINs') || !fleetTrustStrip().includes('1 duplicate VIN in upload') || !fleetDispatchChecklist().includes('No duplicate VINs') || !fleetDispatchChecklist().includes('1 duplicate VIN') || !fleetAccuracyGate().includes('1 duplicate VIN') || !fleetPage().includes('7FCEHEB79PN014816') || !fleetGapRows().some(row => row[0] === 'HIGH' && row[1] === 'Duplicate VIN in upload' && row[2] === '7FCEHEB79PN014816')) throw new Error('Fleet duplicate VIN warning failed');
   const duplicatePreview = fleetRefreshPreviewFromVehicles(fleetDetailsFromRows(duplicateFleetRows,'amazon fleet list.csv'));
   if (!duplicatePreview.blockers.some(x => x.includes('duplicate VIN')) || duplicatePreview.duplicates !== 1) throw new Error('Fleet refresh preview should block duplicate VIN approval');
   applyFleetVehicles(mergedFleet,{silent:true});
@@ -183,11 +183,11 @@ const checks = `
   rememberFleetSourceUpload(fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),'amazon fleet list.csv','2026-07-05T12:00:00.000Z');
   state.fleetExpectedCount = 2;
   const gapRows = fleetGapRows();
-  if (!gapRows.some(row => row[0] === 'Missing FleetOS battery/range' && row[1] === '7FCEHEB79PN014816' && row[8] === 'Amazon only — battery needs FleetOS' && row[9] === 2 && row[10] === '2026-07-05T12:00:00.000Z') || !gapRows.some(row => row[0] === 'Expected EV count short' && row[8] === 'Expected count from Amazon fleet list')) throw new Error('Fleet gap rows should include missing FleetOS and expected count shortage');
+  if (!gapRows.some(row => row[0] === 'HIGH' && row[1] === 'Missing FleetOS battery/range' && row[2] === '7FCEHEB79PN014816' && row[9] === 'Amazon only — battery needs FleetOS' && row[10] === 2 && row[11] === '2026-07-05T12:00:00.000Z') || !gapRows.some(row => row[0] === 'MED' && row[1] === 'Expected EV count short' && row[9] === 'Expected count from Amazon fleet list')) throw new Error('Fleet gap rows should include missing FleetOS and expected count shortage');
   let capturedGapCsv = null;
   downloadBlob = (data,type,name) => { capturedGapCsv = { data, type, name }; };
   exportFleetGapsCSV();
-  if (!capturedGapCsv || capturedGapCsv.name !== 'relayops-ev-source-gaps.csv' || !capturedGapCsv.data.includes('VIN Source Audit') || !capturedGapCsv.data.includes('Amazon Uploaded At') || !capturedGapCsv.data.includes('FleetOS Uploaded At') || !capturedGapCsv.data.includes('Missing FleetOS battery/range') || !capturedGapCsv.data.includes('Expected EV count short')) throw new Error('Fleet gap CSV export failed');
+  if (!capturedGapCsv || capturedGapCsv.name !== 'relayops-ev-source-gaps.csv' || !capturedGapCsv.data.includes('Priority,Issue,VIN') || !capturedGapCsv.data.includes('VIN Source Audit') || !capturedGapCsv.data.includes('Amazon Uploaded At') || !capturedGapCsv.data.includes('FleetOS Uploaded At') || !capturedGapCsv.data.includes('HIGH,Missing FleetOS battery/range') || !capturedGapCsv.data.includes('MED,Expected EV count short')) throw new Error('Fleet gap CSV export failed');
   state.fleetExpectedCount = 0;
   state.fleetFilter = 'amazon-only';
   if (!fleetPage().includes('Amazon only') || !fleetPage().includes('Upload missing source') || !fleetPage().includes('Partial source view') || !fleetPage().includes('Not uploaded yet') || !fleetPage().includes('Review missing FleetOS') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'Amazon only')) throw new Error('Amazon-only fleet filter failed');
