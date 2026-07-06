@@ -427,7 +427,7 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-dispatch-checklist.ok { border-color:#cfe8c7; background:#f3fbef; }
 .fleet-dispatch-checklist strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
 .fleet-dispatch-checklist span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
-.dispatch-check-items { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:7px; }
+.dispatch-check-items { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:7px; }
 .dispatch-check-items button { min-width:0; border:1px solid #e2e8e3; border-radius:10px; padding:8px; background:#fff; text-align:left; cursor:pointer; }
 .dispatch-check-items button.ok { background:#eef7ea; border-color:#cfe8c7; }
 .dispatch-check-items button.warn { background:#fff2cf; border-color:#ebcf83; }
