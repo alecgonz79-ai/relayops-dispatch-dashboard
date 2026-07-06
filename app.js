@@ -361,6 +361,7 @@ function fleetPage() {
   return `${contextBar(`<a class="btn small ghost" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">${ICONS.link} Rivian tracker</a><a class="btn small ghost" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">${ICONS.link} Amazon fleet list</a>`)}
   <section class="grid kpi-grid">${kpiCard('Rivian battery avg',`${avg}%`,`${low} below 40%`,'van',low?'#fff2cf':'#e9f7df')}${kpiCard('EVs tracked',rivianFleet.length,readyCopy,'van',coverage.needsData?'#fff2cf':'#e9f7df')}${kpiCard('Verified EVs',`${coverage.verified}/${coverage.total}`,`${coverage.needsData} need data`,'check',coverage.needsData?'#fff2cf':'#e9f7df')}${kpiCard('Grounded EVs',grounded,'Tap a van for details','alert',grounded?'#ffe7e2':'#e9f7df')}</section>
   <article class="card rivian-panel"><div class="card-head"><div class="card-title"><h2>FleetOS + Amazon EV live board</h2><p>Compact EV grid for battery %, VIN, license plate, active status, and operational state. Last refresh: ${esc(state.fleetLastRefresh)}.</p></div><div class="head-actions"><input class="fleet-search-input" data-fleet-search placeholder="Find EV, VIN, or plate" value="${esc(state.fleetSearch)}"><label class="fleet-count-label">Expected EVs<input class="fleet-count-input" data-fleet-expected type="number" min="0" inputmode="numeric" value="${state.fleetExpectedCount||''}" placeholder="all"></label><select class="filter-select" data-fleet-filter>${filters.map(value=>`<option value="${value}" ${state.fleetFilter===value?'selected':''}>${labels[value]}</option>`).join('')}</select><button class="btn small ghost" data-action="clear-fleet-search">Clear</button><select class="filter-select" data-fleet-view><option value="tiny" ${state.fleetView==='tiny'?'selected':''}>View: Tiny grid</option><option value="detail" ${state.fleetView==='detail'?'selected':''}>View: Detail grid</option></select><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><button class="btn small lime" data-action="refresh-fleet">${ICONS.download} Refresh battery % + status</button><button class="btn small" data-action="export-fleet-csv">${ICONS.download} EV CSV</button><button class="btn small" data-action="export-fleet-gaps">${ICONS.download} Gap CSV</button><button class="btn small primary" data-action="fleet-import">${ICONS.upload} Upload / paste fleet list</button><button class="btn small ghost" data-action="reset-fleet-demo">Clear upload</button><a class="btn small" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">FleetOS</a><a class="btn small" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">Amazon</a></div></div>
+  ${fleetHeaderRefreshGuide()}
   ${fleetPortalQuickStart()}
   ${fleetTrustStrip()}
   ${fleetDispatchChecklist()}
@@ -424,6 +425,14 @@ function fleetUpdateSummary() {
 function fleetResultBar(visible=0,filterLabel='Show all EVs') {
   const total=rivianFleet.length, searching=String(state.fleetSearch||'').trim();
   return `<div class="fleet-result-bar"><div><strong>${visible} of ${total} EVs showing</strong><span>${esc(filterLabel)}${searching?` · search: “${esc(searching)}”`:''}</span></div><div><span>${state.fleetView==='detail'?'Detail grid':'Tiny grid'}</span><button class="btn small ghost" data-action="clear-fleet-search">Show all EVs</button></div></div>`;
+}
+
+function fleetHeaderRefreshGuide() {
+  const status=fleetSourceStatus();
+  const both=status.hasAmazon&&status.hasFleetos;
+  const headline=both?'Refresh is ready to compare both portals':'Upload both portal lists for a trusted refresh';
+  const action=both?'Press Refresh to review changes before the grid updates.':'Start with Upload / paste fleet list, then refresh once both sides are loaded.';
+  return `<div class="fleet-refresh-guide ${both?'ok':'warn'}"><div><strong>${esc(headline)}</strong><span>${esc(action)}</span></div><div class="fleet-refresh-guide-map"><span class="${status.hasAmazon?'ok':'warn'}"><b>Amazon</b>EV name, plate, Active/Inactive, Grounded</span><span class="${status.hasFleetos?'ok':'warn'}"><b>FleetOS</b>battery %, miles, charge readiness</span><span class="ok"><b>VIN</b>matches the same van across both files</span></div></div>`;
 }
 
 function fleetQuickFilterChips() {

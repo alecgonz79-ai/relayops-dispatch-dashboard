@@ -391,6 +391,15 @@ tbody tr:last-child td { border-bottom:0; }
 .refresh-source-pills em { display:block; margin-top:2px; color:#6c7770; font-style:normal; font-size:7px; font-weight:1000; }
 .refresh-source-pills .ok { background:#eef7ea; border-color:#cfe8c7; color:#275c1f; }
 .refresh-source-pills .warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
+.fleet-refresh-guide { display:grid; grid-template-columns:1fr 2fr; gap:10px; align-items:center; margin:12px 18px 12px; padding:10px 11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
+.fleet-refresh-guide.ok { border-color:#cfe8c7; background:#f4fbef; }
+.fleet-refresh-guide strong { display:block; color:#172019; font:1000 10px "Manrope"; }
+.fleet-refresh-guide span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
+.fleet-refresh-guide-map { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+.fleet-refresh-guide-map span { min-width:0; padding:7px 8px; border-radius:9px; border:1px solid #e2e8e3; background:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-refresh-guide-map span.ok { background:#eef7ea; border-color:#cfe8c7; color:#275c1f; }
+.fleet-refresh-guide-map span.warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
+.fleet-refresh-guide-map b { display:block; margin-bottom:2px; color:#172019; font-size:7px; letter-spacing:.07em; text-transform:uppercase; }
 .fleet-search-input { min-width:150px; height:30px; border:1px solid var(--line); border-radius:10px; padding:0 10px; font-size:8px; font-weight:900; color:var(--ink); background:#fff; outline:none; }
 .fleet-search-input:focus { border-color:#82c66b; box-shadow:0 0 0 3px rgba(130,198,107,.18); }
 .fleet-update-summary { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:7px; margin:0 0 12px; }
@@ -751,7 +760,7 @@ tbody tr:last-child td { border-bottom:0; }
   .trust-mini, .dispatch-check-items { grid-template-columns:1fr; }
   .fleet-portal-match { grid-template-columns:1fr; }
   .portal-match-grid { grid-template-columns:1fr 1fr; }
-  .fleet-refresh-readiness, .refresh-update-map { grid-template-columns:1fr; }
+  .fleet-refresh-readiness, .refresh-update-map, .fleet-refresh-guide, .fleet-refresh-guide-map { grid-template-columns:1fr; }
   .fleet-refresh-preview, .fleet-refresh-impact, .fleet-refresh-change-list, .rivian-id-summary { grid-template-columns:1fr; }
   .fleet-refresh-impact > strong { grid-column:auto; }
   .fleet-full-list { grid-template-columns:1fr; }
