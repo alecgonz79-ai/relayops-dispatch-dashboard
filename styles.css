@@ -422,6 +422,7 @@ tbody tr:last-child td { border-bottom:0; }
 .rivian-card.expanded { grid-column:span 2; min-height:138px; }
 .rivian-card.updated { border-color:#82c66b; box-shadow:0 8px 20px rgba(74,141,49,.13); }
 .rivian-card.needs-data { border-style:dashed; }
+.rivian-card.hard-status { border-color:#f0b2aa; box-shadow:0 6px 18px rgba(170,59,44,.14); }
 .rivian-card-main { display:flex; align-items:center; justify-content:space-between; gap:6px; }
 .tiny-view .rivian-card:not(.expanded) .rivian-card-main { gap:4px; align-items:flex-start; }
 .rivian-copy { min-width:0; }
@@ -433,6 +434,9 @@ tbody tr:last-child td { border-bottom:0; }
 .confidence-pill.partial { background:#fff2cf; color:#8a5d08; }
 .confidence-pill.demo { background:#edf0ec; color:#68726b; }
 .update-pill { padding:2px 5px; border-radius:999px; background:#dff5d7; color:#275c1f; font-size:6px; font-weight:1000; letter-spacing:.08em; text-transform:uppercase; }
+.hard-status-pill { padding:2px 5px; border-radius:999px; background:#ffe7e2; color:#a8372a; font-size:6px; font-weight:1000; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
+.hard-status-pill.inactive { background:#edf0ec; color:#5d6861; }
+.tiny-view .hard-status-pill { padding:2px 4px; font-size:5px; }
 .rivian-vin { display:block; max-width:98px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px; color:#5c6970; font-size:6px; font-weight:800; }
 .tiny-view .rivian-card:not(.expanded) .rivian-vin { max-width:74px; font-size:5px; }
 .rivian-charge-line { margin-top:5px; display:flex; align-items:center; gap:6px; color:#111; }

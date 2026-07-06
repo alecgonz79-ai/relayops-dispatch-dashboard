@@ -78,7 +78,9 @@ const checks = `
   const sortedFleet = sortedRivianFleet();
   if (sortedFleet[0].battery !== 18 || batteryTone(18) !== 'critical' || batteryTone(92) !== 'high') throw new Error('Rivian battery sorting or color tone failed');
   state.expandedFleetVin = '';
-  if (!fleetPage().includes('Tap for plate/status')) throw new Error('Compact EV cards should show tap-for-details cue');
+  const compactFleetHtml = fleetPage();
+  if (!compactFleetHtml.includes('Tap for plate/status')) throw new Error('Compact EV cards should show tap-for-details cue');
+  if (!compactFleetHtml.includes('hard-status-pill grounded') || !compactFleetHtml.includes('hard-status-pill inactive') || !compactFleetHtml.includes('hard-status')) throw new Error('Grounded/inactive EV cards should stay obvious in compact view');
   const amazonFleetRows = [
     ['Vehicle Name','VIN','License Plate','Active','Operational Status'],
     ['LLOL EV 21','7FCEHEB79PN014816','9ABC123','Inactive','Grounded']
