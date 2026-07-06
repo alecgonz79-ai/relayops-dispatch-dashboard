@@ -1691,16 +1691,17 @@ function fleetGapRows() {
   const stats=fleetPortalMatchStats(), byVin=new Map(rivianFleet.map(v=>[cleanVin(v.vin),v])), rows=[];
   const vehicleRow=(issue,vin,fix)=>{
     const v=byVin.get(cleanVin(vin))||{};
-    rows.push([issue,vin,v.name||'',v.plate||'',v.active||'',v.operational||'',v.battery??'',v.miles??'',fix]);
+    const audit=v.vin?fleetSourceAudit(v):{summary:'Missing source row'};
+    rows.push([issue,vin,v.name||'',v.plate||'',v.active||'',v.operational||'',v.battery??'',v.miles??'',audit.summary,Number(state.fleetExpectedCount)||'',fleetSourceUploadedAt('amazon','iso'),fleetSourceUploadedAt('fleetos','iso'),fix]);
   };
   stats.amazonOnly.forEach(vin=>vehicleRow('Missing FleetOS battery/range',vin,'Upload FleetOS tracker row for this VIN'));
   stats.fleetosOnly.forEach(vin=>vehicleRow('Missing Amazon name/status',vin,'Upload Amazon fleet-list row for this VIN'));
   (state.fleetUpdateSummary?.duplicateVins||[]).forEach(vin=>vehicleRow('Duplicate VIN in upload',vin,'Remove duplicate VIN row from the source export before refresh'));
   const expected=Number(state.fleetExpectedCount)||0, short=Math.max(0,expected-stats.uniqueVins.size);
-  if(short) rows.push(['Expected EV count short','',`Tracked ${stats.uniqueVins.size} of expected ${expected}`,'','','','','',`Find ${short} missing VIN${short===1?'':'s'} in Amazon/FleetOS exports`]);
+  if(short) rows.push(['Expected EV count short','',`Tracked ${stats.uniqueVins.size} of expected ${expected}`,'','','','','','Expected count from Amazon fleet list',expected,fleetSourceUploadedAt('amazon','iso'),fleetSourceUploadedAt('fleetos','iso'),`Find ${short} missing VIN${short===1?'':'s'} in Amazon/FleetOS exports`]);
   return rows;
 }
-function exportFleetGapsCSV(){const h=['Issue','VIN','Vehicle Name','License Plate','Active','Operational Status','Battery %','Range Miles','Fix'];const rows=fleetGapRows();downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8','relayops-ev-source-gaps.csv');toast(rows.length?`${rows.length} Fleet gap rows downloaded`:'No Fleet gaps found — source match looks complete');}
+function exportFleetGapsCSV(){const h=['Issue','VIN','Vehicle Name','License Plate','Active','Operational Status','Battery %','Range Miles','VIN Source Audit','Expected EV Count','Amazon Uploaded At','FleetOS Uploaded At','Fix'];const rows=fleetGapRows();downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8','relayops-ev-source-gaps.csv');toast(rows.length?`${rows.length} Fleet gap rows downloaded`:'No Fleet gaps found — source match looks complete');}
 function exportExcel(){
   const rows=[exportHeaders,...exportRows()];
   const xml=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1D4D35" ss:Pattern="Solid"/></Style><Style ss:ID="Cell"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E6DF"/></Borders></Style></Styles><Worksheet ss:Name="Daily Roster"><Table>${rows.map((r,i)=>`<Row>${r.map(v=>`<Cell ss:StyleID="${i===0?'Header':'Cell'}"><Data ss:Type="${typeof v==='number'?'Number':'String'}">${xmlEscape(v)}</Data></Cell>`).join('')}</Row>`).join('')}</Table><AutoFilter xmlns="urn:schemas-microsoft-com:office:excel" x:Range="R1C1:R${rows.length}C${exportHeaders.length}" xmlns:x="urn:schemas-microsoft-com:office:excel"/></Worksheet></Workbook>`;

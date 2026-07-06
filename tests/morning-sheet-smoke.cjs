@@ -179,11 +179,11 @@ const checks = `
   rememberFleetSourceUpload(fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),'amazon fleet list.csv','2026-07-05T12:00:00.000Z');
   state.fleetExpectedCount = 2;
   const gapRows = fleetGapRows();
-  if (!gapRows.some(row => row[0] === 'Missing FleetOS battery/range' && row[1] === '7FCEHEB79PN014816') || !gapRows.some(row => row[0] === 'Expected EV count short')) throw new Error('Fleet gap rows should include missing FleetOS and expected count shortage');
+  if (!gapRows.some(row => row[0] === 'Missing FleetOS battery/range' && row[1] === '7FCEHEB79PN014816' && row[8] === 'Amazon only — battery needs FleetOS' && row[9] === 2 && row[10] === '2026-07-05T12:00:00.000Z') || !gapRows.some(row => row[0] === 'Expected EV count short' && row[8] === 'Expected count from Amazon fleet list')) throw new Error('Fleet gap rows should include missing FleetOS and expected count shortage');
   let capturedGapCsv = null;
   downloadBlob = (data,type,name) => { capturedGapCsv = { data, type, name }; };
   exportFleetGapsCSV();
-  if (!capturedGapCsv || capturedGapCsv.name !== 'relayops-ev-source-gaps.csv' || !capturedGapCsv.data.includes('Missing FleetOS battery/range') || !capturedGapCsv.data.includes('Expected EV count short')) throw new Error('Fleet gap CSV export failed');
+  if (!capturedGapCsv || capturedGapCsv.name !== 'relayops-ev-source-gaps.csv' || !capturedGapCsv.data.includes('VIN Source Audit') || !capturedGapCsv.data.includes('Amazon Uploaded At') || !capturedGapCsv.data.includes('FleetOS Uploaded At') || !capturedGapCsv.data.includes('Missing FleetOS battery/range') || !capturedGapCsv.data.includes('Expected EV count short')) throw new Error('Fleet gap CSV export failed');
   state.fleetExpectedCount = 0;
   state.fleetFilter = 'amazon-only';
   if (!fleetPage().includes('Amazon only') || !fleetPage().includes('Upload missing source') || !fleetPage().includes('Partial source view') || !fleetPage().includes('Not uploaded yet') || !fleetPage().includes('Review missing FleetOS') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'Amazon only')) throw new Error('Amazon-only fleet filter failed');
