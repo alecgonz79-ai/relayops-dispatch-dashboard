@@ -395,12 +395,14 @@ function fleetTrustStrip() {
 function fleetDispatchChecklist() {
   const stats=fleetPortalMatchStats(), coverage=fleetCoverageStats();
   const amazonAge=fleetSourceAge('amazon'), fleetosAge=fleetSourceAge('fleetos');
+  const expected=Number(state.fleetExpectedCount)||0, expectedShort=expected?Math.max(0,expected-stats.uniqueVins.size):0;
   const grounded=rivianFleet.filter(v=>v.operational==='Grounded').length, low=rivianFleet.filter(v=>v.battery<40).length;
   const missingPortalFilter=stats.amazonOnly.length?'missing-fleetos':stats.fleetosOnly.length?'missing-amazon':'';
   const items=[
     {ok:amazonAge.hasUpload&&!amazonAge.stale,label:'Amazon fleet list loaded',detail:amazonAge.hasUpload?amazonAge.label:'Need official names/status',action:'fleet-import',button:'Upload'},
     {ok:fleetosAge.hasUpload&&!fleetosAge.stale,label:'FleetOS battery loaded',detail:fleetosAge.hasUpload?fleetosAge.label:'Need battery/range',action:'fleet-import',button:'Upload'},
     {ok:stats.both.length>0&&!stats.amazonOnly.length&&!stats.fleetosOnly.length,label:'VINs match both portals',detail:stats.uniqueVins.size?`${stats.both.length}/${stats.uniqueVins.size} matched`:'No portal VINs yet',action:missingPortalFilter?'fleet-filter-quick':'export-fleet-gaps',filter:missingPortalFilter,button:missingPortalFilter?'Review':'Gap CSV'},
+    {ok:expected>0&&!expectedShort,label:'Expected EV count covered',detail:expected?`${stats.uniqueVins.size}/${expected} portal VINs loaded`:'Need Amazon fleet count',action:expectedShort?'export-fleet-gaps':'fleet-import',button:expectedShort?'Gap CSV':'Upload'},
     {ok:coverage.needsData===0,label:'No missing card data',detail:coverage.needsData?`${coverage.needsData} need review`:'All cards filled',action:'fleet-filter-quick',filter:'needs-data',button:'Review'},
     {ok:grounded===0&&low===0,label:'No grounded / low battery surprises',detail:`${grounded} grounded · ${low} low`,action:grounded?'fleet-filter-quick':'fleet-filter-quick',filter:grounded?'grounded':'low',button:'Review'}
   ];
