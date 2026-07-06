@@ -580,6 +580,16 @@ function fleetConfidence(vehicle={}) {
   if(hasFleetos)return {label:'FleetOS only',className:'partial'};
   return {label:'Demo',className:'demo'};
 }
+function fleetSourceAudit(vehicle={}) {
+  const source=String(vehicle.source||'').toLowerCase();
+  const hasAmazon=source.includes('amazon fleet list');
+  const hasFleetos=source.includes('fleetos tracker')||source.includes('rivian');
+  return {
+    amazon:hasAmazon?'✓ Amazon row found':'Missing Amazon row',
+    fleetos:hasFleetos?'✓ FleetOS row found':'Missing FleetOS row',
+    summary:hasAmazon&&hasFleetos?'VIN matched both portals':hasAmazon?'Amazon only — battery needs FleetOS':hasFleetos?'FleetOS only — name/status needs Amazon':'Demo data — upload both portals'
+  };
+}
 function fleetMissingFields(vehicle={}) {
   const confidence=fleetConfidence(vehicle);
   if(confidence.label==='Demo')return ['real upload'];
@@ -596,9 +606,10 @@ function rivianCard(v) {
   const tone=batteryTone(v.battery), open=state.expandedFleetVin===v.vin;
   const changes=state.fleetChangedVins?.[v.vin]||v.changedFields||[];
   const confidence=fleetConfidence(v);
+  const audit=fleetSourceAudit(v);
   const missing=fleetMissingFields(v);
   const changedAt=v.updatedAt?new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date(v.updatedAt)):'—';
-  return `<button class="rivian-card ${tone} ${open?'expanded':''} ${changes.length?'updated':''} ${missing.length?'needs-data':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(v.name)}</h3><span class="confidence-pill ${confidence.className}">${esc(confidence.label)}</span>${changes.length?'<span class="update-pill">Updated</span>':''}</div><span class="rivian-vin">${esc(v.vin)}</span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span><span class="tap-cue">${open?'Tap to collapse':'Tap for plate/status'}</span>${missing.length?`<span class="missing-line">Needs: ${esc(missing.join(', '))}</span>`:''}${changes.length?`<span class="change-line">Changed: ${esc(changes.join(', '))}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`<div class="rivian-details"><span><b>Plate</b>${esc(v.plate||'—')}</span><span><b>Active</b>${esc(v.active||'—')}</span><span><b>State</b>${esc(v.operational||'—')}</span><span><b>Last change</b>${esc(changedAt)}</span><span><b>Amazon uploaded</b>${esc(fleetSourceUploadedAt('amazon'))}</span><span><b>FleetOS uploaded</b>${esc(fleetSourceUploadedAt('fleetos'))}</span><span><b>Confidence</b>${esc(confidence.label)}</span><span><b>Needs</b>${esc(missing.join(', ')||'Nothing')}</span><span><b>Changed</b>${esc(changes.join(', ')||'No changes')}</span><span><b>Source</b>${esc(v.source||'Demo data')}</span></div>`:''}</button>`;
+  return `<button class="rivian-card ${tone} ${open?'expanded':''} ${changes.length?'updated':''} ${missing.length?'needs-data':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(v.name)}</h3><span class="confidence-pill ${confidence.className}">${esc(confidence.label)}</span>${changes.length?'<span class="update-pill">Updated</span>':''}</div><span class="rivian-vin">${esc(v.vin)}</span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span><span class="tap-cue">${open?'Tap to collapse':'Tap for plate/status'}</span>${missing.length?`<span class="missing-line">Needs: ${esc(missing.join(', '))}</span>`:''}${changes.length?`<span class="change-line">Changed: ${esc(changes.join(', '))}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`<div class="rivian-details"><span><b>Plate</b>${esc(v.plate||'—')}</span><span><b>Active</b>${esc(v.active||'—')}</span><span><b>State</b>${esc(v.operational||'—')}</span><span><b>Last change</b>${esc(changedAt)}</span><span><b>Amazon uploaded</b>${esc(fleetSourceUploadedAt('amazon'))}</span><span><b>FleetOS uploaded</b>${esc(fleetSourceUploadedAt('fleetos'))}</span><span><b>VIN source audit</b>${esc(audit.summary)}</span><span><b>Amazon row</b>${esc(audit.amazon)}</span><span><b>FleetOS row</b>${esc(audit.fleetos)}</span><span><b>Confidence</b>${esc(confidence.label)}</span><span><b>Needs</b>${esc(missing.join(', ')||'Nothing')}</span><span><b>Changed</b>${esc(changes.join(', ')||'No changes')}</span><span><b>Source</b>${esc(v.source||'Demo data')}</span></div>`:''}</button>`;
 }
 
 function performancePage() {
