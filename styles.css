@@ -349,6 +349,16 @@ tbody tr:last-child td { border-bottom:0; }
 .portal-match-grid b { display:block; color:#172019; font-size:14px; line-height:1; margin-bottom:2px; }
 .portal-match-grid .warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
 .portal-match-grid .ok { background:#eef7ea; border-color:#cfe8c7; color:#275c1f; }
+.fleet-refresh-readiness { display:grid; grid-template-columns:1.1fr 1.4fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:10px 11px; border-radius:13px; border:1px solid #dfe7dd; background:#fbfcfa; }
+.fleet-refresh-readiness.ok { background:#f3fbef; border-color:#cfe8c7; }
+.fleet-refresh-readiness.warn { background:#fff8e6; border-color:#ebcf83; }
+.fleet-refresh-readiness strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
+.fleet-refresh-readiness span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
+.refresh-source-pills { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+.refresh-source-pills span { padding:7px 8px; border-radius:9px; background:#fff; border:1px solid #e2e8e3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.refresh-source-pills b { display:block; color:#172019; font-size:8px; text-transform:uppercase; letter-spacing:.06em; }
+.refresh-source-pills .ok { background:#eef7ea; border-color:#cfe8c7; color:#275c1f; }
+.refresh-source-pills .warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
 .fleet-search-input { min-width:150px; height:30px; border:1px solid var(--line); border-radius:10px; padding:0 10px; font-size:8px; font-weight:900; color:var(--ink); background:#fff; outline:none; }
 .fleet-search-input:focus { border-color:#82c66b; box-shadow:0 0 0 3px rgba(130,198,107,.18); }
 .fleet-update-summary { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:7px; margin:0 0 12px; }
@@ -554,6 +564,7 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-coverage-strip { grid-template-columns:1fr 1fr; }
   .fleet-portal-match { grid-template-columns:1fr; }
   .portal-match-grid { grid-template-columns:1fr 1fr; }
+  .fleet-refresh-readiness { grid-template-columns:1fr; }
   .fleet-attention-strip { grid-template-columns:1fr; }
   .fleet-recent-changes { grid-template-columns:1fr; }
   .fleet-change-list { grid-template-columns:1fr; }
