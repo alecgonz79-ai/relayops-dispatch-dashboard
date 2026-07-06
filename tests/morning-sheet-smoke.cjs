@@ -58,7 +58,8 @@ const checks = `
   if (!uploadHtml.includes('CX route matching')) throw new Error('CX matching explanation missing');
   state.page = 'fleet';
   const fleetHtml = fleetPage();
-  if (!fleetHtml.includes('FleetOS + Amazon EV live board') || !fleetHtml.includes('Refresh battery %') || !fleetHtml.includes('Clear upload') || !fleetHtml.includes('Verified EVs') || !fleetHtml.includes('Amazon fleet list') || !fleetHtml.includes('FleetOS battery/range') || !fleetHtml.includes('Upload/export both lists') || !fleetHtml.includes('logistics.amazon.com/fleet-management/#vehicles') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('EDV-014816') || !fleetHtml.includes('7FCEHEB79PN014816') || !fleetHtml.includes('98 mi / 63%')) throw new Error('FleetOS/Amazon EV board missing');
+  if (!fleetHtml.includes('FleetOS + Amazon EV live board') || !fleetHtml.includes('Refresh battery %') || !fleetHtml.includes('Clear upload') || !fleetHtml.includes('Verified EVs') || !fleetHtml.includes('Need charge') || !fleetHtml.includes('Grounded') || !fleetHtml.includes('Missing data') || !fleetHtml.includes('Amazon fleet list') || !fleetHtml.includes('FleetOS battery/range') || !fleetHtml.includes('Upload/export both lists') || !fleetHtml.includes('logistics.amazon.com/fleet-management/#vehicles') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('EDV-014816') || !fleetHtml.includes('7FCEHEB79PN014816') || !fleetHtml.includes('98 mi / 63%')) throw new Error('FleetOS/Amazon EV board missing');
+  if (!fleetAttentionStrip().includes('data-filter="low"') || !fleetAttentionStrip().includes('data-filter="grounded"') || !fleetAttentionStrip().includes('data-filter="needs-data"')) throw new Error('Fleet attention strip missing quick filters');
   const startingCoverage = fleetCoverageStats();
   if (startingCoverage.demo !== rivianFleet.length || startingCoverage.needsData !== rivianFleet.length) throw new Error('Fleet coverage counters should flag demo data');
   const noUploadBattery = rivianFleet.find(v => v.vin === '7FCEHEB79PN014816').battery;
@@ -120,6 +121,8 @@ const checks = `
   applyFleetVehicles(mergedFleet,{silent:true});
   state.fleetFilter = 'grounded';
   if (!fleetPage().includes('LLOL EV 21') || sortedRivianFleet().some(v => v.operational !== 'Grounded')) throw new Error('Grounded fleet filter failed');
+  action('fleet-filter-quick',{dataset:{filter:'low'}});
+  if (state.fleetFilter !== 'low' || sortedRivianFleet().some(v => v.battery >= 40)) throw new Error('Fleet attention strip quick filter failed');
   state.fleetFilter = 'verified';
   if (!fleetPage().includes('Verified only') || !sortedRivianFleet().every(v => fleetConfidence(v).label === 'Verified')) throw new Error('Verified fleet filter failed');
   state.fleetFilter = 'needs-data';
