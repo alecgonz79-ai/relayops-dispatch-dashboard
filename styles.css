@@ -420,6 +420,8 @@ tbody tr:last-child td { border-bottom:0; }
 .rivian-live-status.medium { color:#2e75bc; }
 .rivian-live-status.low { color:#9a6d12; }
 .rivian-live-status.critical { color:#bb2d20; }
+.battery-freshness { display:inline-flex; margin-top:4px; padding:2px 5px; border-radius:999px; background:#eef7ea; color:#275c1f; font-size:6px; font-weight:1000; text-transform:uppercase; letter-spacing:.07em; }
+.battery-freshness.warn { background:#fff2cf; color:#8a5d08; }
 .tap-cue { display:inline-flex; margin-top:4px; padding:2px 5px; border-radius:999px; background:#edf3ff; color:#285c9d; font-size:6px; font-weight:1000; text-transform:uppercase; letter-spacing:.07em; }
 .missing-line { display:block; margin-top:4px; color:#9a6d12; font-size:7px; font-weight:1000; line-height:1.25; }
 .change-line { display:block; margin-top:4px; color:#4b6b42; font-size:7px; font-weight:900; line-height:1.25; }

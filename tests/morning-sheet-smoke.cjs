@@ -69,7 +69,7 @@ const checks = `
   state.modal = null;
   state.expandedFleetVin = '7FCEHEB79PN014816';
   const expandedFleetHtml = fleetPage();
-  if (!expandedFleetHtml.includes('8HJK214') || !expandedFleetHtml.includes('Operational') || !expandedFleetHtml.includes('Demo') || !expandedFleetHtml.includes('Needs: real upload') || !expandedFleetHtml.includes('Tap to collapse')) throw new Error('Expandable FleetOS/Amazon EV details missing');
+  if (!expandedFleetHtml.includes('8HJK214') || !expandedFleetHtml.includes('Operational') || !expandedFleetHtml.includes('Demo') || !expandedFleetHtml.includes('Needs: real upload') || !expandedFleetHtml.includes('Battery demo only') || !expandedFleetHtml.includes('Tap to collapse')) throw new Error('Expandable FleetOS/Amazon EV details missing');
   state.fleetSort = 'battery-low';
   const sortedFleet = sortedRivianFleet();
   if (sortedFleet[0].battery !== 18 || batteryTone(18) !== 'critical' || batteryTone(92) !== 'high') throw new Error('Rivian battery sorting or color tone failed');
@@ -136,7 +136,7 @@ const checks = `
   if (fleetUploadAge().stale || fleetPage().includes('Battery data may be stale')) throw new Error('Fresh fleet upload should not show stale warning');
   if (!fleetSourceStatus().hasAmazon || !fleetSourceStatus().hasFleetos) throw new Error('Fleet source status should detect combined Amazon + FleetOS import');
   state.expandedFleetVin = '7FCEHEB79PN014816';
-  if (!fleetPage().includes('Last change') || !fleetPage().includes('Amazon uploaded') || !fleetPage().includes('FleetOS uploaded') || !fleetPage().includes('VIN source audit') || !fleetPage().includes('VIN matched both portals') || !fleetPage().includes('✓ Amazon row found') || !fleetPage().includes('✓ FleetOS row found') || !fleetPage().includes('Changed</b>battery, range')) throw new Error('Fleet expanded card should show change audit details');
+  if (!fleetPage().includes('Last change') || !fleetPage().includes('Amazon uploaded') || !fleetPage().includes('FleetOS uploaded') || !fleetPage().includes('VIN source audit') || !fleetPage().includes('VIN matched both portals') || !fleetPage().includes('✓ Amazon row found') || !fleetPage().includes('✓ FleetOS row found') || !fleetPage().includes('Battery check') || (!fleetPage().includes('Battery fresh') && !fleetPage().includes('Battery stale') && !fleetPage().includes('Battery source missing')) || !fleetPage().includes('Changed</b>battery, range')) throw new Error('Fleet expanded card should show change audit details');
   if (!fleetCoverageStats().verified) throw new Error('Fleet coverage counters should show verified EVs after Amazon + FleetOS import');
   const fleetRows = fleetExportRows();
   const exportedEv = fleetRows.find(row => row[1] === '7FCEHEB79PN014816');
