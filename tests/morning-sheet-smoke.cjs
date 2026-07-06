@@ -71,6 +71,13 @@ const checks = `
   refreshFleetStatus();
   if (rivianFleet.find(v => v.vin === '7FCEHEB79PN014816').battery !== noUploadBattery || state.modal !== 'fleet-import') throw new Error('Fleet refresh should require a real upload before changing battery data');
   state.modal = null;
+  const amazonOnlyAuditRows = fleetDetailsFromRows([
+    ['Vehicle Name','VIN','License Plate','Active','Operational Status'],
+    ['LLOL EV Missing','7FCTGAAA1PN111111','9MISS1','Active','Operational']
+  ],'amazon fleet list.csv');
+  state.fleetImport = { name: 'amazon fleet list.csv', vehicles: amazonOnlyAuditRows, uploadedAt: '2026-07-05T12:00:00.000Z' };
+  if (!fleetGapAuditStrip().includes('Missing VIN audit') || !fleetGapAuditStrip().includes('Missing FleetOS battery/range') || !fleetGapAuditStrip().includes('Download gap CSV')) throw new Error('Fleet missing VIN audit should show source gaps before dispatch');
+  resetFleetDemo();
   state.expandedFleetVin = '7FCEHEB79PN014816';
   const expandedFleetHtml = fleetPage();
   if (!expandedFleetHtml.includes('8HJK214') || !expandedFleetHtml.includes('Operational') || !expandedFleetHtml.includes('Demo') || !expandedFleetHtml.includes('Needs: real upload') || !expandedFleetHtml.includes('Battery demo only') || !expandedFleetHtml.includes('Tap to collapse')) throw new Error('Expandable FleetOS/Amazon EV details missing');
@@ -94,7 +101,7 @@ const checks = `
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet, uploadedAt: '2026-07-05T12:34:00.000Z' };
   applyFleetVehicles(mergedFleet,{silent:true});
   const matchedFleetStats = fleetPortalMatchStats();
-  if (state.fleetUpdateSummary.duplicates !== 0 || matchedFleetStats.uniqueVins.size !== 1 || matchedFleetStats.amazon.size !== 1 || matchedFleetStats.fleetos.size !== 1 || matchedFleetStats.both.length !== 1 || matchedFleetStats.amazonOnly.length || matchedFleetStats.fleetosOnly.length || !fleetPortalMatchStrip().includes('unique VINs accounted') || !fleetPortalMatchStrip().includes('matched both') || !fleetTrustStrip().includes('Board trust: verified')) throw new Error('FleetOS/Amazon matched VINs should reconcile without duplicate warnings');
+  if (state.fleetUpdateSummary.duplicates !== 0 || matchedFleetStats.uniqueVins.size !== 1 || matchedFleetStats.amazon.size !== 1 || matchedFleetStats.fleetos.size !== 1 || matchedFleetStats.both.length !== 1 || matchedFleetStats.amazonOnly.length || matchedFleetStats.fleetosOnly.length || !fleetPortalMatchStrip().includes('unique VINs accounted') || !fleetPortalMatchStrip().includes('matched both') || !fleetTrustStrip().includes('Board trust: verified') || fleetGapAuditStrip() !== '') throw new Error('FleetOS/Amazon matched VINs should reconcile without duplicate warnings');
   state.fleetExpectedCount = 2;
   if (!fleetPortalMatchStrip().includes('1 short of expected 2')) throw new Error('Fleet expected count short warning missing');
   state.fleetExpectedCount = 1;
