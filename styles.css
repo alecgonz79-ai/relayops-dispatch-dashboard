@@ -319,6 +319,9 @@ tbody tr:last-child td { border-bottom:0; }
 .entity-stat strong { font-size:9px; margin-top:3px; }
 .rivian-panel { padding:16px; margin-bottom:16px; }
 .fleet-source-note { margin:0 0 12px; padding:10px 11px; border-radius:11px; background:#f5f7f4; color:#5f6b63; font-size:8px; line-height:1.45; }
+.fleet-update-summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; margin:0 0 12px; }
+.fleet-update-summary span { padding:8px 9px; border-radius:10px; background:#eef7ea; color:#43523f; font-size:7px; font-weight:900; text-transform:uppercase; letter-spacing:.05em; }
+.fleet-update-summary b { display:block; color:#111b13; font-size:14px; line-height:1; margin-bottom:3px; }
 .rivian-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
 .rivian-card { min-height:118px; padding:10px; border:1px solid #d8dcdf; border-radius:12px; background:#fff; display:block; text-align:left; cursor:pointer; box-shadow:0 1px 0 rgba(0,0,0,.04); transition:.16s ease; }
 .rivian-card:hover, .rivian-card.expanded { transform:translateY(-1px); border-color:#8ab4f8; box-shadow:0 10px 24px rgba(24,40,32,.12); }
