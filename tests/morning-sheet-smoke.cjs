@@ -167,6 +167,8 @@ const checks = `
   ];
   applyFleetVehicles(fleetDetailsFromRows(duplicateFleetRows,'amazon fleet list.csv'),{silent:true});
   if (state.fleetUpdateSummary.duplicates !== 1 || !state.fleetUpdateSummary.duplicateVins.includes('7FCEHEB79PN014816') || !fleetPage().includes('duplicate VINs') || !fleetTrustStrip().includes('1 duplicate VIN in upload') || !fleetDispatchChecklist().includes('No duplicate VINs') || !fleetDispatchChecklist().includes('1 duplicate VIN') || !fleetAccuracyGate().includes('1 duplicate VIN') || !fleetPage().includes('7FCEHEB79PN014816') || !fleetGapRows().some(row => row[0] === 'Duplicate VIN in upload' && row[1] === '7FCEHEB79PN014816')) throw new Error('Fleet duplicate VIN warning failed');
+  const duplicatePreview = fleetRefreshPreviewFromVehicles(fleetDetailsFromRows(duplicateFleetRows,'amazon fleet list.csv'));
+  if (!duplicatePreview.blockers.some(x => x.includes('duplicate VIN')) || duplicatePreview.duplicates !== 1) throw new Error('Fleet refresh preview should block duplicate VIN approval');
   applyFleetVehicles(mergedFleet,{silent:true});
   state.fleetFilter = 'grounded';
   if (!fleetPage().includes('LLOL EV 21') || sortedRivianFleet().some(v => v.operational !== 'Grounded')) throw new Error('Grounded fleet filter failed');
@@ -246,7 +248,7 @@ const checks = `
   if (state.fleetSearch !== '' || state.fleetFilter !== 'all' || sortedRivianFleet().length !== rivianFleet.length) throw new Error('Fleet clear search/filter failed');
   state.fleetExpectedCount = rivianFleet.length + 1;
   refreshFleetStatus();
-  if (state.modal !== 'fleet-refresh' || !state.fleetRefreshPreview || state.fleetRefreshPreview.expectedShort !== 1 || !modal().includes('Approve fleet refresh') || !modal().includes('source rows read') || !modal().includes('short of expected') || !modal().includes('Refresh will update') || !modal().includes('Amazon fleet list') || !modal().includes('Amazon wins for van names and status') || !modal().includes('FleetOS tracker') || !modal().includes('FleetOS wins for battery and range') || !modal().includes('official EV name') || !modal().includes('battery %, range miles') || !modal().includes('Accuracy reminder') || !modal().includes('upload fresh exports first before approving') || !modal().includes('Approve refresh')) throw new Error('Fleet refresh should show approval preview before applying');
+  if (state.modal !== 'fleet-refresh' || !state.fleetRefreshPreview || state.fleetRefreshPreview.expectedShort !== 1 || !state.fleetRefreshPreview.blockers.length || !modal().includes('Approve fleet refresh') || !modal().includes('source rows read') || !modal().includes('short of expected') || !modal().includes('Fix before approving') || !modal().includes('1 EV short of expected') || !modal().includes('Refresh will update') || !modal().includes('Amazon fleet list') || !modal().includes('Amazon wins for van names and status') || !modal().includes('FleetOS tracker') || !modal().includes('FleetOS wins for battery and range') || !modal().includes('official EV name') || !modal().includes('battery %, range miles') || !modal().includes('Accuracy reminder') || !modal().includes('upload fresh exports first before approving') || !modal().includes('Approve refresh')) throw new Error('Fleet refresh should show approval preview before applying');
   state.fleetExpectedCount = 0;
   action('approve-fleet-refresh',{});
   if (state.fleetLastRefresh === 'Not refreshed yet' || state.modal || state.fleetRefreshPreview || !fleetPage().includes('Last refresh:') || !fleetPage().includes('Refresh readiness')) throw new Error('Approved fleet refresh did not update the board');
@@ -349,7 +351,7 @@ const checks = `
 
 vm.runInNewContext(`${source}\n${checks}`, context, { filename: 'app.js' });
 const fleetCss = fs.readFileSync('styles.css','utf8');
-  if (!fleetCss.includes('minmax(86px,1fr)') || !fleetCss.includes('min-height:46px') || !fleetCss.includes('width:21px; height:11px') || !fleetCss.includes('repeat(7,minmax(0,1fr))') || !fleetCss.includes('.fleet-card-cue') || !fleetCss.includes('.refresh-freshness-summary') || !fleetCss.includes('.rivian-id-summary') || !fleetCss.includes('.fleet-gap-fix-tips')) throw new Error('Tiny EV grid should stay compact and scan-friendly');
+  if (!fleetCss.includes('minmax(86px,1fr)') || !fleetCss.includes('min-height:46px') || !fleetCss.includes('width:21px; height:11px') || !fleetCss.includes('repeat(7,minmax(0,1fr))') || !fleetCss.includes('.fleet-card-cue') || !fleetCss.includes('.refresh-freshness-summary') || !fleetCss.includes('.rivian-id-summary') || !fleetCss.includes('.fleet-gap-fix-tips') || !fleetCss.includes('.fleet-refresh-blockers')) throw new Error('Tiny EV grid should stay compact and scan-friendly');
 
 (async () => {
   const zip = new JSZip();
