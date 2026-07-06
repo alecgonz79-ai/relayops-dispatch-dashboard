@@ -75,6 +75,15 @@ const checks = `
   if (equipment['21'].device !== '3' || equipment['21'].portable !== '-') throw new Error('EV/device text parsing failed');
   const filledScreenshotText = equipmentDetailsFromText('1 40 31 37 31 -\\n2 41 32 38 32 -\\nF33 76 P1 R35 77 P2');
   if (filledScreenshotText['37'].device !== '31' || filledScreenshotText['2'].portable !== '32' || filledScreenshotText.R35.portable !== 'P2') throw new Error('Filled VAN/DEV/PORT OCR text parsing failed');
+  const denseScreenshotText = equipmentDetailsFromText('EV/VAN DEVICE Portable EV/VAN DEVICE Portable 1 40 31 37 31 - 2 41 32 38 32 - 55 49 - 56 50 2 57 51 7 58 52 9');
+  if (denseScreenshotText['1'].device !== '40' || denseScreenshotText['58'].portable !== '9') throw new Error('Dense screenshot text parsing failed');
+  const positionedOcr = detectionsToText([
+    { rawValue:'37', boundingBox:{x:350,y:35,height:20} }, { rawValue:'31', boundingBox:{x:500,y:36,height:14} }, { rawValue:'-', boundingBox:{x:620,y:37,height:14} },
+    { rawValue:'1', boundingBox:{x:45,y:35,height:20} }, { rawValue:'40', boundingBox:{x:160,y:36,height:14} }, { rawValue:'31', boundingBox:{x:280,y:37,height:14} },
+    { rawValue:'2', boundingBox:{x:45,y:68,height:20} }, { rawValue:'41', boundingBox:{x:160,y:69,height:14} }, { rawValue:'32', boundingBox:{x:280,y:70,height:14} }
+  ]);
+  const positionedDetails = equipmentDetailsFromText(positionedOcr);
+  if (positionedDetails['37'].portable !== '-' || positionedDetails['2'].device !== '41') throw new Error('Positioned OCR row grouping failed');
   const equipmentRows = equipmentDetailsFromRows([
     ['EV/VAN','Device','Portable'],
     ['21','3','-']
@@ -89,8 +98,12 @@ const checks = `
   state.equipmentImport = { name: 'device list', details: equipment };
   applyEquipmentImport();
   if (state.morningRoutes[0].deviceName !== '3' || state.morningRoutes[0].portable !== '-') throw new Error('EV/device assignment failed');
+  state.morningRoutes[0].ev = '37';
+  state.equipmentImport = { name: 'filled screenshot trial', details: denseScreenshotText };
+  applyEquipmentImport();
+  if (state.morningRoutes[0].deviceName !== '31' || state.morningRoutes[0].portable !== '-') throw new Error('Filled screenshot EV/device assignment failed');
   state.modal = 'equipment';
-  if (!modal().includes('VAN/DEV/PORT IMPORT') || !modal().includes('Upload any file type') || !modal().includes('equipment-paste-text')) throw new Error('EV/device import modal missing');
+  if (!modal().includes('VAN/DEV/PORT IMPORT') || !modal().includes('PDF with selectable text') || !modal().includes('Upload any file type') || !modal().includes('equipment-paste-text')) throw new Error('EV/device import modal missing');
   state.editMode = true;
   const editableHtml = morningSheetPage();
   if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('data-sheet-cell="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('VAN/DEV/PORT Import') || !editableHtml.includes('EV 1-57 Low → High') || !editableHtml.includes('Randomize EVs') || !editableHtml.includes('Assign Gas Vehicles') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG')) throw new Error('Editable sheet or JPEG control missing');
@@ -110,6 +123,7 @@ const checks = `
   state.screenshotPreview = 'data:image/jpeg;base64,demo'; state.modal = 'screenshot';
   if (!modal().includes('Approve & save JPEG') || !modal().includes('Driver/Helper')) throw new Error('JPEG approval dialog missing');
   globalThis.__parseXlsx = parseXlsxArrayBuffer;
+  globalThis.__readPdfText = readPdfText;
 `;
 
 vm.runInNewContext(`${source}\n${checks}`, context, { filename: 'app.js' });
@@ -123,5 +137,8 @@ vm.runInNewContext(`${source}\n${checks}`, context, { filename: 'app.js' });
   const workbook = await zip.generateAsync({ type: 'nodebuffer' });
   const parsed = await context.__parseXlsx(workbook);
   if (parsed.length !== 2 || parsed[0][0] !== 'DSP' || parsed[1][1] !== 'CX100' || parsed[1][4] !== 332) throw new Error('XLSX parsing failed');
+  const pdfLike = Buffer.from('%PDF-1.4\\nBT (1 40 31 37 31 - 2 41 32 38 32 -) Tj ET\\n%%EOF');
+  const pdfText = await context.__readPdfText(pdfLike.buffer.slice(pdfLike.byteOffset, pdfLike.byteOffset + pdfLike.byteLength));
+  if (!pdfText.includes('1 40 31 37 31 -')) throw new Error('PDF text extraction failed');
   console.log('Morning sheet CSV/XLSX smoke test passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

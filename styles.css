@@ -288,6 +288,8 @@ tbody tr:last-child td { border-bottom:0; }
 .slack-file small { margin-top:3px; color:var(--muted); font-size:7px; }
 .import-preview { display:flex; align-items:center; gap:10px; padding:11px 12px; margin-top:12px; border:1px solid #bfe0c8; border-radius:11px; background:#eff9f1; }
 .preview-check { width:24px; height:24px; border-radius:8px; display:grid; place-items:center; color:#fff; background:#2c7c4b; font-weight:900; }
+.import-warning { border-color:#efc18d; background:#fff6e8; }
+.import-warning .preview-check { background:#c57920; }
 .import-preview strong, .import-preview span { display:block; }
 .import-preview strong { font-size:10px; }
 .import-preview span { color:#587061; font-size:8px; margin-top:3px; }

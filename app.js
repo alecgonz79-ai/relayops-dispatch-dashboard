@@ -382,7 +382,7 @@ function modal() {
   if (state.modal === 'sheets-helper') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="sheets-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS PASTE BOX</span><h2 id="sheets-title">Paste-ready morning sheet</h2><p>If one-click copy does not work, click Select all, copy, then paste into Google Sheets cell A1.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="paste-guide"><span><b>1</b> Select all</span><span><b>2</b> Copy</span><span><b>3</b> Paste in A1</span></div><textarea id="sheets-copy-text" class="sheets-copy-text" readonly>${esc(state.sheetCopyText||morningSheetTsv())}</textarea><div class="modal-actions"><button class="btn" data-action="select-sheets-text">Select all text</button><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy again</button></div></div></div></div>`;
   if (state.modal === 'equipment') {
     const count=state.equipmentImport?Object.keys(state.equipmentImport.details||{}).length:0;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="equipment-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">VAN/DEV/PORT IMPORT</span><h2 id="equipment-title">Match vans to devices</h2><p>Upload the screenshot/table or paste the list. RelayOps matches EV/VAN number to the EV cell, then fills Device and Portable.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="equipment-drop"><button class="btn primary" data-action="choose-file">${ICONS.upload} Upload any file type</button><span>Best results: screenshot, CSV, XLSX, TXT, Numbers-exported file, or pasted text. Screenshot OCR depends on browser support, so the paste box is always available.</span></div><label class="equipment-text-label" for="equipment-paste-text">Paste VAN/DEV/PORT list here</label><textarea id="equipment-paste-text" class="equipment-paste-text" placeholder="Example: EV/VAN 21   Device 3   Portable -">${esc(state.equipmentText)}</textarea>${state.equipmentImport?`<div class="import-preview"><span class="preview-check">✓</span><div><strong>${count} EV/VAN assignments found</strong><span>${state.equipmentImport.name?esc(state.equipmentImport.name):'Ready to match against the EV column.'}</span></div></div><div class="equipment-preview">${Object.entries(state.equipmentImport.details||{}).slice(0,6).map(([van,d])=>`<span><b>${esc(van)}</b> Device ${esc(d.device||'')} · Portable ${esc(d.portable||'')}</span>`).join('')}</div>`:''}<div class="modal-actions"><button class="btn" data-action="parse-equipment-text">Read list</button><button class="btn primary" data-action="apply-equipment-import" ${count?'':'disabled'}>Fill Device + Portable cells</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="equipment-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">VAN/DEV/PORT IMPORT</span><h2 id="equipment-title">Match vans to devices</h2><p>Upload the screenshot/table or paste the list. RelayOps matches EV/VAN number to the EV cell, then fills Device and Portable.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="equipment-drop"><button class="btn primary" data-action="choose-file">${ICONS.upload} Upload any file type</button><span>Best results: clear screenshot/JPEG, PDF with selectable text, CSV, XLSX, TXT, Numbers-exported file, or pasted text. If image OCR is blocked by the browser, paste the detected text here.</span></div><label class="equipment-text-label" for="equipment-paste-text">Paste VAN/DEV/PORT list here</label><textarea id="equipment-paste-text" class="equipment-paste-text" placeholder="Example: 1 40 31 37 31 -">${esc(state.equipmentText)}</textarea>${state.equipmentImport?`<div class="import-preview ${count?'':'import-warning'}"><span class="preview-check">${count?'✓':'!'}</span><div><strong>${count} EV/VAN assignments found</strong><span>${count?(state.equipmentImport.name?esc(state.equipmentImport.name):'Ready to match against the EV column.'):'Try a clearer screenshot/PDF or paste the copied text from the image.'}</span></div></div><div class="equipment-preview">${Object.entries(state.equipmentImport.details||{}).slice(0,6).map(([van,d])=>`<span><b>${esc(van)}</b> Device ${esc(d.device||'')} · Portable ${esc(d.portable||'')}</span>`).join('')}</div>`:''}<div class="modal-actions"><button class="btn" data-action="parse-equipment-text">Read list</button><button class="btn primary" data-action="apply-equipment-import" ${count?'':'disabled'}>Fill Device + Portable cells</button></div></div></div></div>`;
   }
   if (state.modal === 'screenshot' && state.screenshotPreview) return `<div class="modal-backdrop" data-action="close-modal"><div class="modal screenshot-modal" role="dialog" aria-modal="true" aria-labelledby="screenshot-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">APPROVAL REQUIRED</span><h2 id="screenshot-title">Approve GroupMe JPEG</h2><p>Only Wave, Driver/Helper, Route, Staging, Pad, EV, Device, and Portable are included.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="jpeg-preview"><img src="${state.screenshotPreview}" alt="Wave sheet JPEG preview"></div><div class="modal-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="save-wave-screenshot">Approve & save JPEG</button></div></div></div></div>`;
   return '';
@@ -594,6 +594,30 @@ function cleanEquipmentValue(value='') {
   const text=String(value??'').replace(/["']/g,'').trim();
   return text || '-';
 }
+function isEquipmentHeaderToken(value='') {
+  return /^(ev|van|evvan|vehicle|device|dev|portable|port)$/i.test(headerKey(value));
+}
+function isLikelyEquipmentId(value='') {
+  const id=normalizeEquipmentId(value);
+  if(!id)return false;
+  if(gasVehicleIds.includes(id))return true;
+  if(/^H[1-4]$/.test(id))return true;
+  const n=Number(id);
+  return Number.isInteger(n)&&n>=1&&n<=99;
+}
+function addEquipmentDetail(details,van,device,portable) {
+  const key=normalizeEquipmentId(van);
+  if(!key||!isLikelyEquipmentId(key))return false;
+  details[key]={device:cleanEquipmentValue(device),portable:cleanEquipmentValue(portable)};
+  return true;
+}
+function equipmentDetailsFromTokenStream(text='') {
+  const details={}, tokens=String(text||'').replace(/[|,]/g,' ').split(/\s+/).map(t=>t.replace(/^["']|["']$/g,'').trim()).filter(Boolean).filter(t=>!isEquipmentHeaderToken(t));
+  for(let i=0;i+2<tokens.length;i+=3) {
+    if(!addEquipmentDetail(details,tokens[i],tokens[i+1],tokens[i+2])) return {};
+  }
+  return details;
+}
 function equipmentDetailsFromRows(rows=[]) {
   let header=rows.findIndex(row=>{
     const keys=row.map(headerKey);
@@ -619,22 +643,19 @@ function equipmentDetailsFromText(text='') {
   lines.forEach(line=>{
     if(/^(ev\s*\/?\s*van|van|vehicle)\b.*\bdevice\b.*\bportable\b/i.test(line)&&!/\d/.test(line)) return;
     let m=line.match(/(?:EV\s*\/?\s*VAN|VAN|EV|VEHICLE)\s*[:#-]?\s*"?([A-Z0-9-]+)"?.*?(?:DEVICE|DEV)\s*[:#-]?\s*"?([A-Z0-9-]+|-)"?.*?(?:PORTABLE|PORT)\s*[:#-]?\s*"?([A-Z0-9-]+|-)"?/i);
-    if(m){details[normalizeEquipmentId(m[1])]={device:cleanEquipmentValue(m[2]),portable:cleanEquipmentValue(m[3])};return;}
+    if(m&&addEquipmentDetail(details,m[1],m[2],m[3])) return;
     let parts=line.replace(/[|,]/g,'\t').split(/\t+|\s{2,}/).map(x=>x.trim()).filter(Boolean);
     const looseParts=line.split(/\s+/).map(x=>x.trim()).filter(Boolean);
     if(parts.length<3&&looseParts.length>=3&&looseParts.every(x=>/^[A-Z0-9-]+$/i.test(x))) parts=looseParts;
     if(parts.length>=6&&!/device|portable|ev\s*\/?\s*van/i.test(parts.join(' '))) {
-      [[0,1,2],[3,4,5]].forEach(([vanIx,deviceIx,portableIx])=>{
-        const van=normalizeEquipmentId(parts[vanIx]);
-        if(van) details[van]={device:cleanEquipmentValue(parts[deviceIx]),portable:cleanEquipmentValue(parts[portableIx])};
-      });
+      for(let i=0;i+2<parts.length;i+=3) addEquipmentDetail(details,parts[i],parts[i+1],parts[i+2]);
       return;
     }
     if(parts.length>=3&&!/device|portable|ev\s*\/?\s*van/i.test(parts.join(' '))) {
-      const van=normalizeEquipmentId(parts[0]); if(van)details[van]={device:cleanEquipmentValue(parts[1]),portable:cleanEquipmentValue(parts[2])};
+      addEquipmentDetail(details,parts[0],parts[1],parts[2]);
     }
   });
-  return details;
+  return Object.keys(details).length?details:equipmentDetailsFromTokenStream(text);
 }
 function routeDetailsFromRows(rows) {
   const header=findImportHeader(rows,[['route','routecode','routeid','cx','cxnumber','cxroute','blockid'],['driver','drivername','transportername','employeename','daname','associatename','name','deliveryassociate','stops','stopcount','plannedstops','numstops','planneddeparturetime']]);
@@ -648,6 +669,7 @@ function routeDetailsFromRows(rows) {
 async function parseUploadedFile(file) {
   const name=file.name.toLowerCase(); let rows;
   if(/^image\//.test(file.type)||/\.(png|jpe?g|webp)$/i.test(name)) return {name:file.name,rows:[],text:await readImageText(file),kind:'image'};
+  if(file.type==='application/pdf'||name.endsWith('.pdf')) return {name:file.name,rows:[],text:await readPdfText(await file.arrayBuffer()),kind:'pdf'};
   if(name.endsWith('.csv')) rows=parseCSV(await file.text());
   else if(name.endsWith('.xlsx')) rows=await parseXlsxArrayBuffer(await file.arrayBuffer());
   else return {name:file.name,rows:[],text:await file.text().catch(()=>''),kind:'text'};
@@ -660,7 +682,40 @@ async function readImageText(file) {
     const detector=new TextDetector();
     const bitmap=await createImageBitmap(file);
     const results=await detector.detect(bitmap);
-    return results.map(r=>r.rawValue||'').join('\n');
+    return detectionsToText(results);
+  } catch { return ''; }
+}
+function detectionBox(result) {
+  const box=result?.boundingBox||{};
+  return {x:Number(box.x??box.left??0),y:Number(box.y??box.top??0),height:Number(box.height??16)};
+}
+function detectionsToText(results=[]) {
+  const words=results.map(r=>({text:String(r.rawValue||'').trim(),...detectionBox(r)})).filter(w=>w.text);
+  if(!words.length)return '';
+  const medianHeight=[...words].map(w=>w.height||16).sort((a,b)=>a-b)[Math.floor(words.length/2)]||16;
+  const lines=[];
+  words.sort((a,b)=>a.y-b.y||a.x-b.x).forEach(word=>{
+    const line=lines.find(l=>Math.abs(l.y-word.y)<=Math.max(8,medianHeight*.65));
+    if(line){line.words.push(word);line.y=(line.y*(line.words.length-1)+word.y)/line.words.length;}
+    else lines.push({y:word.y,words:[word]});
+  });
+  return lines.sort((a,b)=>a.y-b.y).map(line=>line.words.sort((a,b)=>a.x-b.x).map(w=>w.text).join(' ')).join('\n');
+}
+function pdfBytesToLatin1(buffer) {
+  const bytes=new Uint8Array(buffer), chunk=8192, parts=[];
+  for(let i=0;i<bytes.length;i+=chunk) parts.push(String.fromCharCode(...bytes.slice(i,i+chunk)));
+  return parts.join('');
+}
+function decodePdfString(value='') {
+  return String(value).replace(/\\([nrtbf()\\])/g,(_,c)=>({n:'\n',r:'\r',t:'\t',b:'\b',f:'\f','(':'(',')':')','\\':'\\'}[c]||c)).replace(/\\([0-7]{1,3})/g,(_,n)=>String.fromCharCode(parseInt(n,8)));
+}
+async function readPdfText(buffer) {
+  try {
+    const raw=pdfBytesToLatin1(buffer), pieces=[];
+    raw.replace(/\((?:\\.|[^\\)])*\)\s*Tj/g,match=>{pieces.push(decodePdfString(match.replace(/\)\s*Tj$/,'').slice(1)));return match;});
+    raw.replace(/\[(.*?)\]\s*TJ/gs,(_,body)=>{body.replace(/\((?:\\.|[^\\)])*\)/g,s=>{pieces.push(decodePdfString(s.slice(1,-1)));return s;});return _;});
+    if(!pieces.length) raw.replace(/\((?:\\.|[^\\)]){1,80}\)/g,s=>{const text=decodePdfString(s.slice(1,-1)).trim();if(/[A-Za-z0-9-]{1,}/.test(text))pieces.push(text);return s;});
+    return pieces.join('\n');
   } catch { return ''; }
 }
 async function readFiles(files) {
@@ -672,7 +727,9 @@ async function readFiles(files) {
       const rowDetails=parsed.reduce((all,f)=>({...all,...equipmentDetailsFromRows(f.rows||[])}),{});
       state.equipmentText=textParts.join('\n').trim()||state.equipmentText;
       state.equipmentImport={name:parsed.map(f=>f.name).join(' + '),details:{...details,...rowDetails}};
-      state.modal='equipment';render();return toast(`${Object.keys(state.equipmentImport.details).length} EV/VAN assignments ready to match`);
+      const count=Object.keys(state.equipmentImport.details).length;
+      state.modal='equipment';render();
+      return toast(count?`${count} EV/VAN assignments ready to match`:'No EV/VAN assignments found yet — paste the screenshot text or try a clearer image/PDF','error');
     }
     const plan=parsed.find(f=>/day\s*of\s*ops\s*plan/i.test(f.name)||findImportHeader(f.rows,[['route','routecode','cxnumber','cxroute','blockid'],['wave','wavetime','starttime'],['staging','staginglocation']])>=0);
     const routeFile=parsed.find(f=>/route[_\s-]*djt6/i.test(f.name))||parsed.find(f=>f!==plan&&Object.keys(routeDetailsFromRows(f.rows)).length);
