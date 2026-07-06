@@ -118,7 +118,7 @@ const checks = `
   applyFleetVehicles(combinedSourceVehicles,{silent:true});
   const sourceMemoryEv = rivianFleet.find(v => v.vin === '7FCEHEB79PN014816');
   const sourceMemoryStats = fleetPortalMatchStats();
-  if (state.fleetImport.vehicles.length !== 2 || sourceMemoryEv.name !== 'LLOL EV 21' || sourceMemoryEv.plate !== '9ABC123' || sourceMemoryEv.battery !== 38 || !fleetSourceStatus().hasAmazon || !fleetSourceStatus().hasFleetos || sourceMemoryStats.uniqueVins.size !== 1 || sourceMemoryStats.both.length !== 1 || !fleetRefreshReadinessStrip().includes('Refresh readiness') || !fleetRefreshReadinessStrip().includes('Refresh now')) throw new Error('Separate Amazon and FleetOS uploads should combine by VIN and preserve latest source data');
+  if (state.fleetImport.vehicles.length !== 2 || sourceMemoryEv.name !== 'LLOL EV 21' || sourceMemoryEv.plate !== '9ABC123' || sourceMemoryEv.battery !== 38 || !fleetSourceStatus().hasAmazon || !fleetSourceStatus().hasFleetos || sourceMemoryStats.uniqueVins.size !== 1 || sourceMemoryStats.both.length !== 1 || fleetSourceUploadedAt('amazon','iso') !== '2026-07-05T12:00:00.000Z' || fleetSourceUploadedAt('fleetos','iso') !== '2026-07-05T12:10:00.000Z' || !fleetRefreshReadinessStrip().includes('Refresh readiness') || !fleetRefreshReadinessStrip().includes('Refresh now')) throw new Error('Separate Amazon and FleetOS uploads should combine by VIN and preserve latest source data');
   resetFleetDemo();
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet, uploadedAt: '2026-07-05T12:34:00.000Z' };
   applyFleetVehicles(mergedFleet,{silent:true});
@@ -136,11 +136,11 @@ const checks = `
   if (fleetUploadAge().stale || fleetPage().includes('Battery data may be stale')) throw new Error('Fresh fleet upload should not show stale warning');
   if (!fleetSourceStatus().hasAmazon || !fleetSourceStatus().hasFleetos) throw new Error('Fleet source status should detect combined Amazon + FleetOS import');
   state.expandedFleetVin = '7FCEHEB79PN014816';
-  if (!fleetPage().includes('Last change') || !fleetPage().includes('Changed</b>battery, range')) throw new Error('Fleet expanded card should show change audit details');
+  if (!fleetPage().includes('Last change') || !fleetPage().includes('Amazon uploaded') || !fleetPage().includes('FleetOS uploaded') || !fleetPage().includes('Changed</b>battery, range')) throw new Error('Fleet expanded card should show change audit details');
   if (!fleetCoverageStats().verified) throw new Error('Fleet coverage counters should show verified EVs after Amazon + FleetOS import');
   const fleetRows = fleetExportRows();
   const exportedEv = fleetRows.find(row => row[1] === '7FCEHEB79PN014816');
-  if (!exportedEv || exportedEv[0] !== 'LLOL EV 21' || exportedEv[7] !== 'Verified' || exportedEv[8] !== '' || !exportedEv[10] || !exportedEv[11].includes('Amazon fleet list')) throw new Error('Fleet CSV export rows missing verified EV data');
+  if (!exportedEv || exportedEv[0] !== 'LLOL EV 21' || exportedEv[7] !== 'Verified' || exportedEv[8] !== '' || !exportedEv[10] || !exportedEv[11] || !exportedEv[12] || !exportedEv[13].includes('Amazon fleet list')) throw new Error('Fleet CSV export rows missing verified EV data');
   const duplicateFleetRows = [
     ['Vehicle Name','VIN','License Plate','Active','Operational Status'],
     ['LLOL EV 21','7FCEHEB79PN014816','9ABC123','Active','Operational'],
