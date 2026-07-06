@@ -342,6 +342,8 @@ const checks = `
 `;
 
 vm.runInNewContext(`${source}\n${checks}`, context, { filename: 'app.js' });
+const fleetCss = fs.readFileSync('styles.css','utf8');
+if (!fleetCss.includes('minmax(96px,1fr)') || !fleetCss.includes('min-height:50px') || !fleetCss.includes('width:24px; height:12px')) throw new Error('Tiny EV grid should stay compact and scan-friendly');
 
 (async () => {
   const zip = new JSZip();
