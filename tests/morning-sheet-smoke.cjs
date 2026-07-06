@@ -96,6 +96,10 @@ const checks = `
   applyFleetVehicles(mergedFleet,{silent:true});
   state.fleetFilter = 'grounded';
   if (!fleetPage().includes('LLOL EV 21') || sortedRivianFleet().some(v => v.operational !== 'Grounded')) throw new Error('Grounded fleet filter failed');
+  state.fleetFilter = 'verified';
+  if (!fleetPage().includes('Verified only') || !sortedRivianFleet().every(v => fleetConfidence(v).label === 'Verified')) throw new Error('Verified fleet filter failed');
+  state.fleetFilter = 'needs-data';
+  if (!fleetPage().includes('Needs data') || !sortedRivianFleet().every(v => fleetMissingFields(v).length > 0)) throw new Error('Needs-data fleet filter failed');
   state.fleetFilter = 'all';
   state.modal = 'fleet-import';
   const fleetImportHtml = modal();
