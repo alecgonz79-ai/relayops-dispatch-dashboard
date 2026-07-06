@@ -457,6 +457,8 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-change-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
 .fleet-change-list span { min-width:0; padding:7px 8px; border-radius:9px; background:#fff; border:1px solid #d8e7f7; color:#566879; font-size:8px; font-weight:850; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .fleet-change-list b { display:inline; margin-right:5px; color:#172019; font-size:8px; }
+.change-source-pills { display:inline-flex; flex-wrap:wrap; gap:3px; font-style:normal; vertical-align:middle; }
+.change-source-pills i { display:inline-flex; padding:2px 4px; border-radius:999px; background:#eef6ff; color:#0b4f8f; font-style:normal; font-size:6px; font-weight:1000; letter-spacing:.04em; }
 .fleet-legend { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin:0 0 12px; }
 .fleet-legend span { padding:8px 9px; border-radius:10px; border:1px solid #e1e7e3; background:#fff; color:#516158; font-size:7px; font-weight:900; line-height:1.35; }
 .fleet-legend b { display:block; color:#172019; font-size:8px; text-transform:uppercase; letter-spacing:.06em; }
@@ -531,6 +533,8 @@ tbody tr:last-child td { border-bottom:0; }
 .tap-cue { display:inline-flex; margin-top:4px; padding:2px 5px; border-radius:999px; background:#edf3ff; color:#285c9d; font-size:6px; font-weight:1000; text-transform:uppercase; letter-spacing:.07em; }
 .missing-line { display:block; margin-top:4px; color:#9a6d12; font-size:7px; font-weight:1000; line-height:1.25; }
 .change-line { display:block; margin-top:4px; color:#4b6b42; font-size:7px; font-weight:900; line-height:1.25; }
+.change-line .change-source-pills { display:flex; margin-top:2px; }
+.change-line .change-source-pills i { background:#eef7ea; color:#275c1f; }
 .rivian-van-art { width:36px; height:18px; flex:0 0 36px; position:relative; filter:drop-shadow(0 3px 4px rgba(0,0,0,.13)); }
 .tiny-view .rivian-card:not(.expanded) .battery-icon { width:18px; height:10px; padding:1px; border-width:1px; flex-basis:18px; }
 .tiny-view .rivian-card:not(.expanded) .battery-icon:after { right:-4px; top:2px; width:2px; height:5px; border-width:1px; }
