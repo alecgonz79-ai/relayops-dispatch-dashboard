@@ -317,6 +317,36 @@ tbody tr:last-child td { border-bottom:0; }
 .entity-stat span, .entity-stat strong { display:block; }
 .entity-stat span { color:var(--muted); font-size:7px; text-transform:uppercase; letter-spacing:.06em; }
 .entity-stat strong { font-size:9px; margin-top:3px; }
+.rivian-panel { padding:16px; margin-bottom:16px; }
+.rivian-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.rivian-card { padding:13px; border:1px solid var(--line); border-radius:14px; background:#fbfcfa; }
+.rivian-card.high { background:#f3fbf3; border-color:#cde8cd; }
+.rivian-card.medium { background:#f7fbff; border-color:#cddff3; }
+.rivian-card.low { background:#fff8e8; border-color:#eed59a; }
+.rivian-card.critical { background:#fff0ed; border-color:#efb9ad; }
+.rivian-top { display:flex; align-items:center; gap:10px; min-width:0; }
+.rivian-top strong, .rivian-top span { display:block; }
+.rivian-top strong { font-size:10px; letter-spacing:.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rivian-top span { margin-top:3px; color:var(--muted); font-size:8px; }
+.amazon-rivian-icon { width:38px; height:31px; flex:0 0 38px; display:grid; place-items:center; border-radius:11px; color:#101815; background:#e7f4ea; position:relative; }
+.amazon-rivian-icon svg { width:22px; height:22px; }
+.amazon-rivian-icon.medium { background:#e7f1ff; }
+.amazon-rivian-icon.low { background:#fff0bf; }
+.amazon-rivian-icon.critical { background:#ffdcd5; }
+.amazon-smile { position:absolute; right:5px; bottom:1px; color:#ff9900; font-size:14px; font-weight:900; line-height:1; }
+.battery-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:14px; }
+.battery-percent { font:900 22px "Manrope"; color:#152019; }
+.battery-pill { padding:5px 7px; border-radius:999px; font-size:7px; font-weight:900; text-transform:uppercase; letter-spacing:.04em; background:#e4eee6; color:#275936; }
+.battery-pill.medium { background:#e5efff; color:#275987; }
+.battery-pill.low { background:#fff0bf; color:#806014; }
+.battery-pill.critical { background:#ffdcd5; color:#9a2f20; }
+.battery-track { height:8px; border-radius:999px; overflow:hidden; background:#e4e9e3; margin-top:9px; }
+.battery-track i { display:block; height:100%; border-radius:inherit; background:#41a958; }
+.battery-track i.medium { background:#4e91d8; }
+.battery-track i.low { background:#d69a24; }
+.battery-track i.critical { background:#d94b39; }
+.rivian-meta { margin-top:11px; display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:8px; }
+.rivian-meta strong { color:var(--ink); }
 
 .chart { padding:18px; }
 .chart-bars { height:180px; display:flex; align-items:flex-end; gap:9px; padding-top:20px; border-bottom:1px solid var(--line); background-image:linear-gradient(to bottom, transparent 24%, #edf0ec 25%, transparent 26%, transparent 49%, #edf0ec 50%, transparent 51%, transparent 74%, #edf0ec 75%, transparent 76%); }
@@ -417,7 +447,7 @@ tbody tr:last-child td { border-bottom:0; }
   .nav-item { justify-content:center; padding:10px; }
   .user-card { justify-content:center; }
   .dashboard-grid, .page-grid, .settings-grid { grid-template-columns:1fr; }
-  .fleet-grid, .team-grid, .report-grid { grid-template-columns:repeat(2,1fr); }
+  .fleet-grid, .team-grid, .report-grid, .rivian-grid { grid-template-columns:repeat(2,1fr); }
   .sheets-helper { grid-template-columns:1fr; align-items:start; }
   .sheets-helper-actions { justify-content:flex-start; }
   .equipment-drop { align-items:flex-start; flex-direction:column; }
@@ -443,7 +473,7 @@ tbody tr:last-child td { border-bottom:0; }
   .readiness-top { align-items:flex-start; }
   .readiness-steps { grid-template-columns:1fr; }
   .phase-strip { grid-template-columns:1fr 1fr; }
-  .fleet-grid, .team-grid, .report-grid, .field-grid { grid-template-columns:1fr; }
+  .fleet-grid, .team-grid, .report-grid, .rivian-grid, .field-grid { grid-template-columns:1fr; }
   .morning-command { align-items:flex-start; flex-direction:column; }
   .sheets-helper-steps, .sheets-helper-actions { flex-direction:column; align-items:stretch; }
   .equipment-preview { grid-template-columns:1fr; }

@@ -66,6 +66,15 @@ const fleet = [
   ['Prime 319','Ram ProMaster','Service','Unassigned','—']
 ];
 
+const rivianFleet = [
+  { vin:'7FCTGAAA1PN000184', battery:92, status:'Ready', assigned:'Unassigned' },
+  { vin:'7FCTGAAA7PN000231', battery:76, status:'Ready', assigned:'Unassigned' },
+  { vin:'7FCTGAAA4PN000315', battery:64, status:'Ready soon', assigned:'Unassigned' },
+  { vin:'7FCTGAAA9PN000402', battery:48, status:'Charge watch', assigned:'Unassigned' },
+  { vin:'7FCTGAAA2PN000517', battery:33, status:'Needs charge', assigned:'Unassigned' },
+  { vin:'7FCTGAAA6PN000688', battery:18, status:'Critical', assigned:'Unassigned' }
+];
+
 const morningSeed = [
   ['LLOL','Gustavo Rosales','CX249','Standard Parcel Electric - Rivian MEDIUM with Helper','11:15 AM','STG.M.13',21,332,163,188,'5:35 PM'],
   ['LLOL','Anthony Moore','CX255','Standard Parcel Electric - Rivian MEDIUM with Helper','11:15 AM','STG.V.1',25,416,136,188,'6:58 PM'],
@@ -114,6 +123,7 @@ let state = {
   dspCode: localStorage.getItem('relayops_dsp') || 'LLOL',
   lastImportExcluded: Number(localStorage.getItem('relayops_excluded') || 0),
   morningFilters: {wave:'all',staging:'all',pad:'all'},
+  fleetSort: localStorage.getItem('relayops_fleet_sort') || 'normal',
   fitMorningRows: localStorage.getItem('relayops_fit_rows') === 'true',
   importSource: 'computer',
   importPurpose: 'morning',
@@ -312,7 +322,33 @@ function teamPage() {
 }
 
 function fleetPage() {
-  return `${contextBar()}<section class="grid kpi-grid">${kpiCard('Fleet available','24','26 total vehicles','van','#e9f7df')}${kpiCard('In service','1','Prime 319 · brakes','alert','#ffe7e2')}${kpiCard('DVIC follow-ups','2','1 due before tomorrow','check','#fff2cf')}${kpiCard('Devices ready','31','3 on chargers','phone','#e5efff')}</section><div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All vehicles</option><option>Ready</option><option>Service</option></select><button class="btn" data-action="devices">${ICONS.phone} Device cabinet</button></div><button class="btn lime" data-action="add-vehicle">${ICONS.plus} Add vehicle</button></div><section class="grid fleet-grid">${fleet.map(v=>`<article class="card entity-card"><div class="entity-top"><div class="entity-icon">${ICONS.van}</div><span class="status ${statusClass(v[2])}">${v[2]}</span></div><h3>${v[0]}</h3><p>${v[1]}</p><div class="entity-meta"><div class="entity-stat"><span>Assigned today</span><strong>${v[3]}</strong></div><div class="entity-stat"><span>Fuel / charge</span><strong>${v[4]}</strong></div></div></article>`).join('')}</section>`;
+  const rivians=sortedRivianFleet(), low=rivianFleet.filter(v=>v.battery<40).length, avg=Math.round(rivianFleet.reduce((n,v)=>n+v.battery,0)/rivianFleet.length);
+  return `${contextBar(`<a class="btn small ghost" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">${ICONS.link} Rivian tracker</a>`)}<section class="grid kpi-grid">${kpiCard('Rivian battery avg',`${avg}%`,`${low} below 40%`,'van',low?'#fff2cf':'#e9f7df')}${kpiCard('Fleet available','24','26 total vehicles','van','#e9f7df')}${kpiCard('In service','1','Prime 319 · brakes','alert','#ffe7e2')}${kpiCard('Devices ready','31','3 on chargers','phone','#e5efff')}</section><article class="card rivian-panel"><div class="card-head"><div class="card-title"><h2>Amazon Rivian battery tracker</h2><p>Connection target: business.rivian.com/vehicles/tracker · VIN names until your CSV maps them to van numbers.</p></div><div class="head-actions"><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><a class="btn small" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">Open tracker</a></div></div><section class="grid rivian-grid">${rivians.map(v=>rivianCard(v)).join('')}</section></article><div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All vehicles</option><option>Ready</option><option>Service</option></select><button class="btn" data-action="devices">${ICONS.phone} Device cabinet</button></div><button class="btn lime" data-action="add-vehicle">${ICONS.plus} Add vehicle</button></div><section class="grid fleet-grid">${fleet.map(v=>`<article class="card entity-card"><div class="entity-top"><div class="entity-icon">${ICONS.van}</div><span class="status ${statusClass(v[2])}">${v[2]}</span></div><h3>${v[0]}</h3><p>${v[1]}</p><div class="entity-meta"><div class="entity-stat"><span>Assigned today</span><strong>${v[3]}</strong></div><div class="entity-stat"><span>Fuel / charge</span><strong>${v[4]}</strong></div></div></article>`).join('')}</section>`;
+}
+
+function batteryTone(percent=0) {
+  if(percent>=75)return 'high';
+  if(percent>=50)return 'medium';
+  if(percent>=30)return 'low';
+  return 'critical';
+}
+function batteryLabel(percent=0) {
+  if(percent>=75)return 'Route ready';
+  if(percent>=50)return 'Good';
+  if(percent>=30)return 'Charge soon';
+  return 'Charge now';
+}
+function sortedRivianFleet() {
+  const rows=[...rivianFleet];
+  if(state.fleetSort==='battery-low') rows.sort((a,b)=>a.battery-b.battery||a.vin.localeCompare(b.vin));
+  return rows;
+}
+function amazonRivianIcon(tone='high') {
+  return `<span class="amazon-rivian-icon ${tone}" aria-hidden="true"><span class="van-body">${ICONS.van}</span><span class="amazon-smile">⌣</span></span>`;
+}
+function rivianCard(v) {
+  const tone=batteryTone(v.battery);
+  return `<article class="rivian-card ${tone}"><div class="rivian-top">${amazonRivianIcon(tone)}<div><strong>${esc(v.vin)}</strong><span>${esc(v.status)}</span></div></div><div class="battery-row"><span class="battery-percent">${v.battery}%</span><span class="battery-pill ${tone}">${batteryLabel(v.battery)}</span></div><div class="battery-track"><i class="${tone}" style="width:${v.battery}%"></i></div><div class="rivian-meta"><span>Assigned</span><strong>${esc(v.assigned)}</strong></div></article>`;
 }
 
 function performancePage() {
@@ -403,6 +439,7 @@ function bind() {
   document.querySelectorAll('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
   document.querySelectorAll('[data-phase]').forEach(el=>el.addEventListener('click',()=>{state.phase=Number(el.dataset.phase);persist();render();}));
   document.querySelectorAll('[data-morning-filter]').forEach(el=>el.addEventListener('change',()=>{const key=el.dataset.morningFilter;if(key!=='dsp')state.morningFilters[key]=el.value;render();}));
+  document.querySelectorAll('[data-rivian-sort]').forEach(el=>el.addEventListener('change',()=>{state.fleetSort=el.value;persist();render();}));
   document.querySelectorAll('[data-edit-field]').forEach(el=>{
     el.addEventListener('focus',()=>selectSheetCell(el));
     el.addEventListener('mousedown',()=>selectSheetCell(el));
@@ -1004,7 +1041,7 @@ function downloadTemplate(){const h=['DSP','Driver','Route Code','Service Type',
 
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function persist(){localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);}
+function persist(){localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);}
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
 render();

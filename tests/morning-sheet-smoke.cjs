@@ -56,6 +56,12 @@ const checks = `
   if (!uploadHtml.includes('Make my morning sheet')) throw new Error('Simple upload heading missing');
   if (!uploadHtml.includes('Create my operations sheet')) throw new Error('Simple upload action missing');
   if (!uploadHtml.includes('CX route matching')) throw new Error('CX matching explanation missing');
+  state.page = 'fleet';
+  const fleetHtml = fleetPage();
+  if (!fleetHtml.includes('Amazon Rivian battery tracker') || !fleetHtml.includes('Battery: low to high') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('7FCTGAAA')) throw new Error('Rivian fleet tracker panel missing');
+  state.fleetSort = 'battery-low';
+  const sortedFleet = sortedRivianFleet();
+  if (sortedFleet[0].battery !== 18 || batteryTone(18) !== 'critical' || batteryTone(92) !== 'high') throw new Error('Rivian battery sorting or color tone failed');
   const morningHtml = morningSheetPage();
   if (!morningHtml.includes('Three easy steps') || !morningHtml.includes('White cells + Google Sheets paste')) throw new Error('Quick start guide missing');
   const details = routeDetailsFromRows([
