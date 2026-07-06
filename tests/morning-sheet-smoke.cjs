@@ -97,6 +97,12 @@ const checks = `
   applyFleetVehicles(mergedFleet,{silent:true});
   const importedFleetHtml = fleetPage();
   if (!importedFleetHtml.includes('LLOL EV 21') || !importedFleetHtml.includes('9ABC123') || !importedFleetHtml.includes('41%') || !importedFleetHtml.includes('Verified') || !importedFleetHtml.includes('loaded') || importedFleetHtml.includes('Needs: FleetOS battery') || !importedFleetHtml.includes('Changed: battery, range') || !importedFleetHtml.includes('rows read') || !importedFleetHtml.includes('duplicate VINs') || !importedFleetHtml.includes('EV CSV') || !importedFleetHtml.includes('Upload / paste fleet list')) throw new Error('FleetOS/Amazon fleet import did not update cards');
+  const staleAge = fleetUploadAge(new Date('2026-07-05T15:00:00.000Z'));
+  if (!staleAge.stale || staleAge.label !== '2h 26m old') throw new Error('Fleet upload age warning calculation failed');
+  state.fleetImport.uploadedAt = new Date(Date.now() - 130 * 60000).toISOString();
+  if (!fleetPage().includes('Battery data may be stale')) throw new Error('Fleet page should warn when upload is stale');
+  state.fleetImport.uploadedAt = new Date().toISOString();
+  if (fleetUploadAge().stale || fleetPage().includes('Battery data may be stale')) throw new Error('Fresh fleet upload should not show stale warning');
   if (!fleetSourceStatus().hasAmazon || !fleetSourceStatus().hasFleetos) throw new Error('Fleet source status should detect combined Amazon + FleetOS import');
   state.expandedFleetVin = '7FCEHEB79PN014816';
   if (!fleetPage().includes('Last change') || !fleetPage().includes('Changed</b>battery, range')) throw new Error('Fleet expanded card should show change audit details');
