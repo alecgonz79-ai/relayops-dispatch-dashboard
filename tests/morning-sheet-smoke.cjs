@@ -108,6 +108,9 @@ const checks = `
   if (!fleetPortalMatchStrip().includes('complete vs expected 1')) throw new Error('Fleet expected count complete warning missing');
   state.fleetExpectedCount = 0;
   resetFleetDemo();
+  state.fleetExpectedCount = 9;
+  resetFleetDemo();
+  if (state.fleetExpectedCount !== 0) throw new Error('Fleet clear upload should reset expected EV count');
   const messyFleetRows = [
     ['Asset ID','Vehicle Identification Number','Registration Number','Availability Status','Grounding Status','State of Charge %','Estimated Range (mi)'],
     ['LLOL EV 34','7FCTGAAA9PN999999','9MESSY9','Enabled','Out of Service','72%','113 mi']
@@ -122,6 +125,7 @@ const checks = `
   if (rivianFleet.length !== 1 || fleetCoverageStats().demo !== 0 || !fleetPage().includes('not in upload')) throw new Error('Real fleet import should replace demo-only EV rows');
   resetFleetDemo();
   let combinedSourceVehicles = rememberFleetSourceUpload(fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),'amazon fleet list.csv','2026-07-05T12:00:00.000Z');
+  if (state.fleetExpectedCount !== 1 || !fleetFullListStrip().includes('expected EVs from Amazon')) throw new Error('Amazon fleet upload should set expected EV count from official VIN list');
   applyFleetVehicles(combinedSourceVehicles,{silent:true});
   const fleetOsFreshRows = [
     ['VIN','State of Charge','Estimated Range'],

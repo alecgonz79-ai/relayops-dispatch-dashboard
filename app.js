@@ -513,7 +513,7 @@ function fleetFullListStrip() {
   const short=expected?Math.max(0,expected-stats.uniqueVins.size):0;
   const complete=Boolean(stats.amazon.size&&stats.fleetos.size&&!stats.amazonOnly.length&&!stats.fleetosOnly.length&&(!expected||!short));
   const partial=coverageLabelForFleet(stats,expected);
-  return `<div class="fleet-full-list ${complete?'ok':partial.className}"><div><strong>Full fleet view</strong><span>${esc(partial.message)}</span></div><div class="fleet-full-list-steps"><span><b>${rivianFleet.length}</b>cards showing</span><span><b>${expected||'Set'}</b>${expected?'expected EVs':'expected count'}</span><span><b>${short}</b>still missing</span></div><button class="btn small ${complete?'lime':'primary'}" data-action="${complete?'refresh-fleet':'fleet-import'}">${complete?'Refresh full list':'Upload latest lists'}</button></div>`;
+  return `<div class="fleet-full-list ${complete?'ok':partial.className}"><div><strong>Full fleet view</strong><span>${esc(partial.message)}</span></div><div class="fleet-full-list-steps"><span><b>${rivianFleet.length}</b>cards showing</span><span><b>${expected||'Set'}</b>${expected?'expected EVs from Amazon':'expected count'}</span><span><b>${short}</b>still missing</span></div><button class="btn small ${complete?'lime':'primary'}" data-action="${complete?'refresh-fleet':'fleet-import'}">${complete?'Refresh full list':'Upload latest lists'}</button></div>`;
 }
 
 function coverageLabelForFleet(stats,expected=0) {
@@ -537,6 +537,9 @@ function fleetSourceKeys(source='') {
   return keys.length?keys:['other'];
 }
 function hasAmazonFleetSource(source='') { return String(source||'').toLowerCase().includes('amazon fleet list'); }
+function uniqueFleetVinCount(rows=[]) {
+  return new Set(rows.map(v=>cleanVin(v.vin)).filter(Boolean)).size;
+}
 
 function fleetImportFromSourceUploads() {
   const uploads=Object.values(state.fleetSourceUploads||{}).filter(u=>u?.vehicles?.length);
@@ -564,6 +567,7 @@ function rememberFleetSourceUpload(vehicles=[],name='Fleet upload',uploadedAt=ne
   Object.entries(grouped).forEach(([key,rows])=>{
     state.fleetSourceUploads[key]={name,vehicles:rows,uploadedAt};
   });
+  if(grouped.amazon?.length) state.fleetExpectedCount=uniqueFleetVinCount(grouped.amazon);
   state.fleetImport=fleetImportFromSourceUploads();
   return state.fleetImport.vehicles;
 }
@@ -1657,6 +1661,7 @@ function resetFleetDemo() {
   state.fleetSort='normal';
   state.expandedFleetVin='';
   state.fleetLastRefresh='Not refreshed yet';
+  state.fleetExpectedCount=0;
   persist();render();
   toast('Fleet upload cleared — demo EV board restored');
 }
