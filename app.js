@@ -393,11 +393,24 @@ function fleetConfidence(vehicle={}) {
   if(hasFleetos)return {label:'FleetOS only',className:'partial'};
   return {label:'Demo',className:'demo'};
 }
+function fleetMissingFields(vehicle={}) {
+  const confidence=fleetConfidence(vehicle);
+  if(confidence.label==='Demo')return ['real upload'];
+  const missing=[];
+  if(!String(vehicle.plate||'').trim())missing.push('plate');
+  if(!String(vehicle.active||'').trim())missing.push('active status');
+  if(!String(vehicle.operational||'').trim())missing.push('operational state');
+  if(!vehicle.hasBattery&&confidence.label!=='Amazon only')missing.push('battery');
+  if(confidence.label==='Amazon only')missing.push('FleetOS battery');
+  if(confidence.label==='FleetOS only')missing.push('Amazon name/plate/status');
+  return [...new Set(missing)];
+}
 function rivianCard(v) {
   const tone=batteryTone(v.battery), open=state.expandedFleetVin===v.vin;
   const changes=state.fleetChangedVins?.[v.vin]||v.changedFields||[];
   const confidence=fleetConfidence(v);
-  return `<button class="rivian-card ${tone} ${open?'expanded':''} ${changes.length?'updated':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(v.name)}</h3><span class="confidence-pill ${confidence.className}">${esc(confidence.label)}</span>${changes.length?'<span class="update-pill">Updated</span>':''}</div><span class="rivian-vin">${esc(v.vin)}</span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span>${changes.length?`<span class="change-line">Changed: ${esc(changes.join(', '))}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`<div class="rivian-details"><span><b>Plate</b>${esc(v.plate||'—')}</span><span><b>Active</b>${esc(v.active||'—')}</span><span><b>State</b>${esc(v.operational||'—')}</span><span><b>Confidence</b>${esc(confidence.label)}</span><span><b>Source</b>${esc(v.source||'Demo data')}</span></div>`:''}</button>`;
+  const missing=fleetMissingFields(v);
+  return `<button class="rivian-card ${tone} ${open?'expanded':''} ${changes.length?'updated':''} ${missing.length?'needs-data':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(v.name)}</h3><span class="confidence-pill ${confidence.className}">${esc(confidence.label)}</span>${changes.length?'<span class="update-pill">Updated</span>':''}</div><span class="rivian-vin">${esc(v.vin)}</span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span>${missing.length?`<span class="missing-line">Needs: ${esc(missing.join(', '))}</span>`:''}${changes.length?`<span class="change-line">Changed: ${esc(changes.join(', '))}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`<div class="rivian-details"><span><b>Plate</b>${esc(v.plate||'—')}</span><span><b>Active</b>${esc(v.active||'—')}</span><span><b>State</b>${esc(v.operational||'—')}</span><span><b>Confidence</b>${esc(confidence.label)}</span><span><b>Needs</b>${esc(missing.join(', ')||'Nothing')}</span><span><b>Source</b>${esc(v.source||'Demo data')}</span></div>`:''}</button>`;
 }
 
 function performancePage() {
@@ -932,7 +945,13 @@ function normalizeFleetVehicle(vehicle={}) {
     status:String(vehicle.status||batteryLabel(battery)).trim(),
     source:String(vehicle.source||'Demo data').trim(),
     changedFields:Array.isArray(vehicle.changedFields)?vehicle.changedFields:[],
-    updated:Boolean(vehicle.updated)
+    updated:Boolean(vehicle.updated),
+    hasName:Boolean(vehicle.hasName),
+    hasPlate:Boolean(vehicle.hasPlate),
+    hasActive:Boolean(vehicle.hasActive),
+    hasOperational:Boolean(vehicle.hasOperational),
+    hasBattery:Boolean(vehicle.hasBattery),
+    hasMiles:Boolean(vehicle.hasMiles)
   };
 }
 function fleetDetailsFromRows(rows=[],sourceName='Fleet export') {
