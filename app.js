@@ -437,10 +437,21 @@ function fleetSourceKey(source='') {
   if(value.includes('fleetos tracker')||value.includes('rivian'))return 'fleetos';
   return 'other';
 }
+function fleetSourceKeys(source='') {
+  const value=String(source||'').toLowerCase(), keys=[];
+  if(value.includes('amazon fleet list'))keys.push('amazon');
+  if(value.includes('fleetos tracker')||value.includes('rivian'))keys.push('fleetos');
+  return keys.length?keys:['other'];
+}
 
 function fleetImportFromSourceUploads() {
   const uploads=Object.values(state.fleetSourceUploads||{}).filter(u=>u?.vehicles?.length);
-  const vehicles=uploads.flatMap(u=>u.vehicles||[]);
+  const seen=new Set(), vehicles=[];
+  uploads.flatMap(u=>u.vehicles||[]).forEach(vehicle=>{
+    const key=`${cleanVin(vehicle.vin)||vehicle.vin}|${vehicle.source||''}`;
+    if(seen.has(key))return;
+    seen.add(key); vehicles.push(vehicle);
+  });
   const uploadDates=uploads.map(u=>u.uploadedAt).filter(Boolean).sort();
   const uploadedAt=uploadDates[uploadDates.length-1]||new Date().toISOString();
   const names=[...new Set(uploads.map(u=>u.name).filter(Boolean))];
@@ -450,9 +461,10 @@ function fleetImportFromSourceUploads() {
 function rememberFleetSourceUpload(vehicles=[],name='Fleet upload',uploadedAt=new Date().toISOString()) {
   const grouped={};
   vehicles.forEach(vehicle=>{
-    const key=fleetSourceKey(vehicle.source);
-    if(!grouped[key])grouped[key]=[];
-    grouped[key].push(vehicle);
+    fleetSourceKeys(vehicle.source).forEach(key=>{
+      if(!grouped[key])grouped[key]=[];
+      grouped[key].push(vehicle);
+    });
   });
   state.fleetSourceUploads=state.fleetSourceUploads||{};
   Object.entries(grouped).forEach(([key,rows])=>{
@@ -1142,14 +1154,36 @@ function normalizeFleetVehicle(vehicle={}) {
     hasMiles:Boolean(vehicle.hasMiles)
   };
 }
+function fleetSourceFromHint(value='') {
+  const hint=String(value||'').toLowerCase();
+  const hasAmazon=/amazon|logistics|fleet.?management/.test(hint);
+  const hasFleetos=/rivian|fleetos|tracker|state of charge|battery/.test(hint);
+  if(hasAmazon&&hasFleetos)return 'Amazon fleet list + FleetOS tracker';
+  if(hasAmazon)return 'Amazon fleet list';
+  if(hasFleetos)return 'FleetOS tracker';
+  return '';
+}
+function inferFleetSource(headers=[],sourceName='',rowSource='') {
+  const genericName=/pasted amazon\s*\/\s*fleetos|fleet export/i.test(sourceName)?'':sourceName;
+  const explicit=fleetSourceFromHint(rowSource)||fleetSourceFromHint(genericName);
+  if(explicit)return explicit;
+  const keys=headers.map(headerKey);
+  const hasAmazonCols=keys.some(h=>['vehiclename','vehicle','name','asset','assetid','fleetid','van','ev','displayname','vehicledisplayname','unit','unitnumber','licenseplate','plate','platenumber','registration','registrationnumber','license','tag','active','activitystatus','lifecyclestatus','vehiclestatus','availability','availabilitystatus','assignmentstatus','operational','operationstatus','operationalstatus','grounded','groundingstatus','vehiclestate','servicestatus','maintenancestatus'].includes(h));
+  const hasFleetosCols=keys.some(h=>['battery','batterypercent','batterypercentage','soc','socpercent','stateofcharge','stateofchargepercent','charge','chargepercent','range','rangemiles','estimatedrange','estimatedrangemiles','remainingmiles','milesremaining'].includes(h));
+  if(hasAmazonCols&&hasFleetosCols)return 'Amazon fleet list + FleetOS tracker';
+  if(hasAmazonCols)return 'Amazon fleet list';
+  if(hasFleetosCols)return 'FleetOS tracker';
+  return 'Fleet export';
+}
 function fleetDetailsFromRows(rows=[],sourceName='Fleet export') {
   const header=findImportHeader(rows,[['vin','vehicleidentificationnumber','vehiclevin']]);
   if(header<0)return [];
   const headers=rows[header].map(v=>String(v||''));
-  const source=/amazon|logistics|fleet.?management/i.test(sourceName)?'Amazon fleet list':(/rivian|fleetos|tracker/i.test(sourceName)?'FleetOS tracker':'Fleet export');
+  const defaultSource=inferFleetSource(headers,sourceName);
   return rows.slice(header+1).map(row=>{
     const vin=cleanVin(firstExisting(row,headers,['vin','vin number','vinnumber','vehicle identification number','vehicleidentificationnumber','vehicle vin','vehiclevin','vehicle id','vehicleid']));
     if(!vin)return null;
+    const source=inferFleetSource(headers,sourceName,firstExisting(row,headers,['source','data source','datasource','portal','system','export source','exportsource']))||defaultSource;
     const rawName=firstExisting(row,headers,['vehicle','vehicle name','vehiclename','name','asset','asset id','assetid','fleet id','fleetid','van','ev','display name','displayname','vehicle display name','vehicledisplayname','unit','unit number','unitnumber']);
     const name=rawName||vin;
     const plate=firstExisting(row,headers,['license plate','licenseplate','plate','plate number','platenumber','registration','registration number','registrationnumber','license','tag']);

@@ -191,10 +191,23 @@ const checks = `
   downloadBlob = (data,type,name) => { capturedFleetTemplate = { data, type, name }; };
   downloadFleetTemplate();
   if (!capturedFleetTemplate || capturedFleetTemplate.name !== 'fleetos-amazon-ev-import-template.csv' || !capturedFleetTemplate.data.includes('Source,Vehicle Name,VIN') || !capturedFleetTemplate.data.includes('Amazon fleet list') || !capturedFleetTemplate.data.includes('FleetOS tracker') || !capturedFleetTemplate.data.includes('Official name/status row') || !capturedFleetTemplate.data.includes('Battery/range row for same VIN')) throw new Error('Fleet template should explain Amazon and FleetOS source rows');
+  const sourceColumnRows = [
+    ['Source','Vehicle Name','VIN','License Plate','Active','Operational Status','Battery %','Range Miles'],
+    ['Amazon fleet list','LLOL EV 21','7FCEHEB79PN014816','9ABC123','Active','Operational','',''],
+    ['FleetOS tracker','','7FCEHEB79PN014816','','','','63%','98']
+  ];
+  const sourceColumnFleet = fleetDetailsFromRows(sourceColumnRows,'manual fleet table.csv');
+  if (sourceColumnFleet.length !== 2 || sourceColumnFleet[0].source !== 'Amazon fleet list' || sourceColumnFleet[1].source !== 'FleetOS tracker') throw new Error('Fleet Source column should identify Amazon vs FleetOS rows');
+  const combinedPastedRows = [
+    ['Vehicle Name','VIN','License Plate','Active','Operational Status','Battery %','Range Miles'],
+    ['LLOL EV 40','7FCTGAAA9PN004040','9BOTH40','Active','Operational','77%','120 mi']
+  ];
+  const combinedPastedFleet = fleetDetailsFromRows(combinedPastedRows,'Pasted Amazon/FleetOS fleet table');
+  if (combinedPastedFleet.length !== 1 || combinedPastedFleet[0].source !== 'Amazon fleet list + FleetOS tracker' || fleetConfidence(combinedPastedFleet[0]).label !== 'Verified') throw new Error('Combined pasted fleet table should infer verified Amazon + FleetOS source');
   state.fleetPasteText = 'Vehicle Name\\tVIN\\tLicense Plate\\tActive\\tOperational Status\\tBattery %\\tRange Miles\\nLLOL EV 22\\t7FCTGAAA1PN000184\\t9XYZ222\\tActive\\tOperational\\t88%\\t137 mi';
   parseFleetPasteAction();
   state.expandedFleetVin = '7FCTGAAA1PN000184';
-  if (!fleetPage().includes('LLOL EV 22') || !fleetPage().includes('88%') || !fleetPage().includes('9XYZ222')) throw new Error('Fleet pasted table did not update cards');
+  if (!fleetPage().includes('LLOL EV 22') || !fleetPage().includes('88%') || !fleetPage().includes('9XYZ222') || fleetConfidence(rivianFleet.find(v => v.vin === '7FCTGAAA1PN000184')).label !== 'Verified' || !fleetSourceStatus().hasAmazon || !fleetSourceStatus().hasFleetos || !fleetRefreshReadinessStrip().includes('Refresh now')) throw new Error('Fleet pasted table did not update verified cards');
   resetFleetDemo();
   if (rivianFleet.length !== demoRivianFleet.length || state.fleetImport !== null || Object.keys(state.fleetSourceUploads||{}).length || state.fleetUpdateSummary !== null || state.fleetLastRefresh !== 'Not refreshed yet' || !fleetPage().includes('EDV-014816') || !fleetPage().includes('Needs: real upload')) throw new Error('Fleet clear upload should restore demo board');
   state.fleetPasteText = 'Vehicle Name\\tVIN\\tLicense Plate\\tActive\\tOperational Status\\tBattery %\\tRange Miles\\nLLOL EV 22\\t7FCTGAAA1PN000184\\t9XYZ222\\tActive\\tOperational\\t88%\\t137 mi';
