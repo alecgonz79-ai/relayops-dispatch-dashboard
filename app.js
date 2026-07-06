@@ -384,10 +384,20 @@ function sortedRivianFleet() {
 function amazonRivianIcon(tone='high') {
   return `<span class="rivian-van-art ${tone}" aria-hidden="true"><span class="van-cab"></span><span class="van-box"><i class="prime-smile"></i><b>prime</b></span><span class="van-wheel front"></span><span class="van-wheel rear"></span></span>`;
 }
+function fleetConfidence(vehicle={}) {
+  const source=String(vehicle.source||'').toLowerCase();
+  const hasAmazon=source.includes('amazon fleet list');
+  const hasFleetos=source.includes('fleetos tracker')||source.includes('rivian');
+  if(hasAmazon&&hasFleetos)return {label:'Verified',className:'verified'};
+  if(hasAmazon)return {label:'Amazon only',className:'partial'};
+  if(hasFleetos)return {label:'FleetOS only',className:'partial'};
+  return {label:'Demo',className:'demo'};
+}
 function rivianCard(v) {
   const tone=batteryTone(v.battery), open=state.expandedFleetVin===v.vin;
   const changes=state.fleetChangedVins?.[v.vin]||v.changedFields||[];
-  return `<button class="rivian-card ${tone} ${open?'expanded':''} ${changes.length?'updated':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(v.name)}</h3>${changes.length?'<span class="update-pill">Updated</span>':''}</div><span class="rivian-vin">${esc(v.vin)}</span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span>${changes.length?`<span class="change-line">Changed: ${esc(changes.join(', '))}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`<div class="rivian-details"><span><b>Plate</b>${esc(v.plate||'—')}</span><span><b>Active</b>${esc(v.active||'—')}</span><span><b>State</b>${esc(v.operational||'—')}</span><span><b>Source</b>${esc(v.source||'FleetOS + Amazon')}</span></div>`:''}</button>`;
+  const confidence=fleetConfidence(v);
+  return `<button class="rivian-card ${tone} ${open?'expanded':''} ${changes.length?'updated':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(v.name)}</h3><span class="confidence-pill ${confidence.className}">${esc(confidence.label)}</span>${changes.length?'<span class="update-pill">Updated</span>':''}</div><span class="rivian-vin">${esc(v.vin)}</span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span>${changes.length?`<span class="change-line">Changed: ${esc(changes.join(', '))}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`<div class="rivian-details"><span><b>Plate</b>${esc(v.plate||'—')}</span><span><b>Active</b>${esc(v.active||'—')}</span><span><b>State</b>${esc(v.operational||'—')}</span><span><b>Confidence</b>${esc(confidence.label)}</span><span><b>Source</b>${esc(v.source||'Demo data')}</span></div>`:''}</button>`;
 }
 
 function performancePage() {
@@ -920,7 +930,7 @@ function normalizeFleetVehicle(vehicle={}) {
     active:normalizeActive(vehicle.active||vehicle.status,vehicle.active||'Active'),
     operational:normalizeOperational(vehicle.operational||vehicle.status,vehicle.operational||'Operational'),
     status:String(vehicle.status||batteryLabel(battery)).trim(),
-    source:String(vehicle.source||'FleetOS + Amazon').trim(),
+    source:String(vehicle.source||'Demo data').trim(),
     changedFields:Array.isArray(vehicle.changedFields)?vehicle.changedFields:[],
     updated:Boolean(vehicle.updated)
   };

@@ -332,6 +332,10 @@ tbody tr:last-child td { border-bottom:0; }
 .rivian-copy { min-width:0; }
 .rivian-title-line { display:flex; align-items:center; gap:5px; min-width:0; }
 .rivian-copy h3 { margin:0; color:#005da6; font:900 13px "Manrope"; letter-spacing:-.01em; }
+.confidence-pill { padding:2px 5px; border-radius:999px; font-size:6px; font-weight:1000; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
+.confidence-pill.verified { background:#dff5d7; color:#275c1f; }
+.confidence-pill.partial { background:#fff2cf; color:#8a5d08; }
+.confidence-pill.demo { background:#edf0ec; color:#68726b; }
 .update-pill { padding:2px 5px; border-radius:999px; background:#dff5d7; color:#275c1f; font-size:6px; font-weight:1000; letter-spacing:.08em; text-transform:uppercase; }
 .rivian-vin { display:block; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px; color:#5c6970; font-size:7px; font-weight:800; }
 .rivian-charge-line { margin-top:6px; display:flex; align-items:center; gap:7px; color:#111; }
