@@ -636,7 +636,7 @@ function modal() {
   if (state.modal === 'sheets-helper') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="sheets-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS PASTE BOX</span><h2 id="sheets-title">Paste-ready morning sheet</h2><p>If one-click copy does not work, click Select all, copy, then paste into Google Sheets cell A1.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="paste-guide"><span><b>1</b> Select all</span><span><b>2</b> Copy</span><span><b>3</b> Paste in A1</span></div><textarea id="sheets-copy-text" class="sheets-copy-text" readonly>${esc(state.sheetCopyText||morningSheetTsv())}</textarea><div class="modal-actions"><button class="btn" data-action="select-sheets-text">Select all text</button><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy again</button></div></div></div></div>`;
   if (state.modal === 'equipment') {
     const count=state.equipmentImport?Object.keys(state.equipmentImport.details||{}).length:0;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="equipment-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">VAN/DEV/PORT IMPORT</span><h2 id="equipment-title">Match vans to devices</h2><p>Upload the screenshot/table or paste the list. RelayOps matches EV/VAN number to the EV cell, then fills Device and Portable.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="equipment-drop" id="equipment-drop" tabindex="0"><div class="equipment-drop-copy"><strong>Drop screenshot, JPEG, PDF, CSV, or XLSX here</strong><span>Or press ⌘V after copying a screenshot/file. Best results: clear screenshot/JPEG, PDF with selectable text, CSV, XLSX, TXT, Numbers-exported file, or pasted text.</span></div><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose file</button></div><label class="equipment-text-label" for="equipment-paste-text">Paste VAN/DEV/PORT list here</label><textarea id="equipment-paste-text" class="equipment-paste-text" placeholder="Example: 1 40 31 37 31 -">${esc(state.equipmentText)}</textarea>${state.equipmentImport?`<div class="import-preview ${count?'':'import-warning'}"><span class="preview-check">${count?'✓':'!'}</span><div><strong>${count} EV/VAN assignments found</strong><span>${count?(state.equipmentImport.name?esc(state.equipmentImport.name):'Ready to match against the EV column.'):'Try a clearer screenshot/PDF or paste the copied text from the image.'}</span></div></div><div class="equipment-preview">${Object.entries(state.equipmentImport.details||{}).slice(0,6).map(([van,d])=>`<span><b>${esc(van)}</b> Device ${esc(d.device||'')} · Portable ${esc(d.portable||'')}</span>`).join('')}</div>`:''}<div class="modal-actions"><button class="btn" data-action="parse-equipment-text">Read list</button><button class="btn primary" data-action="apply-equipment-import" ${count?'':'disabled'}>Fill Device + Portable cells</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="equipment-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">VAN/DEV/PORT IMPORT</span><h2 id="equipment-title">Match vans to devices</h2><p>Upload the screenshot, CSV, XLSX, PDF, or Google Sheets export. RelayOps matches each EV/VAN number to the EV cell, then fills Device and Portable.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="equipment-drop" id="equipment-drop" tabindex="0"><div class="equipment-drop-copy"><strong>Drop VAN/DEV/PORT file here</strong><span>Accepts screenshots, JPEG/PNG, PDF, CSV, XLSX, TXT, or copied screenshot files. Best Google Sheets layout: one row per van with columns EV/VAN, DEVICE, PORTABLE.</span></div><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose file</button></div><div class="equipment-layout-tip"><strong>Safest Google Sheets layout</strong><span>EV/VAN | DEVICE | PORTABLE — no merged cells. The split two-table screenshot also works, but the simple 3-column list is easiest for every dispatcher.</span></div>${state.equipmentImport?`<div class="import-preview ${count?'':'import-warning'}"><span class="preview-check">${count?'✓':'!'}</span><div><strong>${count} EV/VAN assignments found</strong><span>${count?(state.equipmentImport.name?esc(state.equipmentImport.name):'Ready to match against the EV column.'):'Try the 3-column Google Sheets layout, or upload a clearer screenshot/export.'}</span></div></div><div class="equipment-preview">${Object.entries(state.equipmentImport.details||{}).slice(0,6).map(([van,d])=>`<span><b>${esc(van)}</b> Device ${esc(d.device||'')} · Portable ${esc(d.portable||'')}</span>`).join('')}</div>`:''}<div class="modal-actions"><button class="btn" data-action="equipment-template-csv">Download VAN/DEV/PORT layout</button><button class="btn primary" data-action="apply-equipment-import" ${count?'':'disabled'}>Fill Device + Portable cells</button></div></div></div></div>`;
   }
   if (state.modal === 'fleet-import') {
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-import-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">FLEETOS + AMAZON IMPORT</span><h2 id="fleet-import-title">Update EV battery board</h2><p>Upload both files together when you can. RelayOps matches by VIN and keeps the van name exactly like the Amazon fleet list.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="fleet-import-sources"><button class="fleet-source-card" data-action="choose-file"><strong>Amazon fleet list</strong><span>Names, VINs, license plates, Active/Inactive, Operational/Grounded</span><small>Use this for the official van name.</small></button><button class="fleet-source-card" data-action="choose-file"><strong>FleetOS tracker</strong><span>VINs, battery %, range miles, live charge readiness</span><small>Use this for battery accuracy.</small></button></div><div class="equipment-drop" id="drop-zone"><div class="equipment-drop-copy"><strong>Drop CSV or XLSX fleet files here</strong><span>Best: choose the Amazon fleet list and FleetOS tracker at the same time. Accepted columns include VIN, vehicle/name, license plate, active/inactive, operational/grounded, SOC/battery %, and range/miles.</span></div><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose fleet files</button></div><label class="equipment-text-label" for="fleet-paste-text">Or paste the copied FleetOS/Amazon table here</label><textarea id="fleet-paste-text" class="equipment-paste-text" placeholder="Vehicle Name&#9;VIN&#9;License Plate&#9;Active&#9;Operational Status&#10;LLOL EV 21&#9;7FCEHEB79PN014816&#9;9ABC123&#9;Active&#9;Operational">${esc(state.fleetPasteText)}</textarea><div class="auto-match"><strong>RelayOps will do this:</strong><div><span>✓ Match by VIN</span><span>✓ Use Amazon fleet names</span><span>✓ Update battery + status cards</span></div></div><div class="modal-actions"><button class="btn" data-action="fleet-template-csv">Need fleet example?</button><button class="btn" data-action="parse-fleet-paste">Read pasted table</button><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose fleet files</button></div><p class="upload-help">Tip: if only one file is uploaded, the Fleet board will warn whether Amazon names/status or FleetOS battery/range is missing.</p></div></div></div>`;
@@ -832,6 +832,7 @@ function action(name,el) {
   if (name==='export-fleet-gaps') return exportFleetGapsCSV();
   if (name==='copy') return copyRows();
   if (name==='template-csv') return downloadTemplate();
+  if (name==='equipment-template-csv') return downloadEquipmentTemplate();
   if (name==='fleet-template-csv') return downloadFleetTemplate();
   if (name==='clear-morning-filters') { state.morningFilters={wave:'all',staging:'all',pad:'all'};render();return; }
   if (name==='clear-fleet-search') { state.fleetSearch='';state.fleetFilter='all';persist();render();return toast('Showing every EV again'); }
@@ -897,7 +898,7 @@ function cleanEquipmentValue(value='') {
   return text || '-';
 }
 function isEquipmentHeaderToken(value='') {
-  return /^(ev|van|evvan|vehicle|device|dev|portable|port)$/i.test(headerKey(value));
+  return /^(ev|van|evvan|vehicle|vehicleid|vannumber|gasvan|gas|helper|device|deviceid|dev|rabbit|portable|portableid|port|powerbank|battery)$/i.test(headerKey(value));
 }
 function isLikelyEquipmentId(value='') {
   const id=normalizeEquipmentId(value);
@@ -910,13 +911,19 @@ function isLikelyEquipmentId(value='') {
 function addEquipmentDetail(details,van,device,portable) {
   const key=normalizeEquipmentId(van);
   if(!key||!isLikelyEquipmentId(key))return false;
+  if(isEquipmentHeaderToken(van)||isEquipmentHeaderToken(device)||isEquipmentHeaderToken(portable))return false;
+  if(!String(device??'').trim()&&!String(portable??'').trim())return false;
   details[key]={device:cleanEquipmentValue(device),portable:cleanEquipmentValue(portable)};
   return true;
 }
 function equipmentDetailsFromTokenStream(text='') {
   const details={}, tokens=String(text||'').replace(/[|,]/g,' ').split(/\s+/).map(t=>t.replace(/^["']|["']$/g,'').trim()).filter(Boolean).filter(t=>!isEquipmentHeaderToken(t));
-  for(let i=0;i+2<tokens.length;i+=3) {
-    if(!addEquipmentDetail(details,tokens[i],tokens[i+1],tokens[i+2])) return {};
+  for(let i=0;i+2<tokens.length;) {
+    if(addEquipmentDetail(details,tokens[i],tokens[i+1],tokens[i+2])) {
+      i+=3;
+    } else {
+      i+=1;
+    }
   }
   return details;
 }
@@ -934,8 +941,7 @@ function equipmentDetailsFromRows(rows=[]) {
   const details={};
   rows.slice(header+1).forEach(row=>{
     groups.forEach(([vanIx,deviceIx,portableIx])=>{
-      const van=normalizeEquipmentId(row[vanIx]); if(!van)return;
-      details[van]={device:cleanEquipmentValue(row[deviceIx]),portable:cleanEquipmentValue(row[portableIx])};
+      addEquipmentDetail(details,row[vanIx],row[deviceIx],row[portableIx]);
     });
   });
   return details;
@@ -943,17 +949,21 @@ function equipmentDetailsFromRows(rows=[]) {
 function equipmentDetailsFromText(text='') {
   const details={}, lines=String(text||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
   lines.forEach(line=>{
-    if(/^(ev\s*\/?\s*van|van|vehicle)\b.*\bdevice\b.*\bportable\b/i.test(line)&&!/\d/.test(line)) return;
+    const cleanedLine=line.replace(/[|,]/g,' ').trim();
+    if(/^(ev\s*\/?\s*van|van|vehicle|gas\s*van|helper)\b.*\b(device|dev)\b.*\b(portable|port)\b/i.test(cleanedLine)&&!/\d/.test(cleanedLine)) return;
     let m=line.match(/(?:EV\s*\/?\s*VAN|VAN|EV|VEHICLE)\s*[:#-]?\s*"?([A-Z0-9-]+)"?.*?(?:DEVICE|DEV)\s*[:#-]?\s*"?([A-Z0-9-]+|-)"?.*?(?:PORTABLE|PORT)\s*[:#-]?\s*"?([A-Z0-9-]+|-)"?/i);
     if(m&&addEquipmentDetail(details,m[1],m[2],m[3])) return;
     let parts=line.replace(/[|,]/g,'\t').split(/\t+|\s{2,}/).map(x=>x.trim()).filter(Boolean);
     const looseParts=line.split(/\s+/).map(x=>x.trim()).filter(Boolean);
     if(parts.length<3&&looseParts.length>=3&&looseParts.every(x=>/^[A-Z0-9-]+$/i.test(x))) parts=looseParts;
-    if(parts.length>=6&&!/device|portable|ev\s*\/?\s*van/i.test(parts.join(' '))) {
-      for(let i=0;i+2<parts.length;i+=3) addEquipmentDetail(details,parts[i],parts[i+1],parts[i+2]);
+    parts=parts.filter(x=>!isEquipmentHeaderToken(x));
+    if(parts.length>=6) {
+      for(let i=0;i+2<parts.length;i+=3) {
+        if(!addEquipmentDetail(details,parts[i],parts[i+1],parts[i+2])) i-=2;
+      }
       return;
     }
-    if(parts.length>=3&&!/device|portable|ev\s*\/?\s*van/i.test(parts.join(' '))) {
+    if(parts.length>=3) {
       addEquipmentDetail(details,parts[0],parts[1],parts[2]);
     }
   });
@@ -1487,6 +1497,15 @@ function buildWaveScreenshot(rows) {
 function previewWaveScreenshot(){const rows=filteredMorningRows();if(!rows.length)return toast('No wave rows are visible to capture','error');state.screenshotPreview=buildWaveScreenshot(rows);state.modal='screenshot';render();}
 function saveWaveScreenshot(){if(!state.screenshotPreview)return;const a=document.createElement('a');a.href=state.screenshotPreview;a.download=`${state.dspCode}-${state.morningFilters.wave==='all'?'all-waves':state.morningFilters.wave.replace(/[^a-z0-9]+/gi,'-')}.jpg`;document.body.appendChild(a);a.click();a.remove();state.modal=null;state.screenshotPreview=null;render();toast('Approved JPEG saved — ready for GroupMe');}
 function downloadTemplate(){const h=['DSP','Driver','Route Code','Service Type','Wave','Staging Location','Route Duration','Num Zones','Num Packages','Num Commercial Pkgs','Stops'];const a=['LLOL','Maya Collins','CX249','Standard Parcel Electric','11:15 AM','STG.V.1','420','21','332','12','188'];const b=['OTHER','Other DSP Driver','ZZ101','Standard Parcel','11:10 AM','STG.A.1','390','19','301','11','172'];downloadBlob(`${h.join(',')}\r\n${a.join(',')}\r\n${b.join(',')}\r\n`,'text/csv','day-of-operations-import-template.csv');toast('Day-of-operations template downloaded');}
+function downloadEquipmentTemplate(){
+  const h=['EV/VAN','DEVICE','PORTABLE'];
+  const rows=[
+    ['1','40','31'],['2','41','32'],['3','42','33'],['21','60','51'],['37','31','-'],['40','34','r'],['43','37','cc'],['58','52','9'],
+    ['F33','',''],['F34','',''],['R35','',''],['R36','',''],['R54','',''],['R55','',''],['R62','',''],['H1','',''],['H2','',''],['H3','',''],['H4','','']
+  ];
+  downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n')+'\r\n','text/csv;charset=utf-8','van-dev-port-google-sheets-layout.csv');
+  toast('VAN/DEV/PORT Google Sheets layout downloaded');
+}
 function downloadFleetTemplate(){const h=['Source','Vehicle Name','VIN','License Plate','Active','Operational Status','Battery %','Range Miles','Dispatcher Note'];const amazon=['Amazon fleet list','LLOL EV 21','7FCEHEB79PN014816','9ABC123','Active','Operational','','','Official name/status row'];const fleetos=['FleetOS tracker','','7FCEHEB79PN014816','','','','63%','98','Battery/range row for same VIN'];const both=['Amazon + FleetOS','LLOL EV 22','7FCTGAAA1PN000184','9XYZ222','Active','Operational','88%','137','One complete combined row also works'];downloadBlob(`${h.map(csvEscape).join(',')}\r\n${amazon.map(csvEscape).join(',')}\r\n${fleetos.map(csvEscape).join(',')}\r\n${both.map(csvEscape).join(',')}\r\n`,'text/csv','fleetos-amazon-ev-import-template.csv');toast('FleetOS/Amazon EV template downloaded');}
 
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}

@@ -485,6 +485,9 @@ tbody tr:last-child td { border-bottom:0; }
 .equipment-text-label { display:block; margin:0 0 6px; color:var(--muted); font-size:8px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
 .equipment-paste-text { width:100%; height:160px; resize:vertical; padding:12px; border:1px solid var(--line); border-radius:12px; font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; outline:0; }
 .equipment-paste-text:focus { border-color:#9ec94a; box-shadow:0 0 0 3px rgba(216,255,114,.28); }
+.equipment-layout-tip { display:grid; gap:4px; padding:12px 14px; margin:0 0 14px; border:1px solid #dbe6d6; border-radius:13px; background:linear-gradient(135deg,#f7fff0,#ffffff); }
+.equipment-layout-tip strong { font-size:10px; letter-spacing:.04em; text-transform:uppercase; }
+.equipment-layout-tip span { color:var(--muted); font-size:9px; line-height:1.45; }
 .equipment-preview { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:10px; }
 .equipment-preview span { padding:8px 10px; border-radius:9px; background:#f4f7f2; font-size:9px; }
 .equipment-preview b { margin-right:5px; }

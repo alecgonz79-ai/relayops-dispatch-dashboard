@@ -250,6 +250,29 @@ const checks = `
     ['F33','4','P2','H1','9','-']
   ]);
   if (splitEquipmentRows['37'].device !== '8' || splitEquipmentRows.F33.portable !== 'P2' || splitEquipmentRows.H1.device !== '9') throw new Error('Split VAN/DEV/PORT table parsing failed');
+  const latestDeviceLayout = equipmentDetailsFromRows([
+    ['EV','DEVICE','PORTABLE','EV','DEVICE','PORTABLE'],
+    ['1','40','31','37','31','-'],
+    ['2','41','32','38','32','-'],
+    ['3','42','33','39','33','-'],
+    ['4','43','34','40','34','r'],
+    ['5','44','35','41','35','f'],
+    ['21','60','51','57','51','7'],
+    ['22','61','52','58','52','9'],
+    ['23','62','53','GAS VAN','DEVICE','PORTABLE'],
+    ['24','63','54','F33','',''],
+    ['31','70','61','HELPER','DEVICE','PORTABLE'],
+    ['32','71','62','H1','','']
+  ]);
+  if (latestDeviceLayout['1'].device !== '40' || latestDeviceLayout['40'].portable !== 'r' || latestDeviceLayout['58'].portable !== '9' || latestDeviceLayout.F33 || latestDeviceLayout.HELPER) throw new Error('Latest VAN/DEV/PORT sheet layout parsing failed');
+  const cleanDeviceLayout = equipmentDetailsFromRows([
+    ['EV/VAN','DEVICE','PORTABLE'],
+    ['1','40','31'],
+    ['37','31','-'],
+    ['40','34','r'],
+    ['43','37','cc']
+  ]);
+  if (cleanDeviceLayout['43'].portable !== 'cc' || cleanDeviceLayout['37'].device !== '31') throw new Error('Clean Google Sheets VAN/DEV/PORT layout parsing failed');
   state.equipmentImport = { name: 'device list', details: equipment };
   applyEquipmentImport();
   if (state.morningRoutes[0].deviceName !== '3' || state.morningRoutes[0].portable !== '-') throw new Error('EV/device assignment failed');
@@ -258,7 +281,8 @@ const checks = `
   applyEquipmentImport();
   if (state.morningRoutes[0].deviceName !== '31' || state.morningRoutes[0].portable !== '-') throw new Error('Filled screenshot EV/device assignment failed');
   state.modal = 'equipment';
-  if (!modal().includes('VAN/DEV/PORT IMPORT') || !modal().includes('Drop screenshot, JPEG, PDF, CSV, or XLSX here') || !modal().includes('equipment-drop') || !modal().includes('equipment-paste-text')) throw new Error('EV/device import modal missing');
+  const equipmentModalHtml = modal();
+  if (!equipmentModalHtml.includes('VAN/DEV/PORT IMPORT') || !equipmentModalHtml.includes('Drop VAN/DEV/PORT file here') || !equipmentModalHtml.includes('equipment-drop') || !equipmentModalHtml.includes('Download VAN/DEV/PORT layout') || equipmentModalHtml.includes('equipment-paste-text')) throw new Error('EV/device import modal missing');
   state.modal = 'equipment';
   handleEquipmentPaste({ preventDefault(){}, clipboardData:{ files:[], getData:()=> '1 40 31 37 31 -' } });
   if (!state.equipmentImport || state.equipmentImport.details['37'].device !== '31') throw new Error('Equipment paste shortcut failed');
