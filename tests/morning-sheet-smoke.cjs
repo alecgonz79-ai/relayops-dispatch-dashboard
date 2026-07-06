@@ -124,6 +124,18 @@ const checks = `
   if (!fleetPage().includes('Verified only') || !sortedRivianFleet().every(v => fleetConfidence(v).label === 'Verified')) throw new Error('Verified fleet filter failed');
   state.fleetFilter = 'needs-data';
   if (!fleetPage().includes('Needs data') || !sortedRivianFleet().every(v => fleetMissingFields(v).length > 0)) throw new Error('Needs-data fleet filter failed');
+  resetFleetDemo();
+  applyFleetVehicles(fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),{silent:true});
+  state.fleetFilter = 'amazon-only';
+  if (!fleetPage().includes('Amazon only') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'Amazon only')) throw new Error('Amazon-only fleet filter failed');
+  resetFleetDemo();
+  applyFleetVehicles(fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx'),{silent:true});
+  state.fleetFilter = 'fleetos-only';
+  if (!fleetPage().includes('FleetOS only') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('FleetOS-only fleet filter failed');
+  resetFleetDemo();
+  state.fleetFilter = 'demo-only';
+  if (!fleetPage().includes('Demo only') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'Demo')) throw new Error('Demo-only fleet filter failed');
+  applyFleetVehicles(mergedFleet,{silent:true});
   state.fleetFilter = 'all';
   state.modal = 'fleet-import';
   const fleetImportHtml = modal();
