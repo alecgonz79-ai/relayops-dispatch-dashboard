@@ -504,6 +504,11 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-source-card strong { display:block; color:#172019; font:900 12px "Manrope"; margin-bottom:5px; }
 .fleet-source-card span { display:block; color:#4f5f55; font-size:9px; font-weight:800; line-height:1.45; }
 .fleet-source-card small { display:block; margin-top:8px; color:#275c1f; font-size:8px; font-weight:1000; text-transform:uppercase; letter-spacing:.05em; }
+.fleet-import-status { display:grid; grid-template-columns:auto repeat(2,minmax(0,1fr)); gap:8px; align-items:center; margin:0 0 12px; padding:9px 10px; border-radius:12px; background:#f5f7f4; border:1px solid #e0e6e1; }
+.fleet-import-status strong { color:#172019; font:1000 9px "Manrope"; text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
+.fleet-import-status span { padding:7px 8px; border-radius:9px; border:1px solid #ebcf83; background:#fff2cf; color:#8a5d08; font-size:8px; font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-import-status span.ok { border-color:#cfe8c7; background:#eef7ea; color:#275c1f; }
+.fleet-import-status b { margin-right:6px; color:#172019; }
 .fleet-column-guide { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:0 0 12px; }
 .fleet-column-guide > div { padding:11px; border:1px solid #dfe7dd; border-radius:13px; background:#fbfcfa; }
 .fleet-column-guide strong { display:block; margin-bottom:8px; color:#172019; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.05em; }
@@ -612,6 +617,7 @@ tbody tr:last-child td { border-bottom:0; }
   .quick-arrow { transform:rotate(90deg); }
   .auto-match > div { grid-template-columns:1fr; }
   .fleet-import-sources { grid-template-columns:1fr; }
+  .fleet-import-status { grid-template-columns:1fr; }
   .fleet-column-guide { grid-template-columns:1fr; }
   .fleet-source-rule { align-items:flex-start; flex-direction:column; }
   .easy-actions { align-items:stretch; flex-direction:column-reverse; }
