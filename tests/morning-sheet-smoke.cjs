@@ -81,6 +81,12 @@ const checks = `
   ];
   const mergedFleet = [...fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),...fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx')];
   if (mergedFleet.length !== 2 || mergedFleet[0].name !== 'LLOL EV 21' || mergedFleet[1].battery !== 41) throw new Error('FleetOS/Amazon fleet row parsing failed');
+  const messyFleetRows = [
+    ['Asset ID','Vehicle Identification Number','Registration Number','Availability Status','Grounding Status','State of Charge %','Estimated Range (mi)'],
+    ['LLOL EV 34','7FCTGAAA9PN999999','9MESSY9','Enabled','Out of Service','72%','113 mi']
+  ];
+  const messyFleet = fleetDetailsFromRows(messyFleetRows,'FleetOS tracker.xlsx');
+  if (messyFleet.length !== 1 || messyFleet[0].name !== 'LLOL EV 34' || messyFleet[0].plate !== '9MESSY9' || messyFleet[0].active !== 'Active' || messyFleet[0].operational !== 'Grounded' || messyFleet[0].battery !== 72 || messyFleet[0].miles !== 113) throw new Error('Fleet export alias headers failed');
   const currentBattery = rivianFleet.find(v => v.vin === '7FCEHEB79PN014816').battery;
   applyFleetVehicles(fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),{silent:true});
   const amazonOnlyVehicle = rivianFleet.find(v => v.vin === '7FCEHEB79PN014816');
