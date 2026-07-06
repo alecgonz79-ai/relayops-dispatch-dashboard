@@ -371,6 +371,12 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-update-summary span.warn { background:#fff2cf; color:#8a5d08; }
 .fleet-update-summary b { display:block; color:#111b13; font-size:14px; line-height:1; margin-bottom:3px; }
 .fleet-update-summary em { display:block; margin-top:3px; color:#8a5d08; font-style:normal; font-size:6px; letter-spacing:0; text-transform:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-result-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 10px; padding:9px 10px; border:1px solid #dfe7dd; border-radius:12px; background:#fbfcfa; }
+.fleet-result-bar strong, .fleet-result-bar span { display:block; }
+.fleet-result-bar strong { color:#172019; font:1000 10px "Manrope"; }
+.fleet-result-bar span { color:#5c685f; font-size:8px; font-weight:850; margin-top:2px; }
+.fleet-result-bar > div:last-child { display:flex; align-items:center; justify-content:flex-end; gap:8px; }
+.fleet-result-bar > div:last-child span { margin:0; padding:5px 7px; border-radius:999px; background:#eef6ff; color:#285c9d; font-size:7px; text-transform:uppercase; letter-spacing:.06em; }
 .fleet-full-list { display:grid; grid-template-columns:1.15fr 1.7fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:10px 11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
 .fleet-full-list.ok { border-color:#cfe8c7; background:#f3fbef; }
 .fleet-full-list strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
@@ -657,6 +663,8 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-full-list-steps { grid-template-columns:1fr 1fr 1fr; }
   .fleet-accuracy-gate { grid-template-columns:1fr; }
   .accuracy-source-mini { grid-template-columns:1fr 1fr 1fr; }
+  .fleet-result-bar { align-items:flex-start; flex-direction:column; }
+  .fleet-result-bar > div:last-child { justify-content:flex-start; }
   .fleet-legend { grid-template-columns:1fr 1fr; }
   .fleet-attention-strip { grid-template-columns:1fr; }
   .fleet-recent-changes { grid-template-columns:1fr; }
