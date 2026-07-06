@@ -58,7 +58,7 @@ const checks = `
   if (!uploadHtml.includes('CX route matching')) throw new Error('CX matching explanation missing');
   state.page = 'fleet';
   const fleetHtml = fleetPage();
-  if (!fleetHtml.includes('FleetOS + Amazon EV live board') || !fleetHtml.includes('Refresh battery %') || !fleetHtml.includes('Verified EVs') || !fleetHtml.includes('Upload/export both lists') || !fleetHtml.includes('logistics.amazon.com/fleet-management/#vehicles') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('EDV-014816') || !fleetHtml.includes('7FCEHEB79PN014816') || !fleetHtml.includes('98 mi / 63%')) throw new Error('FleetOS/Amazon EV board missing');
+  if (!fleetHtml.includes('FleetOS + Amazon EV live board') || !fleetHtml.includes('Refresh battery %') || !fleetHtml.includes('Verified EVs') || !fleetHtml.includes('Amazon fleet list') || !fleetHtml.includes('FleetOS battery/range') || !fleetHtml.includes('Upload/export both lists') || !fleetHtml.includes('logistics.amazon.com/fleet-management/#vehicles') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('EDV-014816') || !fleetHtml.includes('7FCEHEB79PN014816') || !fleetHtml.includes('98 mi / 63%')) throw new Error('FleetOS/Amazon EV board missing');
   const startingCoverage = fleetCoverageStats();
   if (startingCoverage.demo !== rivianFleet.length || startingCoverage.needsData !== rivianFleet.length) throw new Error('Fleet coverage counters should flag demo data');
   const noUploadBattery = rivianFleet.find(v => v.vin === '7FCEHEB79PN014816').battery;
@@ -85,11 +85,13 @@ const checks = `
   applyFleetVehicles(fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),{silent:true});
   const amazonOnlyVehicle = rivianFleet.find(v => v.vin === '7FCEHEB79PN014816');
   if (amazonOnlyVehicle.battery !== currentBattery || !fleetPage().includes('Amazon only') || !fleetPage().includes('Needs: FleetOS battery') || !fleetPage().includes('Updated') || !fleetPage().includes('Changed: name, plate, active status, operational state')) throw new Error('Amazon fleet import should preserve battery and flag status changes');
+  if (!fleetSourceStatus().hasAmazon || fleetSourceStatus().hasFleetos) throw new Error('Fleet source status should detect Amazon-only import');
   if (rivianFleet.length !== 1 || fleetCoverageStats().demo !== 0 || !fleetPage().includes('not in upload')) throw new Error('Real fleet import should replace demo-only EV rows');
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet, uploadedAt: '2026-07-05T12:34:00.000Z' };
   applyFleetVehicles(mergedFleet,{silent:true});
   const importedFleetHtml = fleetPage();
   if (!importedFleetHtml.includes('LLOL EV 21') || !importedFleetHtml.includes('9ABC123') || !importedFleetHtml.includes('41%') || !importedFleetHtml.includes('Verified') || !importedFleetHtml.includes('loaded') || importedFleetHtml.includes('Needs: FleetOS battery') || !importedFleetHtml.includes('Changed: battery, range') || !importedFleetHtml.includes('rows read') || !importedFleetHtml.includes('duplicate VINs') || !importedFleetHtml.includes('EV CSV') || !importedFleetHtml.includes('Upload / paste fleet list')) throw new Error('FleetOS/Amazon fleet import did not update cards');
+  if (!fleetSourceStatus().hasAmazon || !fleetSourceStatus().hasFleetos) throw new Error('Fleet source status should detect combined Amazon + FleetOS import');
   state.expandedFleetVin = '7FCEHEB79PN014816';
   if (!fleetPage().includes('Last change') || !fleetPage().includes('Changed</b>battery, range')) throw new Error('Fleet expanded card should show change audit details');
   if (!fleetCoverageStats().verified) throw new Error('Fleet coverage counters should show verified EVs after Amazon + FleetOS import');
