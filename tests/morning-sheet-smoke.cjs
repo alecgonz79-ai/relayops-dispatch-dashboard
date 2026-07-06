@@ -58,7 +58,11 @@ const checks = `
   if (!uploadHtml.includes('CX route matching')) throw new Error('CX matching explanation missing');
   state.page = 'fleet';
   const fleetHtml = fleetPage();
-  if (!fleetHtml.includes('FleetOS + Amazon EV live board') || !fleetHtml.includes('Refresh battery %') || !fleetHtml.includes('logistics.amazon.com/fleet-management/#vehicles') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('EDV-014816') || !fleetHtml.includes('7FCEHEB79PN014816') || !fleetHtml.includes('98 mi / 63%')) throw new Error('FleetOS/Amazon EV board missing');
+  if (!fleetHtml.includes('FleetOS + Amazon EV live board') || !fleetHtml.includes('Refresh battery %') || !fleetHtml.includes('Upload/export both lists') || !fleetHtml.includes('logistics.amazon.com/fleet-management/#vehicles') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('EDV-014816') || !fleetHtml.includes('7FCEHEB79PN014816') || !fleetHtml.includes('98 mi / 63%')) throw new Error('FleetOS/Amazon EV board missing');
+  const noUploadBattery = rivianFleet.find(v => v.vin === '7FCEHEB79PN014816').battery;
+  refreshFleetStatus();
+  if (rivianFleet.find(v => v.vin === '7FCEHEB79PN014816').battery !== noUploadBattery || state.modal !== 'fleet-import') throw new Error('Fleet refresh should require a real upload before changing battery data');
+  state.modal = null;
   state.expandedFleetVin = '7FCEHEB79PN014816';
   const expandedFleetHtml = fleetPage();
   if (!expandedFleetHtml.includes('8HJK214') || !expandedFleetHtml.includes('Operational') || !expandedFleetHtml.includes('Demo') || !expandedFleetHtml.includes('Needs: real upload')) throw new Error('Expandable FleetOS/Amazon EV details missing');
