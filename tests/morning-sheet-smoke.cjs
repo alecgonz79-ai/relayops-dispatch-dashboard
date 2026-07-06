@@ -82,10 +82,18 @@ const checks = `
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet };
   applyFleetVehicles(mergedFleet,{silent:true});
   const importedFleetHtml = fleetPage();
-  if (!importedFleetHtml.includes('LLOL EV 21') || !importedFleetHtml.includes('9ABC123') || !importedFleetHtml.includes('41%') || !importedFleetHtml.includes('Verified') || importedFleetHtml.includes('Needs: FleetOS battery') || !importedFleetHtml.includes('Changed: battery, range') || !importedFleetHtml.includes('rows read') || !importedFleetHtml.includes('unchanged') || !importedFleetHtml.includes('EV CSV') || !importedFleetHtml.includes('Upload / paste fleet list')) throw new Error('FleetOS/Amazon fleet import did not update cards');
+  if (!importedFleetHtml.includes('LLOL EV 21') || !importedFleetHtml.includes('9ABC123') || !importedFleetHtml.includes('41%') || !importedFleetHtml.includes('Verified') || importedFleetHtml.includes('Needs: FleetOS battery') || !importedFleetHtml.includes('Changed: battery, range') || !importedFleetHtml.includes('rows read') || !importedFleetHtml.includes('duplicate VINs') || !importedFleetHtml.includes('EV CSV') || !importedFleetHtml.includes('Upload / paste fleet list')) throw new Error('FleetOS/Amazon fleet import did not update cards');
   const fleetRows = fleetExportRows();
   const exportedEv = fleetRows.find(row => row[1] === '7FCEHEB79PN014816');
   if (!exportedEv || exportedEv[0] !== 'LLOL EV 21' || exportedEv[7] !== 'Verified' || exportedEv[8] !== '' || !exportedEv[10].includes('Amazon fleet list')) throw new Error('Fleet CSV export rows missing verified EV data');
+  const duplicateFleetRows = [
+    ['Vehicle Name','VIN','License Plate','Active','Operational Status'],
+    ['LLOL EV 21','7FCEHEB79PN014816','9ABC123','Active','Operational'],
+    ['LLOL EV 21 duplicate','7FCEHEB79PN014816','9ABC123','Active','Operational']
+  ];
+  applyFleetVehicles(fleetDetailsFromRows(duplicateFleetRows,'amazon fleet list.csv'),{silent:true});
+  if (state.fleetUpdateSummary.duplicates !== 1 || !state.fleetUpdateSummary.duplicateVins.includes('7FCEHEB79PN014816') || !fleetPage().includes('duplicate VINs')) throw new Error('Fleet duplicate VIN warning failed');
+  applyFleetVehicles(mergedFleet,{silent:true});
   state.fleetFilter = 'grounded';
   if (!fleetPage().includes('LLOL EV 21') || sortedRivianFleet().some(v => v.operational !== 'Grounded')) throw new Error('Grounded fleet filter failed');
   state.fleetFilter = 'all';

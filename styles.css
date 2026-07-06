@@ -323,6 +323,7 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-search-input:focus { border-color:#82c66b; box-shadow:0 0 0 3px rgba(130,198,107,.18); }
 .fleet-update-summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; margin:0 0 12px; }
 .fleet-update-summary span { padding:8px 9px; border-radius:10px; background:#eef7ea; color:#43523f; font-size:7px; font-weight:900; text-transform:uppercase; letter-spacing:.05em; }
+.fleet-update-summary span.warn { background:#fff2cf; color:#8a5d08; }
 .fleet-update-summary b { display:block; color:#111b13; font-size:14px; line-height:1; margin-bottom:3px; }
 .rivian-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
 .rivian-card { min-height:118px; padding:10px; border:1px solid #d8dcdf; border-radius:12px; background:#fff; display:block; text-align:left; cursor:pointer; box-shadow:0 1px 0 rgba(0,0,0,.04); transition:.16s ease; }
