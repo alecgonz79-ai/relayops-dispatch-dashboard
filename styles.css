@@ -463,6 +463,10 @@ tbody tr:last-child td { border-bottom:0; }
 .tiny-view .hard-status-pill { padding:2px 4px; font-size:5px; }
 .rivian-vin { display:block; max-width:98px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px; color:#5c6970; font-size:6px; font-weight:800; }
 .tiny-view .rivian-card:not(.expanded) .rivian-vin { max-width:74px; font-size:5px; }
+.name-source-pill { display:inline-flex; margin-top:3px; padding:2px 5px; border-radius:999px; background:#eef7ea; color:#275c1f; font-size:6px; font-weight:1000; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
+.name-source-pill.warn { background:#fff2cf; color:#8a5d08; }
+.name-source-pill.demo { background:#edf0ec; color:#68726b; }
+.tiny-view .rivian-card:not(.expanded) .name-source-pill { max-width:78px; overflow:hidden; text-overflow:ellipsis; font-size:5px; padding:2px 4px; }
 .rivian-charge-line { margin-top:5px; display:flex; align-items:center; gap:6px; color:#111; }
 .tiny-view .rivian-card:not(.expanded) .rivian-charge-line { margin-top:4px; gap:5px; }
 .rivian-charge-line strong { font:800 9px Arial,sans-serif; white-space:nowrap; }
