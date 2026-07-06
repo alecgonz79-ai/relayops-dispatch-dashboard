@@ -248,8 +248,10 @@ const checks = `
   if (state.fleetSearch !== '' || state.fleetFilter !== 'all' || sortedRivianFleet().length !== rivianFleet.length) throw new Error('Fleet clear search/filter failed');
   state.fleetExpectedCount = rivianFleet.length + 1;
   refreshFleetStatus();
-  if (state.modal !== 'fleet-refresh' || !state.fleetRefreshPreview || state.fleetRefreshPreview.expectedShort !== 1 || !state.fleetRefreshPreview.blockers.length || !modal().includes('Approve fleet refresh') || !modal().includes('source rows read') || !modal().includes('short of expected') || !modal().includes('Fix before approving') || !modal().includes('1 EV short of expected') || !modal().includes('Refresh will update') || !modal().includes('Amazon fleet list') || !modal().includes('Amazon wins for van names and status') || !modal().includes('FleetOS tracker') || !modal().includes('FleetOS wins for battery and range') || !modal().includes('official EV name') || !modal().includes('battery %, range miles') || !modal().includes('Accuracy reminder') || !modal().includes('upload fresh exports first before approving') || !modal().includes('Approve refresh')) throw new Error('Fleet refresh should show approval preview before applying');
+  if (state.modal !== 'fleet-refresh' || !state.fleetRefreshPreview || state.fleetRefreshPreview.expectedShort !== 1 || !state.fleetRefreshPreview.blockers.length || !modal().includes('Approve fleet refresh') || !modal().includes('source rows read') || !modal().includes('short of expected') || !modal().includes('Fix before approving') || !modal().includes('1 EV short of expected') || !modal().includes('Refresh will update') || !modal().includes('Amazon fleet list') || !modal().includes('Amazon wins for van names and status') || !modal().includes('FleetOS tracker') || !modal().includes('FleetOS wins for battery and range') || !modal().includes('official EV name') || !modal().includes('battery %, range miles') || !modal().includes('Accuracy reminder') || !modal().includes('upload fresh exports first before approving') || !modal().includes('warn-approve') || !modal().includes('Approve anyway')) throw new Error('Fleet refresh should show approval preview before applying');
   state.fleetExpectedCount = 0;
+  refreshFleetStatus();
+  if (!state.fleetRefreshPreview || state.fleetRefreshPreview.blockers.length || !modal().includes('Approve refresh') || modal().includes('Approve anyway')) throw new Error('Clean fleet refresh should show normal approval button');
   action('approve-fleet-refresh',{});
   if (state.fleetLastRefresh === 'Not refreshed yet' || state.modal || state.fleetRefreshPreview || !fleetPage().includes('Last refresh:') || !fleetPage().includes('Refresh readiness')) throw new Error('Approved fleet refresh did not update the board');
   const morningHtml = morningSheetPage();
@@ -351,7 +353,7 @@ const checks = `
 
 vm.runInNewContext(`${source}\n${checks}`, context, { filename: 'app.js' });
 const fleetCss = fs.readFileSync('styles.css','utf8');
-  if (!fleetCss.includes('minmax(86px,1fr)') || !fleetCss.includes('min-height:46px') || !fleetCss.includes('width:21px; height:11px') || !fleetCss.includes('repeat(7,minmax(0,1fr))') || !fleetCss.includes('.fleet-card-cue') || !fleetCss.includes('.refresh-freshness-summary') || !fleetCss.includes('.rivian-id-summary') || !fleetCss.includes('.fleet-gap-fix-tips') || !fleetCss.includes('.fleet-refresh-blockers')) throw new Error('Tiny EV grid should stay compact and scan-friendly');
+  if (!fleetCss.includes('minmax(86px,1fr)') || !fleetCss.includes('min-height:46px') || !fleetCss.includes('width:21px; height:11px') || !fleetCss.includes('repeat(7,minmax(0,1fr))') || !fleetCss.includes('.fleet-card-cue') || !fleetCss.includes('.refresh-freshness-summary') || !fleetCss.includes('.rivian-id-summary') || !fleetCss.includes('.fleet-gap-fix-tips') || !fleetCss.includes('.fleet-refresh-blockers') || !fleetCss.includes('.warn-approve')) throw new Error('Tiny EV grid should stay compact and scan-friendly');
 
 (async () => {
   const zip = new JSZip();

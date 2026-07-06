@@ -684,6 +684,7 @@ tbody tr:last-child td { border-bottom:0; }
 .mapping-col { padding:9px 10px; border:1px solid var(--line); border-radius:9px; font-size:9px; }
 .mapping-arrow { color:var(--muted); text-align:center; }
 .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+.modal-actions .warn-approve { background:#c98211; box-shadow:0 10px 20px rgba(201,130,17,.18); }
 .easy-actions { align-items:center; }
 .create-sheet-button { min-height:44px; min-width:230px; font-size:11px; }
 .sample-button { margin-right:auto; }
