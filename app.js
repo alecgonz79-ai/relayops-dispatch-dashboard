@@ -114,6 +114,7 @@ let state = {
   dspCode: localStorage.getItem('relayops_dsp') || 'LLOL',
   lastImportExcluded: Number(localStorage.getItem('relayops_excluded') || 0),
   morningFilters: {wave:'all',staging:'all',pad:'all'},
+  fitMorningRows: localStorage.getItem('relayops_fit_rows') === 'true',
   importSource: 'computer',
   importPurpose: 'morning',
   rosterPublished: localStorage.getItem('relayops_published') === 'true',
@@ -242,11 +243,11 @@ function morningSheetPage() {
   const excluded=state.lastImportExcluded;
   const groups=morningSections(rows);
   const irregular=rows.filter(r=>r.plannedRtsIssue).length;
-  const copyRowsCount=groups.reduce((n,g)=>n+Math.max(g.rows.length,g.minRows)+(g.wave?1:0),1);
+  const copyRowsCount=groups.reduce((n,g)=>n+morningDisplayRows(g).length+(g.wave?1:0),1);
   return `${contextBar(`<span class="status blue">Earliest waves first</span>`)}
   <div class="morning-command card"><div><span class="eyebrow">LLOL OPENING OPERATIONS</span><h2>Morning operations sheet</h2><p>Upload DAYOFOPSPLAN plus ROUTE_DJT6. RelayOps keeps only ${state.dspCode}, matches CX routes, uses the first driver name only, and keeps waves earliest first.</p></div><div class="morning-actions"><button class="btn" data-action="slack-import">${ICONS.inbox} Slack Import <span class="demo-tag">DEMO</span></button><button class="btn primary easy-upload-button" data-action="import">${ICONS.upload} Cortex Import</button><button class="btn lime" data-action="planned-rts-import">${ICONS.calendar} Planned RTS Upload</button></div></div>
   <div class="quick-start" aria-label="Three easy steps"><div class="quick-step done"><b>1</b><span><strong>Pick import</strong><small>Slack or Cortex</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>2</b><span><strong>We match CX</strong><small>Wave + staging + pad</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>3</b><span><strong>Edit/copy</strong><small>White cells + Google Sheets paste</small></span></div></div>
-  <div class="sheet-toolbar"><div class="sheet-filter"><label>DSP</label><select data-morning-filter="dsp"><option>${state.dspCode}</option></select></div><div class="sheet-filter"><label>Wave</label><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Staging location</label><select data-morning-filter="staging"><option value="all">All staging</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Pad</label><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></div><button class="btn small" data-action="clear-morning-filters">Clear filters</button><span class="filter-note">Sorted ${ICONS.chevron} earliest launch first</span><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Done editing':'✎ Edit mode'}</button><button class="btn small" data-action="copy-morning-visible">${ICONS.copy} Copy for Sheets</button><button class="btn small" data-action="preview-wave-screenshot">${ICONS.download} Preview JPEG</button><button class="btn small" data-action="export-morning">${ICONS.download} Export sheet</button></div>
+  <div class="sheet-toolbar"><div class="sheet-filter"><label>DSP</label><select data-morning-filter="dsp"><option>${state.dspCode}</option></select></div><div class="sheet-filter"><label>Wave</label><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Staging location</label><select data-morning-filter="staging"><option value="all">All staging</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Pad</label><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></div><button class="btn small" data-action="clear-morning-filters">Clear filters</button><span class="filter-note">Sorted ${ICONS.chevron} earliest launch first</span><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Done editing':'✎ Edit mode'}</button><button class="btn small ${state.fitMorningRows?'lime':''}" data-action="toggle-fit-rows">${state.fitMorningRows?'✓ Fit to drivers':'Remove blank rows'}</button><button class="btn small" data-action="copy-morning-visible">${ICONS.copy} Copy for Sheets</button><button class="btn small" data-action="preview-wave-screenshot">${ICONS.download} Preview JPEG</button><button class="btn small" data-action="export-morning">${ICONS.download} Export sheet</button></div>
   <div class="sheet-kpis"><span><strong>${rows.length}</strong> routes</span><span><strong>${rows.reduce((n,r)=>n+r.packages,0).toLocaleString()}</strong> packages</span><span><strong>${rows.reduce((n,r)=>n+r.stops,0).toLocaleString()}</strong> stops</span><span><strong>${irregular}</strong> RTS flags</span></div>
   <div class="sheets-helper card"><div class="sheets-helper-copy"><span class="eyebrow">GOOGLE SHEETS HANDOFF</span><h3>One-click paste into your template</h3><p>Click copy, open Google Sheets, click cell A1, then paste. No dragging or perfect highlighting needed.</p></div><div class="sheets-helper-steps"><span>1 Copy ${copyRowsCount} rows</span><span>2 Open Google Sheets</span><span>3 Paste in A1</span></div><div class="sheets-helper-actions"><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy Google Sheets table</button><button class="btn" data-action="open-sheets-helper">Open paste box</button></div></div>
   ${state.editMode?`<div class="edit-help">Editing is on. Every white sheet cell can be typed into for call-offs, route swaps, van swaps, device swaps, portable swaps, and RTS fixes. You can also drag-select cells and copy them into Google Sheets.</div>`:''}
@@ -263,11 +264,19 @@ function morningSections(rows) {
   sections.push({label:"ADHOC's",wave:'',rows:adHoc,minRows:14});
   sections.push({label:'HELPERS',wave:'',rows:helpers,minRows:16});
   sections.push({label:'DSP',wave:'',rows:[],minRows:5,dsp:true});
+  if(state.fitMorningRows) return sections.filter(s=>s.rows.length||s.dsp);
   return sections.filter(s=>s.rows.length||s.label.startsWith('WAVE')||s.dsp||state.morningFilters.wave==='all');
 }
 
 function blankMorningRow(section,index) {
   return {dsp:state.dspCode,driver:'',route:`__blank_${section.label}_${index}`,service:'',wave:section.wave,staging:'',pad:section.rows[0]?.pad||'',padOverride:section.rows[0]?.padOverride||'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true};
+}
+
+function morningDisplayRows(section) {
+  const rows=[...section.rows];
+  const target=state.fitMorningRows?Math.max(rows.length,section.dsp?1:0):section.minRows;
+  while(rows.length<target) rows.push(blankMorningRow(section,rows.length));
+  return rows;
 }
 
 function createManualMorningRoute(seed={}) {
@@ -277,8 +286,7 @@ function createManualMorningRoute(seed={}) {
 }
 
 function morningWaveGroup(section) {
-  const rows=[...section.rows];
-  while(rows.length<section.minRows) rows.push(blankMorningRow(section,rows.length));
+  const rows=morningDisplayRows(section);
   const edit=state.editMode;
   const blankEditable=(r,field,value,cls='')=>`<td class="sheet-edit-cell ${cls} ${r.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" ${edit?`contenteditable="true" data-edit-route="${esc(r.route)}" data-edit-field="${field}" data-edit-wave="${esc(r.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''}>${esc(value??'')}</td>`;
   const check=(r,field,value)=>`<input class="sheet-check" type="checkbox" data-check-route="${esc(r.route)}" data-check-wave="${esc(r.wave||section.wave||'')}" data-check-field="${field}" ${value?'checked':''}>`;
@@ -431,6 +439,7 @@ function action(name,el) {
   if (name==='template-csv') return downloadTemplate();
   if (name==='clear-morning-filters') { state.morningFilters={wave:'all',staging:'all',pad:'all'};render();return; }
   if (name==='toggle-morning-edit') { state.editMode=!state.editMode;render();return toast(state.editMode?'Editing is on — click any highlighted cell':'Edits saved'); }
+  if (name==='toggle-fit-rows') { state.fitMorningRows=!state.fitMorningRows;persist();render();return toast(state.fitMorningRows?'Blank rows removed — waves fit driver count':'Template rows restored'); }
   if (name==='preview-wave-screenshot') return previewWaveScreenshot();
   if (name==='save-wave-screenshot') return saveWaveScreenshot();
   if (name==='export-morning') return exportMorningSheet();
@@ -615,8 +624,7 @@ function morningSheetCopyRows() {
   const headers=['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','PRE DVIC','PRE-WHIP','POST DVIC','POST-WHIP','RESCUED','STOP COUNT','PACKAGE COUNT','PACKAGE RETURNS','END TIME','RTS TIME','PLANNED RTS','CLOCK OUT TIME'];
   const lines=[headers];
   morningSections(filteredMorningRows()).forEach(section=>{
-    const rows=[...section.rows];
-    while(rows.length<section.minRows) rows.push(blankMorningRow(section,rows.length));
+    const rows=morningDisplayRows(section);
     rows.forEach((r,i)=>lines.push([
       i===0?section.label:'',
       r.driver||'',
@@ -681,7 +689,7 @@ function downloadTemplate(){const h=['DSP','Driver','Route Code','Service Type',
 
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function persist(){localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);}
+function persist(){localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);}
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
 render();
