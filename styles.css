@@ -398,6 +398,15 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-legend .verified { background:#eef7ea; border-color:#cfe8c7; }
 .fleet-legend .partial, .fleet-legend .charge { background:#fff8e6; border-color:#ebcf83; }
 .fleet-legend .demo { background:#f3f5f2; border-color:#dfe5df; }
+.fleet-accuracy-gate { display:grid; grid-template-columns:1.2fr 1fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
+.fleet-accuracy-gate.ok { border-color:#cfe8c7; background:#f3fbef; }
+.fleet-accuracy-gate strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
+.fleet-accuracy-gate span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
+.accuracy-source-mini { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+.accuracy-source-mini span { padding:7px 8px; border-radius:9px; background:#fff; border:1px solid #e2e8e3; color:#536159; font-size:7px; font-weight:1000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.accuracy-source-mini b { display:block; color:#172019; font-size:8px; text-transform:uppercase; letter-spacing:.06em; }
+.accuracy-source-mini .ok { background:#eef7ea; border-color:#cfe8c7; color:#275c1f; }
+.accuracy-source-mini .warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
 .rivian-grid { grid-template-columns:repeat(auto-fill,minmax(136px,1fr)); gap:6px; align-items:start; }
 .rivian-card { min-height:74px; padding:6px; border:1px solid #d8dcdf; border-radius:9px; background:#fff; display:block; text-align:left; cursor:pointer; box-shadow:0 1px 0 rgba(0,0,0,.04); transition:.16s ease; }
 .rivian-card:hover, .rivian-card.expanded { transform:translateY(-1px); border-color:#8ab4f8; box-shadow:0 10px 24px rgba(24,40,32,.12); }
@@ -622,6 +631,8 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-refresh-impact > strong { grid-column:auto; }
   .fleet-full-list { grid-template-columns:1fr; }
   .fleet-full-list-steps { grid-template-columns:1fr 1fr 1fr; }
+  .fleet-accuracy-gate { grid-template-columns:1fr; }
+  .accuracy-source-mini { grid-template-columns:1fr 1fr 1fr; }
   .fleet-legend { grid-template-columns:1fr 1fr; }
   .fleet-attention-strip { grid-template-columns:1fr; }
   .fleet-recent-changes { grid-template-columns:1fr; }
