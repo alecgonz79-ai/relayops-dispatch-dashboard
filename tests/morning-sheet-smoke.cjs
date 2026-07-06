@@ -229,8 +229,10 @@ const checks = `
   state.fleetFilter = 'grounded';
   action('clear-fleet-search',{});
   if (state.fleetSearch !== '' || state.fleetFilter !== 'all' || sortedRivianFleet().length !== rivianFleet.length) throw new Error('Fleet clear search/filter failed');
+  state.fleetExpectedCount = rivianFleet.length + 1;
   refreshFleetStatus();
-  if (state.modal !== 'fleet-refresh' || !state.fleetRefreshPreview || !modal().includes('Approve fleet refresh') || !modal().includes('source rows read') || !modal().includes('Refresh will update') || !modal().includes('Amazon fleet list') || !modal().includes('FleetOS tracker') || !modal().includes('battery %, range miles') || !modal().includes('Approve refresh')) throw new Error('Fleet refresh should show approval preview before applying');
+  if (state.modal !== 'fleet-refresh' || !state.fleetRefreshPreview || state.fleetRefreshPreview.expectedShort !== 1 || !modal().includes('Approve fleet refresh') || !modal().includes('source rows read') || !modal().includes('short of expected') || !modal().includes('Refresh will update') || !modal().includes('Amazon fleet list') || !modal().includes('FleetOS tracker') || !modal().includes('battery %, range miles') || !modal().includes('Approve refresh')) throw new Error('Fleet refresh should show approval preview before applying');
+  state.fleetExpectedCount = 0;
   action('approve-fleet-refresh',{});
   if (state.fleetLastRefresh === 'Not refreshed yet' || state.modal || state.fleetRefreshPreview || !fleetPage().includes('Last refresh:') || !fleetPage().includes('Refresh readiness')) throw new Error('Approved fleet refresh did not update the board');
   const morningHtml = morningSheetPage();

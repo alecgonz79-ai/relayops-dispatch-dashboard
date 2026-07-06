@@ -558,9 +558,9 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-source-rule { display:flex; align-items:center; gap:9px; margin:0 0 12px; padding:9px 11px; border-radius:12px; background:#eef6ff; border:1px solid #cbdff7; }
 .fleet-source-rule strong { color:#0b4f8f; font:1000 9px "Manrope"; text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
 .fleet-source-rule span { color:#354b61; font-size:9px; font-weight:900; line-height:1.35; }
-.fleet-refresh-preview { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:12px; }
+.fleet-refresh-preview { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:12px; }
 .fleet-refresh-preview span { padding:10px; border:1px solid #dfe7dd; border-radius:12px; background:#eef7ea; color:#43523f; font-size:7px; font-weight:1000; text-transform:uppercase; letter-spacing:.05em; }
-.fleet-refresh-preview.warn span:last-child { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
+.fleet-refresh-preview.warn span:last-child, .fleet-refresh-preview span.warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
 .fleet-refresh-preview b { display:block; color:#172019; font-size:15px; line-height:1; margin-bottom:4px; text-transform:none; letter-spacing:0; }
 .fleet-refresh-impact { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0 0 12px; padding:10px; border-radius:13px; background:#f6f8f5; border:1px solid #dfe7dd; }
 .fleet-refresh-impact > strong { grid-column:1/-1; color:#172019; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }
