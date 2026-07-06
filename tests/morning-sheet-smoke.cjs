@@ -98,8 +98,10 @@ const checks = `
   state.fleetSearch = 'PN014816';
   if (!sortedRivianFleet().some(v => v.vin === '7FCEHEB79PN014816')) throw new Error('Fleet search by VIN failed');
   state.fleetSearch = 'not-a-real-ev';
-  if (!fleetPage().includes('No EVs match this search/filter')) throw new Error('Fleet search empty state missing');
-  state.fleetSearch = '';
+  if (!fleetPage().includes('No EVs match this search/filter') || !fleetPage().includes('Press Clear to show every EV again') || !fleetPage().includes('data-action="clear-fleet-search"')) throw new Error('Fleet search empty state missing');
+  state.fleetFilter = 'grounded';
+  action('clear-fleet-search',{});
+  if (state.fleetSearch !== '' || state.fleetFilter !== 'all' || sortedRivianFleet().length !== rivianFleet.length) throw new Error('Fleet clear search/filter failed');
   refreshFleetStatus();
   if (state.fleetLastRefresh === 'Not refreshed yet' || !fleetPage().includes('Last refresh:')) throw new Error('Fleet refresh did not update the board');
   const morningHtml = morningSheetPage();
