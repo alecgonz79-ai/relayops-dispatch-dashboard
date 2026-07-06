@@ -58,7 +58,7 @@ const checks = `
   if (!uploadHtml.includes('CX route matching')) throw new Error('CX matching explanation missing');
   state.page = 'fleet';
   const fleetHtml = fleetPage();
-  if (!fleetHtml.includes('FleetOS + Amazon EV live board') || !fleetHtml.includes('Refresh battery %') || !fleetHtml.includes('Clear upload') || !fleetHtml.includes('Verified EVs') || !fleetHtml.includes('Need charge') || !fleetHtml.includes('Grounded') || !fleetHtml.includes('Missing data') || !fleetHtml.includes('Amazon fleet list') || !fleetHtml.includes('FleetOS battery/range') || !fleetHtml.includes('Upload/export both lists') || !fleetHtml.includes('Full EV portal check') || !fleetHtml.includes('Upload the Amazon fleet list and FleetOS tracker export') || !fleetHtml.includes('logistics.amazon.com/fleet-management/#vehicles') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('EDV-014816') || !fleetHtml.includes('7FCEHEB79PN014816') || !fleetHtml.includes('98 mi / 63%')) throw new Error('FleetOS/Amazon EV board missing');
+  if (!fleetHtml.includes('FleetOS + Amazon EV live board') || !fleetHtml.includes('Refresh battery %') || !fleetHtml.includes('Clear upload') || !fleetHtml.includes('Verified EVs') || !fleetHtml.includes('Need charge') || !fleetHtml.includes('Grounded') || !fleetHtml.includes('Missing data') || !fleetHtml.includes('Expected EVs') || !fleetHtml.includes('Amazon fleet list') || !fleetHtml.includes('FleetOS battery/range') || !fleetHtml.includes('Upload/export both lists') || !fleetHtml.includes('Full EV portal check') || !fleetHtml.includes('Upload the Amazon fleet list and FleetOS tracker export') || !fleetHtml.includes('logistics.amazon.com/fleet-management/#vehicles') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('EDV-014816') || !fleetHtml.includes('7FCEHEB79PN014816') || !fleetHtml.includes('98 mi / 63%')) throw new Error('FleetOS/Amazon EV board missing');
   if (!fleetAttentionStrip().includes('data-filter="low"') || !fleetAttentionStrip().includes('data-filter="grounded"') || !fleetAttentionStrip().includes('data-filter="needs-data"')) throw new Error('Fleet attention strip missing quick filters');
   if (fleetRecentChangesStrip() !== '') throw new Error('Fleet recent changes strip should stay hidden until an upload changes EVs');
   const startingCoverage = fleetCoverageStats();
@@ -89,6 +89,11 @@ const checks = `
   applyFleetVehicles(mergedFleet,{silent:true});
   const matchedFleetStats = fleetPortalMatchStats();
   if (state.fleetUpdateSummary.duplicates !== 0 || matchedFleetStats.uniqueVins.size !== 1 || matchedFleetStats.amazon.size !== 1 || matchedFleetStats.fleetos.size !== 1 || matchedFleetStats.both.length !== 1 || matchedFleetStats.amazonOnly.length || matchedFleetStats.fleetosOnly.length || !fleetPortalMatchStrip().includes('unique VINs accounted') || !fleetPortalMatchStrip().includes('matched both')) throw new Error('FleetOS/Amazon matched VINs should reconcile without duplicate warnings');
+  state.fleetExpectedCount = 2;
+  if (!fleetPortalMatchStrip().includes('1 short of expected 2')) throw new Error('Fleet expected count short warning missing');
+  state.fleetExpectedCount = 1;
+  if (!fleetPortalMatchStrip().includes('complete vs expected 1')) throw new Error('Fleet expected count complete warning missing');
+  state.fleetExpectedCount = 0;
   resetFleetDemo();
   const messyFleetRows = [
     ['Asset ID','Vehicle Identification Number','Registration Number','Availability Status','Grounding Status','State of Charge %','Estimated Range (mi)'],
