@@ -223,7 +223,9 @@ const checks = `
   action('clear-fleet-search',{});
   if (state.fleetSearch !== '' || state.fleetFilter !== 'all' || sortedRivianFleet().length !== rivianFleet.length) throw new Error('Fleet clear search/filter failed');
   refreshFleetStatus();
-  if (state.fleetLastRefresh === 'Not refreshed yet' || !fleetPage().includes('Last refresh:') || !fleetPage().includes('Refresh readiness')) throw new Error('Fleet refresh did not update the board');
+  if (state.modal !== 'fleet-refresh' || !state.fleetRefreshPreview || !modal().includes('Approve fleet refresh') || !modal().includes('source rows read') || !modal().includes('Approve refresh')) throw new Error('Fleet refresh should show approval preview before applying');
+  action('approve-fleet-refresh',{});
+  if (state.fleetLastRefresh === 'Not refreshed yet' || state.modal || state.fleetRefreshPreview || !fleetPage().includes('Last refresh:') || !fleetPage().includes('Refresh readiness')) throw new Error('Approved fleet refresh did not update the board');
   const morningHtml = morningSheetPage();
   if (!morningHtml.includes('Three easy steps') || !morningHtml.includes('White cells + Google Sheets paste')) throw new Error('Quick start guide missing');
   const details = routeDetailsFromRows([

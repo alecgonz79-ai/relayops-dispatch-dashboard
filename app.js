@@ -144,6 +144,7 @@ let state = {
   fleetExpectedCount: Number(localStorage.getItem('relayops_fleet_expected_count') || 0),
   fleetChangedVins: {},
   fleetUpdateSummary: null,
+  fleetRefreshPreview: null,
   fitMorningRows: localStorage.getItem('relayops_fit_rows') === 'true',
   importSource: 'computer',
   importPurpose: 'morning',
@@ -386,7 +387,10 @@ function fleetRecentChangesStrip() {
 }
 
 function fleetPortalMatchStats() {
-  const rows=state.fleetImport?.vehicles||[];
+  return fleetPortalMatchStatsForRows(state.fleetImport?.vehicles||[]);
+}
+
+function fleetPortalMatchStatsForRows(rows=[]) {
   const amazon=new Set(), fleetos=new Set();
   rows.forEach(v=>{
     const vin=cleanVin(v.vin), source=String(v.source||'').toLowerCase();
@@ -669,6 +673,10 @@ function modal() {
   if (state.modal === 'fleet-import') {
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-import-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">FLEETOS + AMAZON IMPORT</span><h2 id="fleet-import-title">Update EV battery board</h2><p>Upload both files together when you can. RelayOps matches by VIN and keeps the van name exactly like the Amazon fleet list.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="fleet-import-sources"><button class="fleet-source-card" data-action="choose-file"><strong>Amazon fleet list</strong><span>Names, VINs, license plates, Active/Inactive, Operational/Grounded</span><small>Use this for the official van name.</small></button><button class="fleet-source-card" data-action="choose-file"><strong>FleetOS tracker</strong><span>VINs, battery %, range miles, live charge readiness</span><small>Use this for battery accuracy.</small></button></div><div class="equipment-drop" id="drop-zone"><div class="equipment-drop-copy"><strong>Drop CSV or XLSX fleet files here</strong><span>Best: choose the Amazon fleet list and FleetOS tracker at the same time. Accepted columns include VIN, vehicle/name, license plate, active/inactive, operational/grounded, SOC/battery %, and range/miles.</span></div><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose fleet files</button></div><label class="equipment-text-label" for="fleet-paste-text">Or paste the copied FleetOS/Amazon table here</label><textarea id="fleet-paste-text" class="equipment-paste-text" placeholder="Vehicle Name&#9;VIN&#9;License Plate&#9;Active&#9;Operational Status&#10;LLOL EV 21&#9;7FCEHEB79PN014816&#9;9ABC123&#9;Active&#9;Operational">${esc(state.fleetPasteText)}</textarea><div class="auto-match"><strong>RelayOps will do this:</strong><div><span>✓ Match by VIN</span><span>✓ Use Amazon fleet names</span><span>✓ Update battery + status cards</span></div></div><div class="modal-actions"><button class="btn" data-action="fleet-template-csv">Need fleet example?</button><button class="btn" data-action="parse-fleet-paste">Read pasted table</button><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose fleet files</button></div><p class="upload-help">Tip: if only one file is uploaded, the Fleet board will warn whether Amazon names/status or FleetOS battery/range is missing.</p></div></div></div>`;
   }
+  if (state.modal === 'fleet-refresh' && state.fleetRefreshPreview) {
+    const p=state.fleetRefreshPreview, missing=p.missingSources||[], tone=missing.length?'warn':'ok';
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-refresh-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">REVIEW BEFORE REFRESH</span><h2 id="fleet-refresh-title">Approve fleet refresh</h2><p>RelayOps found saved portal data. Review the counts, then approve to update the EV grid.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="fleet-refresh-preview ${tone}"><span><b>${p.input}</b>source rows read</span><span><b>${p.total}</b>EV cards after refresh</span><span><b>${p.updated}</b>cards will change</span><span><b>${p.newCount}</b>new EVs</span><span><b>${p.duplicates}</b>duplicate VINs</span><span><b>${missing.length?missing.join(' + '):'Ready'}</b>${missing.length?'missing source':'both sources matched'}</span></div>${p.changedPreview?.length?`<div class="fleet-refresh-change-list"><strong>First changes to review</strong>${p.changedPreview.map(x=>`<span><b>${esc(x.name)}</b>${esc(x.fields.join(', '))}</span>`).join('')}</div>`:''}<p class="upload-help">Nothing changes until you approve. If the counts look wrong, go back and upload the latest Amazon + FleetOS files first.</p><div class="modal-actions"><button class="btn" data-action="fleet-import">Upload newer files</button><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="approve-fleet-refresh">Approve refresh</button></div></div></div></div>`;
+  }
   if (state.modal === 'screenshot' && state.screenshotPreview) return `<div class="modal-backdrop" data-action="close-modal"><div class="modal screenshot-modal" role="dialog" aria-modal="true" aria-labelledby="screenshot-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">APPROVAL REQUIRED</span><h2 id="screenshot-title">Approve GroupMe JPEG</h2><p>Only Wave, Driver/Helper, Route, Staging, Pad, EV, Device, and Portable are included.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="jpeg-preview"><img src="${state.screenshotPreview}" alt="Wave sheet JPEG preview"></div><div class="modal-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="save-wave-screenshot">Approve & save JPEG</button></div></div></div></div>`;
   return '';
 }
@@ -850,7 +858,7 @@ function action(name,el) {
   if (name==='fleet-import') { state.modal='fleet-import'; state.importPurpose='fleet'; return render(); }
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal') { state.modal=null;state.screenshotPreview=null;return render(); }
+  if (name==='close-modal') { state.modal=null;state.screenshotPreview=null;state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') return fileInput.click();
   if (name==='apply-import') return applyImport();
   if (name==='export-menu') { state.modal='export'; return render(); }
@@ -873,6 +881,7 @@ function action(name,el) {
   if (name==='assign-gas-vans') return assignGasVehicles();
   if (name==='toggle-fleet-card') return toggleFleetCard(el.dataset.vin);
   if (name==='refresh-fleet') return refreshFleetStatus();
+  if (name==='approve-fleet-refresh') return approveFleetRefresh();
   if (name==='preview-wave-screenshot') return previewWaveScreenshot();
   if (name==='save-wave-screenshot') return saveWaveScreenshot();
   if (name==='export-morning') return exportMorningSheet();
@@ -1253,6 +1262,22 @@ function applyFleetVehicles(vehicles=[],options={}) {
   }
   return merged.length;
 }
+function fleetRefreshPreviewFromVehicles(vehicles=[]) {
+  const merged=mergeFleetVehicles(vehicles), stats=fleetPortalMatchStatsForRows(vehicles);
+  const missingSources=[];
+  if(!stats.amazon.size)missingSources.push('Amazon fleet list');
+  if(!stats.fleetos.size)missingSources.push('FleetOS tracker');
+  return {
+    input:merged.summary?.input||vehicles.length,
+    total:merged.length,
+    updated:merged.summary?.updated||0,
+    newCount:merged.summary?.newCount||0,
+    duplicates:merged.summary?.duplicates||0,
+    duplicateVins:merged.summary?.duplicateVins||[],
+    missingSources,
+    changedPreview:merged.filter(v=>v.updated).slice(0,5).map(v=>({name:v.name,vin:v.vin,fields:v.changedFields||[]}))
+  };
+}
 
 function parseCSV(text) {
   const rows=[]; let row=[],cell='',quoted=false;
@@ -1411,18 +1436,29 @@ function toggleFleetCard(vin='') {
 function refreshFleetStatus() {
   if(Object.keys(state.fleetSourceUploads||{}).length) state.fleetImport=fleetImportFromSourceUploads();
   if(state.fleetImport?.vehicles?.length) {
-    const total=applyFleetVehicles(state.fleetImport.vehicles);
-    const stats=fleetPortalMatchStats();
-    const missing=[];
-    if(!stats.amazon.size)missing.push('Amazon fleet list');
-    if(!stats.fleetos.size)missing.push('FleetOS tracker');
-    toast(`${state.fleetUpdateSummary.updated} changed · ${total} EV cards refreshed from saved ${stats.amazon.size?'Amazon':''}${stats.amazon.size&&stats.fleetos.size?' + ':''}${stats.fleetos.size?'FleetOS':''} upload${missing.length?` · upload ${missing.join(' + ')} for full accuracy`:''}`);
+    state.fleetRefreshPreview=fleetRefreshPreviewFromVehicles(state.fleetImport.vehicles);
+    state.modal='fleet-refresh';
+    persist();render();
+    toast('Review the fleet refresh before applying it');
     return;
   }
   state.modal='fleet-import';
   state.importPurpose='fleet';
   persist();render();
   toast('Upload the latest FleetOS/Amazon export first so refresh stays accurate. No demo battery changes were made.','error');
+}
+
+function approveFleetRefresh() {
+  if(Object.keys(state.fleetSourceUploads||{}).length) state.fleetImport=fleetImportFromSourceUploads();
+  if(!state.fleetImport?.vehicles?.length)return refreshFleetStatus();
+  const total=applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
+  const stats=fleetPortalMatchStats(), missing=[];
+  if(!stats.amazon.size)missing.push('Amazon fleet list');
+  if(!stats.fleetos.size)missing.push('FleetOS tracker');
+  state.fleetLastRefresh=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
+  state.modal=null; state.fleetRefreshPreview=null; state.page='fleet';
+  persist(); render();
+  toast(`${state.fleetUpdateSummary.updated} changed · ${total} EV cards refreshed${missing.length?` · upload ${missing.join(' + ')} for full accuracy`:''}`);
 }
 
 function resetFleetDemo() {
