@@ -122,6 +122,10 @@ const checks = `
   state.modal = 'fleet-import';
   const fleetImportHtml = modal();
   if (!fleetImportHtml.includes('Amazon fleet list') || !fleetImportHtml.includes('FleetOS tracker') || !fleetImportHtml.includes('Use this for the official van name') || !fleetImportHtml.includes('Use this for battery accuracy') || !fleetImportHtml.includes('Or paste the copied FleetOS/Amazon table here') || !fleetImportHtml.includes('Read pasted table') || !fleetImportHtml.includes('Need fleet example?')) throw new Error('Fleet paste modal missing');
+  let capturedFleetTemplate = null;
+  downloadBlob = (data,type,name) => { capturedFleetTemplate = { data, type, name }; };
+  downloadFleetTemplate();
+  if (!capturedFleetTemplate || capturedFleetTemplate.name !== 'fleetos-amazon-ev-import-template.csv' || !capturedFleetTemplate.data.includes('Source,Vehicle Name,VIN') || !capturedFleetTemplate.data.includes('Amazon fleet list') || !capturedFleetTemplate.data.includes('FleetOS tracker') || !capturedFleetTemplate.data.includes('Official name/status row') || !capturedFleetTemplate.data.includes('Battery/range row for same VIN')) throw new Error('Fleet template should explain Amazon and FleetOS source rows');
   state.fleetPasteText = 'Vehicle Name\\tVIN\\tLicense Plate\\tActive\\tOperational Status\\tBattery %\\tRange Miles\\nLLOL EV 22\\t7FCTGAAA1PN000184\\t9XYZ222\\tActive\\tOperational\\t88%\\t137 mi';
   parseFleetPasteAction();
   state.expandedFleetVin = '7FCTGAAA1PN000184';
