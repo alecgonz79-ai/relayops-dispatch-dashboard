@@ -443,6 +443,11 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-legend .verified { background:#eef7ea; border-color:#cfe8c7; }
 .fleet-legend .partial, .fleet-legend .charge { background:#fff8e6; border-color:#ebcf83; }
 .fleet-legend .demo { background:#f3f5f2; border-color:#dfe5df; }
+.fleet-filter-chips { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0 0 10px; }
+.fleet-filter-chips button { border:1px solid #dfe7dd; border-radius:999px; background:#fff; color:#516158; padding:6px 8px; font-size:7px; font-weight:1000; text-transform:uppercase; letter-spacing:.05em; cursor:pointer; }
+.fleet-filter-chips button.active { background:#172019; border-color:#172019; color:#fff; }
+.fleet-filter-chips button.empty { opacity:.55; }
+.fleet-filter-chips b { display:inline-block; margin-right:5px; color:inherit; font-size:9px; }
 .fleet-accuracy-gate { display:grid; grid-template-columns:1.2fr 1fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
 .fleet-accuracy-gate.ok { border-color:#cfe8c7; background:#f3fbef; }
 .fleet-accuracy-gate strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }

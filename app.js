@@ -365,7 +365,7 @@ function fleetPage() {
   ${fleetTrustStrip()}
   ${fleetDispatchChecklist()}
   <div class="fleet-source-note ${age.stale?'stale':''}"><strong>${sourceName}</strong>${age.stale?'<div class="fleet-stale-warning">Battery data may be stale — upload fresh FleetOS/Amazon exports before dispatch decisions.</div>':''}<div class="fleet-sync-steps"><span>1. Open FleetOS and Amazon</span><span>2. Upload/export both lists</span><span>3. Press Refresh to re-check the latest real data</span></div><div class="fleet-source-checks"><span class="${sourceStatus.hasAmazon?'ok':'warn'}"><b>${sourceStatus.hasAmazon?'✓':'!'}</b> Amazon fleet list</span><span class="${sourceStatus.hasFleetos?'ok':'warn'}"><b>${sourceStatus.hasFleetos?'✓':'!'}</b> FleetOS battery/range</span></div><div class="fleet-coverage-strip"><span class="${coverage.demo?'warn':''}"><b>${coverage.demo}</b> demo</span><span><b>${coverage.amazonOnly}</b> Amazon only</span><span><b>${coverage.fleetosOnly}</b> FleetOS only</span><span class="${coverage.needsData?'warn':'ok'}"><b>${coverage.needsData}</b> need data</span></div><small>RelayOps matches rows by VIN first, keeps Amazon fleet-list names exactly as uploaded, and marks anything that is not fully verified.</small></div>
-  ${fleetPortalMatchStrip()}${fleetGapAuditStrip()}${fleetFullListStrip()}${fleetRefreshReadinessStrip()}${fleetUpdateSummary()}${fleetRecentChangesStrip()}${fleetAttentionStrip()}${fleetAccuracyGate()}${fleetLegend()}${fleetResultBar(rivians.length,labels[state.fleetFilter]||'Show all EVs')}<section class="grid rivian-grid ${state.fleetView==='detail'?'detail-view':'tiny-view'}">${rivians.length?rivians.map(v=>rivianCard(v)).join(''):`<div class="empty-state">No EVs match this search/filter. Press Clear to show every EV again.</div>`}</section></article>`;
+  ${fleetPortalMatchStrip()}${fleetGapAuditStrip()}${fleetFullListStrip()}${fleetRefreshReadinessStrip()}${fleetUpdateSummary()}${fleetRecentChangesStrip()}${fleetAttentionStrip()}${fleetAccuracyGate()}${fleetLegend()}${fleetQuickFilterChips()}${fleetResultBar(rivians.length,labels[state.fleetFilter]||'Show all EVs')}<section class="grid rivian-grid ${state.fleetView==='detail'?'detail-view':'tiny-view'}">${rivians.length?rivians.map(v=>rivianCard(v)).join(''):`<div class="empty-state">No EVs match this search/filter. Press Clear to show every EV again.</div>`}</section></article>`;
 }
 
 function fleetPortalQuickStart() {
@@ -418,6 +418,26 @@ function fleetUpdateSummary() {
 function fleetResultBar(visible=0,filterLabel='Show all EVs') {
   const total=rivianFleet.length, searching=String(state.fleetSearch||'').trim();
   return `<div class="fleet-result-bar"><div><strong>${visible} of ${total} EVs showing</strong><span>${esc(filterLabel)}${searching?` · search: “${esc(searching)}”`:''}</span></div><div><span>${state.fleetView==='detail'?'Detail grid':'Tiny grid'}</span><button class="btn small ghost" data-action="clear-fleet-search">Show all EVs</button></div></div>`;
+}
+
+function fleetQuickFilterChips() {
+  const counts={
+    all:rivianFleet.length,
+    verified:rivianFleet.filter(v=>fleetConfidence(v).label==='Verified').length,
+    low:rivianFleet.filter(v=>v.battery<40).length,
+    grounded:rivianFleet.filter(v=>v.operational==='Grounded').length,
+    'needs-data':rivianFleet.filter(v=>fleetMissingFields(v).length).length,
+    changed:fleetRecentChanges().length
+  };
+  const chips=[
+    ['all','All EVs'],
+    ['verified','Verified'],
+    ['low','Low battery'],
+    ['grounded','Grounded'],
+    ['needs-data','Missing data'],
+    ['changed','Changed']
+  ];
+  return `<div class="fleet-filter-chips" aria-label="Quick Fleet filters">${chips.map(([filter,label])=>`<button class="${state.fleetFilter===filter?'active':''} ${counts[filter]?'':'empty'}" data-action="fleet-filter-quick" data-filter="${filter}"><b>${counts[filter]}</b>${esc(label)}</button>`).join('')}</div>`;
 }
 
 function fleetAttentionStrip() {
