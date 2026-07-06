@@ -65,6 +65,20 @@ const checks = `
   state.fleetSort = 'battery-low';
   const sortedFleet = sortedRivianFleet();
   if (sortedFleet[0].battery !== 18 || batteryTone(18) !== 'critical' || batteryTone(92) !== 'high') throw new Error('Rivian battery sorting or color tone failed');
+  const amazonFleetRows = [
+    ['Vehicle Name','VIN','License Plate','Active','Operational Status'],
+    ['LLOL EV 21','7FCEHEB79PN014816','9ABC123','Inactive','Grounded']
+  ];
+  const fleetOsRows = [
+    ['VIN','State of Charge','Estimated Range'],
+    ['7FCEHEB79PN014816','41%','64 mi']
+  ];
+  const mergedFleet = [...fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),...fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx')];
+  if (mergedFleet.length !== 2 || mergedFleet[0].name !== 'LLOL EV 21' || mergedFleet[1].battery !== 41) throw new Error('FleetOS/Amazon fleet row parsing failed');
+  state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet };
+  applyFleetVehicles(mergedFleet,{silent:true});
+  const importedFleetHtml = fleetPage();
+  if (!importedFleetHtml.includes('LLOL EV 21') || !importedFleetHtml.includes('9ABC123') || !importedFleetHtml.includes('41%') || !importedFleetHtml.includes('Upload fleet list')) throw new Error('FleetOS/Amazon fleet import did not update cards');
   refreshFleetStatus();
   if (state.fleetLastRefresh === 'Not refreshed yet' || !fleetPage().includes('Last refresh:')) throw new Error('Fleet refresh did not update the board');
   const morningHtml = morningSheetPage();
