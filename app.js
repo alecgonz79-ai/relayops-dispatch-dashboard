@@ -354,7 +354,7 @@ function fleetPage() {
 function fleetUpdateSummary() {
   const s=state.fleetUpdateSummary;
   if(!s)return '';
-  return `<div class="fleet-update-summary"><span><b>${s.input}</b> rows read</span><span><b>${s.updated}</b> updated</span><span><b>${s.newCount}</b> new</span><span class="${s.duplicates?'warn':''}"><b>${s.duplicates||0}</b> duplicate VINs</span><span><b>${s.visible}</b> showing now</span></div>`;
+  return `<div class="fleet-update-summary"><span><b>${s.input}</b> rows read</span><span><b>${s.updated}</b> updated</span><span><b>${s.newCount}</b> new</span><span class="${s.duplicates?'warn':''}"><b>${s.duplicates||0}</b> duplicate VINs</span><span><b>${s.removed||0}</b> not in upload</span><span><b>${s.visible}</b> showing now</span></div>`;
 }
 
 function fleetCoverageStats() {
@@ -1004,14 +1004,15 @@ function fleetChangedFields(before={},after={}) {
   return Object.entries(labels).filter(([key])=>String(before[key]??'')!==String(after[key]??'')).map(([,label])=>label);
 }
 function mergeFleetVehicles(imports=[]) {
-  const byVin=new Map(rivianFleet.map(v=>[cleanVin(v.vin),normalizeFleetVehicle(v)]));
+  const previousByVin=new Map(rivianFleet.map(v=>[cleanVin(v.vin),normalizeFleetVehicle(v)]));
+  const byVin=new Map();
   const touched=new Set(), newVins=new Set(), seenImportVins=new Set(), duplicateVins=new Set();
   imports.forEach(item=>{
     const vin=cleanVin(item.vin); if(!vin)return;
     if(seenImportVins.has(vin))duplicateVins.add(vin);
     seenImportVins.add(vin);
-    const current=byVin.get(vin)||{};
-    if(!current.vin)newVins.add(vin);
+    const current=byVin.get(vin)||previousByVin.get(vin)||{};
+    if(!previousByVin.has(vin))newVins.add(vin);
     touched.add(vin);
     const next={...current,...item,vin};
     if(item.source==='Amazon fleet list'&&item.name) next.name=item.name;
@@ -1030,7 +1031,8 @@ function mergeFleetVehicles(imports=[]) {
   });
   const rows=[...byVin.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})||a.vin.localeCompare(b.vin));
   const updated=rows.filter(v=>touched.has(cleanVin(v.vin))&&v.updated).length;
-  rows.summary={input:imports.length,touched:touched.size,newCount:newVins.size,updated,unchanged:Math.max(0,touched.size-updated),duplicates:duplicateVins.size,duplicateVins:[...duplicateVins]};
+  const removed=[...previousByVin.keys()].filter(vin=>!touched.has(vin)).length;
+  rows.summary={input:imports.length,touched:touched.size,newCount:newVins.size,updated,unchanged:Math.max(0,touched.size-updated),removed,duplicates:duplicateVins.size,duplicateVins:[...duplicateVins]};
   return rows;
 }
 function applyFleetVehicles(vehicles=[],options={}) {

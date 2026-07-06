@@ -85,6 +85,7 @@ const checks = `
   applyFleetVehicles(fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),{silent:true});
   const amazonOnlyVehicle = rivianFleet.find(v => v.vin === '7FCEHEB79PN014816');
   if (amazonOnlyVehicle.battery !== currentBattery || !fleetPage().includes('Amazon only') || !fleetPage().includes('Needs: FleetOS battery') || !fleetPage().includes('Updated') || !fleetPage().includes('Changed: name, plate, active status, operational state')) throw new Error('Amazon fleet import should preserve battery and flag status changes');
+  if (rivianFleet.length !== 1 || fleetCoverageStats().demo !== 0 || !fleetPage().includes('not in upload')) throw new Error('Real fleet import should replace demo-only EV rows');
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet, uploadedAt: '2026-07-05T12:34:00.000Z' };
   applyFleetVehicles(mergedFleet,{silent:true});
   const importedFleetHtml = fleetPage();
@@ -117,8 +118,8 @@ const checks = `
   if (!fleetPage().includes('LLOL EV 22') || !fleetPage().includes('88%') || !fleetPage().includes('9XYZ222')) throw new Error('Fleet pasted table did not update cards');
   state.fleetSearch = '9xyz222';
   if (sortedRivianFleet().length !== 1 || sortedRivianFleet()[0].name !== 'LLOL EV 22' || !fleetPage().includes('Find EV, VIN, or plate')) throw new Error('Fleet search by plate failed');
-  state.fleetSearch = 'PN014816';
-  if (!sortedRivianFleet().some(v => v.vin === '7FCEHEB79PN014816')) throw new Error('Fleet search by VIN failed');
+  state.fleetSearch = 'PN000184';
+  if (!sortedRivianFleet().some(v => v.vin === '7FCTGAAA1PN000184')) throw new Error('Fleet search by VIN failed');
   state.fleetSearch = 'not-a-real-ev';
   if (!fleetPage().includes('No EVs match this search/filter') || !fleetPage().includes('Press Clear to show every EV again') || !fleetPage().includes('data-action="clear-fleet-search"')) throw new Error('Fleet search empty state missing');
   state.fleetFilter = 'grounded';
