@@ -73,6 +73,8 @@ const checks = `
   state.morningRoutes[0].ev = '21';
   const equipment = equipmentDetailsFromText('EV/VAN "21" Device "3" Portable "-"');
   if (equipment['21'].device !== '3' || equipment['21'].portable !== '-') throw new Error('EV/device text parsing failed');
+  const filledScreenshotText = equipmentDetailsFromText('1 40 31 37 31 -\\n2 41 32 38 32 -\\nF33 76 P1 R35 77 P2');
+  if (filledScreenshotText['37'].device !== '31' || filledScreenshotText['2'].portable !== '32' || filledScreenshotText.R35.portable !== 'P2') throw new Error('Filled VAN/DEV/PORT OCR text parsing failed');
   const equipmentRows = equipmentDetailsFromRows([
     ['EV/VAN','Device','Portable'],
     ['21','3','-']
@@ -91,7 +93,11 @@ const checks = `
   if (!modal().includes('VAN/DEV/PORT IMPORT') || !modal().includes('Upload any file type') || !modal().includes('equipment-paste-text')) throw new Error('EV/device import modal missing');
   state.editMode = true;
   const editableHtml = morningSheetPage();
-  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('VAN/DEV/PORT Import') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG')) throw new Error('Editable sheet or JPEG control missing');
+  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('data-sheet-cell="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('VAN/DEV/PORT Import') || !editableHtml.includes('EV 1-57 Low → High') || !editableHtml.includes('Randomize EVs') || !editableHtml.includes('Assign Gas Vehicles') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG')) throw new Error('Editable sheet or JPEG control missing');
+  assignElectricVehicles('low');
+  if (state.morningRoutes[0].ev !== '1') throw new Error('Lowest-to-highest EV assignment failed');
+  assignGasVehicles();
+  if (state.morningRoutes[0].ev !== 'F33') throw new Error('Gas vehicle assignment failed');
   const tsv = morningSheetTsv();
   if (!tsv.startsWith('WAVE\\tDRIVER\\tROUTE') || !tsv.includes('11:15 (1)')) throw new Error('Google Sheets TSV output missing headers or wave count');
   if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 14) throw new Error('Template row padding missing');
