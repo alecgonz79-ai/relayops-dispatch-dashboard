@@ -428,7 +428,8 @@ function rivianCard(v) {
   const changes=state.fleetChangedVins?.[v.vin]||v.changedFields||[];
   const confidence=fleetConfidence(v);
   const missing=fleetMissingFields(v);
-  return `<button class="rivian-card ${tone} ${open?'expanded':''} ${changes.length?'updated':''} ${missing.length?'needs-data':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(v.name)}</h3><span class="confidence-pill ${confidence.className}">${esc(confidence.label)}</span>${changes.length?'<span class="update-pill">Updated</span>':''}</div><span class="rivian-vin">${esc(v.vin)}</span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span>${missing.length?`<span class="missing-line">Needs: ${esc(missing.join(', '))}</span>`:''}${changes.length?`<span class="change-line">Changed: ${esc(changes.join(', '))}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`<div class="rivian-details"><span><b>Plate</b>${esc(v.plate||'—')}</span><span><b>Active</b>${esc(v.active||'—')}</span><span><b>State</b>${esc(v.operational||'—')}</span><span><b>Confidence</b>${esc(confidence.label)}</span><span><b>Needs</b>${esc(missing.join(', ')||'Nothing')}</span><span><b>Source</b>${esc(v.source||'Demo data')}</span></div>`:''}</button>`;
+  const changedAt=v.updatedAt?new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date(v.updatedAt)):'—';
+  return `<button class="rivian-card ${tone} ${open?'expanded':''} ${changes.length?'updated':''} ${missing.length?'needs-data':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(v.name)}</h3><span class="confidence-pill ${confidence.className}">${esc(confidence.label)}</span>${changes.length?'<span class="update-pill">Updated</span>':''}</div><span class="rivian-vin">${esc(v.vin)}</span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span>${missing.length?`<span class="missing-line">Needs: ${esc(missing.join(', '))}</span>`:''}${changes.length?`<span class="change-line">Changed: ${esc(changes.join(', '))}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`<div class="rivian-details"><span><b>Plate</b>${esc(v.plate||'—')}</span><span><b>Active</b>${esc(v.active||'—')}</span><span><b>State</b>${esc(v.operational||'—')}</span><span><b>Last change</b>${esc(changedAt)}</span><span><b>Confidence</b>${esc(confidence.label)}</span><span><b>Needs</b>${esc(missing.join(', ')||'Nothing')}</span><span><b>Changed</b>${esc(changes.join(', ')||'No changes')}</span><span><b>Source</b>${esc(v.source||'Demo data')}</span></div>`:''}</button>`;
 }
 
 function performancePage() {
@@ -965,6 +966,7 @@ function normalizeFleetVehicle(vehicle={}) {
     source:String(vehicle.source||'Demo data').trim(),
     changedFields:Array.isArray(vehicle.changedFields)?vehicle.changedFields:[],
     updated:Boolean(vehicle.updated),
+    updatedAt:String(vehicle.updatedAt||'').trim(),
     hasName:Boolean(vehicle.hasName),
     hasPlate:Boolean(vehicle.hasPlate),
     hasActive:Boolean(vehicle.hasActive),
@@ -1006,6 +1008,7 @@ function fleetChangedFields(before={},after={}) {
 function mergeFleetVehicles(imports=[]) {
   const previousByVin=new Map(rivianFleet.map(v=>[cleanVin(v.vin),normalizeFleetVehicle(v)]));
   const byVin=new Map();
+  const nowIso=new Date().toISOString();
   const touched=new Set(), newVins=new Set(), seenImportVins=new Set(), duplicateVins=new Set();
   imports.forEach(item=>{
     const vin=cleanVin(item.vin); if(!vin)return;
@@ -1027,6 +1030,7 @@ function mergeFleetVehicles(imports=[]) {
     const normalized=normalizeFleetVehicle(next);
     normalized.changedFields=fleetChangedFields(current,normalized);
     normalized.updated=normalized.changedFields.length>0;
+    normalized.updatedAt=normalized.updated?nowIso:(current.updatedAt||normalized.updatedAt||'');
     byVin.set(vin,normalized);
   });
   const rows=[...byVin.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})||a.vin.localeCompare(b.vin));
@@ -1230,10 +1234,10 @@ function exportCSV(){const csv=[exportHeaders,...exportRows()].map(r=>r.map(csvE
 function fleetExportRows() {
   return sortedRivianFleet().map(v=>{
     const confidence=fleetConfidence(v), missing=fleetMissingFields(v), changes=state.fleetChangedVins?.[v.vin]||v.changedFields||[];
-    return [v.name,v.vin,v.plate||'',v.active||'',v.operational||'',v.battery,v.miles,confidence.label,missing.join('; '),changes.join('; '),v.source||'Demo data'];
+    return [v.name,v.vin,v.plate||'',v.active||'',v.operational||'',v.battery,v.miles,confidence.label,missing.join('; '),changes.join('; '),v.updatedAt||'',v.source||'Demo data'];
   });
 }
-function exportFleetCSV(){const h=['Vehicle Name','VIN','License Plate','Active','Operational Status','Battery %','Range Miles','Confidence','Needs','Changed Fields','Source'];const rows=fleetExportRows();downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8','relayops-ev-fleet-board.csv');toast(`${rows.length} EV rows downloaded`);}
+function exportFleetCSV(){const h=['Vehicle Name','VIN','License Plate','Active','Operational Status','Battery %','Range Miles','Confidence','Needs','Changed Fields','Last Changed At','Source'];const rows=fleetExportRows();downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8','relayops-ev-fleet-board.csv');toast(`${rows.length} EV rows downloaded`);}
 function exportExcel(){
   const rows=[exportHeaders,...exportRows()];
   const xml=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1D4D35" ss:Pattern="Solid"/></Style><Style ss:ID="Cell"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E6DF"/></Borders></Style></Styles><Worksheet ss:Name="Daily Roster"><Table>${rows.map((r,i)=>`<Row>${r.map(v=>`<Cell ss:StyleID="${i===0?'Header':'Cell'}"><Data ss:Type="${typeof v==='number'?'Number':'String'}">${xmlEscape(v)}</Data></Cell>`).join('')}</Row>`).join('')}</Table><AutoFilter xmlns="urn:schemas-microsoft-com:office:excel" x:Range="R1C1:R${rows.length}C${exportHeaders.length}" xmlns:x="urn:schemas-microsoft-com:office:excel"/></Worksheet></Workbook>`;

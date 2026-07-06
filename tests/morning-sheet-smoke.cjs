@@ -90,10 +90,12 @@ const checks = `
   applyFleetVehicles(mergedFleet,{silent:true});
   const importedFleetHtml = fleetPage();
   if (!importedFleetHtml.includes('LLOL EV 21') || !importedFleetHtml.includes('9ABC123') || !importedFleetHtml.includes('41%') || !importedFleetHtml.includes('Verified') || !importedFleetHtml.includes('loaded') || importedFleetHtml.includes('Needs: FleetOS battery') || !importedFleetHtml.includes('Changed: battery, range') || !importedFleetHtml.includes('rows read') || !importedFleetHtml.includes('duplicate VINs') || !importedFleetHtml.includes('EV CSV') || !importedFleetHtml.includes('Upload / paste fleet list')) throw new Error('FleetOS/Amazon fleet import did not update cards');
+  state.expandedFleetVin = '7FCEHEB79PN014816';
+  if (!fleetPage().includes('Last change') || !fleetPage().includes('Changed</b>battery, range')) throw new Error('Fleet expanded card should show change audit details');
   if (!fleetCoverageStats().verified) throw new Error('Fleet coverage counters should show verified EVs after Amazon + FleetOS import');
   const fleetRows = fleetExportRows();
   const exportedEv = fleetRows.find(row => row[1] === '7FCEHEB79PN014816');
-  if (!exportedEv || exportedEv[0] !== 'LLOL EV 21' || exportedEv[7] !== 'Verified' || exportedEv[8] !== '' || !exportedEv[10].includes('Amazon fleet list')) throw new Error('Fleet CSV export rows missing verified EV data');
+  if (!exportedEv || exportedEv[0] !== 'LLOL EV 21' || exportedEv[7] !== 'Verified' || exportedEv[8] !== '' || !exportedEv[10] || !exportedEv[11].includes('Amazon fleet list')) throw new Error('Fleet CSV export rows missing verified EV data');
   const duplicateFleetRows = [
     ['Vehicle Name','VIN','License Plate','Active','Operational Status'],
     ['LLOL EV 21','7FCEHEB79PN014816','9ABC123','Active','Operational'],
