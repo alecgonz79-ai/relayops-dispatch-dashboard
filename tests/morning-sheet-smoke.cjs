@@ -76,7 +76,7 @@ const checks = `
     ['LLOL EV Missing','7FCTGAAA1PN111111','9MISS1','Active','Operational']
   ],'amazon fleet list.csv');
   state.fleetImport = { name: 'amazon fleet list.csv', vehicles: amazonOnlyAuditRows, uploadedAt: '2026-07-05T12:00:00.000Z' };
-  if (!fleetGapAuditStrip().includes('Missing VIN audit') || !fleetGapAuditStrip().includes('Missing FleetOS battery/range') || !fleetGapAuditStrip().includes('Download gap CSV')) throw new Error('Fleet missing VIN audit should show source gaps before dispatch');
+  if (!fleetGapAuditStrip().includes('Missing VIN audit') || !fleetGapAuditStrip().includes('Missing FleetOS battery/range') || !fleetGapAuditStrip().includes('Amazon-only VINs need FleetOS tracker battery/range rows') || !fleetGapAuditStrip().includes('Download gap CSV')) throw new Error('Fleet missing VIN audit should show source gaps before dispatch');
   resetFleetDemo();
   state.expandedFleetVin = '7FCEHEB79PN014816';
   const expandedFleetHtml = fleetPage();
@@ -195,7 +195,7 @@ const checks = `
   applyFleetVehicles(fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx'),{silent:true});
   state.fleetFilter = 'fleetos-only';
   state.fleetImport = { name: 'FleetOS tracker.xlsx', vehicles: fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx'), uploadedAt: new Date().toISOString() };
-  if (!fleetPage().includes('FleetOS only') || !fleetPage().includes('missing Amazon') || !fleetPage().includes('Review missing Amazon') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('FleetOS-only fleet filter failed');
+  if (!fleetPage().includes('FleetOS only') || !fleetPage().includes('missing Amazon') || !fleetPage().includes('FleetOS-only VINs need Amazon fleet-list name/status rows') || !fleetPage().includes('Review missing Amazon') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('FleetOS-only fleet filter failed');
   resetFleetDemo();
   applyFleetVehicles(messyFleet,{silent:true});
   if (rivianFleet[0].name === 'LLOL EV 34' || rivianFleet[0].name !== '7FCTGAAA9PN999999' || fleetPage().includes('<h3>LLOL EV 34</h3>')) throw new Error('FleetOS-only names should not replace official Amazon fleet names');
@@ -349,7 +349,7 @@ const checks = `
 
 vm.runInNewContext(`${source}\n${checks}`, context, { filename: 'app.js' });
 const fleetCss = fs.readFileSync('styles.css','utf8');
-if (!fleetCss.includes('minmax(86px,1fr)') || !fleetCss.includes('min-height:46px') || !fleetCss.includes('width:21px; height:11px') || !fleetCss.includes('repeat(7,minmax(0,1fr))') || !fleetCss.includes('.fleet-card-cue') || !fleetCss.includes('.refresh-freshness-summary') || !fleetCss.includes('.rivian-id-summary')) throw new Error('Tiny EV grid should stay compact and scan-friendly');
+  if (!fleetCss.includes('minmax(86px,1fr)') || !fleetCss.includes('min-height:46px') || !fleetCss.includes('width:21px; height:11px') || !fleetCss.includes('repeat(7,minmax(0,1fr))') || !fleetCss.includes('.fleet-card-cue') || !fleetCss.includes('.refresh-freshness-summary') || !fleetCss.includes('.rivian-id-summary') || !fleetCss.includes('.fleet-gap-fix-tips')) throw new Error('Tiny EV grid should stay compact and scan-friendly');
 
 (async () => {
   const zip = new JSZip();

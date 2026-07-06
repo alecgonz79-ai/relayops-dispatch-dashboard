@@ -512,8 +512,13 @@ function fleetGapAuditStrip() {
   }).join('');
   const more=Math.max(0,rows.length-5);
   const stats=fleetPortalMatchStats();
+  const fixTips=[
+    stats.amazonOnly.length?`Amazon-only VINs need FleetOS tracker battery/range rows (${stats.amazonOnly.length})`:'',
+    stats.fleetosOnly.length?`FleetOS-only VINs need Amazon fleet-list name/status rows (${stats.fleetosOnly.length})`:'',
+    state.fleetUpdateSummary?.duplicates?`Duplicate VINs need one clean row per source (${state.fleetUpdateSummary.duplicates})`:''
+  ].filter(Boolean);
   const actions=`${stats.amazonOnly.length?'<button class="btn small" data-action="fleet-filter-quick" data-filter="missing-fleetos">Missing FleetOS</button>':''}${stats.fleetosOnly.length?'<button class="btn small" data-action="fleet-filter-quick" data-filter="missing-amazon">Missing Amazon</button>':''}<button class="btn small primary" data-action="export-fleet-gaps">Download gap CSV</button>`;
-  return `<div class="fleet-gap-audit"><div><strong>Missing VIN audit</strong><span>${rows.length} item${rows.length===1?'':'s'} to fix before the board can be treated as 100% accurate.${more?` Showing first 5 · ${more} more in CSV.`:''}</span></div><div class="fleet-gap-preview">${preview}</div><div class="portal-match-actions">${actions}</div></div>`;
+  return `<div class="fleet-gap-audit"><div><strong>Missing VIN audit</strong><span>${rows.length} item${rows.length===1?'':'s'} to fix before the board can be treated as 100% accurate.${more?` Showing first 5 · ${more} more in CSV.`:''}</span>${fixTips.length?`<div class="fleet-gap-fix-tips">${fixTips.map(t=>`<em>${esc(t)}</em>`).join('')}</div>`:''}</div><div class="fleet-gap-preview">${preview}</div><div class="portal-match-actions">${actions}</div></div>`;
 }
 
 function fleetFullListStrip() {

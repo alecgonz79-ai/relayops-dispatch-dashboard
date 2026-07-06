@@ -361,6 +361,8 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-gap-audit { display:grid; grid-template-columns:1fr 1.8fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
 .fleet-gap-audit strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
 .fleet-gap-audit span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
+.fleet-gap-fix-tips { display:grid; gap:4px; margin-top:7px; }
+.fleet-gap-fix-tips em { display:block; padding:5px 6px; border-radius:8px; background:#fff; border:1px solid #ebcf83; color:#8a5d08; font-style:normal; font-size:7px; font-weight:950; line-height:1.25; }
 .fleet-gap-preview { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
 .fleet-gap-preview span { min-width:0; padding:7px 8px; border-radius:9px; background:#fff; border:1px solid #e2e8e3; color:#566159; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .fleet-gap-preview b { display:inline; margin-right:5px; color:#8a5d08; font-size:8px; }
