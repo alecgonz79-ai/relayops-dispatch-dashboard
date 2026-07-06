@@ -93,6 +93,13 @@ const checks = `
   parseFleetPasteAction();
   state.expandedFleetVin = '7FCTGAAA1PN000184';
   if (!fleetPage().includes('LLOL EV 22') || !fleetPage().includes('88%') || !fleetPage().includes('9XYZ222')) throw new Error('Fleet pasted table did not update cards');
+  state.fleetSearch = '9xyz222';
+  if (sortedRivianFleet().length !== 1 || sortedRivianFleet()[0].name !== 'LLOL EV 22' || !fleetPage().includes('Find EV, VIN, or plate')) throw new Error('Fleet search by plate failed');
+  state.fleetSearch = 'PN014816';
+  if (!sortedRivianFleet().some(v => v.vin === '7FCEHEB79PN014816')) throw new Error('Fleet search by VIN failed');
+  state.fleetSearch = 'not-a-real-ev';
+  if (!fleetPage().includes('No EVs match this search/filter')) throw new Error('Fleet search empty state missing');
+  state.fleetSearch = '';
   refreshFleetStatus();
   if (state.fleetLastRefresh === 'Not refreshed yet' || !fleetPage().includes('Last refresh:')) throw new Error('Fleet refresh did not update the board');
   const morningHtml = morningSheetPage();
