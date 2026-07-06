@@ -181,6 +181,9 @@ const checks = `
   state.fleetFilter = 'fleetos-only';
   state.fleetImport = { name: 'FleetOS tracker.xlsx', vehicles: fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx'), uploadedAt: new Date().toISOString() };
   if (!fleetPage().includes('FleetOS only') || !fleetPage().includes('missing Amazon') || !fleetPage().includes('Review missing Amazon') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('FleetOS-only fleet filter failed');
+  resetFleetDemo();
+  applyFleetVehicles(messyFleet,{silent:true});
+  if (rivianFleet[0].name === 'LLOL EV 34' || rivianFleet[0].name !== '7FCTGAAA9PN999999' || fleetPage().includes('<h3>LLOL EV 34</h3>')) throw new Error('FleetOS-only names should not replace official Amazon fleet names');
   action('fleet-filter-quick',{dataset:{filter:'missing-amazon'}});
   if (state.fleetFilter !== 'missing-amazon' || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('Missing-Amazon quick filter failed');
   resetFleetDemo();

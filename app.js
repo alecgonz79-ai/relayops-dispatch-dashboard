@@ -454,6 +454,7 @@ function fleetSourceKeys(source='') {
   if(value.includes('fleetos tracker')||value.includes('rivian'))keys.push('fleetos');
   return keys.length?keys:['other'];
 }
+function hasAmazonFleetSource(source='') { return String(source||'').toLowerCase().includes('amazon fleet list'); }
 
 function fleetImportFromSourceUploads() {
   const uploads=Object.values(state.fleetSourceUploads||{}).filter(u=>u?.vehicles?.length);
@@ -1309,9 +1310,10 @@ function mergeFleetVehicles(imports=[]) {
     const current=byVin.get(vin)||previousByVin.get(vin)||{};
     if(!previousByVin.has(vin))newVins.add(vin);
     touched.add(vin);
-    const next={...current,...item,vin};
-    if(item.source==='Amazon fleet list'&&item.name) next.name=item.name;
-    else if(current.name&&!/^EDV-\d+$/i.test(current.name)) next.name=current.name;
+    const next={...current,...item,vin}, itemHasAmazon=hasAmazonFleetSource(item.source), currentHasAmazon=hasAmazonFleetSource(current.source);
+    if(itemHasAmazon&&item.name) next.name=item.name;
+    else if(currentHasAmazon&&current.name) next.name=current.name;
+    else next.name=current.name||vin;
     if(!item.hasName&&current.name) next.name=current.name;
     if(!item.hasPlate&&current.plate) next.plate=current.plate;
     if(!item.hasActive&&current.active) next.active=current.active;
