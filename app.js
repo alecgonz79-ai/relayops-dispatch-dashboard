@@ -138,6 +138,7 @@ let state = {
   expandedFleetVin: localStorage.getItem('relayops_expanded_fleet_vin') || '',
   fleetLastRefresh: localStorage.getItem('relayops_fleet_refresh') || 'Not refreshed yet',
   fleetImport: JSON.parse(localStorage.getItem('relayops_fleet_import') || 'null'),
+  fleetChangedVins: {},
   fitMorningRows: localStorage.getItem('relayops_fit_rows') === 'true',
   importSource: 'computer',
   importPurpose: 'morning',
@@ -373,7 +374,8 @@ function amazonRivianIcon(tone='high') {
 }
 function rivianCard(v) {
   const tone=batteryTone(v.battery), open=state.expandedFleetVin===v.vin;
-  return `<button class="rivian-card ${tone} ${open?'expanded':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><h3>${esc(v.name)}</h3><span class="rivian-vin">${esc(v.vin)}</span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span></div>${amazonRivianIcon(tone)}</div>${open?`<div class="rivian-details"><span><b>Plate</b>${esc(v.plate||'—')}</span><span><b>Active</b>${esc(v.active||'—')}</span><span><b>State</b>${esc(v.operational||'—')}</span><span><b>Source</b>${esc(v.source||'FleetOS + Amazon')}</span></div>`:''}</button>`;
+  const changes=state.fleetChangedVins?.[v.vin]||v.changedFields||[];
+  return `<button class="rivian-card ${tone} ${open?'expanded':''} ${changes.length?'updated':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(v.name)}</h3>${changes.length?'<span class="update-pill">Updated</span>':''}</div><span class="rivian-vin">${esc(v.vin)}</span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span>${changes.length?`<span class="change-line">Changed: ${esc(changes.join(', '))}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`<div class="rivian-details"><span><b>Plate</b>${esc(v.plate||'—')}</span><span><b>Active</b>${esc(v.active||'—')}</span><span><b>State</b>${esc(v.operational||'—')}</span><span><b>Source</b>${esc(v.source||'FleetOS + Amazon')}</span></div>`:''}</button>`;
 }
 
 function performancePage() {
@@ -903,7 +905,9 @@ function normalizeFleetVehicle(vehicle={}) {
     active:normalizeActive(vehicle.active||vehicle.status,vehicle.active||'Active'),
     operational:normalizeOperational(vehicle.operational||vehicle.status,vehicle.operational||'Operational'),
     status:String(vehicle.status||batteryLabel(battery)).trim(),
-    source:String(vehicle.source||'FleetOS + Amazon').trim()
+    source:String(vehicle.source||'FleetOS + Amazon').trim(),
+    changedFields:Array.isArray(vehicle.changedFields)?vehicle.changedFields:[],
+    updated:Boolean(vehicle.updated)
   };
 }
 function fleetDetailsFromRows(rows=[],sourceName='Fleet export') {
@@ -926,8 +930,15 @@ function fleetDetailsFromRows(rows=[],sourceName='Fleet export') {
     item.hasPlate=Boolean(String(plate||'').trim());
     item.hasActive=Boolean(String(active||'').trim());
     item.hasOperational=Boolean(String(operational||'').trim());
+    item.hasBattery=String(battery??'').trim()!=='';
+    item.hasMiles=String(miles??'').trim()!=='';
     return item;
   }).filter(Boolean);
+}
+function fleetChangedFields(before={},after={}) {
+  if(!before.vin)return ['new EV'];
+  const labels={name:'name',plate:'plate',battery:'battery',miles:'range',active:'active status',operational:'operational state'};
+  return Object.entries(labels).filter(([key])=>String(before[key]??'')!==String(after[key]??'')).map(([,label])=>label);
 }
 function mergeFleetVehicles(imports=[]) {
   const byVin=new Map(rivianFleet.map(v=>[cleanVin(v.vin),normalizeFleetVehicle(v)]));
@@ -941,14 +952,20 @@ function mergeFleetVehicles(imports=[]) {
     if(!item.hasPlate&&current.plate) next.plate=current.plate;
     if(!item.hasActive&&current.active) next.active=current.active;
     if(!item.hasOperational&&current.operational) next.operational=current.operational;
+    if(!item.hasBattery&&current.battery!==undefined) next.battery=current.battery;
+    if(!item.hasMiles&&current.miles!==undefined) next.miles=current.miles;
     next.source=[current.source,item.source].filter(Boolean).join(' + ').split(' + ').filter((v,i,a)=>a.indexOf(v)===i).join(' + ')||'FleetOS + Amazon';
-    byVin.set(vin,normalizeFleetVehicle(next));
+    const normalized=normalizeFleetVehicle(next);
+    normalized.changedFields=fleetChangedFields(current,normalized);
+    normalized.updated=normalized.changedFields.length>0;
+    byVin.set(vin,normalized);
   });
   return [...byVin.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})||a.vin.localeCompare(b.vin));
 }
 function applyFleetVehicles(vehicles=[],options={}) {
   const merged=mergeFleetVehicles(vehicles);
   rivianFleet.splice(0,rivianFleet.length,...merged);
+  state.fleetChangedVins=Object.fromEntries(merged.filter(v=>v.updated).map(v=>[v.vin,v.changedFields]));
   if(!options.silent) {
     state.fleetLastRefresh=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     persist();
