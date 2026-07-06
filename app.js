@@ -67,13 +67,22 @@ const fleet = [
 ];
 
 const rivianFleet = [
-  { vin:'7FCEHEB79PN014816', battery:63, miles:98, status:'Connected' },
-  { vin:'7FCTGAAA1PN000184', battery:92, miles:144, status:'Connected' },
-  { vin:'7FCTGAAA7PN000231', battery:76, miles:119, status:'Connected' },
-  { vin:'7FCTGAAA4PN000315', battery:64, miles:100, status:'Connected' },
-  { vin:'7FCTGAAA9PN000402', battery:48, miles:75, status:'Charge watch' },
-  { vin:'7FCTGAAA2PN000517', battery:33, miles:52, status:'Needs charge' },
-  { vin:'7FCTGAAA6PN000688', battery:18, miles:28, status:'Critical' }
+  { name:'EDV-014816', vin:'7FCEHEB79PN014816', plate:'8HJK214', battery:63, miles:98, active:'Active', operational:'Operational', status:'Connected' },
+  { name:'EDV-000184', vin:'7FCTGAAA1PN000184', plate:'8HJK215', battery:92, miles:144, active:'Active', operational:'Operational', status:'Connected' },
+  { name:'EDV-000231', vin:'7FCTGAAA7PN000231', plate:'8HJK216', battery:76, miles:119, active:'Active', operational:'Operational', status:'Connected' },
+  { name:'EDV-000315', vin:'7FCTGAAA4PN000315', plate:'8HJK217', battery:64, miles:100, active:'Active', operational:'Operational', status:'Connected' },
+  { name:'EDV-000402', vin:'7FCTGAAA9PN000402', plate:'8HJK218', battery:48, miles:75, active:'Active', operational:'Operational', status:'Charge watch' },
+  { name:'EDV-000517', vin:'7FCTGAAA2PN000517', plate:'8HJK219', battery:33, miles:52, active:'Active', operational:'Operational', status:'Needs charge' },
+  { name:'EDV-000688', vin:'7FCTGAAA6PN000688', plate:'8HJK220', battery:18, miles:28, active:'Active', operational:'Grounded', status:'Critical' },
+  { name:'EDV-000742', vin:'7FCTGAAA8PN000742', plate:'8HJK221', battery:85, miles:133, active:'Active', operational:'Operational', status:'Connected' },
+  { name:'EDV-000809', vin:'7FCTGAAA3PN000809', plate:'8HJK222', battery:71, miles:111, active:'Active', operational:'Operational', status:'Connected' },
+  { name:'EDV-000874', vin:'7FCTGAAA5PN000874', plate:'8HJK223', battery:56, miles:88, active:'Inactive', operational:'Operational', status:'Idle' },
+  { name:'EDV-000936', vin:'7FCTGAAA9PN000936', plate:'8HJK224', battery:42, miles:66, active:'Active', operational:'Operational', status:'Charge watch' },
+  { name:'EDV-001022', vin:'7FCTGAAA2PN001022', plate:'8HJK225', battery:27, miles:42, active:'Active', operational:'Grounded', status:'Needs charge' },
+  { name:'EDV-001105', vin:'7FCTGAAA4PN001105', plate:'8HJK226', battery:97, miles:152, active:'Active', operational:'Operational', status:'Connected' },
+  { name:'EDV-001188', vin:'7FCTGAAA7PN001188', plate:'8HJK227', battery:69, miles:108, active:'Active', operational:'Operational', status:'Connected' },
+  { name:'EDV-001240', vin:'7FCTGAAA1PN001240', plate:'8HJK228', battery:58, miles:91, active:'Active', operational:'Operational', status:'Idle' },
+  { name:'EDV-001319', vin:'7FCTGAAA6PN001319', plate:'8HJK229', battery:22, miles:34, active:'Inactive', operational:'Grounded', status:'Critical' }
 ];
 
 const morningSeed = [
@@ -125,6 +134,8 @@ let state = {
   lastImportExcluded: Number(localStorage.getItem('relayops_excluded') || 0),
   morningFilters: {wave:'all',staging:'all',pad:'all'},
   fleetSort: localStorage.getItem('relayops_fleet_sort') || 'normal',
+  expandedFleetVin: localStorage.getItem('relayops_expanded_fleet_vin') || '',
+  fleetLastRefresh: localStorage.getItem('relayops_fleet_refresh') || 'Not refreshed yet',
   fitMorningRows: localStorage.getItem('relayops_fit_rows') === 'true',
   importSource: 'computer',
   importPurpose: 'morning',
@@ -324,7 +335,8 @@ function teamPage() {
 
 function fleetPage() {
   const rivians=sortedRivianFleet(), low=rivianFleet.filter(v=>v.battery<40).length, avg=Math.round(rivianFleet.reduce((n,v)=>n+v.battery,0)/rivianFleet.length);
-  return `${contextBar(`<a class="btn small ghost" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">${ICONS.link} Rivian tracker</a>`)}<section class="grid kpi-grid">${kpiCard('Rivian battery avg',`${avg}%`,`${low} below 40%`,'van',low?'#fff2cf':'#e9f7df')}${kpiCard('Fleet available','24','26 total vehicles','van','#e9f7df')}${kpiCard('In service','1','Prime 319 · brakes','alert','#ffe7e2')}${kpiCard('Devices ready','31','3 on chargers','phone','#e5efff')}</section><article class="card rivian-panel"><div class="card-head"><div class="card-title"><h2>Amazon Rivian battery tracker</h2><p>Connection target: business.rivian.com/vehicles/tracker · VIN names until your CSV maps them to van numbers.</p></div><div class="head-actions"><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><a class="btn small" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">Open tracker</a></div></div><section class="grid rivian-grid">${rivians.map(v=>rivianCard(v)).join('')}</section></article><div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All vehicles</option><option>Ready</option><option>Service</option></select><button class="btn" data-action="devices">${ICONS.phone} Device cabinet</button></div><button class="btn lime" data-action="add-vehicle">${ICONS.plus} Add vehicle</button></div><section class="grid fleet-grid">${fleet.map(v=>`<article class="card entity-card"><div class="entity-top"><div class="entity-icon">${ICONS.van}</div><span class="status ${statusClass(v[2])}">${v[2]}</span></div><h3>${v[0]}</h3><p>${v[1]}</p><div class="entity-meta"><div class="entity-stat"><span>Assigned today</span><strong>${v[3]}</strong></div><div class="entity-stat"><span>Fuel / charge</span><strong>${v[4]}</strong></div></div></article>`).join('')}</section>`;
+  const grounded=rivianFleet.filter(v=>v.operational==='Grounded').length;
+  return `${contextBar(`<a class="btn small ghost" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">${ICONS.link} Rivian tracker</a><a class="btn small ghost" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">${ICONS.link} Amazon fleet list</a>`)}<section class="grid kpi-grid">${kpiCard('Rivian battery avg',`${avg}%`,`${low} below 40%`,'van',low?'#fff2cf':'#e9f7df')}${kpiCard('EVs tracked',rivianFleet.length,'FleetOS/Amazon-ready list','van','#e9f7df')}${kpiCard('Grounded EVs',grounded,'Tap a van for details','alert',grounded?'#ffe7e2':'#e9f7df')}${kpiCard('Devices ready','31','3 on chargers','phone','#e5efff')}</section><article class="card rivian-panel"><div class="card-head"><div class="card-title"><h2>FleetOS + Amazon EV live board</h2><p>Small EV grid for battery %, VIN, license plate, active status, and operational state. Last refresh: ${esc(state.fleetLastRefresh)}.</p></div><div class="head-actions"><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><button class="btn small lime" data-action="refresh-fleet">${ICONS.download} Refresh battery %</button><a class="btn small" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">FleetOS</a><a class="btn small" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">Amazon</a></div></div><div class="fleet-source-note">Live portal sync needs your authenticated FleetOS/Amazon export or API connection. This UI is wired so changing SOC/plate/status data can update from that source when available.</div><section class="grid rivian-grid">${rivians.map(v=>rivianCard(v)).join('')}</section></article><div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All vehicles</option><option>Ready</option><option>Service</option></select><button class="btn" data-action="devices">${ICONS.phone} Device cabinet</button></div><button class="btn lime" data-action="add-vehicle">${ICONS.plus} Add vehicle</button></div><section class="grid fleet-grid">${fleet.map(v=>`<article class="card entity-card"><div class="entity-top"><div class="entity-icon">${ICONS.van}</div><span class="status ${statusClass(v[2])}">${v[2]}</span></div><h3>${v[0]}</h3><p>${v[1]}</p><div class="entity-meta"><div class="entity-stat"><span>Assigned today</span><strong>${v[3]}</strong></div><div class="entity-stat"><span>Fuel / charge</span><strong>${v[4]}</strong></div></div></article>`).join('')}</section>`;
 }
 
 function batteryTone(percent=0) {
@@ -348,8 +360,8 @@ function amazonRivianIcon(tone='high') {
   return `<span class="rivian-van-art ${tone}" aria-hidden="true"><span class="van-cab"></span><span class="van-box"><i class="prime-smile"></i><b>prime</b></span><span class="van-wheel front"></span><span class="van-wheel rear"></span></span>`;
 }
 function rivianCard(v) {
-  const tone=batteryTone(v.battery);
-  return `<article class="rivian-card ${tone}"><div class="rivian-copy"><h3>${esc(v.vin)}</h3><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span></div>${amazonRivianIcon(tone)}</article>`;
+  const tone=batteryTone(v.battery), open=state.expandedFleetVin===v.vin;
+  return `<button class="rivian-card ${tone} ${open?'expanded':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><h3>${esc(v.name)}</h3><span class="rivian-vin">${esc(v.vin)}</span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span></div>${amazonRivianIcon(tone)}</div>${open?`<div class="rivian-details"><span><b>Plate</b>${esc(v.plate)}</span><span><b>Active</b>${esc(v.active)}</span><span><b>State</b>${esc(v.operational)}</span><span><b>Source</b>FleetOS + Amazon</span></div>`:''}</button>`;
 }
 
 function performancePage() {
@@ -610,6 +622,8 @@ function action(name,el) {
   if (name==='assign-ev-low') return assignElectricVehicles('low');
   if (name==='assign-ev-random') return assignElectricVehicles('random');
   if (name==='assign-gas-vans') return assignGasVehicles();
+  if (name==='toggle-fleet-card') return toggleFleetCard(el.dataset.vin);
+  if (name==='refresh-fleet') return refreshFleetStatus();
   if (name==='preview-wave-screenshot') return previewWaveScreenshot();
   if (name==='save-wave-screenshot') return saveWaveScreenshot();
   if (name==='export-morning') return exportMorningSheet();
@@ -952,6 +966,24 @@ function assignGasVehicles() {
   toast(`${targets.length} gas vehicles assigned: ${gasVehicleIds.slice(0,targets.length).join(', ')}`);
 }
 
+function toggleFleetCard(vin='') {
+  state.expandedFleetVin=state.expandedFleetVin===vin?'':vin;
+  persist();render();
+}
+
+function refreshFleetStatus() {
+  const tick=Date.now();
+  rivianFleet.forEach((v,i)=>{
+    const delta=((tick+i*7)%7)-3;
+    v.battery=Math.max(5,Math.min(100,v.battery+delta));
+    v.miles=Math.round(v.battery*1.56);
+    v.status=v.operational==='Grounded'?(v.battery<25?'Critical':'Grounded'):batteryLabel(v.battery);
+  });
+  state.fleetLastRefresh=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
+  persist();render();
+  toast('Fleet battery board refreshed from connected demo data');
+}
+
 const exportHeaders=['Route','Driver','Driver ID','Wave','Staging','Vehicle','Device','Stops','Packages','Progress %','Pace Delta','Status','Rescue Plan'];
 function exportRows(){return routeFiltered().map(r=>[r.route,r.driver,r.id,r.wave,r.staging,r.van,r.device,r.stops,r.packages,r.progress,r.delta,r.status,r.rescue]);}
 function csvEscape(v){const s=String(v??'');return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;}
@@ -1042,7 +1074,7 @@ function downloadTemplate(){const h=['DSP','Driver','Route Code','Service Type',
 
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function persist(){localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);}
+function persist(){localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);}
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
 render();

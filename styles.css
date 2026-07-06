@@ -318,32 +318,40 @@ tbody tr:last-child td { border-bottom:0; }
 .entity-stat span { color:var(--muted); font-size:7px; text-transform:uppercase; letter-spacing:.06em; }
 .entity-stat strong { font-size:9px; margin-top:3px; }
 .rivian-panel { padding:16px; margin-bottom:16px; }
-.rivian-grid { grid-template-columns:1fr; gap:10px; }
-.rivian-card { min-height:108px; padding:18px 30px; border:1px solid #d8dcdf; border-radius:2px; background:#fff; display:flex; align-items:center; justify-content:space-between; gap:18px; box-shadow:0 1px 0 rgba(0,0,0,.04); }
+.fleet-source-note { margin:0 0 12px; padding:10px 11px; border-radius:11px; background:#f5f7f4; color:#5f6b63; font-size:8px; line-height:1.45; }
+.rivian-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.rivian-card { min-height:118px; padding:10px; border:1px solid #d8dcdf; border-radius:12px; background:#fff; display:block; text-align:left; cursor:pointer; box-shadow:0 1px 0 rgba(0,0,0,.04); transition:.16s ease; }
+.rivian-card:hover, .rivian-card.expanded { transform:translateY(-1px); border-color:#8ab4f8; box-shadow:0 10px 24px rgba(24,40,32,.12); }
+.rivian-card-main { display:flex; align-items:center; justify-content:space-between; gap:7px; }
 .rivian-copy { min-width:0; }
-.rivian-copy h3 { margin:0; color:#005da6; font:900 24px "Manrope"; letter-spacing:-.02em; }
-.rivian-charge-line { margin-top:6px; display:flex; align-items:center; gap:12px; color:#111; }
-.rivian-charge-line strong { font:700 24px Arial,sans-serif; }
-.battery-icon { width:30px; height:18px; padding:2px; border:2px solid #151a16; border-radius:3px; position:relative; background:#fff; display:inline-flex; align-items:center; }
-.battery-icon:after { content:""; position:absolute; right:-6px; top:5px; width:4px; height:7px; border:2px solid #151a16; border-left:0; border-radius:0 2px 2px 0; background:#fff; }
+.rivian-copy h3 { margin:0; color:#005da6; font:900 13px "Manrope"; letter-spacing:-.01em; }
+.rivian-vin { display:block; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px; color:#5c6970; font-size:7px; font-weight:800; }
+.rivian-charge-line { margin-top:6px; display:flex; align-items:center; gap:7px; color:#111; }
+.rivian-charge-line strong { font:800 13px Arial,sans-serif; white-space:nowrap; }
+.battery-icon { width:24px; height:14px; padding:2px; border:2px solid #151a16; border-radius:3px; position:relative; background:#fff; display:inline-flex; align-items:center; flex:0 0 24px; }
+.battery-icon:after { content:""; position:absolute; right:-5px; top:3px; width:3px; height:6px; border:2px solid #151a16; border-left:0; border-radius:0 2px 2px 0; background:#fff; }
 .battery-icon i { display:block; height:100%; border-radius:1px; background:#14b84a; }
 .battery-icon.medium i { background:#32a852; }
 .battery-icon.low i { background:#e0a222; }
 .battery-icon.critical i { background:#df3d2f; }
-.rivian-live-status { display:block; margin-top:6px; font-size:8px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#2c7c4b; }
+.rivian-live-status { display:block; margin-top:5px; font-size:7px; font-weight:900; letter-spacing:.07em; text-transform:uppercase; color:#2c7c4b; }
 .rivian-live-status.medium { color:#2e75bc; }
 .rivian-live-status.low { color:#9a6d12; }
 .rivian-live-status.critical { color:#bb2d20; }
-.rivian-van-art { width:170px; height:68px; flex:0 0 170px; position:relative; filter:drop-shadow(0 8px 10px rgba(0,0,0,.14)); }
-.van-box { position:absolute; right:8px; top:13px; width:110px; height:43px; border-radius:8px 6px 5px 4px; background:linear-gradient(180deg,#2c3336,#171c1f); border:1px solid #080b0c; overflow:hidden; }
-.van-cab { position:absolute; left:18px; top:24px; width:52px; height:32px; border-radius:18px 8px 5px 4px; background:linear-gradient(180deg,#333b3e,#15191b); border:1px solid #080b0c; }
-.van-cab:before { content:""; position:absolute; left:15px; top:3px; width:21px; height:13px; border-radius:9px 5px 2px 2px; background:#8ea0a9; clip-path:polygon(18% 0,100% 0,88% 100%,0 100%); }
-.van-wheel { position:absolute; bottom:7px; width:14px; height:14px; border-radius:50%; background:#08090a; box-shadow:inset 0 0 0 3px #30383a; }
-.van-wheel.front { left:39px; }
-.van-wheel.rear { right:28px; }
-.prime-smile { position:absolute; left:30px; top:20px; width:46px; height:15px; border-bottom:3px solid #0b77bd; border-radius:0 0 48px 48px; transform:rotate(-5deg); }
-.van-box b { position:absolute; right:17px; top:13px; color:#f4f6f7; font:700 9px Arial,sans-serif; }
-.van-box b:after { content:""; position:absolute; right:-7px; top:0; width:5px; height:5px; border-radius:50%; background:#6da7d8; }
+.rivian-van-art { width:74px; height:35px; flex:0 0 74px; position:relative; filter:drop-shadow(0 4px 5px rgba(0,0,0,.13)); }
+.van-box { position:absolute; right:3px; top:6px; width:49px; height:22px; border-radius:5px 4px 3px 3px; background:linear-gradient(180deg,#2c3336,#171c1f); border:1px solid #080b0c; overflow:hidden; }
+.van-cab { position:absolute; left:5px; top:12px; width:28px; height:17px; border-radius:10px 5px 3px 3px; background:linear-gradient(180deg,#333b3e,#15191b); border:1px solid #080b0c; }
+.van-cab:before { content:""; position:absolute; left:8px; top:2px; width:12px; height:7px; border-radius:5px 3px 1px 1px; background:#8ea0a9; clip-path:polygon(18% 0,100% 0,88% 100%,0 100%); }
+.van-wheel { position:absolute; bottom:3px; width:8px; height:8px; border-radius:50%; background:#08090a; box-shadow:inset 0 0 0 2px #30383a; }
+.van-wheel.front { left:17px; }
+.van-wheel.rear { right:11px; }
+.prime-smile { position:absolute; left:12px; top:10px; width:24px; height:8px; border-bottom:2px solid #0b77bd; border-radius:0 0 26px 26px; transform:rotate(-5deg); }
+.van-box b { position:absolute; right:7px; top:5px; color:#f4f6f7; font:700 5px Arial,sans-serif; }
+.van-box b:after { content:""; position:absolute; right:-4px; top:0; width:3px; height:3px; border-radius:50%; background:#6da7d8; }
+.rivian-details { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin-top:10px; padding-top:9px; border-top:1px solid #e4e8e5; }
+.rivian-details span, .rivian-details b { display:block; }
+.rivian-details span { padding:6px; border-radius:8px; background:#f5f7f4; color:#162018; font-size:9px; font-weight:900; }
+.rivian-details b { margin-bottom:2px; color:#6c7770; font-size:6px; letter-spacing:.08em; text-transform:uppercase; }
 
 .chart { padding:18px; }
 .chart-bars { height:180px; display:flex; align-items:flex-end; gap:9px; padding-top:20px; border-bottom:1px solid var(--line); background-image:linear-gradient(to bottom, transparent 24%, #edf0ec 25%, transparent 26%, transparent 49%, #edf0ec 50%, transparent 51%, transparent 74%, #edf0ec 75%, transparent 76%); }

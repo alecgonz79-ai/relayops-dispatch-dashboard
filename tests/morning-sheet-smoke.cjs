@@ -58,10 +58,15 @@ const checks = `
   if (!uploadHtml.includes('CX route matching')) throw new Error('CX matching explanation missing');
   state.page = 'fleet';
   const fleetHtml = fleetPage();
-  if (!fleetHtml.includes('Amazon Rivian battery tracker') || !fleetHtml.includes('Battery: low to high') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('7FCEHEB79PN014816') || !fleetHtml.includes('98 mi / 63%') || fleetHtml.includes('Assigned</span>')) throw new Error('Rivian fleet tracker panel missing');
+  if (!fleetHtml.includes('FleetOS + Amazon EV live board') || !fleetHtml.includes('Refresh battery %') || !fleetHtml.includes('logistics.amazon.com/fleet-management/#vehicles') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('EDV-014816') || !fleetHtml.includes('7FCEHEB79PN014816') || !fleetHtml.includes('98 mi / 63%')) throw new Error('FleetOS/Amazon EV board missing');
+  state.expandedFleetVin = '7FCEHEB79PN014816';
+  const expandedFleetHtml = fleetPage();
+  if (!expandedFleetHtml.includes('8HJK214') || !expandedFleetHtml.includes('Operational') || !expandedFleetHtml.includes('FleetOS + Amazon')) throw new Error('Expandable FleetOS/Amazon EV details missing');
   state.fleetSort = 'battery-low';
   const sortedFleet = sortedRivianFleet();
   if (sortedFleet[0].battery !== 18 || batteryTone(18) !== 'critical' || batteryTone(92) !== 'high') throw new Error('Rivian battery sorting or color tone failed');
+  refreshFleetStatus();
+  if (state.fleetLastRefresh === 'Not refreshed yet' || !fleetPage().includes('Last refresh:')) throw new Error('Fleet refresh did not update the board');
   const morningHtml = morningSheetPage();
   if (!morningHtml.includes('Three easy steps') || !morningHtml.includes('White cells + Google Sheets paste')) throw new Error('Quick start guide missing');
   const details = routeDetailsFromRows([
