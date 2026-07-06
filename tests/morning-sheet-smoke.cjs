@@ -151,7 +151,7 @@ const checks = `
     ['LLOL EV 21 duplicate','7FCEHEB79PN014816','9ABC123','Active','Operational']
   ];
   applyFleetVehicles(fleetDetailsFromRows(duplicateFleetRows,'amazon fleet list.csv'),{silent:true});
-  if (state.fleetUpdateSummary.duplicates !== 1 || !state.fleetUpdateSummary.duplicateVins.includes('7FCEHEB79PN014816') || !fleetPage().includes('duplicate VINs')) throw new Error('Fleet duplicate VIN warning failed');
+  if (state.fleetUpdateSummary.duplicates !== 1 || !state.fleetUpdateSummary.duplicateVins.includes('7FCEHEB79PN014816') || !fleetPage().includes('duplicate VINs') || !fleetPage().includes('7FCEHEB79PN014816') || !fleetGapRows().some(row => row[0] === 'Duplicate VIN in upload' && row[1] === '7FCEHEB79PN014816')) throw new Error('Fleet duplicate VIN warning failed');
   applyFleetVehicles(mergedFleet,{silent:true});
   state.fleetFilter = 'grounded';
   if (!fleetPage().includes('LLOL EV 21') || sortedRivianFleet().some(v => v.operational !== 'Grounded')) throw new Error('Grounded fleet filter failed');

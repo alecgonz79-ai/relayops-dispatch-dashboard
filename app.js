@@ -368,7 +368,8 @@ function fleetPage() {
 function fleetUpdateSummary() {
   const s=state.fleetUpdateSummary;
   if(!s)return '';
-  return `<div class="fleet-update-summary"><span><b>${s.input}</b> rows read</span><span><b>${s.updated}</b> updated</span><span><b>${s.newCount}</b> new</span><span class="${s.duplicates?'warn':''}"><b>${s.duplicates||0}</b> duplicate VINs</span><span><b>${s.removed||0}</b> not in upload</span><span><b>${s.visible}</b> showing now</span></div>`;
+  const duplicateList=(s.duplicateVins||[]).slice(0,3).join(', ');
+  return `<div class="fleet-update-summary"><span><b>${s.input}</b> rows read</span><span><b>${s.updated}</b> updated</span><span><b>${s.newCount}</b> new</span><span class="${s.duplicates?'warn':''}"><b>${s.duplicates||0}</b> duplicate VINs${duplicateList?`<em>${esc(duplicateList)}${s.duplicateVins.length>3?'…':''}</em>`:''}</span><span><b>${s.removed||0}</b> not in upload</span><span><b>${s.visible}</b> showing now</span></div>`;
 }
 
 function fleetAttentionStrip() {
@@ -1595,6 +1596,7 @@ function fleetGapRows() {
   };
   stats.amazonOnly.forEach(vin=>vehicleRow('Missing FleetOS battery/range',vin,'Upload FleetOS tracker row for this VIN'));
   stats.fleetosOnly.forEach(vin=>vehicleRow('Missing Amazon name/status',vin,'Upload Amazon fleet-list row for this VIN'));
+  (state.fleetUpdateSummary?.duplicateVins||[]).forEach(vin=>vehicleRow('Duplicate VIN in upload',vin,'Remove duplicate VIN row from the source export before refresh'));
   const expected=Number(state.fleetExpectedCount)||0, short=Math.max(0,expected-stats.uniqueVins.size);
   if(short) rows.push(['Expected EV count short','',`Tracked ${stats.uniqueVins.size} of expected ${expected}`,'','','','','',`Find ${short} missing VIN${short===1?'':'s'} in Amazon/FleetOS exports`]);
   return rows;

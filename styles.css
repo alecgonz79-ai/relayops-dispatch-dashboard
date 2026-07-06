@@ -370,6 +370,7 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-update-summary span { padding:8px 9px; border-radius:10px; background:#eef7ea; color:#43523f; font-size:7px; font-weight:900; text-transform:uppercase; letter-spacing:.05em; }
 .fleet-update-summary span.warn { background:#fff2cf; color:#8a5d08; }
 .fleet-update-summary b { display:block; color:#111b13; font-size:14px; line-height:1; margin-bottom:3px; }
+.fleet-update-summary em { display:block; margin-top:3px; color:#8a5d08; font-style:normal; font-size:6px; letter-spacing:0; text-transform:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .fleet-full-list { display:grid; grid-template-columns:1.15fr 1.7fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:10px 11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
 .fleet-full-list.ok { border-color:#cfe8c7; background:#f3fbef; }
 .fleet-full-list strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
