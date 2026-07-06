@@ -134,6 +134,7 @@ let state = {
   lastImportExcluded: Number(localStorage.getItem('relayops_excluded') || 0),
   morningFilters: {wave:'all',staging:'all',pad:'all'},
   fleetSort: localStorage.getItem('relayops_fleet_sort') || 'normal',
+  fleetFilter: localStorage.getItem('relayops_fleet_filter') || 'all',
   expandedFleetVin: localStorage.getItem('relayops_expanded_fleet_vin') || '',
   fleetLastRefresh: localStorage.getItem('relayops_fleet_refresh') || 'Not refreshed yet',
   fleetImport: JSON.parse(localStorage.getItem('relayops_fleet_import') || 'null'),
@@ -148,6 +149,7 @@ let state = {
   screenshotPreview: null,
   sheetCopyText: '',
   equipmentText: '',
+  fleetPasteText: '',
   equipmentImport: null,
   rating: Number(localStorage.getItem('relayops_rating') || 0)
 };
@@ -340,7 +342,7 @@ function fleetPage() {
   const rivians=sortedRivianFleet(), low=rivianFleet.filter(v=>v.battery<40).length, avg=Math.round(rivianFleet.reduce((n,v)=>n+v.battery,0)/rivianFleet.length);
   const grounded=rivianFleet.filter(v=>v.operational==='Grounded').length;
   const sourceName=state.fleetImport?.name?`Latest upload: ${esc(state.fleetImport.name)}`:'Upload FleetOS + Amazon exports when you have them.';
-  return `${contextBar(`<a class="btn small ghost" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">${ICONS.link} Rivian tracker</a><a class="btn small ghost" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">${ICONS.link} Amazon fleet list</a>`)}<section class="grid kpi-grid">${kpiCard('Rivian battery avg',`${avg}%`,`${low} below 40%`,'van',low?'#fff2cf':'#e9f7df')}${kpiCard('EVs tracked',rivianFleet.length,'FleetOS/Amazon-ready list','van','#e9f7df')}${kpiCard('Grounded EVs',grounded,'Tap a van for details','alert',grounded?'#ffe7e2':'#e9f7df')}${kpiCard('Devices ready','31','3 on chargers','phone','#e5efff')}</section><article class="card rivian-panel"><div class="card-head"><div class="card-title"><h2>FleetOS + Amazon EV live board</h2><p>Small EV grid for battery %, VIN, license plate, active status, and operational state. Last refresh: ${esc(state.fleetLastRefresh)}.</p></div><div class="head-actions"><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><button class="btn small lime" data-action="refresh-fleet">${ICONS.download} Refresh battery %</button><button class="btn small primary" data-action="fleet-import">${ICONS.upload} Upload fleet list</button><a class="btn small" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">FleetOS</a><a class="btn small" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">Amazon</a></div></div><div class="fleet-source-note"><strong>${sourceName}</strong> RelayOps matches rows by VIN first, then keeps Amazon fleet-list names exactly as uploaded. Live portal sync still needs your authenticated export/API connection.</div><section class="grid rivian-grid">${rivians.map(v=>rivianCard(v)).join('')}</section></article><div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All vehicles</option><option>Ready</option><option>Service</option></select><button class="btn" data-action="devices">${ICONS.phone} Device cabinet</button></div><button class="btn lime" data-action="add-vehicle">${ICONS.plus} Add vehicle</button></div><section class="grid fleet-grid">${fleet.map(v=>`<article class="card entity-card"><div class="entity-top"><div class="entity-icon">${ICONS.van}</div><span class="status ${statusClass(v[2])}">${v[2]}</span></div><h3>${v[0]}</h3><p>${v[1]}</p><div class="entity-meta"><div class="entity-stat"><span>Assigned today</span><strong>${v[3]}</strong></div><div class="entity-stat"><span>Fuel / charge</span><strong>${v[4]}</strong></div></div></article>`).join('')}</section>`;
+  return `${contextBar(`<a class="btn small ghost" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">${ICONS.link} Rivian tracker</a><a class="btn small ghost" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">${ICONS.link} Amazon fleet list</a>`)}<section class="grid kpi-grid">${kpiCard('Rivian battery avg',`${avg}%`,`${low} below 40%`,'van',low?'#fff2cf':'#e9f7df')}${kpiCard('EVs tracked',rivianFleet.length,'FleetOS/Amazon-ready list','van','#e9f7df')}${kpiCard('Grounded EVs',grounded,'Tap a van for details','alert',grounded?'#ffe7e2':'#e9f7df')}${kpiCard('Devices ready','31','3 on chargers','phone','#e5efff')}</section><article class="card rivian-panel"><div class="card-head"><div class="card-title"><h2>FleetOS + Amazon EV live board</h2><p>Small EV grid for battery %, VIN, license plate, active status, and operational state. Last refresh: ${esc(state.fleetLastRefresh)}.</p></div><div class="head-actions"><select class="filter-select" data-fleet-filter><option value="all" ${state.fleetFilter==='all'?'selected':''}>Show all EVs</option><option value="low" ${state.fleetFilter==='low'?'selected':''}>Needs charge</option><option value="grounded" ${state.fleetFilter==='grounded'?'selected':''}>Grounded only</option><option value="inactive" ${state.fleetFilter==='inactive'?'selected':''}>Inactive only</option></select><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><button class="btn small lime" data-action="refresh-fleet">${ICONS.download} Refresh battery %</button><button class="btn small primary" data-action="fleet-import">${ICONS.upload} Upload / paste fleet list</button><a class="btn small" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">FleetOS</a><a class="btn small" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">Amazon</a></div></div><div class="fleet-source-note"><strong>${sourceName}</strong> RelayOps matches rows by VIN first, keeps Amazon fleet-list names exactly as uploaded, and lets dispatchers filter to problem EVs fast.</div><section class="grid rivian-grid">${rivians.length?rivians.map(v=>rivianCard(v)).join(''):`<div class="empty-state">No EVs match this filter. Switch back to “Show all EVs.”</div>`}</section></article><div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All vehicles</option><option>Ready</option><option>Service</option></select><button class="btn" data-action="devices">${ICONS.phone} Device cabinet</button></div><button class="btn lime" data-action="add-vehicle">${ICONS.plus} Add vehicle</button></div><section class="grid fleet-grid">${fleet.map(v=>`<article class="card entity-card"><div class="entity-top"><div class="entity-icon">${ICONS.van}</div><span class="status ${statusClass(v[2])}">${v[2]}</span></div><h3>${v[0]}</h3><p>${v[1]}</p><div class="entity-meta"><div class="entity-stat"><span>Assigned today</span><strong>${v[3]}</strong></div><div class="entity-stat"><span>Fuel / charge</span><strong>${v[4]}</strong></div></div></article>`).join('')}</section>`;
 }
 
 function batteryTone(percent=0) {
@@ -357,8 +359,14 @@ function batteryLabel(percent=0) {
 }
 function sortedRivianFleet() {
   const rows=[...rivianFleet];
-  if(state.fleetSort==='battery-low') rows.sort((a,b)=>a.battery-b.battery||a.vin.localeCompare(b.vin));
-  return rows;
+  const filtered=rows.filter(v=>{
+    if(state.fleetFilter==='low')return v.battery<40;
+    if(state.fleetFilter==='grounded')return v.operational==='Grounded';
+    if(state.fleetFilter==='inactive')return v.active==='Inactive';
+    return true;
+  });
+  if(state.fleetSort==='battery-low') filtered.sort((a,b)=>a.battery-b.battery||a.vin.localeCompare(b.vin));
+  return filtered;
 }
 function amazonRivianIcon(tone='high') {
   return `<span class="rivian-van-art ${tone}" aria-hidden="true"><span class="van-cab"></span><span class="van-box"><i class="prime-smile"></i><b>prime</b></span><span class="van-wheel front"></span><span class="van-wheel rear"></span></span>`;
@@ -438,7 +446,7 @@ function modal() {
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="equipment-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">VAN/DEV/PORT IMPORT</span><h2 id="equipment-title">Match vans to devices</h2><p>Upload the screenshot/table or paste the list. RelayOps matches EV/VAN number to the EV cell, then fills Device and Portable.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="equipment-drop" id="equipment-drop" tabindex="0"><div class="equipment-drop-copy"><strong>Drop screenshot, JPEG, PDF, CSV, or XLSX here</strong><span>Or press ⌘V after copying a screenshot/file. Best results: clear screenshot/JPEG, PDF with selectable text, CSV, XLSX, TXT, Numbers-exported file, or pasted text.</span></div><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose file</button></div><label class="equipment-text-label" for="equipment-paste-text">Paste VAN/DEV/PORT list here</label><textarea id="equipment-paste-text" class="equipment-paste-text" placeholder="Example: 1 40 31 37 31 -">${esc(state.equipmentText)}</textarea>${state.equipmentImport?`<div class="import-preview ${count?'':'import-warning'}"><span class="preview-check">${count?'✓':'!'}</span><div><strong>${count} EV/VAN assignments found</strong><span>${count?(state.equipmentImport.name?esc(state.equipmentImport.name):'Ready to match against the EV column.'):'Try a clearer screenshot/PDF or paste the copied text from the image.'}</span></div></div><div class="equipment-preview">${Object.entries(state.equipmentImport.details||{}).slice(0,6).map(([van,d])=>`<span><b>${esc(van)}</b> Device ${esc(d.device||'')} · Portable ${esc(d.portable||'')}</span>`).join('')}</div>`:''}<div class="modal-actions"><button class="btn" data-action="parse-equipment-text">Read list</button><button class="btn primary" data-action="apply-equipment-import" ${count?'':'disabled'}>Fill Device + Portable cells</button></div></div></div></div>`;
   }
   if (state.modal === 'fleet-import') {
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-import-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">FLEETOS + AMAZON IMPORT</span><h2 id="fleet-import-title">Update EV battery board</h2><p>Upload the FleetOS tracker export and/or Amazon fleet list. RelayOps matches by VIN and keeps the van name exactly like the Amazon fleet list.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="equipment-drop" id="drop-zone"><div class="equipment-drop-copy"><strong>Drop CSV or XLSX fleet files here</strong><span>Accepted columns: VIN, vehicle/name, license plate, active/inactive, operational/grounded, SOC/battery %, and range/miles. You can choose multiple files together.</span></div><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose fleet files</button></div><div class="auto-match"><strong>RelayOps will do this:</strong><div><span>✓ Match by VIN</span><span>✓ Use Amazon fleet names</span><span>✓ Update battery + status cards</span></div></div><p class="upload-help">Tip: export FleetOS for battery %, then export Amazon Fleet Management for names, plate, Active/Inactive, and Operational/Grounded.</p></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-import-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">FLEETOS + AMAZON IMPORT</span><h2 id="fleet-import-title">Update EV battery board</h2><p>Upload or paste the FleetOS tracker export and/or Amazon fleet list. RelayOps matches by VIN and keeps the van name exactly like the Amazon fleet list.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="equipment-drop" id="drop-zone"><div class="equipment-drop-copy"><strong>Drop CSV or XLSX fleet files here</strong><span>Accepted columns: VIN, vehicle/name, license plate, active/inactive, operational/grounded, SOC/battery %, and range/miles. You can choose multiple files together.</span></div><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose fleet files</button></div><label class="equipment-text-label" for="fleet-paste-text">Or paste the copied FleetOS/Amazon table here</label><textarea id="fleet-paste-text" class="equipment-paste-text" placeholder="Vehicle Name&#9;VIN&#9;License Plate&#9;Active&#9;Operational Status&#10;LLOL EV 21&#9;7FCEHEB79PN014816&#9;9ABC123&#9;Active&#9;Operational">${esc(state.fleetPasteText)}</textarea><div class="auto-match"><strong>RelayOps will do this:</strong><div><span>✓ Match by VIN</span><span>✓ Use Amazon fleet names</span><span>✓ Update battery + status cards</span></div></div><div class="modal-actions"><button class="btn" data-action="parse-fleet-paste">Read pasted table</button><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose fleet files</button></div><p class="upload-help">Tip: export or copy FleetOS for battery %, then Amazon Fleet Management for names, plate, Active/Inactive, and Operational/Grounded.</p></div></div></div>`;
   }
   if (state.modal === 'screenshot' && state.screenshotPreview) return `<div class="modal-backdrop" data-action="close-modal"><div class="modal screenshot-modal" role="dialog" aria-modal="true" aria-labelledby="screenshot-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">APPROVAL REQUIRED</span><h2 id="screenshot-title">Approve GroupMe JPEG</h2><p>Only Wave, Driver/Helper, Route, Staging, Pad, EV, Device, and Portable are included.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="jpeg-preview"><img src="${state.screenshotPreview}" alt="Wave sheet JPEG preview"></div><div class="modal-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="save-wave-screenshot">Approve & save JPEG</button></div></div></div></div>`;
   return '';
@@ -460,6 +468,7 @@ function bind() {
   document.querySelectorAll('[data-phase]').forEach(el=>el.addEventListener('click',()=>{state.phase=Number(el.dataset.phase);persist();render();}));
   document.querySelectorAll('[data-morning-filter]').forEach(el=>el.addEventListener('change',()=>{const key=el.dataset.morningFilter;if(key!=='dsp')state.morningFilters[key]=el.value;render();}));
   document.querySelectorAll('[data-rivian-sort]').forEach(el=>el.addEventListener('change',()=>{state.fleetSort=el.value;persist();render();}));
+  document.querySelectorAll('[data-fleet-filter]').forEach(el=>el.addEventListener('change',()=>{state.fleetFilter=el.value;persist();render();}));
   document.querySelectorAll('[data-edit-field]').forEach(el=>{
     el.addEventListener('focus',()=>selectSheetCell(el));
     el.addEventListener('mousedown',()=>selectSheetCell(el));
@@ -478,6 +487,8 @@ function bind() {
   }
   const equipmentText=document.getElementById('equipment-paste-text');
   if(equipmentText) equipmentText.addEventListener('input',e=>{state.equipmentText=e.target.value;state.equipmentImport=null;});
+  const fleetPaste=document.getElementById('fleet-paste-text');
+  if(fleetPaste) fleetPaste.addEventListener('input',e=>{state.fleetPasteText=e.target.value;});
   const equipmentDrop=document.getElementById('equipment-drop');
   if(equipmentDrop) {
     ['dragenter','dragover'].forEach(ev=>equipmentDrop.addEventListener(ev,e=>{e.preventDefault();equipmentDrop.classList.add('drag');}));
@@ -640,6 +651,7 @@ function action(name,el) {
   if (name==='select-sheets-text') return selectSheetsText();
   if (name==='parse-equipment-text') return parseEquipmentTextAction();
   if (name==='apply-equipment-import') return applyEquipmentImport();
+  if (name==='parse-fleet-paste') return parseFleetPasteAction();
   if (name==='rate-service') { state.rating=Number(el.dataset.rating)||0;persist();render();return toast(`Thanks — ${state.rating} stars saved`); }
   if (name==='publish') { state.rosterPublished=true;persist();render();return toast('Roster published to the team'); }
   if (name==='phase-next') { state.phase=Math.min(3,state.phase+1);persist();render();return toast(`Shift advanced to ${['Roster','Load-out','On road','Closeout'][state.phase]}`); }
@@ -845,6 +857,14 @@ async function readFiles(files) {
 async function readFile(file) { return readFiles([file]); }
 
 function rowsToText(rows=[]) { return rows.map(row=>row.join('\t')).join('\n'); }
+function rowsFromPastedTable(text='') {
+  const value=String(text||'').trim();
+  if(!value)return [];
+  if(value.includes('\t')) return value.split(/\r?\n/).map(line=>line.split('\t').map(cell=>cell.trim())).filter(row=>row.some(Boolean));
+  const csvRows=parseCSV(value);
+  if(csvRows.length&&csvRows[0]?.length>1)return csvRows;
+  return value.split(/\r?\n/).map(line=>line.trim().split(/\s{2,}/).map(cell=>cell.trim())).filter(row=>row.length>1&&row.some(Boolean));
+}
 
 function normalizeHeader(value='') { return String(value).toLowerCase().replace(/[^a-z0-9]/g,''); }
 function firstExisting(row,headers,names) {
@@ -1029,6 +1049,18 @@ function parseEquipmentTextAction() {
   render();
   toast(`${Object.keys(details).length} EV/VAN assignments found`);
 }
+function parseFleetPasteAction() {
+  const el=document.getElementById('fleet-paste-text');
+  state.fleetPasteText=el?el.value:state.fleetPasteText;
+  const rows=rowsFromPastedTable(state.fleetPasteText);
+  const vehicles=fleetDetailsFromRows(rows,'Pasted Amazon/FleetOS fleet table');
+  if(!vehicles.length) return toast('No VIN rows found. Paste the header row plus vehicle rows from FleetOS or Amazon.','error');
+  state.fleetImport={name:'Pasted Amazon/FleetOS fleet table',vehicles};
+  const total=applyFleetVehicles(vehicles);
+  state.modal=null; state.page='fleet';
+  persist(); render();
+  toast(`${vehicles.length} pasted fleet rows read · ${total} EV cards updated`);
+}
 function applyEquipmentImport() {
   const details=state.equipmentImport?.details||{};
   let matched=0, missing=[];
@@ -1187,7 +1219,7 @@ function downloadTemplate(){const h=['DSP','Driver','Route Code','Service Type',
 
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function persist(){localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));}
+function persist(){localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));}
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
 render();

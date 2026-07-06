@@ -78,7 +78,17 @@ const checks = `
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet };
   applyFleetVehicles(mergedFleet,{silent:true});
   const importedFleetHtml = fleetPage();
-  if (!importedFleetHtml.includes('LLOL EV 21') || !importedFleetHtml.includes('9ABC123') || !importedFleetHtml.includes('41%') || !importedFleetHtml.includes('Upload fleet list')) throw new Error('FleetOS/Amazon fleet import did not update cards');
+  if (!importedFleetHtml.includes('LLOL EV 21') || !importedFleetHtml.includes('9ABC123') || !importedFleetHtml.includes('41%') || !importedFleetHtml.includes('Upload / paste fleet list')) throw new Error('FleetOS/Amazon fleet import did not update cards');
+  state.fleetFilter = 'grounded';
+  if (!fleetPage().includes('LLOL EV 21') || sortedRivianFleet().some(v => v.operational !== 'Grounded')) throw new Error('Grounded fleet filter failed');
+  state.fleetFilter = 'all';
+  state.modal = 'fleet-import';
+  const fleetImportHtml = modal();
+  if (!fleetImportHtml.includes('Or paste the copied FleetOS/Amazon table here') || !fleetImportHtml.includes('Read pasted table')) throw new Error('Fleet paste modal missing');
+  state.fleetPasteText = 'Vehicle Name\\tVIN\\tLicense Plate\\tActive\\tOperational Status\\tBattery %\\tRange Miles\\nLLOL EV 22\\t7FCTGAAA1PN000184\\t9XYZ222\\tActive\\tOperational\\t88%\\t137 mi';
+  parseFleetPasteAction();
+  state.expandedFleetVin = '7FCTGAAA1PN000184';
+  if (!fleetPage().includes('LLOL EV 22') || !fleetPage().includes('88%') || !fleetPage().includes('9XYZ222')) throw new Error('Fleet pasted table did not update cards');
   refreshFleetStatus();
   if (state.fleetLastRefresh === 'Not refreshed yet' || !fleetPage().includes('Last refresh:')) throw new Error('Fleet refresh did not update the board');
   const morningHtml = morningSheetPage();
