@@ -458,9 +458,9 @@ tbody tr:last-child td { border-bottom:0; }
 .accuracy-source-mini .ok { background:#eef7ea; border-color:#cfe8c7; color:#275c1f; }
 .accuracy-source-mini .warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
 .rivian-grid { grid-template-columns:repeat(auto-fill,minmax(136px,1fr)); gap:6px; align-items:start; }
-.rivian-grid.tiny-view { grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:4px; }
+.rivian-grid.tiny-view { grid-template-columns:repeat(auto-fill,minmax(86px,1fr)); gap:4px; }
 .rivian-card { min-height:74px; padding:6px; border:1px solid #d8dcdf; border-radius:9px; background:#fff; display:block; text-align:left; cursor:pointer; box-shadow:0 1px 0 rgba(0,0,0,.04); transition:.16s ease; }
-.tiny-view .rivian-card { min-height:50px; padding:4px; border-radius:8px; }
+.tiny-view .rivian-card { min-height:46px; padding:4px; border-radius:8px; }
 .rivian-card:hover, .rivian-card.expanded { transform:translateY(-1px); border-color:#8ab4f8; box-shadow:0 10px 24px rgba(24,40,32,.12); }
 .rivian-card.expanded { grid-column:span 2; min-height:138px; }
 .rivian-card.updated { border-color:#82c66b; box-shadow:0 8px 20px rgba(74,141,49,.13); }
@@ -490,6 +490,11 @@ tbody tr:last-child td { border-bottom:0; }
 .tiny-view .rivian-card:not(.expanded) .rivian-charge-line { margin-top:3px; gap:4px; }
 .rivian-charge-line strong { font:800 9px Arial,sans-serif; white-space:nowrap; }
 .tiny-view .rivian-card:not(.expanded) .rivian-charge-line strong { font-size:7.5px; }
+.fleet-card-cue { display:inline-flex; margin-top:3px; padding:2px 5px; border-radius:999px; background:#edf3ff; color:#285c9d; font-size:6px; font-weight:1000; text-transform:uppercase; letter-spacing:.07em; white-space:nowrap; }
+.fleet-card-cue.verified { background:#dff5d7; color:#275c1f; }
+.fleet-card-cue.partial { background:#fff2cf; color:#8a5d08; }
+.fleet-card-cue.demo { background:#edf0ec; color:#68726b; }
+.tiny-view .rivian-card:not(.expanded) .fleet-card-cue { display:block; width:max-content; max-width:70px; overflow:hidden; text-overflow:ellipsis; font-size:4.8px; padding:1px 3px; margin-top:2px; }
 .battery-icon { width:22px; height:13px; padding:2px; border:2px solid #151a16; border-radius:3px; position:relative; background:#fff; display:inline-flex; align-items:center; flex:0 0 22px; }
 .battery-icon:after { content:""; position:absolute; right:-5px; top:3px; width:3px; height:6px; border:2px solid #151a16; border-left:0; border-radius:0 2px 2px 0; background:#fff; }
 .battery-icon i { display:block; height:100%; border-radius:1px; background:#14b84a; }
@@ -509,7 +514,7 @@ tbody tr:last-child td { border-bottom:0; }
 .rivian-van-art { width:36px; height:18px; flex:0 0 36px; position:relative; filter:drop-shadow(0 3px 4px rgba(0,0,0,.13)); }
 .tiny-view .rivian-card:not(.expanded) .battery-icon { width:18px; height:10px; padding:1px; border-width:1px; flex-basis:18px; }
 .tiny-view .rivian-card:not(.expanded) .battery-icon:after { right:-4px; top:2px; width:2px; height:5px; border-width:1px; }
-.tiny-view .rivian-card:not(.expanded) .rivian-van-art { width:24px; height:12px; flex-basis:24px; transform:scale(.82); transform-origin:top right; }
+.tiny-view .rivian-card:not(.expanded) .rivian-van-art { width:21px; height:11px; flex-basis:21px; transform:scale(.74); transform-origin:top right; }
 .van-box { position:absolute; right:2px; top:3px; width:25px; height:12px; border-radius:5px 4px 3px 3px; background:linear-gradient(180deg,#2c3336,#171c1f); border:1px solid #080b0c; overflow:hidden; }
 .van-cab { position:absolute; left:2px; top:6px; width:16px; height:10px; border-radius:8px 5px 3px 3px; background:linear-gradient(180deg,#333b3e,#15191b); border:1px solid #080b0c; }
 .van-cab:before { content:""; position:absolute; left:6px; top:2px; width:9px; height:5px; border-radius:5px 3px 1px 1px; background:#8ea0a9; clip-path:polygon(18% 0,100% 0,88% 100%,0 100%); }
