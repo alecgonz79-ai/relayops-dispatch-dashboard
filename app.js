@@ -124,6 +124,8 @@ let state = {
   editMode: false,
   screenshotPreview: null,
   sheetCopyText: '',
+  equipmentText: '',
+  equipmentImport: null,
   rating: Number(localStorage.getItem('relayops_rating') || 0)
 };
 
@@ -245,7 +247,7 @@ function morningSheetPage() {
   const irregular=rows.filter(r=>r.plannedRtsIssue).length;
   const copyRowsCount=groups.reduce((n,g)=>n+morningDisplayRows(g).length+(g.wave?1:0),1);
   return `${contextBar(`<span class="status blue">Earliest waves first</span>`)}
-  <div class="morning-command card"><div><span class="eyebrow">LLOL OPENING OPERATIONS</span><h2>Morning operations sheet</h2><p>Upload DAYOFOPSPLAN plus ROUTE_DJT6. RelayOps keeps only ${state.dspCode}, matches CX routes, uses the first driver name only, and keeps waves earliest first.</p></div><div class="morning-actions"><button class="btn" data-action="slack-import">${ICONS.inbox} Slack Import <span class="demo-tag">DEMO</span></button><button class="btn primary easy-upload-button" data-action="import">${ICONS.upload} Cortex Import</button><button class="btn lime" data-action="planned-rts-import">${ICONS.calendar} Planned RTS Upload</button></div></div>
+  <div class="morning-command card"><div><span class="eyebrow">LLOL OPENING OPERATIONS</span><h2>Morning operations sheet</h2><p>Upload DAYOFOPSPLAN plus ROUTE_DJT6. RelayOps keeps only ${state.dspCode}, matches CX routes, uses the first driver name only, and keeps waves earliest first.</p></div><div class="morning-actions"><button class="btn" data-action="slack-import">${ICONS.inbox} Slack Import <span class="demo-tag">DEMO</span></button><button class="btn primary easy-upload-button" data-action="import">${ICONS.upload} Cortex Import</button><button class="btn lime" data-action="planned-rts-import">${ICONS.calendar} Planned RTS Upload</button><button class="btn" data-action="equipment-import">${ICONS.van} EV / Device Import</button></div></div>
   <div class="quick-start" aria-label="Three easy steps"><div class="quick-step done"><b>1</b><span><strong>Pick import</strong><small>Slack or Cortex</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>2</b><span><strong>We match CX</strong><small>Wave + staging + pad</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>3</b><span><strong>Edit/copy</strong><small>White cells + Google Sheets paste</small></span></div></div>
   <div class="sheet-toolbar"><div class="sheet-filter"><label>DSP</label><select data-morning-filter="dsp"><option>${state.dspCode}</option></select></div><div class="sheet-filter"><label>Wave</label><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Staging location</label><select data-morning-filter="staging"><option value="all">All staging</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Pad</label><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></div><button class="btn small" data-action="clear-morning-filters">Clear filters</button><span class="filter-note">Sorted ${ICONS.chevron} earliest launch first</span><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Done editing':'✎ Edit mode'}</button><button class="btn small ${state.fitMorningRows?'lime':''}" data-action="toggle-fit-rows">${state.fitMorningRows?'✓ Fit to drivers':'Remove blank rows'}</button><button class="btn small" data-action="copy-morning-visible">${ICONS.copy} Copy for Sheets</button><button class="btn small" data-action="preview-wave-screenshot">${ICONS.download} Preview JPEG</button><button class="btn small" data-action="export-morning">${ICONS.download} Export sheet</button></div>
   <div class="sheet-kpis"><span><strong>${rows.length}</strong> routes</span><span><strong>${rows.reduce((n,r)=>n+r.packages,0).toLocaleString()}</strong> packages</span><span><strong>${rows.reduce((n,r)=>n+r.stops,0).toLocaleString()}</strong> stops</span><span><strong>${irregular}</strong> RTS flags</span></div>
@@ -375,6 +377,10 @@ function modal() {
   }
   if (state.modal === 'export') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()"><div class="modal-head"><div><h2>Export route data</h2><p>Ready for Excel or your Google Sheets template</p></div><button class="icon-button" data-action="close-modal">×</button></div><div class="modal-body"><div class="connection"><div class="connection-logo">CSV</div><div class="connection-copy"><strong>CSV file</strong><span>Fastest option for Google Sheets</span></div><button class="btn small" data-action="export-csv">Download</button></div><div class="connection"><div class="connection-logo" style="background:#1c6e44">XLS</div><div class="connection-copy"><strong>Excel workbook</strong><span>Styled table that opens in Excel</span></div><button class="btn small" data-action="export-excel">Download</button></div><div class="connection"><div class="connection-logo" style="background:#2866b4">TAB</div><div class="connection-copy"><strong>Copy for Google Sheets</strong><span>Paste directly into cell A1</span></div><button class="btn small" data-action="copy">Copy</button></div></div></div></div>`;
   if (state.modal === 'sheets-helper') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="sheets-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS PASTE BOX</span><h2 id="sheets-title">Paste-ready morning sheet</h2><p>If one-click copy does not work, click Select all, copy, then paste into Google Sheets cell A1.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="paste-guide"><span><b>1</b> Select all</span><span><b>2</b> Copy</span><span><b>3</b> Paste in A1</span></div><textarea id="sheets-copy-text" class="sheets-copy-text" readonly>${esc(state.sheetCopyText||morningSheetTsv())}</textarea><div class="modal-actions"><button class="btn" data-action="select-sheets-text">Select all text</button><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy again</button></div></div></div></div>`;
+  if (state.modal === 'equipment') {
+    const count=state.equipmentImport?Object.keys(state.equipmentImport.details||{}).length:0;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="equipment-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">EV / DEVICE IMPORT</span><h2 id="equipment-title">Match vans to devices</h2><p>Upload a screenshot or paste the list. RelayOps matches EV/VAN number to the EV cell, then fills Device and Portable.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="equipment-drop"><button class="btn primary" data-action="choose-file">${ICONS.upload} Upload screenshot / file</button><span>Accepts screenshots, CSV, or XLSX. Screenshot OCR depends on browser support, so the paste box is always available.</span></div><label class="equipment-text-label" for="equipment-paste-text">Paste EV/VAN list here</label><textarea id="equipment-paste-text" class="equipment-paste-text" placeholder="Example: EV/VAN 21   Device 3   Portable -">${esc(state.equipmentText)}</textarea>${state.equipmentImport?`<div class="import-preview"><span class="preview-check">✓</span><div><strong>${count} EV/VAN assignments found</strong><span>${state.equipmentImport.name?esc(state.equipmentImport.name):'Ready to match against the EV column.'}</span></div></div><div class="equipment-preview">${Object.entries(state.equipmentImport.details||{}).slice(0,6).map(([van,d])=>`<span><b>${esc(van)}</b> Device ${esc(d.device||'')} · Portable ${esc(d.portable||'')}</span>`).join('')}</div>`:''}<div class="modal-actions"><button class="btn" data-action="parse-equipment-text">Read list</button><button class="btn primary" data-action="apply-equipment-import" ${count?'':'disabled'}>Fill Device + Portable cells</button></div></div></div></div>`;
+  }
   if (state.modal === 'screenshot' && state.screenshotPreview) return `<div class="modal-backdrop" data-action="close-modal"><div class="modal screenshot-modal" role="dialog" aria-modal="true" aria-labelledby="screenshot-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">APPROVAL REQUIRED</span><h2 id="screenshot-title">Approve GroupMe JPEG</h2><p>Only Wave, Driver/Helper, Route, Staging, Pad, EV, Device, and Portable are included.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="jpeg-preview"><img src="${state.screenshotPreview}" alt="Wave sheet JPEG preview"></div><div class="modal-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="save-wave-screenshot">Approve & save JPEG</button></div></div></div></div>`;
   return '';
 }
@@ -415,6 +421,8 @@ function bind() {
     ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
     dz.addEventListener('drop',e=>{if(e.dataTransfer.files.length) readFiles([...e.dataTransfer.files]);});
   }
+  const equipmentText=document.getElementById('equipment-paste-text');
+  if(equipmentText) equipmentText.addEventListener('input',e=>{state.equipmentText=e.target.value;state.equipmentImport=null;});
 }
 
 function go(page) {
@@ -427,6 +435,7 @@ function action(name,el) {
   if (name==='import') { state.modal='import'; state.importSource='computer'; state.importPurpose='morning'; state.importedFile=null; return render(); }
   if (name==='slack-import') { state.modal='import'; state.importSource='slack'; state.importPurpose='morning'; state.importedFile=null; return render(); }
   if (name==='planned-rts-import') { state.modal='import'; state.importSource='computer'; state.importPurpose='rts'; state.importedFile=null; return render(); }
+  if (name==='equipment-import') { state.modal='equipment'; state.importPurpose='equipment'; state.equipmentImport=null; return render(); }
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
   if (name==='close-modal') { state.modal=null;state.screenshotPreview=null;return render(); }
@@ -446,6 +455,8 @@ function action(name,el) {
   if (name==='copy-morning-visible') return copyMorningVisible();
   if (name==='open-sheets-helper') { state.sheetCopyText=morningSheetTsv(); state.modal='sheets-helper'; return render(); }
   if (name==='select-sheets-text') return selectSheetsText();
+  if (name==='parse-equipment-text') return parseEquipmentTextAction();
+  if (name==='apply-equipment-import') return applyEquipmentImport();
   if (name==='rate-service') { state.rating=Number(el.dataset.rating)||0;persist();render();return toast(`Thanks — ${state.rating} stars saved`); }
   if (name==='publish') { state.rosterPublished=true;persist();render();return toast('Roster published to the team'); }
   if (name==='phase-next') { state.phase=Math.min(3,state.phase+1);persist();render();return toast(`Shift advanced to ${['Roster','Load-out','On road','Closeout'][state.phase]}`); }
@@ -482,6 +493,38 @@ function isIrregularPlannedRts(value='',wave='') {
   if(t<8*60 || t>14*60) return true;
   return w!==9999 && Math.abs(t-w)>150;
 }
+function normalizeEquipmentId(value='') {
+  return String(value??'').toUpperCase().replace(/\b(EV|VAN|VEHICLE|DEVICE|PORTABLE)\b/g,'').replace(/["']/g,'').replace(/[^A-Z0-9-]/g,'').replace(/^0+(?=\d)/,'');
+}
+function cleanEquipmentValue(value='') {
+  const text=String(value??'').replace(/["']/g,'').trim();
+  return text || '-';
+}
+function equipmentDetailsFromRows(rows=[]) {
+  const header=findImportHeader(rows,[['evvan','ev','van','vehicle','vehicleid','vannumber'],['device','deviceid','rabbit'],['portable','portableid','powerbank','battery']]);
+  if(header<0)return equipmentDetailsFromText(rowsToText(rows));
+  const headers=rows[header].map(headerKey), index=(...names)=>headers.findIndex(h=>names.map(headerKey).includes(h));
+  const vanIx=index('evvan','ev','van','vehicle','vehicleid','vannumber'), deviceIx=index('device','deviceid','rabbit'), portableIx=index('portable','portableid','powerbank','battery');
+  const details={};
+  rows.slice(header+1).forEach(row=>{
+    const van=normalizeEquipmentId(row[vanIx]); if(!van)return;
+    details[van]={device:cleanEquipmentValue(row[deviceIx]),portable:cleanEquipmentValue(row[portableIx])};
+  });
+  return details;
+}
+function equipmentDetailsFromText(text='') {
+  const details={}, lines=String(text||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  lines.forEach(line=>{
+    if(/^(ev\s*\/?\s*van|van|vehicle)\b.*\bdevice\b.*\bportable\b/i.test(line)&&!/\d/.test(line)) return;
+    let m=line.match(/(?:EV\s*\/?\s*VAN|VAN|EV|VEHICLE)\s*[:#-]?\s*"?([A-Z0-9-]+)"?.*?(?:DEVICE|DEV)\s*[:#-]?\s*"?([A-Z0-9-]+|-)"?.*?(?:PORTABLE|PORT)\s*[:#-]?\s*"?([A-Z0-9-]+|-)"?/i);
+    if(m){details[normalizeEquipmentId(m[1])]={device:cleanEquipmentValue(m[2]),portable:cleanEquipmentValue(m[3])};return;}
+    const parts=line.replace(/[|,]/g,'\t').split(/\t+|\s{2,}/).map(x=>x.trim()).filter(Boolean);
+    if(parts.length>=3&&!/device|portable|ev\s*\/?\s*van/i.test(parts.join(' '))) {
+      const van=normalizeEquipmentId(parts[0]); if(van)details[van]={device:cleanEquipmentValue(parts[1]),portable:cleanEquipmentValue(parts[2])};
+    }
+  });
+  return details;
+}
 function routeDetailsFromRows(rows) {
   const header=findImportHeader(rows,[['route','routecode','routeid','cx','cxnumber','cxroute','blockid'],['driver','drivername','transportername','employeename','daname','associatename','name','deliveryassociate','stops','stopcount','plannedstops','numstops','planneddeparturetime']]);
   if(header<0)return {};
@@ -493,15 +536,33 @@ function routeDetailsFromRows(rows) {
 }
 async function parseUploadedFile(file) {
   const name=file.name.toLowerCase(); let rows;
+  if(/^image\//.test(file.type)||/\.(png|jpe?g|webp)$/i.test(name)) return {name:file.name,rows:[],text:await readImageText(file),kind:'image'};
   if(name.endsWith('.csv')) rows=parseCSV(await file.text());
   else if(name.endsWith('.xlsx')) rows=await parseXlsxArrayBuffer(await file.arrayBuffer());
   else throw new Error('unsupported');
   if(rows.length<2) throw new Error('empty');
   return {name:file.name,rows};
 }
+async function readImageText(file) {
+  try {
+    if(typeof TextDetector==='undefined'||typeof createImageBitmap==='undefined') return '';
+    const detector=new TextDetector();
+    const bitmap=await createImageBitmap(file);
+    const results=await detector.detect(bitmap);
+    return results.map(r=>r.rawValue||'').join('\n');
+  } catch { return ''; }
+}
 async function readFiles(files) {
   try {
     const parsed=await Promise.all(files.map(parseUploadedFile));
+    if(state.importPurpose==='equipment') {
+      const textParts=parsed.map(f=>f.text||rowsToText(f.rows)).filter(Boolean);
+      const details=textParts.reduce((all,text)=>({...all,...equipmentDetailsFromText(text)}),{});
+      const rowDetails=parsed.reduce((all,f)=>({...all,...equipmentDetailsFromRows(f.rows||[])}),{});
+      state.equipmentText=textParts.join('\n').trim()||state.equipmentText;
+      state.equipmentImport={name:parsed.map(f=>f.name).join(' + '),details:{...details,...rowDetails}};
+      state.modal='equipment';render();return toast(`${Object.keys(state.equipmentImport.details).length} EV/VAN assignments ready to match`);
+    }
     const plan=parsed.find(f=>/day\s*of\s*ops\s*plan/i.test(f.name)||findImportHeader(f.rows,[['route','routecode','cxnumber','cxroute','blockid'],['wave','wavetime','starttime'],['staging','staginglocation']])>=0);
     const routeFile=parsed.find(f=>/route[_\s-]*djt6/i.test(f.name))||parsed.find(f=>f!==plan&&Object.keys(routeDetailsFromRows(f.rows)).length);
     const details=routeFile?routeDetailsFromRows(routeFile.rows):{};
@@ -516,6 +577,8 @@ async function readFiles(files) {
   }
 }
 async function readFile(file) { return readFiles([file]); }
+
+function rowsToText(rows=[]) { return rows.map(row=>row.join('\t')).join('\n'); }
 
 function parseCSV(text) {
   const rows=[]; let row=[],cell='',quoted=false;
@@ -599,6 +662,30 @@ function applyImport() {
   }
   state.routes=f.rows.map((r,i)=>({route:r[ix.route]||`IMP-${i+1}`,driver:firstDriverName(r[ix.driver]||'Unassigned driver'),id:`DA-${1100+i}`,wave:r[ix.wave]||'Wave pending',staging:r[ix.staging]||'—',van:r[ix.van]||'Unassigned',device:r[ix.device]||'Unassigned',stops:Number(r[ix.stops])||0,packages:Number(r[ix.packages])||0,progress:0,delta:0,status:(r[ix.driver]&&r[ix.van])?'Assigned':'Needs review',rescue:'—'}));
   state.modal=null;state.page='roster';state.rosterPublished=false;persist();render();toast(`${state.routes.length} routes imported — review before publishing`);
+}
+
+function parseEquipmentTextAction() {
+  const el=document.getElementById('equipment-paste-text');
+  state.equipmentText=el?el.value:state.equipmentText;
+  const details=equipmentDetailsFromText(state.equipmentText);
+  state.equipmentImport={name:'Pasted EV/device list',details};
+  render();
+  toast(`${Object.keys(details).length} EV/VAN assignments found`);
+}
+function applyEquipmentImport() {
+  const details=state.equipmentImport?.details||{};
+  let matched=0, missing=[];
+  state.morningRoutes.forEach(route=>{
+    const key=normalizeEquipmentId(route.ev);
+    if(!key)return;
+    const item=details[key];
+    if(!item){missing.push(key);return;}
+    matched++;
+    route.deviceName=item.device||'';
+    route.portable=item.portable||'';
+  });
+  state.modal=null;state.page='morning';persist();render();
+  toast(`${matched} EV/VAN rows updated${missing.length?` · ${missing.length} EVs not found in import`:''}`);
 }
 
 const exportHeaders=['Route','Driver','Driver ID','Wave','Staging','Vehicle','Device','Stops','Packages','Progress %','Pace Delta','Status','Rescue Plan'];

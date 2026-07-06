@@ -70,6 +70,19 @@ const checks = `
   };
   applyImport();
   if (state.morningRoutes[0].driver !== 'Taylor Driver' || state.morningRoutes[0].stops !== 177) throw new Error('CX route merge failed');
+  state.morningRoutes[0].ev = '21';
+  const equipment = equipmentDetailsFromText('EV/VAN "21" Device "3" Portable "-"');
+  if (equipment['21'].device !== '3' || equipment['21'].portable !== '-') throw new Error('EV/device text parsing failed');
+  const equipmentRows = equipmentDetailsFromRows([
+    ['EV/VAN','Device','Portable'],
+    ['21','3','-']
+  ]);
+  if (equipmentRows['21'].device !== '3' || equipmentRows['21'].portable !== '-') throw new Error('EV/device row parsing failed');
+  state.equipmentImport = { name: 'device list', details: equipment };
+  applyEquipmentImport();
+  if (state.morningRoutes[0].deviceName !== '3' || state.morningRoutes[0].portable !== '-') throw new Error('EV/device assignment failed');
+  state.modal = 'equipment';
+  if (!modal().includes('Match vans to devices') || !modal().includes('equipment-paste-text')) throw new Error('EV/device import modal missing');
   state.editMode = true;
   const editableHtml = morningSheetPage();
   if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG')) throw new Error('Editable sheet or JPEG control missing');
