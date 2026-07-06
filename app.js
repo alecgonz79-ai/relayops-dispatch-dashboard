@@ -67,12 +67,13 @@ const fleet = [
 ];
 
 const rivianFleet = [
-  { vin:'7FCTGAAA1PN000184', battery:92, status:'Ready', assigned:'Unassigned' },
-  { vin:'7FCTGAAA7PN000231', battery:76, status:'Ready', assigned:'Unassigned' },
-  { vin:'7FCTGAAA4PN000315', battery:64, status:'Ready soon', assigned:'Unassigned' },
-  { vin:'7FCTGAAA9PN000402', battery:48, status:'Charge watch', assigned:'Unassigned' },
-  { vin:'7FCTGAAA2PN000517', battery:33, status:'Needs charge', assigned:'Unassigned' },
-  { vin:'7FCTGAAA6PN000688', battery:18, status:'Critical', assigned:'Unassigned' }
+  { vin:'7FCEHEB79PN014816', battery:63, miles:98, status:'Connected' },
+  { vin:'7FCTGAAA1PN000184', battery:92, miles:144, status:'Connected' },
+  { vin:'7FCTGAAA7PN000231', battery:76, miles:119, status:'Connected' },
+  { vin:'7FCTGAAA4PN000315', battery:64, miles:100, status:'Connected' },
+  { vin:'7FCTGAAA9PN000402', battery:48, miles:75, status:'Charge watch' },
+  { vin:'7FCTGAAA2PN000517', battery:33, miles:52, status:'Needs charge' },
+  { vin:'7FCTGAAA6PN000688', battery:18, miles:28, status:'Critical' }
 ];
 
 const morningSeed = [
@@ -344,11 +345,11 @@ function sortedRivianFleet() {
   return rows;
 }
 function amazonRivianIcon(tone='high') {
-  return `<span class="amazon-rivian-icon ${tone}" aria-hidden="true"><span class="van-body">${ICONS.van}</span><span class="amazon-smile">⌣</span></span>`;
+  return `<span class="rivian-van-art ${tone}" aria-hidden="true"><span class="van-cab"></span><span class="van-box"><i class="prime-smile"></i><b>prime</b></span><span class="van-wheel front"></span><span class="van-wheel rear"></span></span>`;
 }
 function rivianCard(v) {
   const tone=batteryTone(v.battery);
-  return `<article class="rivian-card ${tone}"><div class="rivian-top">${amazonRivianIcon(tone)}<div><strong>${esc(v.vin)}</strong><span>${esc(v.status)}</span></div></div><div class="battery-row"><span class="battery-percent">${v.battery}%</span><span class="battery-pill ${tone}">${batteryLabel(v.battery)}</span></div><div class="battery-track"><i class="${tone}" style="width:${v.battery}%"></i></div><div class="rivian-meta"><span>Assigned</span><strong>${esc(v.assigned)}</strong></div></article>`;
+  return `<article class="rivian-card ${tone}"><div class="rivian-copy"><h3>${esc(v.vin)}</h3><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles} mi / ${v.battery}%</strong></div><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span></div>${amazonRivianIcon(tone)}</article>`;
 }
 
 function performancePage() {

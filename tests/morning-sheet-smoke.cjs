@@ -58,7 +58,7 @@ const checks = `
   if (!uploadHtml.includes('CX route matching')) throw new Error('CX matching explanation missing');
   state.page = 'fleet';
   const fleetHtml = fleetPage();
-  if (!fleetHtml.includes('Amazon Rivian battery tracker') || !fleetHtml.includes('Battery: low to high') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('7FCTGAAA')) throw new Error('Rivian fleet tracker panel missing');
+  if (!fleetHtml.includes('Amazon Rivian battery tracker') || !fleetHtml.includes('Battery: low to high') || !fleetHtml.includes('business.rivian.com/vehicles/tracker') || !fleetHtml.includes('7FCEHEB79PN014816') || !fleetHtml.includes('98 mi / 63%') || fleetHtml.includes('Assigned</span>')) throw new Error('Rivian fleet tracker panel missing');
   state.fleetSort = 'battery-low';
   const sortedFleet = sortedRivianFleet();
   if (sortedFleet[0].battery !== 18 || batteryTone(18) !== 'critical' || batteryTone(92) !== 'high') throw new Error('Rivian battery sorting or color tone failed');
