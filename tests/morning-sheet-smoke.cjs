@@ -69,10 +69,12 @@ const checks = `
   state.modal = null;
   state.expandedFleetVin = '7FCEHEB79PN014816';
   const expandedFleetHtml = fleetPage();
-  if (!expandedFleetHtml.includes('8HJK214') || !expandedFleetHtml.includes('Operational') || !expandedFleetHtml.includes('Demo') || !expandedFleetHtml.includes('Needs: real upload')) throw new Error('Expandable FleetOS/Amazon EV details missing');
+  if (!expandedFleetHtml.includes('8HJK214') || !expandedFleetHtml.includes('Operational') || !expandedFleetHtml.includes('Demo') || !expandedFleetHtml.includes('Needs: real upload') || !expandedFleetHtml.includes('Tap to collapse')) throw new Error('Expandable FleetOS/Amazon EV details missing');
   state.fleetSort = 'battery-low';
   const sortedFleet = sortedRivianFleet();
   if (sortedFleet[0].battery !== 18 || batteryTone(18) !== 'critical' || batteryTone(92) !== 'high') throw new Error('Rivian battery sorting or color tone failed');
+  state.expandedFleetVin = '';
+  if (!fleetPage().includes('Tap for plate/status')) throw new Error('Compact EV cards should show tap-for-details cue');
   const amazonFleetRows = [
     ['Vehicle Name','VIN','License Plate','Active','Operational Status'],
     ['LLOL EV 21','7FCEHEB79PN014816','9ABC123','Inactive','Grounded']
