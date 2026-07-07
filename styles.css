@@ -289,7 +289,7 @@ tbody tr:last-child td { border-bottom:0; }
 .morning-template-sheet th:nth-child(5) { width:96px; }
 .morning-template-sheet th:nth-child(6) { width:76px; }
 .morning-template-sheet th:nth-child(7), .morning-template-sheet th:nth-child(8), .morning-template-sheet th:nth-child(9) { width:90px; }
-.morning-template-sheet th:nth-child(10), .morning-template-sheet th:nth-child(13) { width:24px; background:#050505; border-color:#050505; color:#050505; }
+.morning-template-sheet th:nth-child(10), .morning-template-sheet th:nth-child(13) { width:16px; background:#050505; border-color:#050505; color:#050505; }
 .morning-template-sheet th:nth-child(11), .morning-template-sheet th:nth-child(12) { width:112px; }
 .morning-template-sheet th:nth-child(14) { width:120px; background:#bfb4df; }
 .morning-template-sheet td { height:25px; padding:3px 5px; background:#eef3ff; border:1px solid #111827; font-size:9px; }
@@ -299,7 +299,7 @@ tbody tr:last-child td { border-bottom:0; }
 .morning-template-sheet .pad-label { background:#eef3ff; font-size:28px; font-weight:900; vertical-align:middle; }
 .morning-template-sheet .pad-label span { display:inline-block; line-height:1; }
 .morning-template-sheet .planned-rts-cell { background:#b7a7d8; }
-.morning-template-sheet .sheet-spacer-col { width:24px; min-width:24px; background:#050505 !important; border-color:#050505 !important; color:#050505; padding:0; }
+.morning-template-sheet .sheet-spacer-col { width:16px; min-width:16px; background:#050505 !important; border-color:#050505 !important; color:#050505; padding:0; }
 .morning-template-sheet .wave-separator td, .morning-template-sheet .wave-separator th { height:15px; padding:0; background:#050505 !important; border-color:#050505 !important; color:#050505; }
 .morning-template-sheet .sheet-selected-wave:not(.sheet-spacer-col):not(th) { background:#e8f0fe !important; box-shadow:inset 0 0 0 1px rgba(26,115,232,.35); }
 .morning-template-sheet .wave-pulse:not(.sheet-spacer-col):not(th) { animation:wavePulse 1.2s ease-in-out infinite; }

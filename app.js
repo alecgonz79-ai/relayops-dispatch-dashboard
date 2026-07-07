@@ -2022,7 +2022,7 @@ function exportMorningTemplateSheet(){
   const html=`<!doctype html><html><head><meta charset="utf-8"><style>
     table{border-collapse:collapse;font-family:Arial,sans-serif;} td{mso-number-format:"\\@";}
     .head,.waveHead,.plannedHead{height:34px;border:2px solid #111;text-align:center;font-weight:900;font-size:12px;background:#92f4fa;}
-    .waveHead,.plannedHead{background:#b4a7d6}.spacer{width:28px;background:#000;border:1px solid #000;color:#000}
+    .waveHead,.plannedHead{background:#b4a7d6}.spacer{width:16px;background:#000;border:1px solid #000;color:#000}
     .cell,.driver,.planned{height:24px;min-width:82px;border:1px solid #222;text-align:center;font-weight:700;font-size:10px;background:#eef3ff}.driver{min-width:130px}.wave{min-width:90px;font-size:28px;font-weight:900;writing-mode:vertical-rl;transform:rotate(180deg);background:#eef3ff}.waveTime{font-size:13px;font-weight:900;background:#eef3ff}.dsp{vertical-align:bottom}.pad{font-size:24px;font-weight:900;background:#eef3ff}.planned{background:#b4a7d6}.separator td{height:14px;background:#000;border:1px solid #000}
   </style></head><body><table><tr>${headers.map((h,i)=>cell(h,cls(i))).join('')}</tr>${body}</table></body></html>`;
   downloadBlob('\ufeff'+html,'application/vnd.ms-excel',`${state.dspCode}-opening-operations-formatted.xls`);
