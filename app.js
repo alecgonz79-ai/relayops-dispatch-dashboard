@@ -1775,8 +1775,8 @@ function inferFleetSource(headers=[],sourceName='',rowSource='') {
   const explicit=fleetSourceFromHint(rowSource)||fleetSourceFromHint(genericName);
   if(explicit)return explicit;
   const keys=headers.map(headerKey);
-  const hasAmazonCols=keys.some(h=>['vehiclename','vehicle','name','asset','assetid','fleetid','van','ev','displayname','vehicledisplayname','unit','unitnumber','licenseplate','plate','platenumber','registration','registrationnumber','license','tag','active','activitystatus','lifecyclestatus','vehiclestatus','availability','availabilitystatus','assignmentstatus','operational','operationstatus','operationalstatus','grounded','groundingstatus','vehiclestate','servicestatus','maintenancestatus'].includes(h));
-  const hasFleetosCols=keys.some(h=>['battery','batterypercent','batterypercentage','soc','socpercent','stateofcharge','stateofchargepercent','charge','chargepercent','range','rangemiles','estimatedrange','estimatedrangemiles','remainingmiles','milesremaining'].includes(h));
+  const hasAmazonCols=keys.some(h=>['vehiclename','vehicle','name','asset','assetname','assetid','fleetid','van','ev','displayname','vehicledisplayname','unit','unitname','unitnumber','licenseplate','licenseplateid','plate','plateid','platenumber','registration','registrationnumber','license','tag','active','activitystatus','lifecyclestatus','lifecyclestate','vehiclestatus','availability','availabilitystatus','assignmentstatus','operational','operationstatus','operationalstate','operationalstatus','grounded','groundingstatus','vehiclestate','servicestatus','maintenancestatus'].includes(h));
+  const hasFleetosCols=keys.some(h=>['battery','batterypercent','batterypercentage','soc','socpercent','stateofcharge','stateofchargepercent','charge','chargepercent','range','rangemi','rangemiles','estimatedrange','estimatedrangemi','estimatedrangemiles','remainingrange','remainingrangemi','remainingrangemiles','remainingmiles','milesremaining'].includes(h));
   if(hasAmazonCols&&hasFleetosCols)return 'Amazon fleet list + FleetOS tracker';
   if(hasAmazonCols)return 'Amazon fleet list';
   if(hasFleetosCols)return 'FleetOS tracker';
@@ -1788,16 +1788,16 @@ function fleetDetailsFromRows(rows=[],sourceName='Fleet export') {
   const headers=rows[header].map(v=>String(v||''));
   const defaultSource=inferFleetSource(headers,sourceName);
   return rows.slice(header+1).map(row=>{
-    const vin=cleanVin(firstExisting(row,headers,['vin','vin number','vinnumber','vehicle identification number','vehicleidentificationnumber','vehicle vin','vehiclevin','vehicle id','vehicleid']));
+    const vin=cleanVin(firstExisting(row,headers,['vin','vin #','vin number','vinnumber','vehicle identification number','vehicleidentificationnumber','vehicle vin','vehiclevin','vehicle id','vehicleid']));
     if(!vin)return null;
     const source=inferFleetSource(headers,sourceName,firstExisting(row,headers,['source','data source','datasource','portal','system','export source','exportsource']))||defaultSource;
-    const rawName=firstExisting(row,headers,['vehicle','vehicle name','vehiclename','name','asset','asset id','assetid','fleet id','fleetid','van','ev','display name','displayname','vehicle display name','vehicledisplayname','unit','unit number','unitnumber']);
+    const rawName=firstExisting(row,headers,['vehicle','vehicle name','vehiclename','name','asset','asset name','assetname','asset id','assetid','fleet id','fleetid','van','ev','display name','displayname','vehicle display name','vehicledisplayname','unit','unit name','unitname','unit number','unitnumber']);
     const name=rawName||vin;
-    const plate=firstExisting(row,headers,['license plate','licenseplate','plate','plate number','platenumber','registration','registration number','registrationnumber','license','tag']);
-    const active=firstExisting(row,headers,['active','activity status','activitystatus','lifecycle status','lifecyclestatus','vehicle status','vehiclestatus','availability','availability status','availabilitystatus','assignment status','assignmentstatus','status']);
-    const operational=firstExisting(row,headers,['operational','operation status','operationstatus','operational status','operationalstatus','grounded','grounding status','groundingstatus','state','vehicle state','vehiclestate','service status','servicestatus','maintenance status','maintenancestatus','status']);
+    const plate=firstExisting(row,headers,['license plate','licenseplate','license plate #','licenseplateid','plate','plate #','plate id','plateid','plate number','platenumber','registration','registration number','registrationnumber','license','tag']);
+    const active=firstExisting(row,headers,['active','activity status','activitystatus','lifecycle status','lifecyclestatus','lifecycle state','lifecyclestate','vehicle status','vehiclestatus','availability','availability status','availabilitystatus','assignment status','assignmentstatus','status']);
+    const operational=firstExisting(row,headers,['operational','operation status','operationstatus','operational state','operationalstate','operational status','operationalstatus','grounded','grounding status','groundingstatus','state','vehicle state','vehiclestate','service status','servicestatus','maintenance status','maintenancestatus','status']);
     const battery=firstExisting(row,headers,['battery','battery %','battery percent','batterypercentage','battery percentage','soc','soc %','socpercent','state of charge','stateofcharge','state of charge %','stateofchargepercent','charge','charge %','charge percent','chargepercent']);
-    const miles=firstExisting(row,headers,['range','range miles','rangemiles','estimated range','estimatedrange','estimated range miles','estimatedrangemiles','estimated range (mi)','remaining miles','remainingmiles','miles remaining','milesremaining']);
+    const miles=firstExisting(row,headers,['range','range mi','rangemi','range miles','rangemiles','estimated range','estimatedrange','estimated range mi','estimatedrangemi','estimated range miles','estimatedrangemiles','estimated range (mi)','remaining range','remainingrange','remaining range mi','remainingrangemi','remaining range miles','remainingrangemiles','remaining miles','remainingmiles','miles remaining','milesremaining']);
     const item=normalizeFleetVehicle({vin,name,plate,battery:numberFrom(battery,undefined),miles:numberFrom(miles,undefined),active,operational,status:active||operational||'',source});
     item.hasName=Boolean(String(rawName||'').trim());
     item.hasPlate=Boolean(String(plate||'').trim());
