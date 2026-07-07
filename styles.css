@@ -220,6 +220,9 @@ tbody tr:last-child td { border-bottom:0; }
 .sheet-scroll { width:100%; overflow:auto; max-height:calc(100vh - 278px); }
 .ops-sheet { min-width:1920px; width:100%; table-layout:fixed; border-collapse:collapse; font-family:Arial,sans-serif; color:#0b0d0c; user-select:text; }
 .ops-sheet th { position:sticky; top:0; z-index:5; padding:7px 5px; color:#020403; background:#86e8ed; border:2px solid #111; font-size:8px; letter-spacing:.01em; text-align:center; text-transform:uppercase; }
+.ops-sheet .sheet-letters-row th { top:0; z-index:8; height:22px; padding:3px 5px; color:#4b504c; background:#f1f3f4; border:1px solid #c7cbc7; font-size:10px; font-weight:800; text-transform:none; }
+.ops-sheet thead tr:nth-child(2) th { top:25px; }
+.ops-sheet .sheet-corner, .ops-sheet .sheet-row-num { width:42px !important; min-width:42px; color:#4b504c; background:#f1f3f4 !important; border:1px solid #c7cbc7 !important; font-size:10px; font-weight:800; text-align:center; text-transform:none; }
 .exact-ops-sheet th:nth-child(1) { width:76px; background:#bfb4df; }
 .exact-ops-sheet th:nth-child(2) { width:210px; }
 .exact-ops-sheet th:nth-child(3) { width:70px; }
@@ -233,6 +236,19 @@ tbody tr:last-child td { border-bottom:0; }
 .exact-ops-sheet th:nth-child(18) { width:106px; background:#f0b49b; }
 .exact-ops-sheet th:nth-child(19), .exact-ops-sheet th:nth-child(20), .exact-ops-sheet th:nth-child(22) { width:96px; }
 .exact-ops-sheet th:nth-child(21) { width:96px; background:#bfb4df; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(2) { width:76px; background:#bfb4df; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(3) { width:210px; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(4) { width:70px; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(5) { width:82px; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(6) { width:78px; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(7), .edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(8), .edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(9) { width:70px; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(10), .edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(15) { width:28px; background:#050505; border-color:#050505; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(n+11):nth-child(-n+14) { width:76px; background:#efe2bf; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(16) { width:72px; background:#89bf70; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(17), .edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(18) { width:86px; background:#86e8ed; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(19) { width:106px; background:#f0b49b; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(20), .edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(21), .edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(23) { width:96px; }
+.edit-board .exact-ops-sheet thead tr:nth-child(2) th:nth-child(22) { width:96px; background:#bfb4df; }
 .ops-sheet td { height:31px; padding:4px 6px; border:1px solid #6b716d; background:#fff; font-size:9px; font-weight:700; text-align:center; }
 .ops-sheet .sheet-edit-cell { background:#fff; }
 .ops-sheet .planned-rts-cell { background:#bfb4df; color:#171224; }
@@ -248,6 +264,23 @@ tbody tr:last-child td { border-bottom:0; }
 .ops-sheet .wave-time-row td { height:25px; padding:3px 7px; background:#fff; font-size:10px; text-align:left; font-weight:900; }
 .ops-sheet .wave-time-row td:first-child { text-align:center; border-right:1px solid #6b716d; }
 .ops-sheet .dsp-label { vertical-align:bottom; }
+.copy-board .sheet-scroll { max-height:calc(100vh - 330px); }
+.copy-mode-toolbar { margin:0; padding:11px 13px; border-radius:0; display:flex; align-items:center; justify-content:space-between; gap:12px; border-left:1px solid var(--line); border-right:1px solid var(--line); background:#f7fbff; box-shadow:none; }
+.copy-mode-toolbar strong { display:block; font-size:12px; }
+.copy-mode-toolbar span { display:block; margin-top:3px; color:#58645c; font-size:9px; font-weight:700; }
+.copy-mode-buttons { display:flex; flex-wrap:wrap; gap:7px; justify-content:flex-end; }
+.copy-help { background:#eef6ff; border-color:#bfd8ff; color:#24466f; }
+.copy-ops-sheet { min-width:1040px; cursor:cell; }
+.copy-ops-sheet th:nth-child(2) { width:98px; background:#bfb4df; }
+.copy-ops-sheet th:nth-child(3) { width:220px; }
+.copy-ops-sheet th:nth-child(4) { width:82px; }
+.copy-ops-sheet th:nth-child(5) { width:92px; }
+.copy-ops-sheet th:nth-child(6) { width:76px; }
+.copy-ops-sheet th:nth-child(7), .copy-ops-sheet th:nth-child(8), .copy-ops-sheet th:nth-child(9) { width:78px; }
+.copy-ops-sheet th:nth-child(10), .copy-ops-sheet th:nth-child(11) { width:98px; }
+.copy-ops-sheet th:nth-child(12) { width:108px; background:#bfb4df; }
+.copy-ops-sheet .copy-sheet-cell { cursor:cell; user-select:none; }
+.copy-ops-sheet .copy-row th.sheet-row-num { position:sticky; left:0; z-index:4; }
 .sheet-check { appearance:none; width:15px; height:15px; margin:0; border:2px solid #8d938f; border-radius:3px; background:#fff; vertical-align:middle; position:relative; }
 .sheet-check:checked { background:#818682; border-color:#818682; }
 .sheet-check:checked:after { content:"✓"; position:absolute; left:1px; top:-4px; color:#fff; font-size:14px; font-weight:900; }
@@ -255,7 +288,7 @@ tbody tr:last-child td { border-bottom:0; }
 .editable-cell { outline:2px solid transparent; outline-offset:-2px; cursor:text; }
 .editable-cell:focus { outline-color:#1a73e8; background:#eaf2ff !important; }
 .sheet-active-cell { outline-color:#1a73e8 !important; box-shadow:inset 0 0 0 1px #1a73e8; }
-.sheet-selected-cell { background:#dbeaff !important; }
+.sheet-selected-cell { background:#dbeaff !important; box-shadow:inset 0 0 0 1px #8ab4f8; }
 .sheet-copy-highlight .ops-sheet td { animation:copyFlash 1.35s ease-out; }
 .sheet-copy-highlight .ops-sheet .wave-separator td { animation:none; }
 @keyframes copyFlash { 0%,70% { background:#dbeaff; box-shadow:inset 0 0 0 1px #8ab4f8; } 100% { box-shadow:none; } }

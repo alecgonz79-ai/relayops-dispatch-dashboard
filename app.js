@@ -154,6 +154,7 @@ let state = {
   modal: null,
   importedFile: null,
   editMode: false,
+  copyMode: false,
   screenshotPreview: null,
   sheetCopyText: '',
   equipmentText: '',
@@ -169,6 +170,8 @@ const app = document.getElementById('app');
 const fileInput = document.getElementById('file-input');
 const gasVehicleIds = ['F33','F34','R35','R36','R54','R55','R62'];
 const sheetEditFields = ['driver','route','staging','padOverride','ev','deviceName','portable','stops','packages','packageReturns','endTime','rtsTime','plannedRts','clockOutTime'];
+const sheetCopyFields = ['waveLabel','driver','route','staging','pad','ev','deviceName','portable','stops','packages','plannedRts'];
+const sheetLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 let sheetSelection = { anchor: null, focus: null };
 
 function initials(name='') { return name.split(/\s+/).map(p => p[0]).join('').slice(0,2).toUpperCase(); }
@@ -285,14 +288,16 @@ function morningSheetPage() {
   const groups=morningSections(rows);
   const irregular=rows.filter(r=>r.plannedRtsIssue).length;
   const copyRowsCount=groups.reduce((n,g)=>n+morningDisplayRows(g).length,0);
+  const sheetMode=state.copyMode?'copy':state.editMode?'edit':'view';
   return `${contextBar(`<span class="status blue">Earliest waves first</span>`)}
   <div class="morning-command card"><div><span class="eyebrow">LLOL OPENING OPERATIONS</span><h2>Morning operations sheet</h2><p>Upload DAYOFOPSPLAN plus ROUTE_DJT6. RelayOps keeps only ${state.dspCode}, matches CX routes, uses the first driver name only, and keeps waves earliest first.</p></div><div class="morning-actions"><button class="btn" data-action="slack-import">${ICONS.inbox} Slack Import <span class="demo-tag">DEMO</span></button><button class="btn primary easy-upload-button" data-action="import">${ICONS.upload} Cortex Import</button><button class="btn lime" data-action="planned-rts-import">${ICONS.calendar} Planned RTS Upload</button><button class="btn" data-action="equipment-import">${ICONS.van} VAN/DEV/PORT Import</button></div></div>
   <div class="quick-start" aria-label="Three easy steps"><div class="quick-step done"><b>1</b><span><strong>Pick import</strong><small>Slack or Cortex</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>2</b><span><strong>We match CX</strong><small>Wave + staging + pad</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>3</b><span><strong>Edit/copy</strong><small>White cells + Google Sheets paste</small></span></div></div>
-  <div class="sheet-toolbar"><div class="sheet-filter"><label>DSP</label><select data-morning-filter="dsp"><option>${state.dspCode}</option></select></div><div class="sheet-filter"><label>Wave</label><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Staging location</label><select data-morning-filter="staging"><option value="all">All staging</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Pad</label><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></div><button class="btn small" data-action="clear-morning-filters">Clear filters</button><span class="filter-note">Sorted ${ICONS.chevron} earliest launch first</span><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Done editing':'✎ Edit mode'}</button><button class="btn small ${state.fitMorningRows?'lime':''}" data-action="toggle-fit-rows">${state.fitMorningRows?'✓ Fit to drivers':'Remove blank rows'}</button><button class="btn small" data-action="assign-ev-low">EV 1-57 Low → High</button><button class="btn small" data-action="assign-ev-random">Randomize EVs</button><button class="btn small" data-action="assign-gas-vans">Assign Gas Vehicles</button><button class="btn small" data-action="copy-morning-visible">${ICONS.copy} Copy for Sheets</button><button class="btn small lime" data-action="export-morning-template">${ICONS.download} Formatted XLS</button><button class="btn small" data-action="preview-wave-screenshot">${ICONS.download} Preview JPEG</button><button class="btn small" data-action="export-morning">${ICONS.download} Export CSV</button></div>
+  <div class="sheet-toolbar"><div class="sheet-filter"><label>DSP</label><select data-morning-filter="dsp"><option>${state.dspCode}</option></select></div><div class="sheet-filter"><label>Wave</label><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Staging location</label><select data-morning-filter="staging"><option value="all">All staging</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Pad</label><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></div><button class="btn small" data-action="clear-morning-filters">Clear filters</button><span class="filter-note">Sorted ${ICONS.chevron} earliest launch first</span><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Done editing':'✎ Edit mode'}</button><button class="btn small ${state.copyMode?'lime':''}" data-action="toggle-morning-copy">${state.copyMode?'✓ Copy mode':'Copy mode'}</button><button class="btn small ${state.fitMorningRows?'lime':''}" data-action="toggle-fit-rows">${state.fitMorningRows?'✓ Fit to drivers':'Remove blank rows'}</button><button class="btn small" data-action="assign-ev-low">EV 1-57 Low → High</button><button class="btn small" data-action="assign-ev-random">Randomize EVs</button><button class="btn small" data-action="assign-gas-vans">Assign Gas Vehicles</button><button class="btn small" data-action="copy-morning-visible">${ICONS.copy} Copy for Sheets</button><button class="btn small lime" data-action="export-morning-template">${ICONS.download} Formatted XLS</button><button class="btn small" data-action="preview-wave-screenshot">${ICONS.download} Preview JPEG</button><button class="btn small" data-action="export-morning">${ICONS.download} Export CSV</button></div>
   <div class="sheet-kpis"><span><strong>${rows.length}</strong> routes</span><span><strong>${rows.reduce((n,r)=>n+r.packages,0).toLocaleString()}</strong> packages</span><span><strong>${rows.reduce((n,r)=>n+r.stops,0).toLocaleString()}</strong> stops</span><span><strong>${irregular}</strong> RTS flags</span></div>
   <div class="sheets-helper card"><div class="sheets-helper-copy"><span class="eyebrow">GOOGLE SHEETS HANDOFF</span><h3>Paste into the formatted template</h3><p>Click copy, open the Google Sheets template, click cell A3, then paste. Rows 1–2 keep the template headers and formatting.</p></div><div class="sheets-helper-steps"><span>1 Copy ${copyRowsCount} data rows</span><span>2 Open Google Sheets</span><span>3 Paste in A3</span></div><div class="sheets-helper-actions"><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy Google Sheets table</button><button class="btn" data-action="open-sheets-helper">Open paste box</button></div></div>
-  ${state.editMode?`<div class="edit-help">Editing is on. Click and drag white cells to select a rectangle like Google Sheets. Press ⌘C to copy the exact highlighted cells, or paste tabbed rows from Sheets to fill across/down.</div>`:''}
-  <article class="card morning-board"><div class="sheet-scroll"><table class="ops-sheet exact-ops-sheet"><thead><tr><th>WAVE</th><th>DRIVER</th><th>ROUTE</th><th>STAGING</th><th>PAD</th><th>EV</th><th>DEVICE</th><th>PORTABLE</th><th class="sheet-spacer-col"></th><th>PRE DVIC</th><th>PRE-WHIP</th><th>POST DVIC</th><th>POST-WHIP</th><th class="sheet-spacer-col"></th><th>RESCUED</th><th>STOP COUNT</th><th>PACKAGE COUNT</th><th>PACKAGE RETURNS</th><th>END TIME</th><th>RTS TIME</th><th>PLANNED RTS</th><th>CLOCK OUT TIME</th></tr></thead><tbody>${groups.length?groups.map((section)=>morningWaveGroup(section)).join(''):`<tr><td colspan="22"><div class="empty-state"><h3>No routes match these filters</h3><p>Clear a filter or upload a new day-of-operations file.</p></div></td></tr>`}</tbody></table></div></article>
+  ${state.copyMode?copyModeToolbar(groups):''}
+  ${state.copyMode?`<div class="edit-help copy-help">Copy mode is on. Drag across cells exactly like Google Sheets, watch the blue highlight, then press ⌘C on Mac or Ctrl+C on Windows. For the cleanest paste into the Google template: Driver–Staging → B3, EV–Portable → F3, Stop/Package → P3, Planned RTS → U3. This avoids the merged Wave/Pad boxes that Google Sheets does not paste cleanly over.</div>`:state.editMode?`<div class="edit-help">Editing is on. Columns and rows are labeled like Google Sheets. Click and drag white cells to select a rectangle, press ⌘C to copy, or paste tabbed rows from Sheets to fill across/down.</div>`:''}
+  <article class="card morning-board ${state.copyMode?'copy-board':state.editMode?'edit-board':'view-board'}"><div class="sheet-scroll">${state.copyMode?morningCopyGrid(groups):`<table class="ops-sheet exact-ops-sheet"><thead>${sheetModeHeader(['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','PRE DVIC','PRE-WHIP','POST DVIC','POST-WHIP','','RESCUED','STOP COUNT','PACKAGE COUNT','PACKAGE RETURNS','END TIME','RTS TIME','PLANNED RTS','CLOCK OUT TIME'],sheetMode)}</thead><tbody>${groups.length?groups.map((section,sectionIndex)=>morningWaveGroup(section,sectionIndex)).join(''):`<tr><td colspan="${sheetMode==='edit'?23:22}"><div class="empty-state"><h3>No routes match these filters</h3><p>Clear a filter or upload a new day-of-operations file.</p></div></td></tr>`}</tbody></table>`}</div></article>
   <div class="dispatcher-rating card"><div><strong>How easy was this opening sheet?</strong><span>Your 5-star tap helps find what needs to be smoother next.</span></div><div class="stars">${[1,2,3,4,5].map(n=>`<button class="${state.rating>=n?'active':''}" data-action="rate-service" data-rating="${n}" aria-label="${n} stars">★</button>`).join('')}</div></div>`;
 }
 
@@ -320,22 +325,62 @@ function morningDisplayRows(section) {
   return rows;
 }
 
+function sheetColumnLetters(count) {
+  return Array.from({length:count},(_,i)=>i<26?sheetLetters[i]:`${sheetLetters[Math.floor(i/26)-1]}${sheetLetters[i%26]}`);
+}
+function sheetModeHeader(headers=[],mode='view') {
+  const labels=headers.map((h,i)=>`<th class="${!h?'sheet-spacer-col':''}">${esc(h)}</th>`).join('');
+  if(!['edit','copy'].includes(mode))return `<tr>${labels}</tr>`;
+  return `<tr class="sheet-letters-row"><th class="sheet-corner"></th>${sheetColumnLetters(headers.length).map(l=>`<th>${l}</th>`).join('')}</tr><tr><th class="sheet-row-num">${mode==='copy'?'#':'1'}</th>${labels}</tr>`;
+}
+function copyModeToolbar(groups=[]) {
+  const buttons=groups.filter(g=>!g.dsp).map((g,i)=>{
+    const label=g.wave?`${g.label} ${String(g.wave).replace(/\s*[AP]M/i,'')} (${g.rows.length})`:g.label;
+    return `<button class="btn small" data-action="copy-wave" data-wave-index="${i}">${ICONS.copy} ${esc(label||`Wave ${i+1}`)}</button>`;
+  }).join('');
+  return `<div class="copy-mode-toolbar card"><div><strong>Copy mode</strong><span>Select only the cells you want. The visible grid is built for clean Google Sheets copy/paste.</span></div><div class="copy-mode-buttons"><button class="btn small primary" data-action="copy-selected-cells">Copy selected cells</button>${buttons}</div></div>`;
+}
+function copyCellValue(row,field,waveLabel,pad) {
+  if(field==='waveLabel')return waveLabel;
+  if(field==='pad')return pad;
+  if(field==='route')return row._blank?'':row.route||'';
+  if(field==='stops')return row.stops||'';
+  if(field==='packages')return row.packages||'';
+  return row[field]||'';
+}
+function morningCopyRowsForSections(sections=morningSections(filteredMorningRows())) {
+  const rows=[];
+  sections.forEach(section=>{
+    const display=morningDisplayRows(section), pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
+    const waveLabel=section.dsp?'DSP':section.wave?`${section.label} ${String(section.wave).replace(/\s*[AP]M/i,'')} (${section.rows.length})`:section.label;
+    display.forEach((r,i)=>rows.push({section,row:r,values:sheetCopyFields.map(field=>copyCellValue(r,field,i===0?waveLabel:'',i===0?pad:''))}));
+  });
+  return rows;
+}
+function morningCopyGrid(groups=[]) {
+  const headers=['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','STOP COUNT','PACKAGE COUNT','PLANNED RTS'];
+  const rows=morningCopyRowsForSections(groups);
+  return `<table class="ops-sheet copy-ops-sheet"><thead>${sheetModeHeader(headers,'copy')}</thead><tbody>${rows.map((item,rowIndex)=>`<tr class="ops-row copy-row"><th class="sheet-row-num">${rowIndex+1}</th>${item.values.map((value,colIndex)=>`<td class="sheet-edit-cell copy-sheet-cell ${sheetCopyFields[colIndex]==='plannedRts'?'planned-rts-cell':''}" tabindex="0" data-sheet-cell="true" data-sheet-copy-cell="true" data-sheet-row="${rowIndex}" data-sheet-col="${colIndex}">${esc(value)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+
 function createManualMorningRoute(seed={}) {
   const route={dsp:state.dspCode,driver:'',route:seed.route||`MANUAL-${Date.now().toString().slice(-6)}`,service:'Manual opening edit',wave:seed.wave||'Manual',staging:'',duration:0,zones:0,packages:0,commercial:0,stops:0,eta:'',bags:0,overflow:0,parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
   state.morningRoutes.push(route);
   return route;
 }
 
-function morningWaveGroup(section) {
+function morningWaveGroup(section,sectionIndex=0) {
   const rows=morningDisplayRows(section);
   const edit=state.editMode;
+  const rowBase=morningSections(filteredMorningRows()).slice(0,sectionIndex).reduce((n,s)=>n+morningDisplayRows(s).length+1,2);
+  let localRow=0;
   const blankEditable=(r,field,value,cls='')=>`<td class="sheet-edit-cell ${cls} ${r.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" ${edit?`contenteditable="true" tabindex="0" data-sheet-cell="true" data-edit-route="${esc(r.route)}" data-edit-field="${field}" data-edit-wave="${esc(r.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''}>${esc(value??'')}</td>`;
   const check=(r,field,value)=>`<input class="sheet-check" type="checkbox" data-check-route="${esc(r.route)}" data-check-wave="${esc(r.wave||section.wave||'')}" data-check-field="${field}" ${value?'checked':''}>`;
   const waveCount=section.rows.length;
   const waveText=section.wave?`${section.label} ${String(section.wave).replace(/\s*[AP]M/i,'')} (${waveCount})`:section.label;
   const label=section.dsp?`<span>DSP</span>`:`<span>${esc(waveText)}</span>`;
   const spacer='<td class="sheet-spacer-col"></td>';
-  return `<tr class="wave-separator"><td colspan="22"></td></tr>${rows.map((r,i)=>`<tr class="ops-row ${r._blank?'blank-row':''}">${i===0?`<td class="wave-label ${section.dsp?'dsp-label':''}" rowspan="${rows.length}">${label}</td>`:''}${blankEditable(r,'driver',r.driver,'driver-name')}${blankEditable(r,'route',r._blank?'':r.route,'route-id')}${blankEditable(r,'staging',r.staging,'staging-code')}${i===0?`<td class="pad-label sheet-edit-cell ${edit?'editable-cell':''}" rowspan="${rows.length}" ${edit?`contenteditable="true" tabindex="0" data-sheet-cell="true" data-edit-wave="${esc(section.wave)}" data-edit-field="padOverride"`:''}>${esc(section.rows[0]?.padOverride||section.rows[0]?.pad||'')}</td>`:''}${blankEditable(r,'ev',r.ev||'')}${blankEditable(r,'deviceName',r.deviceName||'')}${blankEditable(r,'portable',r.portable||'')}${spacer}<td>${check(r,'preDvic',r.preDvic)}</td><td>${check(r,'preWhip',r.preWhip)}</td><td>${check(r,'postDvic',r.postDvic)}</td><td>${check(r,'postWhip',r.postWhip)}</td>${spacer}<td>${check(r,'rescued',r.rescued)}</td>${blankEditable(r,'stops',r.stops,'count-cell')}${blankEditable(r,'packages',r.packages,'count-cell')}${blankEditable(r,'packageReturns',r.packageReturns||'')}${blankEditable(r,'endTime',r.endTime||'')}${blankEditable(r,'rtsTime',r.rtsTime||'')}${blankEditable(r,'plannedRts',r.plannedRts||'','planned-rts-cell')}${blankEditable(r,'clockOutTime',r.clockOutTime||'')}</tr>`).join('')}`;
+  return `<tr class="wave-separator">${edit?`<th class="sheet-row-num">${rowBase-1}</th>`:''}<td colspan="22"></td></tr>${rows.map((r,i)=>{localRow++;return `<tr class="ops-row ${r._blank?'blank-row':''}">${edit?`<th class="sheet-row-num">${rowBase+localRow-1}</th>`:''}${i===0?`<td class="wave-label ${section.dsp?'dsp-label':''}" rowspan="${rows.length}">${label}</td>`:''}${blankEditable(r,'driver',r.driver,'driver-name')}${blankEditable(r,'route',r._blank?'':r.route,'route-id')}${blankEditable(r,'staging',r.staging,'staging-code')}${i===0?`<td class="pad-label sheet-edit-cell ${edit?'editable-cell':''}" rowspan="${rows.length}" ${edit?`contenteditable="true" tabindex="0" data-sheet-cell="true" data-edit-wave="${esc(section.wave)}" data-edit-field="padOverride"`:''}>${esc(section.rows[0]?.padOverride||section.rows[0]?.pad||'')}</td>`:''}${blankEditable(r,'ev',r.ev||'')}${blankEditable(r,'deviceName',r.deviceName||'')}${blankEditable(r,'portable',r.portable||'')}${spacer}<td>${check(r,'preDvic',r.preDvic)}</td><td>${check(r,'preWhip',r.preWhip)}</td><td>${check(r,'postDvic',r.postDvic)}</td><td>${check(r,'postWhip',r.postWhip)}</td>${spacer}<td>${check(r,'rescued',r.rescued)}</td>${blankEditable(r,'stops',r.stops,'count-cell')}${blankEditable(r,'packages',r.packages,'count-cell')}${blankEditable(r,'packageReturns',r.packageReturns||'')}${blankEditable(r,'endTime',r.endTime||'')}${blankEditable(r,'rtsTime',r.rtsTime||'')}${blankEditable(r,'plannedRts',r.plannedRts||'','planned-rts-cell')}${blankEditable(r,'clockOutTime',r.clockOutTime||'')}</tr>`}).join('')}`;
 }
 
 function livePage() {
@@ -951,7 +996,14 @@ function bind() {
     el.addEventListener('keydown',e=>handleSheetKeydown(e,el));
     el.addEventListener('paste',e=>handleSheetPaste(e,el));
   });
+  document.querySelectorAll('[data-sheet-copy-cell]').forEach(el=>{
+    el.addEventListener('focus',()=>selectSheetCell(el));
+    el.addEventListener('mousedown',e=>handleSheetMouseDown(e,el));
+    el.addEventListener('mouseenter',()=>handleSheetMouseEnter(el));
+    el.addEventListener('keydown',e=>handleSheetKeydown(e,el));
+  });
   if(state.page==='morning') {
+    document.addEventListener?.('mousemove',handleSheetPointerMove);
     document.addEventListener?.('mouseup',stopSheetDrag);
     document.addEventListener?.('copy',handleSheetSelectionCopy);
   }
@@ -1067,6 +1119,13 @@ function handleSheetMouseEnter(el) {
   sheetSelection.focus=el;
   applySheetSelection();
 }
+function handleSheetPointerMove(e) {
+  if(!sheetSelection.dragging)return;
+  const el=document.elementFromPoint?.(e.clientX,e.clientY)?.closest?.('[data-sheet-cell="true"]');
+  if(!el||el===sheetSelection.focus)return;
+  sheetSelection.focus=el;
+  applySheetSelection();
+}
 function stopSheetDrag() {
   if(sheetSelection.dragging)sheetSelection.dragging=false;
 }
@@ -1083,18 +1142,21 @@ function focusSheetCell(el) {
   el.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 function cellPosition(el) {
+  if(el.dataset.sheetRow!==undefined&&el.dataset.sheetCol!==undefined)return {row:Number(el.dataset.sheetRow),col:Number(el.dataset.sheetCol)};
   const row=[...el.parentElement.parentElement.querySelectorAll('tr.ops-row')].indexOf(el.parentElement);
   const col=sheetEditFields.indexOf(el.dataset.editField);
   return {row,col};
 }
 function cellAt(row,col) {
   if(row<0||col<0)return null;
+  const copyCell=document.querySelector(`[data-sheet-copy-cell="true"][data-sheet-row="${row}"][data-sheet-col="${col}"]`);
+  if(copyCell)return copyCell;
   const rows=[...document.querySelectorAll('tr.ops-row')];
   const field=sheetEditFields[col];
   return rows[row]?.querySelector(`[data-edit-field="${field}"]`)||null;
 }
 function moveSheetCell(el,dr,dc) {
-  saveMorningEditCell(el);
+  if(el.dataset.editField)saveMorningEditCell(el);
   if(dc) {
     const rowCells=[...el.parentElement.querySelectorAll('[data-sheet-cell="true"]')];
     const next=rowCells[rowCells.indexOf(el)+dc];
@@ -1114,8 +1176,24 @@ function selectedSheetTsv() {
   }
   return rows.join('\n');
 }
+function copySelectedSheetCells() {
+  const text=selectedSheetTsv();
+  if(!text)return false;
+  state.sheetCopyText=text;
+  writeClipboardText(text).then(ok=>toast(ok?`Copied selected ${selectedSheetCells().length} cell${selectedSheetCells().length===1?'':'s'} for Google Sheets`:'Clipboard access was blocked — use the paste box',ok?'':'error'));
+  return true;
+}
+function copyWaveByIndex(index=0) {
+  const groups=morningSections(filteredMorningRows()).filter(g=>!g.dsp);
+  const group=groups[index];
+  if(!group)return toast('That wave is not available to copy','error');
+  const rows=morningCopyRowsForSections([group]).map(item=>item.values.join('\t')).join('\n');
+  state.sheetCopyText=rows;
+  writeClipboardText(rows).then(ok=>toast(ok?`Copied ${group.label} ${String(group.wave||'').replace(/\s*[AP]M/i,'')} (${group.rows.length}) for Google Sheets`:'Clipboard access was blocked — use the paste box',ok?'':'error'));
+  return true;
+}
 function handleSheetSelectionCopy(e) {
-  if(state.page!=='morning'||!state.editMode)return;
+  if(state.page!=='morning'||(!state.editMode&&!state.copyMode))return;
   const text=selectedSheetTsv();
   if(!text)return;
   e.preventDefault();
@@ -1137,7 +1215,7 @@ function handleSheetKeydown(e,el) {
 function setCellText(el,value) {
   if(!el)return;
   el.textContent=value;
-  saveMorningEditCell(el);
+  if(el.dataset.editField)saveMorningEditCell(el);
 }
 function handleSheetPaste(e,el) {
   const text=e.clipboardData?.getData('text/plain')||'';
@@ -1179,7 +1257,8 @@ function action(name,el) {
   if (name==='clear-fleet-search') { state.fleetSearch='';state.fleetFilter='all';persist();render();return toast('Showing every EV again'); }
   if (name==='fleet-filter-quick') { state.fleetFilter=el.dataset.filter||'all';state.fleetSearch='';persist();render();return toast(`Fleet filtered: ${state.fleetFilter.replace('-',' ')}`); }
   if (name==='reset-fleet-demo') return resetFleetDemo();
-  if (name==='toggle-morning-edit') { state.editMode=!state.editMode;render();return toast(state.editMode?'Editing is on — click any highlighted cell':'Edits saved'); }
+  if (name==='toggle-morning-edit') { state.editMode=!state.editMode;if(state.editMode)state.copyMode=false;render();return toast(state.editMode?'Editing is on — columns and rows are labeled':'Edits saved'); }
+  if (name==='toggle-morning-copy') { state.copyMode=!state.copyMode;if(state.copyMode)state.editMode=false;sheetSelection={anchor:null,focus:null,dragging:false};render();return toast(state.copyMode?'Copy mode is on — drag cells, then press ⌘C/Ctrl+C':'Copy mode off'); }
   if (name==='toggle-fit-rows') { state.fitMorningRows=!state.fitMorningRows;persist();render();return toast(state.fitMorningRows?'Blank rows removed — waves fit driver count':'Template rows restored'); }
   if (name==='assign-ev-low') return assignElectricVehicles('low');
   if (name==='assign-ev-random') return assignElectricVehicles('random');
@@ -1192,6 +1271,8 @@ function action(name,el) {
   if (name==='export-morning') return exportMorningSheet();
   if (name==='export-morning-template') return exportMorningTemplateSheet();
   if (name==='copy-morning-visible') return copyMorningVisible();
+  if (name==='copy-selected-cells') return copySelectedSheetCells();
+  if (name==='copy-wave') return copyWaveByIndex(Number(el.dataset.waveIndex)||0);
   if (name==='open-sheets-helper') { state.sheetCopyText=morningSheetTsv(); state.modal='sheets-helper'; return render(); }
   if (name==='select-sheets-text') return selectSheetsText();
   if (name==='parse-equipment-text') return parseEquipmentTextAction();
