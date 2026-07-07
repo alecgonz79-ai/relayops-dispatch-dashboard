@@ -265,7 +265,7 @@ const checks = `
   applyFleetVehicles(twoEvFleetRows,{silent:true});
   state.fleetImport = { name: 'partial amazon fleet list.csv', vehicles: fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'), uploadedAt: new Date().toISOString() };
   refreshFleetStatus();
-  if (!state.fleetRefreshPreview.removed || !state.fleetRefreshPreview.blockers.some(x => x.includes('not in this upload')) || !modal().includes('partial export')) throw new Error('Fleet refresh should warn before a partial upload removes EV cards');
+  if (!state.fleetRefreshPreview.removed || !state.fleetRefreshPreview.removedVehicles?.length || !state.fleetRefreshPreview.blockers.some(x => x.includes('not in this upload')) || !modal().includes('partial export') || !modal().includes('EVs not in this upload') || !modal().includes('LLOL EV 22') || !modal().includes('7FCTGAAA1PN000184')) throw new Error('Fleet refresh should warn before a partial upload removes EV cards');
   applyFleetVehicles(mergedFleet,{silent:true});
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet, uploadedAt: new Date().toISOString() };
   state.fleetExpectedCount = 0;
