@@ -70,10 +70,12 @@ async function fetchPortalJson(url, cookie = '') {
   return [];
 }
 
-async function liveFleetPayload() {
+async function liveFleetPayload(options = {}) {
+  const amazonUrl = options.amazonUrl || env.AMAZON_FLEET_JSON_URL;
+  const fleetosUrl = options.fleetosUrl || env.FLEETOS_JSON_URL;
   const [amazonRaw, fleetosRaw] = await Promise.all([
-    fetchPortalJson(env.AMAZON_FLEET_JSON_URL, env.AMAZON_COOKIE),
-    fetchPortalJson(env.FLEETOS_JSON_URL, env.FLEETOS_COOKIE)
+    fetchPortalJson(amazonUrl, env.AMAZON_COOKIE),
+    fetchPortalJson(fleetosUrl, env.FLEETOS_COOKIE)
   ]);
 
   return {
@@ -86,11 +88,19 @@ async function liveFleetPayload() {
 
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return sendJson(res, 204, {});
-  if (req.url === '/health') return sendJson(res, 200, { ok: true });
-  if (req.url !== '/api/fleet/live') return sendJson(res, 404, { error: 'Not found' });
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  if (url.pathname === '/health') return sendJson(res, 200, { ok: true });
+  if (url.pathname !== '/api/fleet/live') return sendJson(res, 404, { error: 'Not found' });
 
   try {
-    const payload = await liveFleetPayload();
+    const payload = await liveFleetPayload({
+      amazonUrl: url.searchParams.get('amazonJsonUrl') || '',
+      fleetosUrl: url.searchParams.get('fleetosJsonUrl') || ''
+    });
+    payload.portalLinks = {
+      amazon: url.searchParams.get('amazonPortalUrl') || env.AMAZON_FLEET_PORTAL_URL || 'https://logistics.amazon.com/fleet-management/#vehicles',
+      fleetos: url.searchParams.get('fleetosPortalUrl') || env.FLEETOS_PORTAL_URL || 'https://business.rivian.com/vehicles/tracker'
+    };
     sendJson(res, 200, payload);
   } catch (error) {
     sendJson(res, 502, {

@@ -42,6 +42,8 @@ const NAV = [
 const DISPATCHER_SHARE_URL = 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/';
 const DISPATCHER_SHARE_TEXT = `LLOL Dispatch Opening Operations\n${DISPATCHER_SHARE_URL}`;
 const DISPATCHER_SHARE_NOTE = 'Use this exact full link. GitHub Pages will show 404 if the account name is shortened or changed, like AG79.github.io.';
+const AMAZON_FLEET_PORTAL_URL = 'https://logistics.amazon.com/fleet-management/#vehicles';
+const FLEETOS_PORTAL_URL = 'https://business.rivian.com/vehicles/tracker';
 
 const routesSeed = [
   { route:'CX12', driver:'Maya Collins', id:'DA-1042', wave:'Wave 1 · 9:20', staging:'A-14', van:'EDV 224', device:'CAT-17', stops:186, packages:312, progress:74, delta:18, status:'Ahead', rescue:'—' },
@@ -165,6 +167,8 @@ let state = {
   fleetSourceUploads: JSON.parse(localStorage.getItem('relayops_fleet_source_uploads') || 'null') || {},
   fleetExpectedCount: Number(localStorage.getItem('relayops_fleet_expected_count') || 0),
   fleetLiveEndpoint: localStorage.getItem('relayops_fleet_live_endpoint') || '',
+  fleetAmazonUrl: localStorage.getItem('relayops_fleet_amazon_url') || AMAZON_FLEET_PORTAL_URL,
+  fleetFleetosUrl: localStorage.getItem('relayops_fleet_fleetos_url') || FLEETOS_PORTAL_URL,
   fleetLiveLastPull: localStorage.getItem('relayops_fleet_live_last_pull') || '',
   fleetLiveLastError: localStorage.getItem('relayops_fleet_live_last_error') || '',
   fleetChangedVins: {},
@@ -472,13 +476,19 @@ function fleetPortalQuickStart() {
 function fleetLiveEndpoint() {
   return String(state.fleetLiveEndpoint || window.RELAYOPS_LIVE_FLEET_ENDPOINT || '').trim();
 }
+function fleetAmazonPortalUrl() {
+  return String(state.fleetAmazonUrl || AMAZON_FLEET_PORTAL_URL).trim();
+}
+function fleetFleetosPortalUrl() {
+  return String(state.fleetFleetosUrl || FLEETOS_PORTAL_URL).trim();
+}
 
 function fleetLiveConnectorStrip() {
   const endpoint=fleetLiveEndpoint(), connected=Boolean(endpoint), last=state.fleetLiveLastPull, error=state.fleetLiveLastError;
   const tone=connected?(error?'warn':'ok'):'warn';
   const title=connected?'Live connector ready':'Live connector not connected yet';
-  const detail=connected?`Refresh will call the secure backend first, then open the approval screen. ${last?`Last live pull: ${esc(last)}.`:'No live pull completed yet.'}`:'Set a secure backend endpoint so Refresh can pull Amazon + FleetOS directly instead of waiting for file uploads.';
-  return `<div class="fleet-live-connector ${tone}"><div><strong>${esc(title)}</strong><span>${detail}</span>${error?`<small>${esc(error)}</small>`:''}</div><div class="fleet-live-connector-steps"><span class="${connected?'ok':'warn'}"><b>1</b>Secure backend endpoint</span><span><b>2</b>Backend logs into Amazon + FleetOS</span><span><b>3</b>Dashboard receives normalized VIN rows</span></div><button class="btn small ${connected?'lime':'primary'}" data-action="${connected?'refresh-fleet':'fleet-live-setup'}">${connected?'Live refresh':'Set endpoint'}</button></div>`;
+  const detail=connected?`Refresh will call the secure backend first, then open the approval screen. ${last?`Last live pull: ${esc(last)}.`:'No live pull completed yet.'}`:'Save the Amazon Fleet and FleetOS portal links, then add a secure backend endpoint when ready. Without that backend, Refresh opens the upload/paste fallback instead of changing data blindly.';
+  return `<div class="fleet-live-connector ${tone}"><div><strong>${esc(title)}</strong><span>${detail}</span>${error?`<small>${esc(error)}</small>`:''}<div class="fleet-live-links"><a href="${esc(fleetAmazonPortalUrl())}" target="_blank" rel="noopener">Amazon Fleet</a><a href="${esc(fleetFleetosPortalUrl())}" target="_blank" rel="noopener">FleetOS</a></div></div><div class="fleet-live-connector-steps"><span class="ok"><b>1</b>Amazon Fleet link saved</span><span class="ok"><b>2</b>FleetOS link saved</span><span class="${connected?'ok':'warn'}"><b>3</b>Secure backend endpoint</span></div><button class="btn small ${connected?'lime':'primary'}" data-action="${connected?'refresh-fleet':'fleet-live-setup'}">${connected?'Live refresh':'Live setup'}<span class="assistive-text">Set endpoint</span></button></div>`;
 }
 
 function fleetHeaderAccuracyBadge() {
@@ -1262,6 +1272,10 @@ function modal() {
   if (state.modal === 'fleet-import') {
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-import-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">FLEETOS + AMAZON IMPORT</span><h2 id="fleet-import-title">Update EV battery board</h2><p>Upload both files together when you can. RelayOps matches by VIN and keeps the van name exactly like the Amazon fleet list.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${fleetUploadPrepChecklist()}${fleetFullExportSanityCheck()}<div class="fleet-import-sources"><button class="fleet-source-card" data-action="choose-file"><strong>Amazon fleet list</strong><span>Names, VINs, license plates, Active/Inactive, Operational/Grounded</span><small>Use this for the official van name.</small></button><button class="fleet-source-card" data-action="choose-file"><strong>FleetOS tracker</strong><span>VINs, battery %, range miles, live charge readiness</span><small>Use this for battery accuracy.</small></button></div><div class="fleet-import-status"><strong>Current upload status</strong><span class="${state.fleetSourceUploads?.amazon?.vehicles?.length?'ok':'warn'}"><b>Amazon</b>${esc(fleetSourceUploadLabel('amazon'))}</span><span class="${state.fleetSourceUploads?.fleetos?.vehicles?.length?'ok':'warn'}"><b>FleetOS</b>${esc(fleetSourceUploadLabel('fleetos'))}</span></div>${fleetImportChecklist()}${fleetFullRosterReadinessStrip()}${fleetDispatcherProofStrip()}<div class="fleet-column-guide"><div><strong>Amazon columns to copy</strong><span>Vehicle Name</span><span>VIN</span><span>License Plate</span><span>Active / Inactive</span><span>Operational / Grounded</span></div><div><strong>FleetOS columns to copy</strong><span>VIN</span><span>Battery % / State of Charge</span><span>Range Miles</span><span>Status if shown</span></div></div><div class="fleet-source-rule"><strong>Simple rule</strong><span>Amazon names/status win. FleetOS battery/range wins. VIN is the match key. Amazon also sets Expected EVs automatically. Do not rename Amazon vehicles.</span></div><div class="fleet-source-rule name-lock"><strong>Name lock</strong><span>If only FleetOS is uploaded, cards use the VIN as the temporary name until the matching Amazon fleet-list row is uploaded.</span></div><div class="equipment-drop" id="drop-zone"><div class="equipment-drop-copy"><strong>Drop CSV or XLSX fleet files here</strong><span>Best: choose the Amazon fleet list and FleetOS tracker at the same time. Accepted columns include VIN, vehicle/name, license plate, active/inactive, operational/grounded, SOC/battery %, and range/miles.</span></div><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose fleet files</button></div><label class="equipment-text-label" for="fleet-paste-text">Or paste the copied FleetOS/Amazon table here</label><textarea id="fleet-paste-text" class="equipment-paste-text" placeholder="Vehicle Name&#9;VIN&#9;License Plate&#9;Active&#9;Operational Status&#10;LLOL EV 21&#9;7FCEHEB79PN014816&#9;9ABC123&#9;Active&#9;Operational">${esc(state.fleetPasteText)}</textarea><div class="auto-match"><strong>RelayOps will do this:</strong><div><span>✓ Match by VIN</span><span>✓ Use Amazon fleet names exactly</span><span>✓ Set Expected EVs from Amazon</span><span>✓ Update battery + status cards</span></div></div><div class="modal-actions"><button class="btn" data-action="fleet-template-csv">Need fleet example?</button><button class="btn" data-action="parse-fleet-paste">Read pasted table</button><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose fleet files</button></div><p class="upload-help">Tip: if only one file is uploaded, the Fleet board will warn whether Amazon names/status or FleetOS battery/range is missing. Amazon upload also sets the expected EV count so short lists are flagged automatically.</p></div></div></div>`;
   }
+  if (state.modal === 'fleet-live-setup') {
+    const endpoint=fleetLiveEndpoint();
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-live-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">LIVE FLEET SETUP</span><h2 id="fleet-live-title">Connect Amazon Fleet + FleetOS</h2><p>Save the two portal links dispatchers use every morning. Add a secure backend endpoint when you are ready for true live pull.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="fleet-live-setup-grid"><label><strong>Amazon Fleet link</strong><input id="fleet-amazon-url" value="${esc(fleetAmazonPortalUrl())}" placeholder="${AMAZON_FLEET_PORTAL_URL}"><span>Official source for vehicle name, VIN, plate, Active, Operational, and Grounded.</span></label><label><strong>FleetOS link</strong><input id="fleet-fleetos-url" value="${esc(fleetFleetosPortalUrl())}" placeholder="${FLEETOS_PORTAL_URL}"><span>Official source for battery %, range miles, and charge readiness.</span></label><label class="full"><strong>Secure live connector endpoint</strong><input id="fleet-live-endpoint" value="${esc(endpoint)}" placeholder="https://your-secure-backend.example.com/api/fleet/live"><span>Optional but required for true one-click live pull. Do not paste Amazon/Rivian cookies or passwords here.</span></label></div><div class="fleet-live-flow"><strong>Morning flow</strong><span><b>1</b>Open Amazon + FleetOS links</span><span><b>2</b>Refresh pulls via secure backend if connected</span><span><b>3</b>If backend is offline, upload/paste exports and RelayOps still protects the morning sheet</span></div><div class="fleet-live-warning"><strong>Why a backend is needed</strong><span>Amazon Logistics and Rivian FleetOS are authenticated portals. GitHub Pages cannot safely log in or scrape them directly from the browser. The backend keeps credentials server-side and sends RelayOps clean VIN rows only.</span></div>${state.fleetLiveLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Last live pull failed</strong><span>${esc(state.fleetLiveLastError)}</span></div></div>`:''}<div class="modal-actions"><a class="btn" href="${esc(fleetAmazonPortalUrl())}" target="_blank" rel="noopener">Open Amazon Fleet</a><a class="btn" href="${esc(fleetFleetosPortalUrl())}" target="_blank" rel="noopener">Open FleetOS</a><button class="btn" data-action="fleet-import">Use upload/paste instead</button><button class="btn primary" data-action="save-fleet-live-setup">Save setup</button></div><p class="upload-help">Refresh will never silently assign unsafe vans. If live data is unavailable, it will ask for fresh Amazon + FleetOS exports before applying updates.</p></div></div></div>`;
+  }
   if (state.modal === 'fleet-refresh' && state.fleetRefreshPreview) {
     const p=state.fleetRefreshPreview, missing=p.missingSources||[], blockers=p.blockers||[], tone=blockers.length?'warn':'ok';
     const impact=(p.sourceImpact||[]).map(x=>`<span class="${x.ready?'ok':'warn'}"><b>${esc(x.source)}</b>${esc(x.fields)}<small>${esc(x.rule||'')}</small><em>${x.ready?`${x.count} card${x.count===1?'':'s'} changing`:'missing upload'}</em></span>`).join('');
@@ -1647,6 +1661,7 @@ function action(name,el) {
   if (name==='toggle-fleet-card') return toggleFleetCard(el.dataset.vin);
   if (name==='refresh-fleet') return refreshFleetStatus();
   if (name==='fleet-live-setup') return setupFleetLiveConnector();
+  if (name==='save-fleet-live-setup') return saveFleetLiveSetup();
   if (name==='approve-fleet-refresh') return approveFleetRefresh();
   if (name==='preview-wave-screenshot') return previewWaveScreenshot();
   if (name==='save-wave-screenshot') return saveWaveScreenshot();
@@ -2339,13 +2354,21 @@ function toggleFleetCard(vin='') {
 }
 
 function setupFleetLiveConnector() {
-  const current=fleetLiveEndpoint();
-  const value=window.prompt('Paste your secure RelayOps live Fleet endpoint. Example: https://your-backend.example.com/api/fleet/live',current);
-  if(value===null)return;
-  state.fleetLiveEndpoint=String(value||'').trim();
-  state.fleetLiveLastError='';
+  state.modal='fleet-live-setup';
   persist();render();
-  toast(state.fleetLiveEndpoint?'Live Fleet endpoint saved — Refresh will try live pull first':'Live Fleet endpoint cleared');
+}
+
+function saveFleetLiveSetup() {
+  const endpoint=document.getElementById('fleet-live-endpoint')?.value || '';
+  const amazon=document.getElementById('fleet-amazon-url')?.value || AMAZON_FLEET_PORTAL_URL;
+  const fleetos=document.getElementById('fleet-fleetos-url')?.value || FLEETOS_PORTAL_URL;
+  state.fleetLiveEndpoint=String(endpoint||'').trim();
+  state.fleetAmazonUrl=String(amazon||AMAZON_FLEET_PORTAL_URL).trim();
+  state.fleetFleetosUrl=String(fleetos||FLEETOS_PORTAL_URL).trim();
+  state.fleetLiveLastError='';
+  state.modal=null;
+  persist();render();
+  toast(state.fleetLiveEndpoint?'Live setup saved — Refresh will try the secure connector first':'Portal links saved — upload/paste fallback will be used until a secure endpoint is added');
 }
 
 function liveFleetVehicleFromObject(row={},forcedSource='') {
@@ -2381,7 +2404,10 @@ async function pullFleetLiveData() {
   const endpoint=fleetLiveEndpoint();
   if(!endpoint)return null;
   if(typeof fetch!=='function')throw new Error('Browser fetch is unavailable');
-  const response=await fetch(endpoint,{headers:{'Accept':'application/json'},credentials:'omit'});
+  const url=new URL(endpoint, 'https://relayops.local/');
+  url.searchParams.set('amazonPortalUrl',fleetAmazonPortalUrl());
+  url.searchParams.set('fleetosPortalUrl',fleetFleetosPortalUrl());
+  const response=await fetch(url.toString(),{headers:{'Accept':'application/json'},credentials:'omit'});
   if(!response.ok)throw new Error(`Live connector returned ${response.status}`);
   const payload=await response.json();
   const vehicles=liveFleetVehiclesFromPayload(payload);
@@ -2397,6 +2423,14 @@ async function pullFleetLiveData() {
 }
 
 function refreshFleetStatus() {
+  if(!fleetLiveEndpoint()&&!state.fleetImport?.vehicles?.length&&!Object.keys(state.fleetSourceUploads||{}).length) {
+    state.modal='fleet-import';
+    state.importPurpose='fleet';
+    state.fleetLiveLastError='Live connector is not connected yet. Use upload/paste now, or open Live setup to add the secure endpoint.';
+    persist();render();
+    toast('Live connector is not connected yet — upload/paste the Amazon + FleetOS exports or open Live setup.','error');
+    return;
+  }
   if(fleetLiveEndpoint()) return refreshFleetStatusLive();
   if(Object.keys(state.fleetSourceUploads||{}).length) state.fleetImport=fleetImportFromSourceUploads();
   if(state.fleetImport?.vehicles?.length) {
@@ -2422,8 +2456,9 @@ async function refreshFleetStatusLive() {
     toast('Live data pulled — review before applying refresh');
   } catch(error) {
     state.fleetLiveLastError=error?.message||'Live connector failed';
+    state.modal='fleet-live-setup';
     persist();render();
-    toast(`Live pull failed: ${state.fleetLiveLastError}`,'error');
+    toast(`Live pull failed — check setup or use upload/paste: ${state.fleetLiveLastError}`,'error');
   }
 }
 
@@ -2623,7 +2658,9 @@ function downloadFleetTemplate(){const h=['Source','Vehicle Name','VIN','License
 
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function persist(){localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');}
+function persist(){
+  localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');
+}
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
 render();

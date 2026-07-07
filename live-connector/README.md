@@ -4,6 +4,13 @@ This folder is the secure backend bridge for true live-pull Fleet data.
 
 The GitHub Pages dashboard cannot safely log into Amazon Logistics or FleetOS directly because browser code would expose credentials and authenticated portal requests are blocked by normal web security rules. Run this connector on a private server instead, then paste its public HTTPS endpoint into Fleet → Live setup.
 
+Fleet → Live setup also stores the dispatcher-facing portal links:
+
+- Amazon Fleet: `https://logistics.amazon.com/fleet-management/#vehicles`
+- FleetOS: `https://business.rivian.com/vehicles/tracker`
+
+Those links help dispatchers open the right portals and are sent to the connector as context. The connector still needs server-side JSON/API endpoints, cookies, or approved API access to pull data safely.
+
 ## Dashboard endpoint
 
 The dashboard expects:
@@ -48,9 +55,11 @@ Create a `.env` file on the server:
 PORT=8787
 ALLOW_ORIGIN=https://alecgonz79-ai.github.io
 
+AMAZON_FLEET_PORTAL_URL=https://logistics.amazon.com/fleet-management/#vehicles
 AMAZON_FLEET_JSON_URL=https://logistics.amazon.com/fleet-management/your-observed-json-endpoint
 AMAZON_COOKIE=your-secure-server-side-cookie
 
+FLEETOS_PORTAL_URL=https://business.rivian.com/vehicles/tracker
 FLEETOS_JSON_URL=https://business.rivian.com/vehicles/tracker/your-observed-json-endpoint
 FLEETOS_COOKIE=your-secure-server-side-cookie
 ```
@@ -69,3 +78,4 @@ Then set Fleet → Live setup to:
 http://localhost:8787/api/fleet/live
 ```
 
+If the endpoint is missing or offline, the dashboard will open the upload/paste fallback so dispatchers can still build the morning sheet without trusting stale battery/status data.

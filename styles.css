@@ -880,6 +880,24 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-live-connector-steps span.ok { background:#fff; border-color:#cfe8c7; color:#275c1f; }
 .fleet-live-connector-steps b { display:inline-grid; place-items:center; width:16px; height:16px; margin-right:5px; border-radius:6px; color:#fff; background:#c98211; font-size:8px; }
 .fleet-live-connector-steps .ok b { background:#2c7c4b; }
+.fleet-live-links { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.fleet-live-links a { padding:5px 7px; border-radius:999px; background:#fff; border:1px solid #d8e7f7; color:#0b4f8f; font-size:7px; font-weight:1000; text-decoration:none; text-transform:uppercase; letter-spacing:.06em; }
+.fleet-live-setup-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:12px; }
+.fleet-live-setup-grid label { display:block; padding:11px; border:1px solid #dfe7dd; border-radius:13px; background:#fbfcfa; }
+.fleet-live-setup-grid label.full { grid-column:1/-1; }
+.fleet-live-setup-grid strong, .fleet-live-setup-grid span { display:block; }
+.fleet-live-setup-grid strong { color:#172019; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }
+.fleet-live-setup-grid input { width:100%; height:36px; margin:8px 0 6px; border:1px solid #d8e0db; border-radius:10px; padding:0 10px; color:#172019; font-size:9px; font-weight:850; outline:none; }
+.fleet-live-setup-grid input:focus { border-color:#82c66b; box-shadow:0 0 0 3px rgba(130,198,107,.18); }
+.fleet-live-setup-grid span { color:#5f6b63; font-size:8px; font-weight:850; line-height:1.35; }
+.fleet-live-flow { display:grid; grid-template-columns:.7fr repeat(3,minmax(0,1fr)); gap:8px; margin:0 0 12px; padding:10px; border-radius:13px; border:1px solid #cbdff7; background:#eef6ff; }
+.fleet-live-flow strong { align-self:center; color:#0b4f8f; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }
+.fleet-live-flow span { padding:8px; border-radius:10px; background:#fff; color:#354b61; font-size:8px; font-weight:950; line-height:1.25; }
+.fleet-live-flow b { display:inline-grid; place-items:center; width:17px; height:17px; margin-right:5px; border-radius:7px; background:#0b4f8f; color:#fff; font-size:8px; }
+.fleet-live-warning { margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
+.fleet-live-warning strong, .fleet-live-warning span { display:block; }
+.fleet-live-warning strong { color:#8a5d08; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }
+.fleet-live-warning span { margin-top:4px; color:#6d4b08; font-size:8px; font-weight:900; line-height:1.4; }
 .fleet-dispatcher-proof { display:grid; grid-template-columns:.85fr 2fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:12px; border-radius:14px; border:1px solid #ebcf83; background:#fff8e6; }
 .fleet-dispatcher-proof.ok { border-color:#b9ddb0; background:#f3fbef; }
 .fleet-dispatcher-proof strong { display:block; color:#172019; font:1000 12px "Manrope"; margin-bottom:3px; }
@@ -1088,7 +1106,8 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-sync-steps { grid-template-columns:1fr; }
   .fleet-source-checks { grid-template-columns:1fr; }
   .fleet-coverage-strip { grid-template-columns:1fr 1fr; }
-  .fleet-portal-guide, .fleet-next-step, .fleet-trust-strip, .fleet-dispatch-checklist, .fleet-gap-audit, .fleet-source-map, .fleet-source-health, .fleet-row-count-check, .fleet-name-lock-strip, .fleet-dispatcher-proof, .fleet-live-connector, .fleet-full-roster-readiness { grid-template-columns:1fr; }
+  .fleet-portal-guide, .fleet-next-step, .fleet-trust-strip, .fleet-dispatch-checklist, .fleet-gap-audit, .fleet-source-map, .fleet-source-health, .fleet-row-count-check, .fleet-name-lock-strip, .fleet-dispatcher-proof, .fleet-live-connector, .fleet-full-roster-readiness, .fleet-live-setup-grid, .fleet-live-flow { grid-template-columns:1fr; }
+  .fleet-live-setup-grid label.full { grid-column:auto; }
   .fleet-source-map-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-row-count-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-name-lock-preview { grid-template-columns:repeat(2,minmax(0,1fr)); }
