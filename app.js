@@ -1842,6 +1842,12 @@ function mergeFleetVehicles(imports=[]) {
     if(!item.hasOperational&&current.operational) next.operational=current.operational;
     if(!item.hasBattery&&current.battery!==undefined) next.battery=current.battery;
     if(!item.hasMiles&&current.miles!==undefined) next.miles=current.miles;
+    next.hasName=Boolean(current.hasName||item.hasName);
+    next.hasPlate=Boolean(current.hasPlate||item.hasPlate);
+    next.hasActive=Boolean(current.hasActive||item.hasActive);
+    next.hasOperational=Boolean(current.hasOperational||item.hasOperational);
+    next.hasBattery=Boolean(current.hasBattery||item.hasBattery);
+    next.hasMiles=Boolean(current.hasMiles||item.hasMiles);
     next.source=[current.source,item.source].filter(Boolean).join(' + ').split(' + ').filter((v,i,a)=>a.indexOf(v)===i).join(' + ')||'FleetOS + Amazon';
     const normalized=normalizeFleetVehicle(next);
     const delta=fleetChangedFields(current,normalized);
