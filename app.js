@@ -636,7 +636,7 @@ function fleetPortalMatchStrip() {
   const expectedPct=expected?Math.min(100,Math.round((stats.uniqueVins.size/expected)*100)):0;
   const missingAmazon=stats.fleetosOnly.slice(0,3).join(', ')||'None';
   const missingFleetos=stats.amazonOnly.slice(0,3).join(', ')||'None';
-  const actionButtons=status==='ok'?'<button class="btn small" data-action="fleet-filter-quick" data-filter="verified">Show verified</button>':`<div class="portal-match-actions">${stats.amazonOnly.length?'<button class="btn small" data-action="fleet-filter-quick" data-filter="missing-fleetos">Review missing FleetOS</button>':''}${stats.fleetosOnly.length?'<button class="btn small" data-action="fleet-filter-quick" data-filter="missing-amazon">Review missing Amazon</button>':''}</div>`;
+  const actionButtons=status==='ok'?'<button class="btn small" data-action="fleet-filter-quick" data-filter="verified">Show verified</button>':`<div class="portal-match-actions">${stats.amazonOnly.length?'<button class="btn small" data-action="fleet-filter-quick" data-filter="missing-fleetos">Review missing FleetOS</button><button class="btn small" data-action="copy-fleetos-missing">Copy FleetOS VINs</button>':''}${stats.fleetosOnly.length?'<button class="btn small" data-action="fleet-filter-quick" data-filter="missing-amazon">Review missing Amazon</button><button class="btn small" data-action="copy-amazon-missing">Copy Amazon VINs</button>':''}</div>`;
   return `<div class="fleet-portal-match ${status}"><div><strong>Full EV portal check</strong><span>${status==='ok'?'Every uploaded VIN matched between Amazon names and FleetOS battery rows.':'Some VINs only appeared in one upload — review the exact missing side below.'}</span><div class="portal-coverage-meter"><span><b>Portal match</b><i style="width:${matchedPct}%"></i></span><em>${matchedPct}% matched both uploads</em>${expected?`<em>${expectedPct}% of expected EV count loaded</em>`:''}</div></div><div class="portal-match-grid"><span class="${countClass}"><b>${stats.uniqueVins.size}</b>unique VINs accounted<em>${esc(countCopy)}</em></span><span><b>${stats.amazon.size}</b>Amazon named EVs</span><span><b>${stats.fleetos.size}</b>FleetOS battery EVs</span><span><b>${stats.both.length}</b>matched both</span><span class="${stats.amazonOnly.length?'warn':'ok'}"><b>${stats.amazonOnly.length}</b>missing FleetOS</span><span class="${stats.fleetosOnly.length?'warn':'ok'}"><b>${stats.fleetosOnly.length}</b>missing Amazon</span></div><small>Missing FleetOS: ${esc(missingFleetos)} · Missing Amazon: ${esc(missingAmazon)}</small>${actionButtons}</div>`;
 }
 
@@ -1446,6 +1446,7 @@ function action(name,el) {
   if (name==='export-fleet-gaps') return exportFleetGapsCSV();
   if (name==='export-fleetos-missing') return exportMissingFleetosCSV();
   if (name==='copy-fleetos-missing') return copyMissingFleetosVins();
+  if (name==='copy-amazon-missing') return copyMissingAmazonVins();
   if (name==='copy-fleet-attention') return copyFleetAttentionList();
   if (name==='copy') return copyRows();
   if (name==='template-csv') return downloadTemplate();
@@ -2185,6 +2186,15 @@ function missingFleetosRows() {
 function exportMissingFleetosCSV(){const h=['VIN','Vehicle Name','License Plate','Active','Operational Status','Amazon Uploaded At','FleetOS Uploaded At','Fix'];const rows=missingFleetosRows();downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8','relayops-missing-fleetos-battery.csv');toast(rows.length?`${rows.length} missing FleetOS battery row${rows.length===1?'':'s'} downloaded`:'No missing FleetOS battery rows found');}
 function missingFleetosVinText(){return missingFleetosRows().map(r=>r[0]).filter(Boolean).join('\n');}
 async function copyMissingFleetosVins(){const rows=missingFleetosRows(), text=missingFleetosVinText();if(!rows.length)return toast('No missing FleetOS battery VINs to copy');const ok=await writeClipboardText(text);toast(ok?`${rows.length} missing FleetOS VIN${rows.length===1?'':'s'} copied`:'Clipboard access was blocked — download the missing battery CSV instead',ok?'':'error');return ok;}
+function missingAmazonRows() {
+  const stats=fleetPortalMatchStats(), byVin=new Map(rivianFleet.map(v=>[cleanVin(v.vin),v]));
+  return stats.fleetosOnly.map(vin=>{
+    const v=byVin.get(cleanVin(vin))||{};
+    return [vin,v.name||'',v.battery??'',v.miles??'',fleetSourceUploadedAt('amazon','iso'),fleetSourceUploadedAt('fleetos','iso'),'Upload Amazon fleet-list row for this VIN'];
+  });
+}
+function missingAmazonVinText(){return missingAmazonRows().map(r=>r[0]).filter(Boolean).join('\n');}
+async function copyMissingAmazonVins(){const rows=missingAmazonRows(), text=missingAmazonVinText();if(!rows.length)return toast('No missing Amazon name/status VINs to copy');const ok=await writeClipboardText(text);toast(ok?`${rows.length} missing Amazon VIN${rows.length===1?'':'s'} copied`:'Clipboard access was blocked — download the gap CSV instead',ok?'':'error');return ok;}
 function fleetAttentionRows(){const byVin=new Map();rivianFleet.forEach(v=>{const reasons=[v.battery<40?`battery ${v.battery}%`:'',v.operational==='Grounded'?'grounded':'',v.active==='Inactive'?'inactive':''].filter(Boolean);if(reasons.length)byVin.set(cleanVin(v.vin),{v,reasons});});return [...byVin.values()];}
 function fleetAttentionText(){return fleetAttentionRows().map(({v,reasons})=>`${v.name} | ${v.vin} | ${v.battery}% / ${v.miles} mi | ${v.active||'—'} | ${v.operational||'—'} | ${reasons.join(', ')}`).join('\n');}
 async function copyFleetAttentionList(){const rows=fleetAttentionRows(), text=fleetAttentionText();if(!rows.length)return toast('No low-battery or grounded EVs to copy');const ok=await writeClipboardText(text);toast(ok?`${rows.length} EV alert${rows.length===1?'':'s'} copied for dispatch chat`:'Clipboard access was blocked — use EV CSV instead',ok?'':'error');return ok;}
