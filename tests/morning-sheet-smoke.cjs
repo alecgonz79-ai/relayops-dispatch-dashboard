@@ -80,7 +80,7 @@ const checks = `
   resetFleetDemo();
   state.expandedFleetVin = '7FCEHEB79PN014816';
   const expandedFleetHtml = fleetPage();
-  if (!expandedFleetHtml.includes('rivian-id-summary') || !expandedFleetHtml.includes('Battery source') || !expandedFleetHtml.includes('8HJK214') || !expandedFleetHtml.includes('Operational') || !expandedFleetHtml.includes('Demo') || !expandedFleetHtml.includes('Demo name') || !expandedFleetHtml.includes('Name source') || !expandedFleetHtml.includes('Needs: real upload') || !expandedFleetHtml.includes('Battery demo only') || !expandedFleetHtml.includes('Tap to collapse')) throw new Error('Expandable FleetOS/Amazon EV details missing');
+  if (!expandedFleetHtml.includes('rivian-id-summary') || !expandedFleetHtml.includes('Battery source') || !expandedFleetHtml.includes('8HJK214') || !expandedFleetHtml.includes('Operational') || !expandedFleetHtml.includes('Demo') || !expandedFleetHtml.includes('Demo name') || !expandedFleetHtml.includes('Name source') || !expandedFleetHtml.includes('Needs attention') || !expandedFleetHtml.includes('Dispatch check') || !expandedFleetHtml.includes('Needs: real upload') || !expandedFleetHtml.includes('Battery demo only') || !expandedFleetHtml.includes('Tap to collapse')) throw new Error('Expandable FleetOS/Amazon EV details missing');
   state.fleetSort = 'battery-low';
   const sortedFleet = sortedRivianFleet();
   if (sortedFleet[0].battery !== 18 || batteryTone(18) !== 'critical' || batteryTone(92) !== 'high') throw new Error('Rivian battery sorting or color tone failed');
@@ -113,6 +113,12 @@ const checks = `
   state.fleetExpectedCount = 1;
   if (!fleetPortalMatchStrip().includes('complete vs expected 1')) throw new Error('Fleet expected count complete warning missing');
   if (!fleetDispatchChecklist().includes('1/1 portal VINs loaded')) throw new Error('Fleet dispatch checklist should show expected EV count coverage');
+  rivianFleet[0].active = 'Active';
+  rivianFleet[0].operational = 'Operational';
+  rivianFleet[0].battery = 41;
+  rivianFleet[0].miles = 64;
+  state.expandedFleetVin = rivianFleet[0].vin;
+  if (!fleetPage().includes('Watch charge') || !fleetPage().includes('battery under 50%')) throw new Error('Verified EVs under 50% should show a simple watch-charge label');
   state.fleetExpectedCount = 0;
   resetFleetDemo();
   state.fleetExpectedCount = 9;
@@ -148,7 +154,7 @@ const checks = `
   applyFleetVehicles(mergedFleet,{silent:true});
   state.expandedFleetVin = '7FCEHEB79PN014816';
   const importedFleetHtml = fleetPage();
-  if (!importedFleetHtml.includes('LLOL EV 21') || !importedFleetHtml.includes('9ABC123') || !importedFleetHtml.includes('41%') || !importedFleetHtml.includes('Verified') || !importedFleetHtml.includes('Amazon official') || !importedFleetHtml.includes('Amazon name verified') || !importedFleetHtml.includes('Official name from Amazon fleet list') || !importedFleetHtml.includes('loaded') || !importedFleetHtml.includes('Source field health') || !importedFleetHtml.includes('Every uploaded EV row has the required Amazon/FleetOS fields') || !importedFleetHtml.includes('Vehicle Name') || !importedFleetHtml.includes('Range Miles') || !importedFleetHtml.includes('Full source view is ready') || !importedFleetHtml.includes('Accuracy check passed') || !importedFleetHtml.includes('Dispatch-ready') || !importedFleetHtml.includes('Refresh full list') || importedFleetHtml.includes('Needs: FleetOS battery') || !importedFleetHtml.includes('Changed by source') || !importedFleetHtml.includes('Amazon:') || !importedFleetHtml.includes('FleetOS: battery, range') || !importedFleetHtml.includes('rows read') || !importedFleetHtml.includes('duplicate VINs') || !importedFleetHtml.includes('EV CSV') || !importedFleetHtml.includes('Gap CSV') || !importedFleetHtml.includes('Upload / paste fleet list') || !importedFleetHtml.includes('EV changed after upload') || !importedFleetHtml.includes('Show changed only')) throw new Error('FleetOS/Amazon fleet import did not update cards');
+  if (!importedFleetHtml.includes('LLOL EV 21') || !importedFleetHtml.includes('9ABC123') || !importedFleetHtml.includes('41%') || !importedFleetHtml.includes('Verified') || !importedFleetHtml.includes('Needs attention') || !importedFleetHtml.includes('inactive') || !importedFleetHtml.includes('Amazon official') || !importedFleetHtml.includes('Amazon name verified') || !importedFleetHtml.includes('Official name from Amazon fleet list') || !importedFleetHtml.includes('loaded') || !importedFleetHtml.includes('Source field health') || !importedFleetHtml.includes('Every uploaded EV row has the required Amazon/FleetOS fields') || !importedFleetHtml.includes('Vehicle Name') || !importedFleetHtml.includes('Range Miles') || !importedFleetHtml.includes('Full source view is ready') || !importedFleetHtml.includes('Accuracy check passed') || !importedFleetHtml.includes('Dispatch-ready') || !importedFleetHtml.includes('Refresh full list') || importedFleetHtml.includes('Needs: FleetOS battery') || !importedFleetHtml.includes('Changed by source') || !importedFleetHtml.includes('Amazon:') || !importedFleetHtml.includes('FleetOS: battery, range') || !importedFleetHtml.includes('rows read') || !importedFleetHtml.includes('duplicate VINs') || !importedFleetHtml.includes('EV CSV') || !importedFleetHtml.includes('Gap CSV') || !importedFleetHtml.includes('Upload / paste fleet list') || !importedFleetHtml.includes('EV changed after upload') || !importedFleetHtml.includes('Show changed only')) throw new Error('FleetOS/Amazon fleet import did not update cards');
   action('fleet-filter-quick',{dataset:{filter:'changed'}});
   if (state.fleetFilter !== 'changed' || !fleetPage().includes('Changed only') || !sortedRivianFleet().length || sortedRivianFleet().some(v => !(state.fleetChangedVins?.[v.vin] || v.changedFields || []).length)) throw new Error('Fleet recent changes quick filter failed');
   state.fleetFilter = 'all';

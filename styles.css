@@ -592,6 +592,13 @@ tbody tr:last-child td { border-bottom:0; }
 .name-source-pill.demo { background:#edf0ec; color:#68726b; }
 .tiny-view .rivian-card:not(.expanded) .name-source-pill { max-width:55px; overflow:hidden; font-size:4.25px; padding:1px 3px; margin-top:2px; }
 .tiny-view .rivian-card:not(.expanded) .name-source-pill em { display:none; }
+.fleet-ready-pill { display:inline-flex; flex-direction:column; gap:1px; margin-top:3px; padding:2px 5px; border-radius:8px; background:#dff5d7; color:#275c1f; font-size:6px; font-weight:1000; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
+.fleet-ready-pill.caution { background:#fff2cf; color:#8a5d08; }
+.fleet-ready-pill.warn { background:#ffe7e2; color:#a8372a; }
+.fleet-ready-pill b, .fleet-ready-pill em { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-style:normal; line-height:1.05; }
+.fleet-ready-pill em { color:inherit; opacity:.72; font-size:5px; }
+.tiny-view .rivian-card:not(.expanded) .fleet-ready-pill { max-width:55px; overflow:hidden; font-size:4.25px; padding:1px 3px; margin-top:2px; }
+.tiny-view .rivian-card:not(.expanded) .fleet-ready-pill em { display:none; }
 .rivian-charge-line { margin-top:5px; display:flex; align-items:center; gap:6px; color:#111; }
 .tiny-view .rivian-card:not(.expanded) .rivian-charge-line { margin-top:3px; gap:4px; }
 .rivian-charge-line strong { font:800 9px Arial,sans-serif; white-space:nowrap; }
