@@ -428,7 +428,7 @@ function fleetPage() {
   ${fleetTrustStrip()}
   ${fleetDispatchChecklist()}
   <div class="fleet-source-note ${age.stale?'stale':''}"><strong>${sourceName}</strong>${age.stale?'<div class="fleet-stale-warning">Battery data may be stale — upload fresh FleetOS/Amazon exports before dispatch decisions.</div>':''}<div class="fleet-sync-steps"><span>1. Open FleetOS and Amazon</span><span>2. Upload/export both lists</span><span>3. Press Refresh to re-check the latest real data</span></div><div class="fleet-source-checks"><span class="${sourceStatus.hasAmazon?'ok':'warn'}"><b>${sourceStatus.hasAmazon?'✓':'!'}</b> Amazon fleet list</span><span class="${sourceStatus.hasFleetos?'ok':'warn'}"><b>${sourceStatus.hasFleetos?'✓':'!'}</b> FleetOS battery/range</span></div><div class="fleet-coverage-strip"><span class="${coverage.demo?'warn':''}"><b>${coverage.demo}</b> demo</span><span><b>${coverage.amazonOnly}</b> Amazon only</span><span><b>${coverage.fleetosOnly}</b> FleetOS only</span><span class="${coverage.needsData?'warn':'ok'}"><b>${coverage.needsData}</b> need data</span></div><small>RelayOps matches rows by VIN first, keeps Amazon fleet-list names exactly as uploaded, and marks anything that is not fully verified.</small></div>
-  ${fleetPortalMatchStrip()}${fleetSourceMapStrip()}${fleetGapAuditStrip()}${fleetFullListStrip()}${fleetRefreshReadinessStrip()}${fleetUpdateSummary()}${fleetRecentChangesStrip()}${fleetAttentionStrip()}${fleetAccuracyGate()}${fleetLegend()}${fleetQuickFilterChips()}${fleetResultBar(rivians.length,labels[state.fleetFilter]||'Show all EVs')}<section class="grid rivian-grid ${state.fleetView==='detail'?'detail-view':'tiny-view'}">${rivians.length?rivians.map(v=>rivianCard(v)).join(''):`<div class="empty-state">No EVs match this search/filter. Press Clear to show every EV again.</div>`}</section></article>`;
+  ${fleetPortalMatchStrip()}${fleetSourceMapStrip()}${fleetSourceHealthStrip()}${fleetGapAuditStrip()}${fleetFullListStrip()}${fleetRefreshReadinessStrip()}${fleetUpdateSummary()}${fleetRecentChangesStrip()}${fleetAttentionStrip()}${fleetAccuracyGate()}${fleetLegend()}${fleetQuickFilterChips()}${fleetResultBar(rivians.length,labels[state.fleetFilter]||'Show all EVs')}<section class="grid rivian-grid ${state.fleetView==='detail'?'detail-view':'tiny-view'}">${rivians.length?rivians.map(v=>rivianCard(v)).join(''):`<div class="empty-state">No EVs match this search/filter. Press Clear to show every EV again.</div>`}</section></article>`;
 }
 
 function fleetPortalQuickStart() {
@@ -708,6 +708,36 @@ function fleetImportChecklist() {
     return `<div class="${ready?'ok':'warn'}"><strong>${esc(label)}</strong><small>${rowCount?`${rowCount} VIN row${rowCount===1?'':'s'} read`:'No rows uploaded yet'}</small><div>${checks}</div></div>`;
   };
   return `<div class="fleet-import-checklist"><strong>Source checklist after upload</strong>${sourceCheck('amazon','Amazon required fields',[['hasName','Vehicle Name'],['hasPlate','License Plate'],['hasActive','Active / Inactive'],['hasOperational','Operational / Grounded']])}${sourceCheck('fleetos','FleetOS required fields',[['hasBattery','Battery %'],['hasMiles','Range Miles']])}<p>Green means RelayOps detected the field in at least one row. Yellow means that portal or column still needs a cleaner export.</p></div>`;
+}
+
+function fleetSourceHealthRows() {
+  const fallbackRowsFor=key=>(state.fleetImport?.vehicles||[]).filter(v=>fleetSourceKeys(v.source).includes(key));
+  const sourceRows=(key,fields)=> {
+    const rows=state.fleetSourceUploads?.[key]?.vehicles?.length?state.fleetSourceUploads[key].vehicles:fallbackRowsFor(key);
+    return fields.map(([prop,label,source])=>{
+      const count=rows.filter(v=>v[prop]).length;
+      return {source,label,count,total:rows.length,ok:rows.length>0&&count===rows.length,partial:rows.length>0&&count>0};
+    });
+  };
+  return [
+    ...sourceRows('amazon',[
+      ['hasName','Vehicle Name','Amazon'],
+      ['hasPlate','License Plate','Amazon'],
+      ['hasActive','Active / Inactive','Amazon'],
+      ['hasOperational','Operational / Grounded','Amazon']
+    ]),
+    ...sourceRows('fleetos',[
+      ['hasBattery','Battery %','FleetOS'],
+      ['hasMiles','Range Miles','FleetOS']
+    ])
+  ];
+}
+
+function fleetSourceHealthStrip() {
+  const rows=fleetSourceHealthRows(), hasUploads=rows.some(r=>r.total);
+  if(!hasUploads)return `<div class="fleet-source-health warn"><div><strong>Source field health</strong><span>Upload Amazon + FleetOS exports to check whether every required column was included.</span></div><button class="btn small primary" data-action="fleet-import">Upload source files</button></div>`;
+  const perfect=rows.every(r=>r.ok);
+  return `<div class="fleet-source-health ${perfect?'ok':'warn'}"><div><strong>Source field health</strong><span>${perfect?'Every uploaded EV row has the required Amazon/FleetOS fields.':'Yellow fields mean the export is missing data for at least one EV row.'}</span></div><div class="fleet-source-health-grid">${rows.map(r=>`<span class="${r.ok?'ok':r.partial?'partial':'warn'}"><b>${esc(r.count)}/${esc(r.total||0)}</b>${esc(r.label)}<em>${esc(r.source)}</em></span>`).join('')}</div><button class="btn small ${perfect?'lime':'primary'}" data-action="${perfect?'refresh-fleet':'fleet-import'}">${perfect?'Review refresh':'Upload cleaner export'}</button></div>`;
 }
 
 function fleetSourceUploadedAt(key='',format='time') {
