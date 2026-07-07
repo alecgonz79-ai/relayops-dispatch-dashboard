@@ -11,6 +11,7 @@ Dispatcher share link:
 https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/
 
 Send the full `https://` URL so GroupMe, Slack, text messages, and email turn it into a clickable link.
+Do not shorten or swap the GitHub account name in the URL. For example, `https://AG79.github.io/...` will show GitHub's 404 page unless a GitHub account or organization named `AG79` owns and publishes the site.
 
 ## Local preview
 
