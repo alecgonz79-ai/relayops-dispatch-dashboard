@@ -257,7 +257,7 @@ const checks = `
   if (state.fleetLastRefresh === 'Not refreshed yet' || state.modal || state.fleetRefreshPreview || !fleetPage().includes('Last refresh:') || !fleetPage().includes('Refresh readiness')) throw new Error('Approved fleet refresh did not update the board');
   const morningHtml = morningSheetPage();
   if (!morningHtml.includes('Three easy steps') || !morningHtml.includes('White cells + Google Sheets paste')) throw new Error('Quick start guide missing');
-  if (!topbar().includes('data-action="share-dispatcher-link"') || DISPATCHER_SHARE_URL !== 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/' || !DISPATCHER_SHARE_TEXT.includes('https://')) throw new Error('Clickable dispatcher share link missing');
+  if (!topbar().includes('data-action="share-dispatcher-link"') || DISPATCHER_SHARE_URL !== 'https://ag79-ai.github.io/relayops-dispatch-dashboard/' || !DISPATCHER_SHARE_TEXT.includes('https://')) throw new Error('Clickable dispatcher share link missing');
   const details = routeDetailsFromRows([
     ['Route Code','Driver Name','Stop Count','Planned Departure Time'],
     ['CX901','Taylor Driver|Helper Name','177','12:05pm']
