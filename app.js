@@ -541,8 +541,9 @@ function fleetAttentionStrip() {
   const charge=rivianFleet.filter(v=>v.battery<40);
   const grounded=rivianFleet.filter(v=>v.operational==='Grounded');
   const missing=rivianFleet.filter(v=>fleetMissingFields(v).length);
+  const attention=fleetAttentionRows();
   const firstNames=rows=>rows.slice(0,3).map(v=>v.name).join(', ')||'None';
-  return `<div class="fleet-attention-strip"><button data-action="fleet-filter-quick" data-filter="low" class="${charge.length?'warn':'ok'}"><b>${charge.length}</b><span>Need charge</span><small>${esc(firstNames(charge))}</small></button><button data-action="fleet-filter-quick" data-filter="grounded" class="${grounded.length?'danger':'ok'}"><b>${grounded.length}</b><span>Grounded</span><small>${esc(firstNames(grounded))}</small></button><button data-action="fleet-filter-quick" data-filter="needs-data" class="${missing.length?'warn':'ok'}"><b>${missing.length}</b><span>Missing data</span><small>${esc(firstNames(missing))}</small></button></div>`;
+  return `<div class="fleet-attention-strip"><button data-action="fleet-filter-quick" data-filter="low" class="${charge.length?'warn':'ok'}"><b>${charge.length}</b><span>Need charge</span><small>${esc(firstNames(charge))}</small></button><button data-action="fleet-filter-quick" data-filter="grounded" class="${grounded.length?'danger':'ok'}"><b>${grounded.length}</b><span>Grounded</span><small>${esc(firstNames(grounded))}</small></button><button data-action="fleet-filter-quick" data-filter="needs-data" class="${missing.length?'warn':'ok'}"><b>${missing.length}</b><span>Missing data</span><small>${esc(firstNames(missing))}</small></button><button data-action="copy-fleet-attention" class="${attention.length?'warn':'ok'}"><b>${attention.length}</b><span>Copy alerts</span><small>${attention.length?'Low / grounded list':'No EV alerts'}</small></button></div>`;
 }
 
 function fleetRecentChanges() {
@@ -1427,6 +1428,7 @@ function action(name,el) {
   if (name==='export-fleet-gaps') return exportFleetGapsCSV();
   if (name==='export-fleetos-missing') return exportMissingFleetosCSV();
   if (name==='copy-fleetos-missing') return copyMissingFleetosVins();
+  if (name==='copy-fleet-attention') return copyFleetAttentionList();
   if (name==='copy') return copyRows();
   if (name==='template-csv') return downloadTemplate();
   if (name==='equipment-template-csv') return downloadEquipmentTemplate();
@@ -2165,6 +2167,9 @@ function missingFleetosRows() {
 function exportMissingFleetosCSV(){const h=['VIN','Vehicle Name','License Plate','Active','Operational Status','Amazon Uploaded At','FleetOS Uploaded At','Fix'];const rows=missingFleetosRows();downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8','relayops-missing-fleetos-battery.csv');toast(rows.length?`${rows.length} missing FleetOS battery row${rows.length===1?'':'s'} downloaded`:'No missing FleetOS battery rows found');}
 function missingFleetosVinText(){return missingFleetosRows().map(r=>r[0]).filter(Boolean).join('\n');}
 async function copyMissingFleetosVins(){const rows=missingFleetosRows(), text=missingFleetosVinText();if(!rows.length)return toast('No missing FleetOS battery VINs to copy');const ok=await writeClipboardText(text);toast(ok?`${rows.length} missing FleetOS VIN${rows.length===1?'':'s'} copied`:'Clipboard access was blocked — download the missing battery CSV instead',ok?'':'error');return ok;}
+function fleetAttentionRows(){const byVin=new Map();rivianFleet.forEach(v=>{const reasons=[v.battery<40?`battery ${v.battery}%`:'',v.operational==='Grounded'?'grounded':'',v.active==='Inactive'?'inactive':''].filter(Boolean);if(reasons.length)byVin.set(cleanVin(v.vin),{v,reasons});});return [...byVin.values()];}
+function fleetAttentionText(){return fleetAttentionRows().map(({v,reasons})=>`${v.name} | ${v.vin} | ${v.battery}% / ${v.miles} mi | ${v.active||'—'} | ${v.operational||'—'} | ${reasons.join(', ')}`).join('\n');}
+async function copyFleetAttentionList(){const rows=fleetAttentionRows(), text=fleetAttentionText();if(!rows.length)return toast('No low-battery or grounded EVs to copy');const ok=await writeClipboardText(text);toast(ok?`${rows.length} EV alert${rows.length===1?'':'s'} copied for dispatch chat`:'Clipboard access was blocked — use EV CSV instead',ok?'':'error');return ok;}
 function exportExcel(){
   const rows=[exportHeaders,...exportRows()];
   const xml=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1D4D35" ss:Pattern="Solid"/></Style><Style ss:ID="Cell"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E6DF"/></Borders></Style></Styles><Worksheet ss:Name="Daily Roster"><Table>${rows.map((r,i)=>`<Row>${r.map(v=>`<Cell ss:StyleID="${i===0?'Header':'Cell'}"><Data ss:Type="${typeof v==='number'?'Number':'String'}">${xmlEscape(v)}</Data></Cell>`).join('')}</Row>`).join('')}</Table><AutoFilter xmlns="urn:schemas-microsoft-com:office:excel" x:Range="R1C1:R${rows.length}C${exportHeaders.length}" xmlns:x="urn:schemas-microsoft-com:office:excel"/></Worksheet></Workbook>`;

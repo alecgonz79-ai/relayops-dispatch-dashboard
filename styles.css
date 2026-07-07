@@ -528,7 +528,7 @@ tbody tr:last-child td { border-bottom:0; }
 .dispatch-check-items span { color:#172019; font-size:8px; font-weight:1000; text-transform:uppercase; letter-spacing:.04em; }
 .dispatch-check-items em { margin-top:2px; color:#5f6b63; font-style:normal; font-size:7px; font-weight:900; }
 .dispatch-check-items small { margin-top:5px; color:#285c9d; font-size:7px; font-weight:1000; text-transform:uppercase; letter-spacing:.06em; }
-.fleet-attention-strip { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:0 0 12px; }
+.fleet-attention-strip { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:0 0 12px; }
 .fleet-attention-strip button { border:1px solid #dfe7dd; border-radius:12px; background:#fff; padding:10px; text-align:left; cursor:pointer; transition:.16s ease; }
 .fleet-attention-strip button:hover { transform:translateY(-1px); box-shadow:0 8px 20px rgba(24,40,32,.1); }
 .fleet-attention-strip b { display:block; color:#172019; font-size:20px; line-height:1; }
