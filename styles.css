@@ -802,6 +802,16 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-import-checklist span.ok { border-color:#cfe8c7; background:#fff; color:#275c1f; }
 .fleet-import-checklist span b { width:14px; height:14px; border-radius:6px; display:grid; place-items:center; color:#fff; background:#c98211; font-size:8px; }
 .fleet-import-checklist span.ok b { background:#2c7c4b; }
+.fleet-full-roster-readiness { display:grid; grid-template-columns:.8fr 1.8fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
+.fleet-full-roster-readiness.ok { border-color:#cfe8c7; background:#f3fbef; }
+.fleet-full-roster-readiness strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
+.fleet-full-roster-readiness span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
+.fleet-full-roster-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; }
+.fleet-full-roster-grid span { min-width:0; padding:8px; border-radius:10px; border:1px solid #ebcf83; background:#fff2cf; color:#8a5d08; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-full-roster-grid span.ok { background:#eef7ea; border-color:#cfe8c7; color:#275c1f; }
+.fleet-full-roster-grid b, .fleet-full-roster-grid em { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-full-roster-grid b { color:#172019; font:1000 13px "Manrope"; line-height:1; margin-bottom:3px; }
+.fleet-full-roster-grid em { color:inherit; opacity:.75; font-style:normal; font-size:6px; text-transform:uppercase; letter-spacing:.07em; }
 .fleet-source-health { display:grid; grid-template-columns:.8fr 2fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
 .fleet-source-health.ok { background:#f3fbef; border-color:#cfe8c7; }
 .fleet-source-health strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
@@ -987,9 +997,10 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-sync-steps { grid-template-columns:1fr; }
   .fleet-source-checks { grid-template-columns:1fr; }
   .fleet-coverage-strip { grid-template-columns:1fr 1fr; }
-  .fleet-portal-guide, .fleet-next-step, .fleet-trust-strip, .fleet-dispatch-checklist, .fleet-gap-audit, .fleet-source-map, .fleet-source-health, .fleet-row-count-check { grid-template-columns:1fr; }
+  .fleet-portal-guide, .fleet-next-step, .fleet-trust-strip, .fleet-dispatch-checklist, .fleet-gap-audit, .fleet-source-map, .fleet-source-health, .fleet-row-count-check, .fleet-full-roster-readiness { grid-template-columns:1fr; }
   .fleet-source-map-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-row-count-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .fleet-full-roster-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-source-health-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .trust-mini, .dispatch-check-items { grid-template-columns:1fr; }
   .fleet-portal-match, .fleetos-roster-coverage { grid-template-columns:1fr; }
