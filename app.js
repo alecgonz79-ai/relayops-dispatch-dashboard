@@ -633,7 +633,8 @@ function fleetosRosterCoverageStrip() {
   const tone=expected&&!short&&stats.fleetos.size?'ok':'warn';
   const missing=[...stats.amazon].filter(vin=>!stats.fleetos.has(vin)).slice(0,4);
   const copy=tone==='ok'?'FleetOS battery rows cover the full expected EV roster.':'FleetOS export may be partial — upload the full tracker list or review missing battery VINs.';
-  return `<div class="fleetos-roster-coverage ${tone}"><div><strong>FleetOS battery roster coverage</strong><span>${esc(copy)}</span><div class="portal-coverage-meter"><span><b>FleetOS coverage</b><i style="width:${pct}%"></i></span><em>${covered}/${expected||covered} EVs have battery/range rows${target.source!=='none'?` · target from ${esc(target.source)}`:''}</em></div></div><div class="fleetos-roster-stats"><span class="${short?'warn':'ok'}"><b>${short}</b>missing battery rows</span><span><b>${covered}</b>FleetOS battery EVs</span><span><b>${expected||'Set'}</b>${esc(target.shortLabel)}</span></div><small>Missing battery VINs: ${esc(missing.join(', ')||'None')}</small><button class="btn small ${tone==='ok'?'lime':'primary'}" data-action="${tone==='ok'?'refresh-fleet':'fleet-filter-quick'}" ${tone==='ok'?'':'data-filter="missing-fleetos"'}>${tone==='ok'?'Review refresh':'Show missing battery'}</button></div>`;
+  const action=tone==='ok'?'<button class="btn small lime" data-action="refresh-fleet">Review refresh</button>':'<div class="portal-match-actions"><button class="btn small" data-action="fleet-filter-quick" data-filter="missing-fleetos">Show missing battery</button><button class="btn small primary" data-action="export-fleetos-missing">Download missing battery CSV</button></div>';
+  return `<div class="fleetos-roster-coverage ${tone}"><div><strong>FleetOS battery roster coverage</strong><span>${esc(copy)}</span><div class="portal-coverage-meter"><span><b>FleetOS coverage</b><i style="width:${pct}%"></i></span><em>${covered}/${expected||covered} EVs have battery/range rows${target.source!=='none'?` · target from ${esc(target.source)}`:''}</em></div></div><div class="fleetos-roster-stats"><span class="${short?'warn':'ok'}"><b>${short}</b>missing battery rows</span><span><b>${covered}</b>FleetOS battery EVs</span><span><b>${expected||'Set'}</b>${esc(target.shortLabel)}</span></div><small>Missing battery VINs: ${esc(missing.join(', ')||'None')}</small>${action}</div>`;
 }
 
 function fleetGapAuditStrip() {
@@ -1424,6 +1425,7 @@ function action(name,el) {
   if (name==='export-excel') return exportExcel();
   if (name==='export-fleet-csv') return exportFleetCSV();
   if (name==='export-fleet-gaps') return exportFleetGapsCSV();
+  if (name==='export-fleetos-missing') return exportMissingFleetosCSV();
   if (name==='copy') return copyRows();
   if (name==='template-csv') return downloadTemplate();
   if (name==='equipment-template-csv') return downloadEquipmentTemplate();
@@ -2152,6 +2154,14 @@ function fleetGapRows() {
   return rows;
 }
 function exportFleetGapsCSV(){const h=['Priority','Issue','VIN','Vehicle Name','License Plate','Active','Operational Status','Battery %','Range Miles','VIN Source Audit','Expected EV Count','Amazon Uploaded At','FleetOS Uploaded At','Fix'];const rows=fleetGapRows();downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8','relayops-ev-source-gaps.csv');toast(rows.length?`${rows.length} Fleet gap rows downloaded`:'No Fleet gaps found — source match looks complete');}
+function missingFleetosRows() {
+  const stats=fleetPortalMatchStats(), byVin=new Map(rivianFleet.map(v=>[cleanVin(v.vin),v]));
+  return stats.amazonOnly.map(vin=>{
+    const v=byVin.get(cleanVin(vin))||{};
+    return [vin,v.name||'',v.plate||'',v.active||'',v.operational||'',fleetSourceUploadedAt('amazon','iso'),fleetSourceUploadedAt('fleetos','iso'),'Upload FleetOS tracker row for this VIN'];
+  });
+}
+function exportMissingFleetosCSV(){const h=['VIN','Vehicle Name','License Plate','Active','Operational Status','Amazon Uploaded At','FleetOS Uploaded At','Fix'];const rows=missingFleetosRows();downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8','relayops-missing-fleetos-battery.csv');toast(rows.length?`${rows.length} missing FleetOS battery row${rows.length===1?'':'s'} downloaded`:'No missing FleetOS battery rows found');}
 function exportExcel(){
   const rows=[exportHeaders,...exportRows()];
   const xml=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1D4D35" ss:Pattern="Solid"/></Style><Style ss:ID="Cell"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E6DF"/></Borders></Style></Styles><Worksheet ss:Name="Daily Roster"><Table>${rows.map((r,i)=>`<Row>${r.map(v=>`<Cell ss:StyleID="${i===0?'Header':'Cell'}"><Data ss:Type="${typeof v==='number'?'Number':'String'}">${xmlEscape(v)}</Data></Cell>`).join('')}</Row>`).join('')}</Table><AutoFilter xmlns="urn:schemas-microsoft-com:office:excel" x:Range="R1C1:R${rows.length}C${exportHeaders.length}" xmlns:x="urn:schemas-microsoft-com:office:excel"/></Worksheet></Workbook>`;
