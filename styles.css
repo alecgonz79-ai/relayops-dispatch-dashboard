@@ -1073,6 +1073,46 @@ tbody tr:last-child td { border-bottom:0; }
 .modal-head h2 { margin:0; font:800 16px "Manrope"; }
 .modal-head p { margin:5px 0 0; color:var(--muted); font-size:9px; }
 .modal-body { padding:18px 20px 20px; }
+.van-parking-card { margin:0 0 14px; padding:14px; border:1px solid #dfe7dd; border-radius:18px; background:linear-gradient(180deg,#fff,#fbfcfa); box-shadow:0 10px 28px rgba(24,40,32,.05); }
+.van-parking-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:12px; }
+.van-parking-head h2 { margin:2px 0 4px; color:#172019; font:1000 20px "Manrope"; letter-spacing:-.03em; }
+.van-parking-head p { margin:0; max-width:620px; color:#5e6a62; font-size:9px; font-weight:850; line-height:1.45; }
+.parking-head-actions { display:flex; align-items:center; justify-content:flex-end; gap:7px; flex-wrap:wrap; }
+.parking-updated { padding:7px 9px; border-radius:999px; background:#eef6ff; border:1px solid #cbdff7; color:#0b4f8f; font-size:8px; font-weight:1000; white-space:nowrap; }
+.parking-helper-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:10px; }
+.parking-helper-grid div { padding:10px; border-radius:13px; border:1px solid #dfe7dd; background:#f7faf6; }
+.parking-helper-grid strong, .parking-helper-grid span { display:block; }
+.parking-helper-grid strong { color:#172019; font:1000 14px "Manrope"; }
+.parking-helper-grid span { margin-top:3px; color:#607064; font-size:8px; font-weight:900; line-height:1.35; }
+.parking-import-row { display:grid; grid-template-columns:1.1fr .9fr; gap:10px; margin-bottom:12px; }
+.parking-drop { min-height:92px; display:grid; align-content:center; justify-items:start; gap:5px; padding:13px; border:2px dashed #b9c5bb; border-radius:15px; background:#fafcf8; transition:.2s; }
+.parking-drop.drag { border-color:#8fb438; background:#f7ffe5; }
+.parking-drop b { color:#172019; font:1000 11px "Manrope"; }
+.parking-drop span { color:#607064; font-size:8px; font-weight:850; line-height:1.35; }
+.parking-paste-box { display:grid; grid-template-columns:1fr auto; gap:6px; align-items:end; padding:10px; border-radius:15px; border:1px solid #e2e8e3; background:#fff; }
+.parking-paste-box label { grid-column:1/-1; color:#5e6a62; font-size:8px; font-weight:1000; text-transform:uppercase; letter-spacing:.06em; }
+.parking-paste-box textarea { width:100%; height:54px; resize:vertical; border:1px solid #dce4de; border-radius:10px; padding:8px; color:#172019; font-size:10px; font-weight:850; outline:none; }
+.parking-paste-box textarea:focus { border-color:#82c66b; box-shadow:0 0 0 3px rgba(130,198,107,.18); }
+.parking-lot { padding:12px; border-radius:18px; background:#f5f7f4; border:1px solid #dfe7dd; overflow:auto; }
+.parking-north { min-width:760px; display:grid; grid-template-columns:70px 1fr 1fr 70px; gap:0; align-items:stretch; margin-bottom:8px; }
+.parking-main { min-width:760px; display:grid; grid-template-columns:70px minmax(180px,1fr) 72px minmax(180px,1fr) 70px; align-items:stretch; }
+.parking-street-row { min-width:760px; display:grid; grid-template-columns:repeat(5,1fr); gap:0; margin-bottom:8px; border-top:2px solid #050505; border-bottom:2px solid #050505; }
+.parking-lane { background:#050505; min-height:44px; }
+.parking-lane.vertical { min-height:100%; }
+.parking-stack { display:grid; gap:0; background:#050505; padding:0 0 0; }
+.parking-stack-title { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; background:#172019; color:#fff; }
+.parking-stack-title strong { font-size:9px; font-weight:1000; text-transform:uppercase; letter-spacing:.08em; }
+.parking-stack-title small { color:rgba(255,255,255,.72); font-size:7px; font-weight:850; }
+.parking-slot { min-height:28px; display:grid; grid-template-columns:72px 1fr; align-items:center; gap:6px; padding:3px 8px; background:#fff; border:1px solid #101010; }
+.parking-slot span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#6a746d; font-size:7px; font-weight:900; text-transform:uppercase; letter-spacing:.04em; }
+.parking-slot input { width:100%; height:24px; border:0; background:transparent; color:#050505; text-align:center; font:1000 16px "Manrope"; outline:none; }
+.parking-slot input:focus { background:#e8f0fe; box-shadow:inset 0 0 0 2px #1a73e8; border-radius:5px; }
+.parking-slot.crosswalk-slot, .parking-slot.overflow-slot { background:#ffe8a3; }
+.parking-slot.street-slot { min-height:30px; grid-template-columns:62px 1fr; background:#fff; }
+.parking-crosswalk { display:grid; place-items:center; align-content:center; gap:4px; background:#ffe8a3; border:1px solid #111; color:#172019; text-align:center; }
+.parking-crosswalk .tent-icon { width:34px; height:34px; display:grid; place-items:center; border-radius:12px; background:#25e452; font-size:20px; box-shadow:inset 0 0 0 2px rgba(0,0,0,.08); }
+.parking-crosswalk strong { font:1000 15px "Manrope"; color:#066a1f; }
+.parking-crosswalk span { max-width:56px; color:#4d4b38; font-size:7px; font-weight:950; line-height:1.2; text-transform:uppercase; }
 .drop-zone { border:2px dashed #b9c5bb; border-radius:15px; background:#fafcf8; min-height:190px; display:grid; place-items:center; text-align:center; padding:22px; transition:.2s; }
 .drop-zone.drag { border-color:#8fb438; background:#f7ffe5; }
 .drop-zone.has-file { border-style:solid; border-color:#a9d6b6; background:#f2faf4; }
@@ -1118,6 +1158,8 @@ tbody tr:last-child td { border-bottom:0; }
   .rivian-grid.columns-view { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .fleet-charge-recommendations { grid-template-columns:1fr; }
   .fleet-charge-preview { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .van-parking-head, .parking-import-row { grid-template-columns:1fr; flex-direction:column; }
+  .parking-helper-grid { grid-template-columns:1fr 1fr 1fr; }
   .rivian-grid { grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); }
   .rivian-card { padding:8px; }
   .sheets-helper { grid-template-columns:1fr; align-items:start; }
@@ -1151,6 +1193,10 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-view-switcher button { width:25%; }
   .fleet-charge-recommendations { grid-template-columns:1fr; }
   .fleet-charge-preview { grid-template-columns:1fr; }
+  .van-parking-head { flex-direction:column; }
+  .parking-head-actions { justify-content:flex-start; }
+  .parking-helper-grid, .parking-import-row { grid-template-columns:1fr; }
+  .parking-lot { padding:8px; }
   .fleet-sync-steps { grid-template-columns:1fr; }
   .fleet-source-checks { grid-template-columns:1fr; }
   .fleet-coverage-strip { grid-template-columns:1fr 1fr; }
