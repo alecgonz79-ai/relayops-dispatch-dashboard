@@ -382,6 +382,14 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-source-note strong { display:block; color:#27352d; font-size:9px; margin-bottom:7px; }
 .fleet-source-note small { display:block; margin-top:7px; font-size:8px; line-height:1.45; }
 .fleet-stale-warning { margin:0 0 7px; padding:8px 9px; border-radius:9px; background:#fff2cf; color:#8a5d08; font-size:8px; font-weight:1000; }
+.fleet-next-step { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:14px; border:1px solid #ebcf83; background:#fff8e6; }
+.fleet-next-step.ok { border-color:#cfe8c7; background:#eef7ea; }
+.fleet-next-step.caution { border-color:#ebcf83; background:#fff8e6; }
+.next-step-badge { width:32px; height:32px; display:grid; place-items:center; border-radius:12px; background:#c98211; color:#fff; font:1000 13px "Manrope"; }
+.fleet-next-step.ok .next-step-badge { background:#2c7c4b; }
+.fleet-next-step.caution .next-step-badge { background:#d5971a; }
+.fleet-next-step strong { display:block; color:#172019; font:1000 12px "Manrope"; }
+.fleet-next-step span { display:block; margin-top:3px; color:#58665d; font-size:8px; font-weight:850; line-height:1.35; }
 .fleet-sync-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
 .fleet-sync-steps span { padding:7px 8px; border-radius:9px; background:#fff; border:1px solid #e4e8e5; color:#213127; font-weight:900; }
 .fleet-source-checks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:7px; }
@@ -885,7 +893,7 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-sync-steps { grid-template-columns:1fr; }
   .fleet-source-checks { grid-template-columns:1fr; }
   .fleet-coverage-strip { grid-template-columns:1fr 1fr; }
-  .fleet-portal-guide, .fleet-trust-strip, .fleet-dispatch-checklist, .fleet-gap-audit, .fleet-source-map, .fleet-source-health { grid-template-columns:1fr; }
+  .fleet-portal-guide, .fleet-next-step, .fleet-trust-strip, .fleet-dispatch-checklist, .fleet-gap-audit, .fleet-source-map, .fleet-source-health { grid-template-columns:1fr; }
   .fleet-source-map-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-source-health-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .trust-mini, .dispatch-check-items { grid-template-columns:1fr; }
