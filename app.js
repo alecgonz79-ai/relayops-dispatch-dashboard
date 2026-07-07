@@ -1004,7 +1004,7 @@ function bind() {
   document.querySelectorAll('[data-fleet-search]').forEach(el=>el.addEventListener('input',()=>{state.fleetSearch=el.value;persist();render();const s=document.querySelector('[data-fleet-search]');if(s){s.focus();s.setSelectionRange(state.fleetSearch.length,state.fleetSearch.length);}}));
   document.querySelectorAll('[data-fleet-expected]').forEach(el=>el.addEventListener('input',()=>{state.fleetExpectedCount=Math.max(0,Number(el.value)||0);persist();render();const s=document.querySelector('[data-fleet-expected]');if(s){s.focus();s.setSelectionRange(s.value.length,s.value.length);}}));
   document.querySelectorAll('[data-edit-field]').forEach(el=>{
-    el.addEventListener('focus',()=>selectSheetCell(el));
+    el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);});
     el.addEventListener('mousedown',e=>handleSheetMouseDown(e,el));
     el.addEventListener('pointerdown',e=>handleSheetMouseDown(e,el));
     el.addEventListener('mouseenter',()=>handleSheetMouseEnter(el));
@@ -1014,7 +1014,7 @@ function bind() {
     el.addEventListener('paste',e=>handleSheetPaste(e,el));
   });
   document.querySelectorAll('[data-sheet-copy-cell]').forEach(el=>{
-    el.addEventListener('focus',()=>selectSheetCell(el));
+    el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);});
     el.addEventListener('mousedown',e=>handleSheetMouseDown(e,el));
     el.addEventListener('pointerdown',e=>handleSheetMouseDown(e,el));
     el.addEventListener('mouseenter',()=>handleSheetMouseEnter(el));
@@ -1101,11 +1101,40 @@ function updateSheetRowRoute(el,route) {
 }
 
 function sheetCells() { return [...document.querySelectorAll('[data-sheet-cell="true"]')]; }
+function sheetCopyZone(col) {
+  const n=Number(col);
+  if(n>=0&&n<=7)return [0,7];
+  if(n>=9&&n<=10)return [9,10];
+  if(n===12)return [12,12];
+  return null;
+}
+function inSameSheetBoundary(anchor,cell) {
+  if(!anchor||!cell)return false;
+  if(anchor.dataset.sheetSection!==undefined&&cell.dataset.sheetSection!==undefined&&anchor.dataset.sheetSection!==cell.dataset.sheetSection)return false;
+  if(state.copyMode) {
+    const anchorZone=sheetCopyZone(anchor.dataset.sheetCol), cellZone=sheetCopyZone(cell.dataset.sheetCol);
+    if(!anchorZone||!cellZone)return false;
+    return anchorZone[0]===cellZone[0]&&anchorZone[1]===cellZone[1];
+  }
+  return true;
+}
+function clampSheetFocus(anchor,focus) {
+  if(!anchor||!focus)return focus;
+  if(anchor.dataset.sheetSection!==undefined&&focus.dataset.sheetSection!==undefined&&anchor.dataset.sheetSection!==focus.dataset.sheetSection)return sheetSelection.focus||anchor;
+  if(!state.copyMode)return focus;
+  const zone=sheetCopyZone(anchor.dataset.sheetCol);
+  if(!zone)return anchor;
+  const pos=cellPosition(focus);
+  const col=Math.max(zone[0],Math.min(zone[1],pos.col));
+  return cellAt(pos.row,col,anchor.dataset.sheetSection)||sheetSelection.focus||anchor;
+}
 function sheetSelectionBounds() {
   if(!sheetSelection.anchor||!sheetSelection.focus)return null;
   const a=cellPosition(sheetSelection.anchor), f=cellPosition(sheetSelection.focus);
   if(a.row<0||a.col<0||f.row<0||f.col<0)return null;
-  return {top:Math.min(a.row,f.row),bottom:Math.max(a.row,f.row),left:Math.min(a.col,f.col),right:Math.max(a.col,f.col)};
+  const zone=state.copyMode?sheetCopyZone(a.col):null;
+  const left=Math.min(a.col,f.col), right=Math.max(a.col,f.col);
+  return {top:Math.min(a.row,f.row),bottom:Math.max(a.row,f.row),left:zone?Math.max(zone[0],left):left,right:zone?Math.min(zone[1],right):right,section:sheetSelection.anchor.dataset.sheetSection};
 }
 function selectedSheetCells() {
   const bounds=sheetSelectionBounds();
@@ -1113,7 +1142,7 @@ function selectedSheetCells() {
   const cells=[];
   for(let row=bounds.top;row<=bounds.bottom;row++) {
     for(let col=bounds.left;col<=bounds.right;col++) {
-      const cell=cellAt(row,col);
+      const cell=cellAt(row,col,bounds.section);
       if(cell)cells.push(cell);
     }
   }
@@ -1137,20 +1166,23 @@ function selectSheetCell(el) {
 }
 function handleSheetMouseDown(e,el) {
   e.preventDefault();
+  if(state.copyMode&&!sheetCopyZone(el.dataset.sheetCol))return;
   sheetSelection={anchor:e.shiftKey&&sheetSelection.anchor?sheetSelection.anchor:el,focus:el,dragging:true};
   el.focus({preventScroll:true});
   applySheetSelection();
 }
 function handleSheetMouseEnter(el) {
   if(!sheetSelection.dragging)return;
-  sheetSelection.focus=el;
+  if(!inSameSheetBoundary(sheetSelection.anchor,el))return;
+  sheetSelection.focus=clampSheetFocus(sheetSelection.anchor,el);
   applySheetSelection();
 }
 function handleSheetPointerMove(e) {
   if(!sheetSelection.dragging)return;
   const el=document.elementFromPoint?.(e.clientX,e.clientY)?.closest?.('[data-sheet-cell="true"]');
   if(!el||el===sheetSelection.focus)return;
-  sheetSelection.focus=el;
+  if(!inSameSheetBoundary(sheetSelection.anchor,el))return;
+  sheetSelection.focus=clampSheetFocus(sheetSelection.anchor,el);
   applySheetSelection();
 }
 function stopSheetDrag() {
@@ -1174,9 +1206,10 @@ function cellPosition(el) {
   const col=sheetEditFields.indexOf(el.dataset.editField);
   return {row,col};
 }
-function cellAt(row,col) {
+function cellAt(row,col,section=null) {
   if(row<0||col<0)return null;
-  const copyCell=document.querySelector(`[data-sheet-copy-cell="true"][data-sheet-row="${row}"][data-sheet-col="${col}"]`);
+  const sectionSelector=section!==null&&section!==undefined?`[data-sheet-section="${section}"]`:'';
+  const copyCell=document.querySelector(`[data-sheet-copy-cell="true"][data-sheet-row="${row}"][data-sheet-col="${col}"]${sectionSelector}`);
   if(copyCell)return copyCell;
   const rows=[...document.querySelectorAll('tr.ops-row')];
   const field=sheetEditFields[col];
@@ -1198,7 +1231,7 @@ function selectedSheetTsv() {
   const rows=[];
   for(let row=bounds.top;row<=bounds.bottom;row++) {
     const values=[];
-    for(let col=bounds.left;col<=bounds.right;col++) values.push(cellAt(row,col)?.textContent.trim()||'');
+    for(let col=bounds.left;col<=bounds.right;col++) values.push(cellAt(row,col,bounds.section)?.textContent.trim()||'');
     rows.push(values.join('\t'));
   }
   return rows.join('\n');
