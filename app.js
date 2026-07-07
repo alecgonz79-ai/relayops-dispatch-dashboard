@@ -456,7 +456,7 @@ function fleetSourceTimestampStrip() {
     const status=!age.hasUpload?'Missing':age.stale?'Stale':'Fresh', tone=!age.hasUpload||age.stale?'warn':'ok';
     return `<span class="${tone}"><b>${esc(label)}</b><em>${esc(status)} · ${esc(age.label)}</em><small>${rows?`${rows} rows · loaded ${uploaded}`:'No upload yet'} · ${esc(fields)}</small></span>`;
   };
-  return `<div class="fleet-source-timestamps"><strong>Source timestamps</strong>${sourceBox('amazon','Amazon fleet list','name / plate / active / grounded')}${sourceBox('fleetos','FleetOS tracker','battery % / range miles')}<button class="btn small primary" data-action="fleet-import">Upload fresh files</button></div>`;
+  return `<div class="fleet-source-timestamps"><strong>Source timestamps</strong>${sourceBox('amazon','Amazon fleet list','name / plate / active / grounded')}${sourceBox('fleetos','FleetOS tracker','battery % / range miles')}<div class="fleet-refresh-rule-mini"><b>Refresh rule</b><span>Refresh checks the latest uploaded files. If Amazon or FleetOS changed, upload fresh exports first.</span></div><button class="btn small primary" data-action="fleet-import">Upload fresh files</button></div>`;
 }
 
 function fleetNextStepBox() {
