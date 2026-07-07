@@ -529,7 +529,7 @@ function fleetUpdateSummary() {
 
 function fleetResultBar(visible=0,filterLabel='Show all EVs') {
   const total=rivianFleet.length, searching=String(state.fleetSearch||'').trim();
-  return `<div class="fleet-result-bar"><div><strong>${visible} of ${total} EVs showing</strong><span>${esc(filterLabel)}${searching?` · search: “${esc(searching)}”`:''}</span></div><div><span>${state.fleetView==='detail'?'Detail grid':'Tiny grid'}</span><button class="btn small ghost" data-action="clear-fleet-search">Show all EVs</button></div></div>`;
+  return `<div class="fleet-result-bar"><div><strong>${visible} of ${total} EVs showing</strong><span>${esc(filterLabel)}${searching?` · search: “${esc(searching)}”`:''}</span></div><div><span>${state.fleetView==='detail'?'Detail grid':'Tiny grid'}</span><button class="btn small" data-action="copy-visible-fleet-vins">Copy visible VINs</button><button class="btn small ghost" data-action="clear-fleet-search">Show all EVs</button></div></div>`;
 }
 
 function fleetHeaderRefreshGuide() {
@@ -1459,6 +1459,7 @@ function action(name,el) {
   if (name==='copy-fleetos-missing') return copyMissingFleetosVins();
   if (name==='copy-amazon-missing') return copyMissingAmazonVins();
   if (name==='copy-fleet-attention') return copyFleetAttentionList();
+  if (name==='copy-visible-fleet-vins') return copyVisibleFleetVins();
   if (name==='copy') return copyRows();
   if (name==='template-csv') return downloadTemplate();
   if (name==='equipment-template-csv') return downloadEquipmentTemplate();
@@ -2207,6 +2208,8 @@ function missingAmazonRows() {
 function missingAmazonVinText(){return missingAmazonRows().map(r=>r[0]).filter(Boolean).join('\n');}
 function exportMissingAmazonCSV(){const h=['VIN','Temporary Name','Battery %','Range Miles','Amazon Uploaded At','FleetOS Uploaded At','Fix'];const rows=missingAmazonRows();downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8','relayops-missing-amazon-name-status.csv');toast(rows.length?`${rows.length} missing Amazon row${rows.length===1?'':'s'} downloaded`:'No missing Amazon name/status rows found');}
 async function copyMissingAmazonVins(){const rows=missingAmazonRows(), text=missingAmazonVinText();if(!rows.length)return toast('No missing Amazon name/status VINs to copy');const ok=await writeClipboardText(text);toast(ok?`${rows.length} missing Amazon VIN${rows.length===1?'':'s'} copied`:'Clipboard access was blocked — download the gap CSV instead',ok?'':'error');return ok;}
+function visibleFleetVinText(){return sortedRivianFleet().map(v=>cleanVin(v.vin)||v.vin).filter(Boolean).join('\n');}
+async function copyVisibleFleetVins(){const rows=sortedRivianFleet(), text=visibleFleetVinText();if(!rows.length)return toast('No visible EV VINs to copy');const ok=await writeClipboardText(text);toast(ok?`${rows.length} visible EV VIN${rows.length===1?'':'s'} copied`:'Clipboard access was blocked — use EV CSV instead',ok?'':'error');return ok;}
 function fleetAttentionRows(){const byVin=new Map();rivianFleet.forEach(v=>{const reasons=[v.battery<40?`battery ${v.battery}%`:'',v.operational==='Grounded'?'grounded':'',v.active==='Inactive'?'inactive':''].filter(Boolean);if(reasons.length)byVin.set(cleanVin(v.vin),{v,reasons});});return [...byVin.values()];}
 function fleetAttentionText(){return fleetAttentionRows().map(({v,reasons})=>`${v.name} | ${v.vin} | ${v.battery}% / ${v.miles} mi | ${v.active||'—'} | ${v.operational||'—'} | ${reasons.join(', ')}`).join('\n');}
 async function copyFleetAttentionList(){const rows=fleetAttentionRows(), text=fleetAttentionText();if(!rows.length)return toast('No low-battery or grounded EVs to copy');const ok=await writeClipboardText(text);toast(ok?`${rows.length} EV alert${rows.length===1?'':'s'} copied for dispatch chat`:'Clipboard access was blocked — use EV CSV instead',ok?'':'error');return ok;}
