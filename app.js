@@ -445,9 +445,30 @@ function fleetPage() {
   <section class="grid kpi-grid">${kpiCard('Rivian battery avg',`${avg}%`,`${low} below 40%`,'van',low?'#fff2cf':'#e9f7df')}${kpiCard('EVs tracked',rivianFleet.length,readyCopy,'van',coverage.needsData?'#fff2cf':'#e9f7df')}${kpiCard('Verified EVs',`${coverage.verified}/${coverage.total}`,`${coverage.needsData} need data`,'check',coverage.needsData?'#fff2cf':'#e9f7df')}${kpiCard('Grounded EVs',grounded,'Tap a van for details','alert',grounded?'#ffe7e2':'#e9f7df')}</section>
   <article class="card rivian-panel"><div class="card-head fleet-clean-head"><div class="card-title"><h2>Fleet Health</h2><span class="assistive-text">FleetOS + Amazon EV live board · Refresh battery %</span><p>Simple Rivian health board. Amazon fleet names are used first after import; VIN stays below each card for matching. Last refresh: ${esc(state.fleetLastRefresh)}.</p>${fleetHeaderAccuracyBadge()}</div><div class="head-actions fleet-primary-actions"><input class="fleet-search-input" data-fleet-search placeholder="Find EV, VIN, or plate" value="${esc(state.fleetSearch)}"><select class="filter-select" data-fleet-filter>${filters.map(value=>`<option value="${value}" ${state.fleetFilter===value?'selected':''}>${labels[value]}</option>`).join('')}</select><button class="btn small ghost" data-action="clear-fleet-search">Clear</button><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><button class="btn small lime" data-action="refresh-fleet">${ICONS.download} Refresh battery %</button><button class="btn small primary" data-action="fleet-import">${ICONS.upload} Upload / paste fleet list</button></div></div>
   ${fleetHealthSummary()}
-  <div class="fleet-clean-toolbar"><div class="fleet-view-controls"><label class="fleet-count-label">Expected EVs<input class="fleet-count-input" data-fleet-expected type="number" min="0" inputmode="numeric" value="${state.fleetExpectedCount||''}" placeholder="all"></label><select class="filter-select" data-fleet-view><option value="tiny" ${state.fleetView==='tiny'?'selected':''}>View: Tiny grid</option><option value="detail" ${state.fleetView==='detail'?'selected':''}>View: Detail grid</option></select></div><div class="fleet-secondary-actions"><button class="btn small" data-action="fleet-live-setup">${ICONS.link} Live setup</button><button class="btn small" data-action="export-fleet-csv">${ICONS.download} EV CSV</button><button class="btn small" data-action="export-fleet-gaps">${ICONS.download} Gap CSV</button><button class="btn small ghost" data-action="reset-fleet-demo">Clear upload</button><a class="btn small" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">FleetOS</a><a class="btn small" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">Amazon</a></div></div>
+  ${fleetChargeRecommendations()}
+  <div class="fleet-clean-toolbar"><div class="fleet-view-controls"><label class="fleet-count-label">Expected EVs<input class="fleet-count-input" data-fleet-expected type="number" min="0" inputmode="numeric" value="${state.fleetExpectedCount||''}" placeholder="all"></label>${fleetViewSwitcher()}</div><div class="fleet-secondary-actions"><button class="btn small" data-action="fleet-live-setup">${ICONS.link} Live setup</button><button class="btn small" data-action="export-fleet-csv">${ICONS.download} EV CSV</button><button class="btn small" data-action="export-fleet-gaps">${ICONS.download} Gap CSV</button><button class="btn small ghost" data-action="reset-fleet-demo">Clear upload</button><a class="btn small" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">FleetOS</a><a class="btn small" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">Amazon</a></div></div>
   ${fleetDataDrawer()}
-  ${fleetQuickFilterChips()}${fleetResultBar(rivians.length,labels[state.fleetFilter]||'Show all EVs')}<section class="grid rivian-grid ${state.fleetView==='detail'?'detail-view':'tiny-view'}">${rivians.length?rivians.map(v=>rivianCard(v)).join(''):`<div class="empty-state">No EVs match this search/filter. Press Clear to show every EV again.</div>`}</section></article>`;
+  ${fleetQuickFilterChips()}${fleetResultBar(rivians.length,labels[state.fleetFilter]||'Show all EVs')}<section class="grid rivian-grid ${fleetViewClass()}">${rivians.length?rivians.map(v=>rivianCard(v)).join(''):`<div class="empty-state">No EVs match this search/filter. Press Clear to show every EV again.</div>`}</section></article>`;
+}
+
+function fleetViewMode() {
+  return ['tiny','list','columns','detail'].includes(state.fleetView)?state.fleetView:'tiny';
+}
+function fleetViewClass() {
+  const view=fleetViewMode();
+  return view==='detail'?'detail-view':view==='list'?'list-view':view==='columns'?'columns-view':'tiny-view';
+}
+function fleetViewLabel() {
+  return {tiny:'Tiny grid',list:'List view',columns:'Column view',detail:'Detail grid'}[fleetViewMode()]||'Tiny grid';
+}
+function fleetViewSwitcher() {
+  const views=[
+    ['tiny','Grid','▦','View: Tiny grid'],
+    ['list','List','☷','View: List'],
+    ['columns','Columns','▥','View: Columns'],
+    ['detail','Detail','▭','View: Detail grid']
+  ];
+  return `<div class="fleet-view-switcher" role="group" aria-label="Fleet card view">${views.map(([value,label,icon,assistive])=>`<button class="${fleetViewMode()===value?'active':''}" data-action="set-fleet-view" data-view="${value}" title="${label}" aria-label="${assistive}"><span>${icon}</span><em>${label}</em>${value==='tiny'?`<i class="assistive-text">View: Tiny grid</i>`:''}${value==='detail'?`<i class="assistive-text">View: Detail grid</i>`:''}</button>`).join('')}<select class="assistive-text" data-fleet-view><option value="tiny" ${fleetViewMode()==='tiny'?'selected':''}>View: Tiny grid</option><option value="detail" ${fleetViewMode()==='detail'?'selected':''}>View: Detail grid</option></select></div>`;
 }
 
 function fleetHealthSummary() {
@@ -456,6 +477,16 @@ function fleetHealthSummary() {
   const sourceStatus=fleetSourceStatus();
   const liveReady=!!fleetLiveEndpoint();
   return `<div class="fleet-health-summary"><div class="fleet-health-card primary"><strong>${rivianFleet.length}</strong><span>Rivians displayed</span><small>Default board shows the full 58-card Rivian fleet.</small></div><div class="fleet-health-card ${low?'warn':'ok'}"><strong>${avg}%</strong><span>Average battery</span><small>${low} van${low===1?'':'s'} below 40%.</small></div><div class="fleet-health-card ${grounded?'danger':'ok'}"><strong>${grounded}</strong><span>Grounded</span><small>Sort low to high before launch.</small></div><div class="fleet-health-card ${coverage.needsData?'warn':'ok'}"><strong>${coverage.verified}/${coverage.total}</strong><span>Verified sources</span><small>${sourceStatus.hasAmazon?'Amazon loaded':'Needs Amazon'} · ${sourceStatus.hasFleetos?'FleetOS loaded':'Needs FleetOS'} · ${liveReady?'Live ready':'Manual import'}</small></div></div>`;
+}
+
+function fleetChargeRows() {
+  return [...rivianFleet].filter(v=>Number(v.battery)<50).sort((a,b)=>Number(a.battery)-Number(b.battery)||String(a.name||'').localeCompare(String(b.name||'')));
+}
+function fleetChargeRecommendations() {
+  const rows=fleetChargeRows();
+  const urgent=rows.filter(v=>Number(v.battery)<40).length;
+  const preview=rows.slice(0,8).map(v=>`<button data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" class="${Number(v.battery)<40?'urgent':'watch'}"><b>${esc(fleetDisplayName(v))}</b><span>${v.battery}% · ${v.miles} mi</span><small>${esc(v.plate||v.vin)} · ${esc(v.operational||'—')}</small></button>`).join('');
+  return `<div class="fleet-charge-recommendations ${rows.length?'warn':'ok'}"><div><strong>Recommended to be charged</strong><span>${rows.length?`${rows.length} EV${rows.length===1?'':'s'} under 50% · ${urgent} priority under 40%`:'No EVs under 50% right now'}</span></div><div class="fleet-charge-preview">${preview||'<span class="charge-empty">Fleet is above the watch threshold.</span>'}</div><div class="fleet-charge-actions"><button class="btn small ${rows.length?'primary':'ghost'}" data-action="copy-charge-recommendations">${ICONS.copy} Copy charge list</button><button class="btn small" data-action="fleet-filter-quick" data-filter="low">Show low battery</button></div></div>`;
 }
 
 function fleetSourceNote() {
@@ -589,7 +620,7 @@ function fleetUpdateSummary() {
 
 function fleetResultBar(visible=0,filterLabel='Show all EVs') {
   const total=rivianFleet.length, searching=String(state.fleetSearch||'').trim();
-  return `<div class="fleet-result-bar"><div><strong>${visible} of ${total} EVs showing</strong><span>${esc(filterLabel)}${searching?` · search: “${esc(searching)}”`:''}</span></div><div><span>${state.fleetView==='detail'?'Detail grid':'Tiny grid'}</span><button class="btn small" data-action="copy-visible-fleet-vins">Copy visible VINs</button><button class="btn small ghost" data-action="clear-fleet-search">Show all EVs</button></div></div>`;
+  return `<div class="fleet-result-bar"><div><strong>${visible} of ${total} EVs showing</strong><span>${esc(filterLabel)}${searching?` · search: “${esc(searching)}”`:''}</span></div><div><span>${esc(fleetViewLabel())}</span><button class="btn small" data-action="copy-visible-fleet-vins">Copy visible VINs</button><button class="btn small ghost" data-action="clear-fleet-search">Show all EVs</button></div></div>`;
 }
 
 function fleetHeaderRefreshGuide() {
@@ -1642,6 +1673,7 @@ function action(name,el) {
   if (name==='copy-fleetos-missing') return copyMissingFleetosVins();
   if (name==='copy-amazon-missing') return copyMissingAmazonVins();
   if (name==='copy-fleet-attention') return copyFleetAttentionList();
+  if (name==='copy-charge-recommendations') return copyChargeRecommendations();
   if (name==='copy-refresh-missing-vins') return copyRefreshMissingVins();
   if (name==='copy-visible-fleet-vins') return copyVisibleFleetVins();
   if (name==='copy') return copyRows();
@@ -1651,6 +1683,7 @@ function action(name,el) {
   if (name==='clear-morning-filters') { state.morningFilters={wave:'all',staging:'all',pad:'all'};render();return; }
   if (name==='clear-fleet-search') { state.fleetSearch='';state.fleetFilter='all';persist();render();return toast('Showing every EV again'); }
   if (name==='fleet-filter-quick') { state.fleetFilter=el.dataset.filter||'all';state.fleetSearch='';persist();render();return toast(`Fleet filtered: ${state.fleetFilter.replace('-',' ')}`); }
+  if (name==='set-fleet-view') { state.fleetView=el.dataset.view||'tiny';persist();render();return toast(`Fleet view: ${fleetViewLabel()}`); }
   if (name==='reset-fleet-demo') return resetFleetDemo();
   if (name==='toggle-morning-edit') { state.editMode=!state.editMode;if(state.editMode)state.copyMode=false;render();return toast(state.editMode?'Editing is on — columns and rows are labeled':'Edits saved'); }
   if (name==='toggle-morning-copy') { state.copyMode=!state.copyMode;if(state.copyMode)state.editMode=false;sheetSelection={anchor:null,focus:null,dragging:false};render();return toast(state.copyMode?'Copy mode is on — drag cells, then press ⌘C/Ctrl+C':'Copy mode off'); }
@@ -2556,6 +2589,8 @@ async function copyRefreshMissingVins(){const rows=state.fleetRefreshPreview?.mi
 function fleetAttentionRows(){const byVin=new Map();rivianFleet.forEach(v=>{const reasons=[v.battery<40?`battery ${v.battery}%`:'',v.operational==='Grounded'?'grounded':'',v.active==='Inactive'?'inactive':''].filter(Boolean);if(reasons.length)byVin.set(cleanVin(v.vin),{v,reasons});});return [...byVin.values()];}
 function fleetAttentionText(){return fleetAttentionRows().map(({v,reasons})=>`${v.name} | ${v.vin} | ${v.battery}% / ${v.miles} mi | ${v.active||'—'} | ${v.operational||'—'} | ${reasons.join(', ')}`).join('\n');}
 async function copyFleetAttentionList(){const rows=fleetAttentionRows(), text=fleetAttentionText();if(!rows.length)return toast('No low-battery or grounded EVs to copy');const ok=await writeClipboardText(text);toast(ok?`${rows.length} EV alert${rows.length===1?'':'s'} copied for dispatch chat`:'Clipboard access was blocked — use EV CSV instead',ok?'':'error');return ok;}
+function chargeRecommendationText(){return fleetChargeRows().map(v=>`${fleetDisplayName(v)} | ${v.vin} | ${v.battery}% | ${v.miles} mi | Plate ${v.plate||'—'} | ${v.active||'—'} | ${v.operational||'—'}${Number(v.battery)<40?' | PRIORITY PLUG-IN':' | plug in if available'}`).join('\n');}
+async function copyChargeRecommendations(){const rows=fleetChargeRows(), text=chargeRecommendationText();if(!rows.length)return toast('No EVs under 50% to send for charging');const ok=await writeClipboardText(text);toast(ok?`${rows.length} charge recommendation${rows.length===1?'':'s'} copied for fleet`:'Clipboard access was blocked — use EV CSV instead',ok?'':'error');return ok;}
 function exportExcel(){
   const rows=[exportHeaders,...exportRows()];
   const xml=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1D4D35" ss:Pattern="Solid"/></Style><Style ss:ID="Cell"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E6DF"/></Borders></Style></Styles><Worksheet ss:Name="Daily Roster"><Table>${rows.map((r,i)=>`<Row>${r.map(v=>`<Cell ss:StyleID="${i===0?'Header':'Cell'}"><Data ss:Type="${typeof v==='number'?'Number':'String'}">${xmlEscape(v)}</Data></Cell>`).join('')}</Row>`).join('')}</Table><AutoFilter xmlns="urn:schemas-microsoft-com:office:excel" x:Range="R1C1:R${rows.length}C${exportHeaders.length}" xmlns:x="urn:schemas-microsoft-com:office:excel"/></Worksheet></Workbook>`;
