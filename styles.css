@@ -737,6 +737,14 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-import-status span { padding:7px 8px; border-radius:9px; border:1px solid #ebcf83; background:#fff2cf; color:#8a5d08; font-size:8px; font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .fleet-import-status span.ok { border-color:#cfe8c7; background:#eef7ea; color:#275c1f; }
 .fleet-import-status b { margin-right:6px; color:#172019; }
+.fleet-upload-prep { display:grid; grid-template-columns:.7fr 1.8fr; gap:10px; align-items:start; margin:0 0 12px; padding:12px; border-radius:15px; border:1px solid #cbdff7; background:linear-gradient(135deg,#eef6ff,#fbfdff); }
+.fleet-upload-prep strong { display:block; color:#0b4f8f; font:1000 12px "Manrope"; margin-bottom:4px; }
+.fleet-upload-prep > div span { color:#4e6175; font-size:9px; font-weight:900; line-height:1.35; }
+.fleet-upload-prep ol { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:0; padding:0; list-style:none; }
+.fleet-upload-prep li { min-width:0; display:grid; grid-template-columns:auto 1fr; gap:5px 7px; align-items:start; padding:9px; border-radius:12px; border:1px solid #d8e7f7; background:#fff; }
+.fleet-upload-prep li b { width:22px; height:22px; border-radius:9px; display:grid; place-items:center; background:#0b4f8f; color:#fff; font:1000 10px "Manrope"; }
+.fleet-upload-prep li span { color:#172019; font-size:9px; font-weight:1000; line-height:1.2; }
+.fleet-upload-prep li small { grid-column:2; color:#5d6d7e; font-size:7px; font-weight:850; line-height:1.35; }
 .fleet-import-checklist { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:0 0 12px; padding:11px; border:1px solid #dfe7dd; border-radius:13px; background:#fbfcfa; }
 .fleet-import-checklist > strong, .fleet-import-checklist > p { grid-column:1/-1; }
 .fleet-import-checklist > strong { color:#172019; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }
@@ -935,6 +943,8 @@ tbody tr:last-child td { border-bottom:0; }
   .auto-match > div { grid-template-columns:1fr; }
   .fleet-import-sources { grid-template-columns:1fr; }
   .fleet-import-status { grid-template-columns:1fr; }
+  .fleet-upload-prep { grid-template-columns:1fr; }
+  .fleet-upload-prep ol { grid-template-columns:1fr; }
   .fleet-import-checklist { grid-template-columns:1fr; }
   .fleet-import-checklist > strong, .fleet-import-checklist > p { grid-column:auto; }
   .fleet-column-guide { grid-template-columns:1fr; }
