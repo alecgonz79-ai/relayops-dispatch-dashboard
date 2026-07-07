@@ -152,6 +152,8 @@ const checks = `
   if (!staleAge.stale || staleAge.label !== '2h 26m old') throw new Error('Fleet upload age warning calculation failed');
   state.fleetImport.uploadedAt = new Date(Date.now() - 130 * 60000).toISOString();
   if (!fleetPage().includes('Battery data may be stale')) throw new Error('Fleet page should warn when upload is stale');
+  const stalePreview = fleetRefreshPreviewFromVehicles(state.fleetImport.vehicles);
+  if (!stalePreview.blockers.some(x => x.includes('Saved fleet upload') && x.includes('fresh Amazon/FleetOS exports'))) throw new Error('Fleet refresh should block stale saved portal uploads');
   state.fleetImport.uploadedAt = new Date().toISOString();
   if (fleetUploadAge().stale || fleetPage().includes('Battery data may be stale')) throw new Error('Fresh fleet upload should not show stale warning');
   if (!fleetSourceStatus().hasAmazon || !fleetSourceStatus().hasFleetos) throw new Error('Fleet source status should detect combined Amazon + FleetOS import');

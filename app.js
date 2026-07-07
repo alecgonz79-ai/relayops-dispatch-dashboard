@@ -1792,10 +1792,12 @@ function applyFleetVehicles(vehicles=[],options={}) {
 function fleetRefreshPreviewFromVehicles(vehicles=[]) {
   const merged=mergeFleetVehicles(vehicles), stats=fleetPortalMatchStatsForRows(vehicles);
   const expected=Number(state.fleetExpectedCount)||0, expectedShort=expected?Math.max(0,expected-stats.uniqueVins.size):0;
+  const uploadAge=fleetUploadAge();
   const missingSources=[];
   if(!stats.amazon.size)missingSources.push('Amazon fleet list');
   if(!stats.fleetos.size)missingSources.push('FleetOS tracker');
   const blockerList=[
+    uploadAge.stale?`Saved fleet upload is ${uploadAge.label} old — upload fresh Amazon/FleetOS exports before approving`:'',
     ...missingSources.map(source=>`${source} is missing — upload it for full accuracy`),
     merged.summary?.duplicates?`${merged.summary.duplicates} duplicate VIN${merged.summary.duplicates===1?'':'s'} — remove duplicate source rows first`:'',
     merged.summary?.removed?`${merged.summary.removed} existing EV card${merged.summary.removed===1?'':'s'} not in this upload — check for a partial export before approving`:'',
