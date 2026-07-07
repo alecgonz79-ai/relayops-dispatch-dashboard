@@ -609,6 +609,15 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-row-count-grid b, .fleet-row-count-grid em { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .fleet-row-count-grid b { color:#172019; font:1000 13px "Manrope"; line-height:1; margin-bottom:3px; }
 .fleet-row-count-grid em { color:inherit; opacity:.75; font-style:normal; font-size:6px; text-transform:uppercase; letter-spacing:.07em; }
+.fleet-name-lock-strip { display:grid; grid-template-columns:.9fr 1.6fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
+.fleet-name-lock-strip strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
+.fleet-name-lock-strip span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
+.fleet-name-lock-preview { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+.fleet-name-lock-preview span { min-width:0; padding:8px; border-radius:10px; border:1px solid #ebcf83; background:#fff; color:#8a5d08; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-name-lock-preview span.more { background:#fff2cf; }
+.fleet-name-lock-preview b, .fleet-name-lock-preview em { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-name-lock-preview b { color:#172019; font:1000 12px "Manrope"; line-height:1; margin-bottom:3px; }
+.fleet-name-lock-preview em { color:inherit; opacity:.75; font-style:normal; font-size:6px; text-transform:uppercase; letter-spacing:.07em; }
 .rivian-grid { grid-template-columns:repeat(auto-fill,minmax(128px,1fr)); gap:5px; align-items:start; }
 .rivian-grid.tiny-view { grid-template-columns:repeat(auto-fill,minmax(74px,1fr)); gap:4px; }
 .rivian-card { min-height:70px; padding:6px; border:1px solid #d8dcdf; border-radius:9px; background:#fff; display:block; text-align:left; cursor:pointer; box-shadow:0 1px 0 rgba(0,0,0,.04); transition:.16s ease; }
@@ -997,9 +1006,10 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-sync-steps { grid-template-columns:1fr; }
   .fleet-source-checks { grid-template-columns:1fr; }
   .fleet-coverage-strip { grid-template-columns:1fr 1fr; }
-  .fleet-portal-guide, .fleet-next-step, .fleet-trust-strip, .fleet-dispatch-checklist, .fleet-gap-audit, .fleet-source-map, .fleet-source-health, .fleet-row-count-check, .fleet-full-roster-readiness { grid-template-columns:1fr; }
+  .fleet-portal-guide, .fleet-next-step, .fleet-trust-strip, .fleet-dispatch-checklist, .fleet-gap-audit, .fleet-source-map, .fleet-source-health, .fleet-row-count-check, .fleet-name-lock-strip, .fleet-full-roster-readiness { grid-template-columns:1fr; }
   .fleet-source-map-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-row-count-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .fleet-name-lock-preview { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-full-roster-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-source-health-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .trust-mini, .dispatch-check-items { grid-template-columns:1fr; }
