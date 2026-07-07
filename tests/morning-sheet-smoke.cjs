@@ -367,6 +367,7 @@ const checks = `
 
 vm.runInNewContext(`${source}\n${checks}`, context, { filename: 'app.js' });
 const fleetCss = fs.readFileSync('styles.css','utf8');
+  if (!fleetCss.includes('.morning-template-sheet .wave-label span { display:inline-block; writing-mode:vertical-rl; transform:rotate(180deg);') || fleetCss.includes('.morning-template-sheet .pad-label span { display:inline-block; writing-mode:vertical-rl')) throw new Error('Morning template should keep Wave vertical but Pad horizontal');
   if (!fleetCss.includes('minmax(86px,1fr)') || !fleetCss.includes('min-height:46px') || !fleetCss.includes('width:21px; height:11px') || !fleetCss.includes('repeat(7,minmax(0,1fr))') || !fleetCss.includes('.fleet-card-cue') || !fleetCss.includes('.refresh-freshness-summary') || !fleetCss.includes('.rivian-id-summary') || !fleetCss.includes('.fleet-gap-fix-tips') || !fleetCss.includes('.fleet-refresh-blockers') || !fleetCss.includes('.fleet-refresh-guide') || !fleetCss.includes('.name-source-pill em') || !fleetCss.includes('.gap-priority') || !fleetCss.includes('.change-source-pills') || !fleetCss.includes('.warn-approve')) throw new Error('Tiny EV grid should stay compact and scan-friendly');
 
 (async () => {

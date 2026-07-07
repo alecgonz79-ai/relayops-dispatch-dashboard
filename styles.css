@@ -297,7 +297,7 @@ tbody tr:last-child td { border-bottom:0; }
 .morning-template-sheet .wave-label span { display:inline-block; writing-mode:vertical-rl; transform:rotate(180deg); white-space:nowrap; }
 .morning-template-sheet .wave-time-cell { background:#eef3ff; font-size:13px; font-weight:900; text-align:center; white-space:nowrap; }
 .morning-template-sheet .pad-label { background:#eef3ff; font-size:28px; font-weight:900; vertical-align:middle; }
-.morning-template-sheet .pad-label span { display:inline-block; writing-mode:vertical-rl; transform:rotate(180deg); line-height:1; }
+.morning-template-sheet .pad-label span { display:inline-block; line-height:1; }
 .morning-template-sheet .planned-rts-cell { background:#b7a7d8; }
 .morning-template-sheet .sheet-spacer-col { width:24px; min-width:24px; background:#050505 !important; border-color:#050505 !important; color:#050505; padding:0; }
 .morning-template-sheet .wave-separator td, .morning-template-sheet .wave-separator th { height:15px; padding:0; background:#050505 !important; border-color:#050505 !important; color:#050505; }
