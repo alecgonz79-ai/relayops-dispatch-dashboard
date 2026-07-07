@@ -425,6 +425,16 @@ tbody tr:last-child td { border-bottom:0; }
 .portal-coverage-meter span i { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#72c456,#1f8f44); }
 .portal-coverage-meter em { color:#516158; font-style:normal; font-size:7px; font-weight:950; line-height:1.2; }
 .portal-match-actions { display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+.fleetos-roster-coverage { display:grid; grid-template-columns:1.2fr 1.2fr 1fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
+.fleetos-roster-coverage.ok { border-color:#cfe8c7; background:#eef7ea; }
+.fleetos-roster-coverage strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
+.fleetos-roster-coverage span, .fleetos-roster-coverage small { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
+.fleetos-roster-coverage small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleetos-roster-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+.fleetos-roster-stats span { padding:7px 8px; border-radius:9px; background:#fff; border:1px solid #e2e8e3; color:#546159; font-size:7px; font-weight:1000; text-transform:uppercase; letter-spacing:.04em; }
+.fleetos-roster-stats span.warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
+.fleetos-roster-stats span.ok { background:#eef7ea; border-color:#cfe8c7; color:#275c1f; }
+.fleetos-roster-stats b { display:block; color:#172019; font-size:14px; line-height:1; margin-bottom:2px; }
 .fleet-gap-audit { display:grid; grid-template-columns:1fr 1.8fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
 .fleet-gap-audit strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
 .fleet-gap-audit span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
@@ -897,8 +907,9 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-source-map-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-source-health-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .trust-mini, .dispatch-check-items { grid-template-columns:1fr; }
-  .fleet-portal-match { grid-template-columns:1fr; }
+  .fleet-portal-match, .fleetos-roster-coverage { grid-template-columns:1fr; }
   .portal-match-grid { grid-template-columns:1fr 1fr; }
+  .fleetos-roster-stats { grid-template-columns:1fr 1fr 1fr; }
   .fleet-refresh-readiness, .refresh-update-map, .fleet-refresh-guide, .fleet-refresh-guide-map { grid-template-columns:1fr; }
   .fleet-refresh-preview, .fleet-refresh-impact, .fleet-refresh-fields, .fleet-refresh-removed, .fleet-refresh-change-list, .fleet-refresh-battery, .fleet-refresh-status, .rivian-id-summary { grid-template-columns:1fr; }
   .fleet-refresh-impact > strong { grid-column:auto; }

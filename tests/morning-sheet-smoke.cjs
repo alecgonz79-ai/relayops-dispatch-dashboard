@@ -108,11 +108,12 @@ const checks = `
   if (!fleetChangeSourceLabels(['name','battery']).join('|').includes('Amazon: name') || !fleetChangeSourceLabels(['name','battery']).join('|').includes('FleetOS: battery') || !fleetRecentChangesStrip().includes('Amazon:') || !fleetRecentChangesStrip().includes('FleetOS:')) throw new Error('Fleet refresh changes should be grouped by Amazon vs FleetOS source');
   if (state.fleetUpdateSummary.duplicates !== 0 || matchedFleetStats.uniqueVins.size !== 1 || matchedFleetStats.amazon.size !== 1 || matchedFleetStats.fleetos.size !== 1 || matchedFleetStats.both.length !== 1 || matchedFleetStats.amazonOnly.length || matchedFleetStats.fleetosOnly.length || !fleetPortalMatchStrip().includes('unique VINs accounted') || !fleetPortalMatchStrip().includes('matched both') || !fleetPortalMatchStrip().includes('portal-coverage-meter') || !fleetPortalMatchStrip().includes('100% matched both uploads') || !fleetTrustStrip().includes('Board trust: verified') || fleetGapAuditStrip() !== '') throw new Error('FleetOS/Amazon matched VINs should reconcile without duplicate warnings');
   state.fleetExpectedCount = 2;
-  if (!fleetPortalMatchStrip().includes('1 short of expected 2') || !fleetPortalMatchStrip().includes('50% of expected EV count loaded')) throw new Error('Fleet expected count short warning missing');
+  if (!fleetPortalMatchStrip().includes('1 short of expected 2') || !fleetPortalMatchStrip().includes('50% of expected EV count loaded') || !fleetosRosterCoverageStrip().includes('FleetOS battery roster coverage') || !fleetosRosterCoverageStrip().includes('1/2 EVs have battery/range rows') || !fleetosRosterCoverageStrip().includes('1</b>missing battery rows')) throw new Error('Fleet expected count short warning missing');
   if (!fleetDispatchChecklist().includes('Expected EV count covered') || !fleetDispatchChecklist().includes('1/2 portal VINs loaded')) throw new Error('Fleet dispatch checklist should warn when expected EV count is short');
   state.fleetExpectedCount = 1;
   if (!fleetPortalMatchStrip().includes('complete vs expected 1')) throw new Error('Fleet expected count complete warning missing');
   if (!fleetDispatchChecklist().includes('1/1 portal VINs loaded')) throw new Error('Fleet dispatch checklist should show expected EV count coverage');
+  if (!fleetosRosterCoverageStrip().includes('FleetOS battery rows cover the full expected EV roster') || !fleetosRosterCoverageStrip().includes('1/1 EVs have battery/range rows')) throw new Error('FleetOS roster coverage should confirm full battery coverage');
   rivianFleet[0].active = 'Active';
   rivianFleet[0].operational = 'Operational';
   rivianFleet[0].battery = 64;
