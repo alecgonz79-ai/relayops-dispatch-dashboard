@@ -39,7 +39,7 @@ const NAV = [
   { section: 'Owner', admin: true, items: [['admin','Admin control','settings']] }
 ];
 
-const DISPATCHER_SHARE_URL = 'https://ag79-ai.github.io/relayops-dispatch-dashboard/';
+const DISPATCHER_SHARE_URL = 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/';
 const DISPATCHER_SHARE_TEXT = `LLOL Dispatch Opening Operations\n${DISPATCHER_SHARE_URL}`;
 
 const routesSeed = [

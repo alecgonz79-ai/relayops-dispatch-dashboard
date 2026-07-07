@@ -8,7 +8,7 @@ GitHub Pages publishes this static dashboard directly from the root of `main`. E
 
 Dispatcher share link:
 
-https://ag79-ai.github.io/relayops-dispatch-dashboard/
+https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/
 
 Send the full `https://` URL so GroupMe, Slack, text messages, and email turn it into a clickable link.
 
