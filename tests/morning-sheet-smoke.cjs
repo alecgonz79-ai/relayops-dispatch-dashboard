@@ -123,7 +123,7 @@ const checks = `
   const currentBattery = rivianFleet.find(v => v.vin === '7FCEHEB79PN014816').battery;
   applyFleetVehicles(fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),{silent:true});
   const amazonOnlyVehicle = rivianFleet.find(v => v.vin === '7FCEHEB79PN014816');
-  if (amazonOnlyVehicle.battery !== currentBattery || !fleetPage().includes('Amazon only') || !fleetPage().includes('Amazon name verified') || !fleetPage().includes('Needs: FleetOS battery') || !fleetPage().includes('Updated') || !fleetPage().includes('Changed by source') || !fleetPage().includes('Amazon: name, plate, active status, operational state')) throw new Error('Amazon fleet import should preserve battery and flag status changes');
+  if (amazonOnlyVehicle.battery !== currentBattery || !fleetPage().includes('Amazon only') || !fleetPage().includes('Amazon official') || !fleetPage().includes('Amazon name verified') || !fleetPage().includes('Needs: FleetOS battery') || !fleetPage().includes('Updated') || !fleetPage().includes('Changed by source') || !fleetPage().includes('Amazon: name, plate, active status, operational state')) throw new Error('Amazon fleet import should preserve battery and flag status changes');
   if (!fleetSourceStatus().hasAmazon || fleetSourceStatus().hasFleetos) throw new Error('Fleet source status should detect Amazon-only import');
   if (rivianFleet.length !== 1 || fleetCoverageStats().demo !== 0 || !fleetPage().includes('not in upload')) throw new Error('Real fleet import should replace demo-only EV rows');
   resetFleetDemo();
@@ -144,7 +144,7 @@ const checks = `
   applyFleetVehicles(mergedFleet,{silent:true});
   state.expandedFleetVin = '7FCEHEB79PN014816';
   const importedFleetHtml = fleetPage();
-  if (!importedFleetHtml.includes('LLOL EV 21') || !importedFleetHtml.includes('9ABC123') || !importedFleetHtml.includes('41%') || !importedFleetHtml.includes('Verified') || !importedFleetHtml.includes('Amazon name verified') || !importedFleetHtml.includes('Official name from Amazon fleet list') || !importedFleetHtml.includes('loaded') || !importedFleetHtml.includes('Full source view is ready') || !importedFleetHtml.includes('Accuracy check passed') || !importedFleetHtml.includes('Dispatch-ready') || !importedFleetHtml.includes('Refresh full list') || importedFleetHtml.includes('Needs: FleetOS battery') || !importedFleetHtml.includes('Changed by source') || !importedFleetHtml.includes('Amazon:') || !importedFleetHtml.includes('FleetOS: battery, range') || !importedFleetHtml.includes('rows read') || !importedFleetHtml.includes('duplicate VINs') || !importedFleetHtml.includes('EV CSV') || !importedFleetHtml.includes('Gap CSV') || !importedFleetHtml.includes('Upload / paste fleet list') || !importedFleetHtml.includes('EV changed after upload') || !importedFleetHtml.includes('Show changed only')) throw new Error('FleetOS/Amazon fleet import did not update cards');
+  if (!importedFleetHtml.includes('LLOL EV 21') || !importedFleetHtml.includes('9ABC123') || !importedFleetHtml.includes('41%') || !importedFleetHtml.includes('Verified') || !importedFleetHtml.includes('Amazon official') || !importedFleetHtml.includes('Amazon name verified') || !importedFleetHtml.includes('Official name from Amazon fleet list') || !importedFleetHtml.includes('loaded') || !importedFleetHtml.includes('Full source view is ready') || !importedFleetHtml.includes('Accuracy check passed') || !importedFleetHtml.includes('Dispatch-ready') || !importedFleetHtml.includes('Refresh full list') || importedFleetHtml.includes('Needs: FleetOS battery') || !importedFleetHtml.includes('Changed by source') || !importedFleetHtml.includes('Amazon:') || !importedFleetHtml.includes('FleetOS: battery, range') || !importedFleetHtml.includes('rows read') || !importedFleetHtml.includes('duplicate VINs') || !importedFleetHtml.includes('EV CSV') || !importedFleetHtml.includes('Gap CSV') || !importedFleetHtml.includes('Upload / paste fleet list') || !importedFleetHtml.includes('EV changed after upload') || !importedFleetHtml.includes('Show changed only')) throw new Error('FleetOS/Amazon fleet import did not update cards');
   action('fleet-filter-quick',{dataset:{filter:'changed'}});
   if (state.fleetFilter !== 'changed' || !fleetPage().includes('Changed only') || !sortedRivianFleet().length || sortedRivianFleet().some(v => !(state.fleetChangedVins?.[v.vin] || v.changedFields || []).length)) throw new Error('Fleet recent changes quick filter failed');
   state.fleetFilter = 'all';
@@ -198,7 +198,7 @@ const checks = `
   applyFleetVehicles(fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx'),{silent:true});
   state.fleetFilter = 'fleetos-only';
   state.fleetImport = { name: 'FleetOS tracker.xlsx', vehicles: fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx'), uploadedAt: new Date().toISOString() };
-  if (!fleetPage().includes('FleetOS only') || !fleetPage().includes('missing Amazon') || !fleetPage().includes('FleetOS-only VINs need Amazon fleet-list name/status rows') || !fleetPage().includes('Review missing Amazon') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('FleetOS-only fleet filter failed');
+  if (!fleetPage().includes('FleetOS only') || !fleetPage().includes('Needs Amazon') || !fleetPage().includes('missing Amazon') || !fleetPage().includes('FleetOS-only VINs need Amazon fleet-list name/status rows') || !fleetPage().includes('Review missing Amazon') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('FleetOS-only fleet filter failed');
   resetFleetDemo();
   applyFleetVehicles(messyFleet,{silent:true});
   if (rivianFleet[0].name === 'LLOL EV 34' || rivianFleet[0].name !== '7FCTGAAA9PN999999' || fleetPage().includes('<h3>LLOL EV 34</h3>')) throw new Error('FleetOS-only names should not replace official Amazon fleet names');
@@ -332,20 +332,21 @@ const checks = `
   if (!state.equipmentImport || state.equipmentImport.details['37'].device !== '31') throw new Error('Equipment paste shortcut failed');
   state.editMode = true;
   const editableHtml = morningSheetPage();
-  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('data-sheet-cell="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('VAN/DEV/PORT Import') || !editableHtml.includes('EV 1-57 Low → High') || !editableHtml.includes('Randomize EVs') || !editableHtml.includes('Assign Gas Vehicles') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG')) throw new Error('Editable sheet or JPEG control missing');
+  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('data-sheet-cell="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('sheet-spacer-col') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('VAN/DEV/PORT Import') || !editableHtml.includes('EV 1-57 Low → High') || !editableHtml.includes('Randomize EVs') || !editableHtml.includes('Assign Gas Vehicles') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG') || !editableHtml.includes('Click and drag white cells')) throw new Error('Editable sheet or JPEG control missing');
   assignElectricVehicles('low');
   if (state.morningRoutes[0].ev !== '1') throw new Error('Lowest-to-highest EV assignment failed');
   assignGasVehicles();
   if (state.morningRoutes[0].ev !== 'F33') throw new Error('Gas vehicle assignment failed');
   const tsv = morningSheetTsv();
-  if (!tsv.startsWith('WAVE\\tDRIVER\\tROUTE') || !tsv.includes('11:15 (1)')) throw new Error('Google Sheets TSV output missing headers or wave count');
+  const tsvRows = tsv.split('\\n').map(row => row.split('\\t'));
+  if (!tsv.startsWith('WAVE 1 11:15 (1)\\tTaylor Driver') || tsvRows.some(row => row.length !== 22) || tsvRows[0][8] !== '' || tsvRows[0][13] !== '' || tsv.includes('WAVE\\tDRIVER\\tROUTE')) throw new Error('Google Sheets TSV output should match the 22-column template body pasted at A3');
   if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 14) throw new Error('Template row padding missing');
   state.fitMorningRows = true;
   if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 1) throw new Error('Fit-to-drivers row sizing failed');
   if (!morningSheetPage().includes('✓ Fit to drivers')) throw new Error('Fit-to-drivers toggle missing');
   state.fitMorningRows = false;
   state.sheetCopyText = tsv; state.modal = 'sheets-helper';
-  if (!modal().includes('Paste-ready morning sheet') || !modal().includes('sheets-copy-text')) throw new Error('Google Sheets paste helper missing');
+  if (!modal().includes('Paste-ready morning sheet') || !modal().includes('Paste in A3') || !modal().includes('sheets-copy-text')) throw new Error('Google Sheets paste helper missing');
   state.screenshotPreview = 'data:image/jpeg;base64,demo'; state.modal = 'screenshot';
   if (!modal().includes('Approve & save JPEG') || !modal().includes('Driver/Helper')) throw new Error('JPEG approval dialog missing');
   globalThis.__parseXlsx = parseXlsxArrayBuffer;
@@ -354,7 +355,7 @@ const checks = `
 
 vm.runInNewContext(`${source}\n${checks}`, context, { filename: 'app.js' });
 const fleetCss = fs.readFileSync('styles.css','utf8');
-  if (!fleetCss.includes('minmax(86px,1fr)') || !fleetCss.includes('min-height:46px') || !fleetCss.includes('width:21px; height:11px') || !fleetCss.includes('repeat(7,minmax(0,1fr))') || !fleetCss.includes('.fleet-card-cue') || !fleetCss.includes('.refresh-freshness-summary') || !fleetCss.includes('.rivian-id-summary') || !fleetCss.includes('.fleet-gap-fix-tips') || !fleetCss.includes('.fleet-refresh-blockers') || !fleetCss.includes('.fleet-refresh-guide') || !fleetCss.includes('.gap-priority') || !fleetCss.includes('.change-source-pills') || !fleetCss.includes('.warn-approve')) throw new Error('Tiny EV grid should stay compact and scan-friendly');
+  if (!fleetCss.includes('minmax(86px,1fr)') || !fleetCss.includes('min-height:46px') || !fleetCss.includes('width:21px; height:11px') || !fleetCss.includes('repeat(7,minmax(0,1fr))') || !fleetCss.includes('.fleet-card-cue') || !fleetCss.includes('.refresh-freshness-summary') || !fleetCss.includes('.rivian-id-summary') || !fleetCss.includes('.fleet-gap-fix-tips') || !fleetCss.includes('.fleet-refresh-blockers') || !fleetCss.includes('.fleet-refresh-guide') || !fleetCss.includes('.name-source-pill em') || !fleetCss.includes('.gap-priority') || !fleetCss.includes('.change-source-pills') || !fleetCss.includes('.warn-approve')) throw new Error('Tiny EV grid should stay compact and scan-friendly');
 
 (async () => {
   const zip = new JSZip();
