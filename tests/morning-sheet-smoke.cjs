@@ -198,7 +198,7 @@ const checks = `
   applyFleetVehicles(fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx'),{silent:true});
   state.fleetFilter = 'fleetos-only';
   state.fleetImport = { name: 'FleetOS tracker.xlsx', vehicles: fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx'), uploadedAt: new Date().toISOString() };
-  if (!fleetPage().includes('FleetOS only') || !fleetPage().includes('Needs Amazon') || !fleetPage().includes('missing Amazon') || !fleetPage().includes('FleetOS-only VINs need Amazon fleet-list name/status rows') || !fleetPage().includes('Review missing Amazon') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('FleetOS-only fleet filter failed');
+  if (!fleetPage().includes('FleetOS only') || !fleetPage().includes('Needs Amazon') || !fleetPage().includes('missing Amazon') || !fleetPage().includes('FleetOS roster view is showing') || !fleetPage().includes('FleetOS EV count') || !fleetPage().includes('Need Amazon') || !fleetPage().includes('FleetOS-only VINs need Amazon fleet-list name/status rows') || !fleetPage().includes('Review missing Amazon') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('FleetOS-only fleet filter failed');
   resetFleetDemo();
   applyFleetVehicles(messyFleet,{silent:true});
   if (rivianFleet[0].name === 'LLOL EV 34' || rivianFleet[0].name !== '7FCTGAAA9PN999999' || fleetPage().includes('<h3>LLOL EV 34</h3>')) throw new Error('FleetOS-only names should not replace official Amazon fleet names');

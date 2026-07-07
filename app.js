@@ -578,12 +578,12 @@ function fleetPortalMatchStatsForRows(rows=[]) {
 function fleetSourceMapStrip() {
   const stats=fleetPortalMatchStats(), coverage=fleetCoverageStats();
   const amazonAge=fleetSourceAge('amazon'), fleetosAge=fleetSourceAge('fleetos');
-  const expected=Number(state.fleetExpectedCount)||0, expectedShort=expected?Math.max(0,expected-stats.uniqueVins.size):0;
+  const target=fleetCoverageTarget(stats), expected=target.count, expectedShort=expected?Math.max(0,expected-stats.uniqueVins.size):0;
   const rows=[
     {key:'amazon',label:'Amazon names/status',ok:stats.amazon.size>0&&!amazonAge.stale,count:stats.amazon.size,detail:amazonAge.hasUpload?amazonAge.label:'Upload fleet list',action:stats.amazon.size?'fleet-filter-quick':'fleet-import',filter:'missing-amazon',button:'Fix names'},
     {key:'fleetos',label:'FleetOS battery/range',ok:stats.fleetos.size>0&&!fleetosAge.stale,count:stats.fleetos.size,detail:fleetosAge.hasUpload?fleetosAge.label:'Upload tracker',action:stats.fleetos.size?'fleet-filter-quick':'fleet-import',filter:'missing-fleetos',button:'Fix battery'},
     {key:'matched',label:'VINs matched',ok:stats.uniqueVins.size>0&&stats.both.length===stats.uniqueVins.size,count:stats.both.length,detail:stats.uniqueVins.size?`${stats.both.length}/${stats.uniqueVins.size} cards A✓ F✓`:'No portal rows yet',action:stats.uniqueVins.size?'fleet-filter-quick':'fleet-import',filter:'verified',button:'Show verified'},
-    {key:'expected',label:'All EVs covered',ok:expected>0&&!expectedShort,count:expected||stats.uniqueVins.size,detail:expected?`${Math.max(0,expected-expectedShort)}/${expected} expected`:'Set by Amazon upload',action:expected?'fleet-filter-quick':'fleet-import',filter:'needs-data',button:'Review gaps'}
+    {key:'expected',label:'All EVs covered',ok:expected>0&&!expectedShort&&target.official,count:expected||stats.uniqueVins.size,detail:expected?`${Math.max(0,expected-expectedShort)}/${expected} ${target.label}`:'Set by Amazon/FleetOS upload',action:expected?'fleet-filter-quick':'fleet-import',filter:'needs-data',button:target.official?'Review gaps':'Need Amazon'}
   ];
   const ready=rows.every(r=>r.ok)&&coverage.verified===coverage.total&&coverage.total>0;
   const helper=ready?'Clean source map: each EV card has Amazon identity plus FleetOS battery.':'Use the yellow boxes as your to-do list before dispatch.';
@@ -626,17 +626,26 @@ function fleetGapAuditStrip() {
 }
 
 function fleetFullListStrip() {
-  const stats=fleetPortalMatchStats(), expected=Number(state.fleetExpectedCount)||0;
+  const stats=fleetPortalMatchStats(), target=fleetCoverageTarget(stats), expected=target.count;
   const short=expected?Math.max(0,expected-stats.uniqueVins.size):0;
-  const complete=Boolean(stats.amazon.size&&stats.fleetos.size&&!stats.amazonOnly.length&&!stats.fleetosOnly.length&&(!expected||!short));
-  const partial=coverageLabelForFleet(stats,expected);
-  return `<div class="fleet-full-list ${complete?'ok':partial.className}"><div><strong>Full fleet view</strong><span>${esc(partial.message)}</span></div><div class="fleet-full-list-steps"><span><b>${rivianFleet.length}</b>cards showing</span><span><b>${expected||'Set'}</b>${expected?'expected EVs from Amazon':'expected count'}</span><span><b>${short}</b>still missing</span></div><button class="btn small ${complete?'lime':'primary'}" data-action="${complete?'refresh-fleet':'fleet-import'}">${complete?'Refresh full list':'Upload latest lists'}</button></div>`;
+  const complete=Boolean(target.official&&stats.amazon.size&&stats.fleetos.size&&!stats.amazonOnly.length&&!stats.fleetosOnly.length&&(!expected||!short));
+  const partial=coverageLabelForFleet(stats,expected,target);
+  return `<div class="fleet-full-list ${complete?'ok':partial.className}"><div><strong>Full fleet view</strong><span>${esc(partial.message)}</span></div><div class="fleet-full-list-steps"><span><b>${rivianFleet.length}</b>cards showing</span><span><b>${expected||'Set'}</b>${esc(target.shortLabel)}</span><span><b>${short}</b>still missing</span></div><button class="btn small ${complete?'lime':'primary'}" data-action="${complete?'refresh-fleet':'fleet-import'}">${complete?'Refresh full list':'Upload latest lists'}</button></div>`;
 }
 
-function coverageLabelForFleet(stats,expected=0) {
+function fleetCoverageTarget(stats=fleetPortalMatchStats()) {
+  const manual=Number(state.fleetExpectedCount)||0;
+  if(manual)return {count:manual,label:'expected',shortLabel:'expected EVs from Amazon',official:true,source:'Amazon'};
+  if(stats.amazon.size)return {count:stats.amazon.size,label:'Amazon EVs',shortLabel:'Amazon EV count',official:true,source:'Amazon'};
+  if(stats.fleetos.size)return {count:stats.fleetos.size,label:'FleetOS EVs',shortLabel:'FleetOS EV count',official:false,source:'FleetOS'};
+  return {count:0,label:'expected',shortLabel:'expected count',official:false,source:'none'};
+}
+
+function coverageLabelForFleet(stats,expected=0,target=fleetCoverageTarget(stats)) {
   if(!stats.rows.length)return {className:'warn',message:'Demo/sample view. Upload FleetOS and Amazon exports to replace it with every portal EV.'};
+  if(stats.fleetos.size&&!stats.amazon.size)return {className:'warn',message:`FleetOS roster view is showing ${stats.fleetos.size} EV VIN${stats.fleetos.size===1?'':'s'} with battery data. Upload Amazon fleet list next for official van names, plates, and status.`};
   if(!stats.amazon.size||!stats.fleetos.size)return {className:'warn',message:`Partial source view. Upload the ${stats.amazon.size?'FleetOS tracker':'Amazon fleet list'} so every VIN has both name/status and battery data.`};
-  if(expected&&stats.uniqueVins.size<expected)return {className:'warn',message:`Portal lists loaded, but the board is ${expected-stats.uniqueVins.size} EV${expected-stats.uniqueVins.size===1?'':'s'} short of your expected count.`};
+  if(expected&&target.official&&stats.uniqueVins.size<expected)return {className:'warn',message:`Portal lists loaded, but the board is ${expected-stats.uniqueVins.size} EV${expected-stats.uniqueVins.size===1?'':'s'} short of your expected count.`};
   if(stats.amazonOnly.length||stats.fleetosOnly.length)return {className:'warn',message:'Portal lists loaded, but some VINs only exist on one side. Use the Missing FleetOS/Amazon filters.'};
   return {className:'ok',message:'Full source view is ready: Amazon names/status and FleetOS battery rows match by VIN.'};
 }
