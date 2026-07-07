@@ -99,6 +99,9 @@ const checks = `
   const mergedFleet = [...fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),...fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx')];
   if (mergedFleet.length !== 2 || mergedFleet[0].name !== 'LLOL EV 21' || mergedFleet[1].battery !== 41) throw new Error('FleetOS/Amazon fleet row parsing failed');
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet, uploadedAt: '2026-07-05T12:34:00.000Z' };
+  state.fleetRefreshPreview = fleetRefreshPreviewFromVehicles(mergedFleet); state.modal = 'fleet-refresh';
+  if (!state.fleetRefreshPreview.batteryChanges?.length || !modal().includes('Battery changes to review') || !modal().includes('63%') || !modal().includes('41%') || !modal().includes('98 mi') || !modal().includes('64 mi')) throw new Error('Fleet refresh preview should show old to new EV battery/range changes');
+  state.modal = null;
   applyFleetVehicles(mergedFleet,{silent:true});
   const matchedFleetStats = fleetPortalMatchStats();
   if (!fleetChangeSourceLabels(['name','battery']).join('|').includes('Amazon: name') || !fleetChangeSourceLabels(['name','battery']).join('|').includes('FleetOS: battery') || !fleetRecentChangesStrip().includes('Amazon:') || !fleetRecentChangesStrip().includes('FleetOS:')) throw new Error('Fleet refresh changes should be grouped by Amazon vs FleetOS source');
