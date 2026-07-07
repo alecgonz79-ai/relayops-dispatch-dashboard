@@ -31,4 +31,22 @@ Serve this folder with any static web server, then open `index.html` through tha
 
 ## Current boundary
 
-This GitHub Pages version is a functional front-end prototype. It is suitable for workflow validation and file exports, but GitHub Pages is static hosting: it cannot safely hold Amazon credentials or enforce shared user accounts by itself. Real authentication, role enforcement, shared cloud data, true XLSX export, notifications, and approved Amazon Vendor Exchange/API connectivity require a secure backend. The intended production architecture is documented in `PRODUCTION_BUILD_BRIEF.md` and can be implemented with a backend provider while GitHub remains the source of truth.
+This GitHub Pages version is a functional front-end prototype. It is suitable for workflow validation and file exports, but GitHub Pages is static hosting: it cannot safely hold Amazon or FleetOS credentials or enforce shared user accounts by itself. Real authentication, role enforcement, shared cloud data, true XLSX export, notifications, and approved Amazon/FleetOS connectivity require a secure backend. The intended production architecture is documented in `PRODUCTION_BUILD_BRIEF.md` and can be implemented with a backend provider while GitHub remains the source of truth.
+
+## Live Fleet connector
+
+The Fleet page now supports a live connector endpoint. In Fleet → Live setup, paste a secure backend URL such as:
+
+```text
+https://your-backend.example.com/api/fleet/live
+```
+
+When configured, the Refresh button pulls live Amazon + FleetOS data from that endpoint first, then opens the same approval screen before updating EV cards.
+
+Backend scaffold and the required JSON shape live in:
+
+```text
+live-connector/
+```
+
+Never put Amazon/FleetOS usernames, passwords, cookies, or tokens in the GitHub Pages dashboard. Keep those only in the backend connector.
