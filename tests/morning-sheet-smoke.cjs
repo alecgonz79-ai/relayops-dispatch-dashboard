@@ -101,6 +101,7 @@ const checks = `
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet, uploadedAt: '2026-07-05T12:34:00.000Z' };
   state.fleetRefreshPreview = fleetRefreshPreviewFromVehicles(mergedFleet); state.modal = 'fleet-refresh';
   if (!state.fleetRefreshPreview.batteryChanges?.length || !modal().includes('Battery changes to review') || !modal().includes('63%') || !modal().includes('41%') || !modal().includes('98 mi') || !modal().includes('64 mi')) throw new Error('Fleet refresh preview should show old to new EV battery/range changes');
+  if (!state.fleetRefreshPreview.statusChanges?.length || !modal().includes('Amazon status changes to review') || !modal().includes('Active: Active → Inactive') || !modal().includes('Status: Operational → Grounded') || !modal().includes('Plate: 8HJK214 → 9ABC123')) throw new Error('Fleet refresh preview should show old to new Amazon name/status changes');
   state.modal = null;
   applyFleetVehicles(mergedFleet,{silent:true});
   const matchedFleetStats = fleetPortalMatchStats();
