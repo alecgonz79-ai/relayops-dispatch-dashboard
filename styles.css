@@ -749,6 +749,12 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-refresh-impact small { margin-top:4px; color:#516158; font-size:7px; font-weight:1000; line-height:1.25; }
 .fleet-refresh-impact em { margin-top:5px; color:#275c1f; font-style:normal; font-size:7px; font-weight:1000; text-transform:uppercase; letter-spacing:.06em; }
 .fleet-refresh-impact .warn em { color:#8a5d08; }
+.fleet-refresh-fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin:0 0 12px; padding:10px; border-radius:13px; background:#fbfcfa; border:1px solid #dfe7dd; }
+.fleet-refresh-fields strong { grid-column:1/-1; color:#172019; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }
+.fleet-refresh-fields span { padding:8px; border-radius:9px; background:#f5f7f4; color:#66726b; font-size:8px; font-weight:1000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-refresh-fields span.changed { background:#eef7ea; border:1px solid #cfe8c7; color:#275c1f; }
+.fleet-refresh-fields b { display:block; color:#172019; font:1000 13px "Manrope"; line-height:1; margin-bottom:3px; }
+.fleet-refresh-fields small { display:block; color:inherit; opacity:.75; font-size:6px; text-transform:uppercase; letter-spacing:.06em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .fleet-refresh-blockers { display:grid; gap:7px; margin:0 0 12px; padding:10px 11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
 .fleet-refresh-blockers strong { color:#8a5d08; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }
 .fleet-refresh-blockers span { display:block; padding:8px; border-radius:9px; background:#fff; border:1px solid #f0dc9e; color:#6d4b08; font-size:8px; font-weight:950; line-height:1.3; }
@@ -839,7 +845,7 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-portal-match { grid-template-columns:1fr; }
   .portal-match-grid { grid-template-columns:1fr 1fr; }
   .fleet-refresh-readiness, .refresh-update-map, .fleet-refresh-guide, .fleet-refresh-guide-map { grid-template-columns:1fr; }
-  .fleet-refresh-preview, .fleet-refresh-impact, .fleet-refresh-change-list, .rivian-id-summary { grid-template-columns:1fr; }
+  .fleet-refresh-preview, .fleet-refresh-impact, .fleet-refresh-fields, .fleet-refresh-change-list, .rivian-id-summary { grid-template-columns:1fr; }
   .fleet-refresh-impact > strong { grid-column:auto; }
   .fleet-full-list { grid-template-columns:1fr; }
   .fleet-full-list-steps { grid-template-columns:1fr 1fr 1fr; }
