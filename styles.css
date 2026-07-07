@@ -377,7 +377,34 @@ tbody tr:last-child td { border-bottom:0; }
 .entity-stat span, .entity-stat strong { display:block; }
 .entity-stat span { color:var(--muted); font-size:7px; text-transform:uppercase; letter-spacing:.06em; }
 .entity-stat strong { font-size:9px; margin-top:3px; }
+.assistive-text { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .rivian-panel { padding:16px; margin-bottom:16px; }
+.fleet-clean-head { align-items:flex-start; gap:14px; }
+.fleet-primary-actions { align-items:center; }
+.fleet-health-summary { display:grid; grid-template-columns:1.1fr repeat(3,minmax(0,1fr)); gap:10px; margin:2px 0 12px; }
+.fleet-health-card { min-width:0; padding:14px; border-radius:16px; border:1px solid #dfe7dd; background:linear-gradient(180deg,#fff,#f8faf7); box-shadow:0 8px 22px rgba(24,40,32,.05); }
+.fleet-health-card.primary { background:linear-gradient(135deg,#172019,#2d3f32); border-color:#172019; color:#fff; }
+.fleet-health-card.ok { background:#f3fbef; border-color:#cfe8c7; }
+.fleet-health-card.warn { background:#fff8e6; border-color:#ebcf83; }
+.fleet-health-card.danger { background:#ffe7e2; border-color:#f0b2aa; }
+.fleet-health-card strong, .fleet-health-card span, .fleet-health-card small { display:block; }
+.fleet-health-card strong { color:#172019; font:1000 24px "Manrope"; line-height:1; letter-spacing:-.04em; }
+.fleet-health-card.primary strong, .fleet-health-card.primary span, .fleet-health-card.primary small { color:#fff; }
+.fleet-health-card span { margin-top:6px; color:#172019; font-size:9px; font-weight:1000; text-transform:uppercase; letter-spacing:.06em; }
+.fleet-health-card small { margin-top:5px; color:#657269; font-size:8px; font-weight:850; line-height:1.35; }
+.fleet-health-card.primary small { color:rgba(255,255,255,.72); }
+.fleet-clean-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 12px; padding:9px 10px; border:1px solid #e2e8e3; border-radius:14px; background:#fbfcfa; }
+.fleet-view-controls, .fleet-secondary-actions { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.fleet-data-drawer { margin:0 0 12px; border:1px solid #dfe7dd; border-radius:15px; background:#fff; overflow:hidden; }
+.fleet-data-drawer > summary { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; cursor:pointer; list-style:none; background:linear-gradient(180deg,#fbfcfa,#f4f7f3); }
+.fleet-data-drawer > summary::-webkit-details-marker { display:none; }
+.fleet-data-drawer > summary strong, .fleet-data-drawer > summary span { display:block; }
+.fleet-data-drawer > summary strong { color:#172019; font:1000 11px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }
+.fleet-data-drawer > summary span { margin-top:3px; color:#66726b; font-size:8px; font-weight:850; }
+.fleet-data-drawer > summary b { padding:6px 9px; border-radius:999px; background:#172019; color:#fff; font-size:7px; text-transform:uppercase; letter-spacing:.08em; }
+.fleet-data-drawer[open] > summary b { background:#dfe7dd; color:#172019; font-size:0; }
+.fleet-data-drawer[open] > summary b::before { content:'Close'; font-size:7px; }
+.fleet-drawer-body { padding:12px; border-top:1px solid #e7ece8; background:#fff; }
 .fleet-source-note { margin:0 0 12px; padding:10px 11px; border-radius:11px; background:#f5f7f4; color:#5f6b63; font-size:8px; line-height:1.45; }
 .fleet-source-note.stale { background:#fff8e6; border:1px solid #ebcf83; }
 .fleet-source-note strong { display:block; color:#27352d; font-size:9px; margin-bottom:7px; }
@@ -1005,6 +1032,8 @@ tbody tr:last-child td { border-bottom:0; }
   .user-card { justify-content:center; }
   .dashboard-grid, .page-grid, .settings-grid { grid-template-columns:1fr; }
   .fleet-grid, .team-grid, .report-grid { grid-template-columns:repeat(2,1fr); }
+  .fleet-health-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .fleet-clean-toolbar { align-items:flex-start; flex-direction:column; }
   .rivian-grid { grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); }
   .rivian-card { padding:8px; }
   .sheets-helper { grid-template-columns:1fr; align-items:start; }
@@ -1032,7 +1061,8 @@ tbody tr:last-child td { border-bottom:0; }
   .readiness-top { align-items:flex-start; }
   .readiness-steps { grid-template-columns:1fr; }
   .phase-strip { grid-template-columns:1fr 1fr; }
-  .fleet-grid, .team-grid, .report-grid, .rivian-grid, .field-grid { grid-template-columns:1fr; }
+  .fleet-grid, .team-grid, .report-grid, .rivian-grid, .field-grid, .fleet-health-summary { grid-template-columns:1fr; }
+  .fleet-clean-toolbar { align-items:flex-start; flex-direction:column; }
   .fleet-sync-steps { grid-template-columns:1fr; }
   .fleet-source-checks { grid-template-columns:1fr; }
   .fleet-coverage-strip { grid-template-columns:1fr 1fr; }
