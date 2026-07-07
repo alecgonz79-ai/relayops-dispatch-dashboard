@@ -253,7 +253,21 @@ const checks = `
   if (state.fleetSearch !== '' || state.fleetFilter !== 'all' || sortedRivianFleet().length !== rivianFleet.length) throw new Error('Fleet clear search/filter failed');
   state.fleetExpectedCount = rivianFleet.length + 1;
   refreshFleetStatus();
-  if (state.modal !== 'fleet-refresh' || !state.fleetRefreshPreview || state.fleetRefreshPreview.expectedShort !== 1 || !state.fleetRefreshPreview.blockers.length || !state.fleetRefreshPreview.fieldBreakdown?.length || !modal().includes('Approve fleet refresh') || !modal().includes('source rows read') || !modal().includes('short of expected') || !modal().includes('Fix before approving') || !modal().includes('1 EV short of expected') || !modal().includes('Refresh will update') || !modal().includes('Changed fields by source') || !modal().includes('Active / Inactive') || !modal().includes('Operational / Grounded') || !modal().includes('Battery %') || !modal().includes('Range miles') || !modal().includes('Amazon fleet list') || !modal().includes('Amazon wins for van names and status') || !modal().includes('FleetOS tracker') || !modal().includes('FleetOS wins for battery and range') || !modal().includes('official EV name') || !modal().includes('battery %, range miles') || !modal().includes('Accuracy reminder') || !modal().includes('upload fresh exports first before approving') || !modal().includes('warn-approve') || !modal().includes('Approve anyway')) throw new Error('Fleet refresh should show approval preview before applying');
+  if (state.modal !== 'fleet-refresh' || !state.fleetRefreshPreview || state.fleetRefreshPreview.expectedShort !== 1 || !state.fleetRefreshPreview.blockers.length || !state.fleetRefreshPreview.fieldBreakdown?.length || !modal().includes('Approve fleet refresh') || !modal().includes('source rows read') || !modal().includes('short of expected') || !modal().includes('not in upload') || !modal().includes('Fix before approving') || !modal().includes('1 EV short of expected') || !modal().includes('Refresh will update') || !modal().includes('Changed fields by source') || !modal().includes('Active / Inactive') || !modal().includes('Operational / Grounded') || !modal().includes('Battery %') || !modal().includes('Range miles') || !modal().includes('Amazon fleet list') || !modal().includes('Amazon wins for van names and status') || !modal().includes('FleetOS tracker') || !modal().includes('FleetOS wins for battery and range') || !modal().includes('official EV name') || !modal().includes('battery %, range miles') || !modal().includes('Accuracy reminder') || !modal().includes('upload fresh exports first before approving') || !modal().includes('warn-approve') || !modal().includes('Approve anyway')) throw new Error('Fleet refresh should show approval preview before applying');
+  resetFleetDemo();
+  const twoEvFleetRows = fleetDetailsFromRows([
+    ['Source','Vehicle Name','VIN','License Plate','Active','Operational Status','Battery %','Range Miles'],
+    ['Amazon fleet list','LLOL EV 21','7FCEHEB79PN014816','9ABC123','Active','Operational','',''],
+    ['FleetOS tracker','','7FCEHEB79PN014816','','','','41%','77'],
+    ['Amazon fleet list','LLOL EV 22','7FCTGAAA1PN000184','9XYZ222','Active','Operational','',''],
+    ['FleetOS tracker','','7FCTGAAA1PN000184','','','','88%','137']
+  ],'combined fleet table.csv');
+  applyFleetVehicles(twoEvFleetRows,{silent:true});
+  state.fleetImport = { name: 'partial amazon fleet list.csv', vehicles: fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'), uploadedAt: new Date().toISOString() };
+  refreshFleetStatus();
+  if (!state.fleetRefreshPreview.removed || !state.fleetRefreshPreview.blockers.some(x => x.includes('not in this upload')) || !modal().includes('partial export')) throw new Error('Fleet refresh should warn before a partial upload removes EV cards');
+  applyFleetVehicles(mergedFleet,{silent:true});
+  state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet, uploadedAt: new Date().toISOString() };
   state.fleetExpectedCount = 0;
   refreshFleetStatus();
   if (!state.fleetRefreshPreview || state.fleetRefreshPreview.blockers.length || !modal().includes('Approve refresh') || modal().includes('Approve anyway')) throw new Error('Clean fleet refresh should show normal approval button');
