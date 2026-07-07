@@ -423,6 +423,7 @@ function fleetPage() {
   return `${contextBar(`<a class="btn small ghost" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">${ICONS.link} Rivian tracker</a><a class="btn small ghost" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">${ICONS.link} Amazon fleet list</a>`)}
   <section class="grid kpi-grid">${kpiCard('Rivian battery avg',`${avg}%`,`${low} below 40%`,'van',low?'#fff2cf':'#e9f7df')}${kpiCard('EVs tracked',rivianFleet.length,readyCopy,'van',coverage.needsData?'#fff2cf':'#e9f7df')}${kpiCard('Verified EVs',`${coverage.verified}/${coverage.total}`,`${coverage.needsData} need data`,'check',coverage.needsData?'#fff2cf':'#e9f7df')}${kpiCard('Grounded EVs',grounded,'Tap a van for details','alert',grounded?'#ffe7e2':'#e9f7df')}</section>
   <article class="card rivian-panel"><div class="card-head"><div class="card-title"><h2>FleetOS + Amazon EV live board</h2><p>Compact EV grid for battery %, VIN, license plate, active status, and operational state. Last refresh: ${esc(state.fleetLastRefresh)}.</p>${fleetHeaderAccuracyBadge()}</div><div class="head-actions"><input class="fleet-search-input" data-fleet-search placeholder="Find EV, VIN, or plate" value="${esc(state.fleetSearch)}"><label class="fleet-count-label">Expected EVs<input class="fleet-count-input" data-fleet-expected type="number" min="0" inputmode="numeric" value="${state.fleetExpectedCount||''}" placeholder="all"></label><select class="filter-select" data-fleet-filter>${filters.map(value=>`<option value="${value}" ${state.fleetFilter===value?'selected':''}>${labels[value]}</option>`).join('')}</select><button class="btn small ghost" data-action="clear-fleet-search">Clear</button><select class="filter-select" data-fleet-view><option value="tiny" ${state.fleetView==='tiny'?'selected':''}>View: Tiny grid</option><option value="detail" ${state.fleetView==='detail'?'selected':''}>View: Detail grid</option></select><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><button class="btn small lime" data-action="refresh-fleet">${ICONS.download} Refresh battery % + status</button><button class="btn small" data-action="export-fleet-csv">${ICONS.download} EV CSV</button><button class="btn small" data-action="export-fleet-gaps">${ICONS.download} Gap CSV</button><button class="btn small primary" data-action="fleet-import">${ICONS.upload} Upload / paste fleet list</button><button class="btn small ghost" data-action="reset-fleet-demo">Clear upload</button><a class="btn small" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">FleetOS</a><a class="btn small" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">Amazon</a></div></div>
+  ${fleetSourceTimestampStrip()}
   ${fleetHeaderRefreshGuide()}
   ${fleetNextStepBox()}
   ${fleetPortalQuickStart()}
@@ -447,6 +448,15 @@ function fleetHeaderAccuracyBadge() {
   else if(stale){tone='stale';label='STALE';detail=`Upload fresh files: Amazon ${amazonAge.label}, FleetOS ${fleetosAge.label}`;}
   else if(stats.rows.length){tone='warn';label='NOT READY';detail=`${coverage.verified}/${coverage.total} verified · ${coverage.needsData+stats.amazonOnly.length+stats.fleetosOnly.length+short+duplicateCount} issue${coverage.needsData+stats.amazonOnly.length+stats.fleetosOnly.length+short+duplicateCount===1?'':'s'} to fix`;}
   return `<div class="fleet-header-badge ${tone}" title="${esc(detail)}"><b>Header status: ${esc(label)}</b><span>${esc(detail)}</span></div>`;
+}
+
+function fleetSourceTimestampStrip() {
+  const sourceBox=(key,label,fields)=>{
+    const age=fleetSourceAge(key), uploaded=fleetSourceUploadedAt(key), upload=state.fleetSourceUploads?.[key], rows=upload?.vehicles?.length||0;
+    const status=!age.hasUpload?'Missing':age.stale?'Stale':'Fresh', tone=!age.hasUpload||age.stale?'warn':'ok';
+    return `<span class="${tone}"><b>${esc(label)}</b><em>${esc(status)} · ${esc(age.label)}</em><small>${rows?`${rows} rows · loaded ${uploaded}`:'No upload yet'} · ${esc(fields)}</small></span>`;
+  };
+  return `<div class="fleet-source-timestamps"><strong>Source timestamps</strong>${sourceBox('amazon','Amazon fleet list','name / plate / active / grounded')}${sourceBox('fleetos','FleetOS tracker','battery % / range miles')}<button class="btn small primary" data-action="fleet-import">Upload fresh files</button></div>`;
 }
 
 function fleetNextStepBox() {
