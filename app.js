@@ -205,6 +205,7 @@ let state = {
   vanParkingPasteText: '',
   vanParkingBatteries: JSON.parse(localStorage.getItem('relayops_van_parking_batteries') || 'null') || {},
   selectedParkingId: localStorage.getItem('relayops_selected_parking_id') || '',
+  parkingMode: localStorage.getItem('relayops_parking_mode') || 'manual',
   fleetChangedVins: {},
   fleetUpdateSummary: null,
   fleetRefreshPreview: null,
@@ -537,7 +538,9 @@ function parkingSlotInput(slot) {
   const tone=slot.kind==='crosswalk'?' crosswalk-slot':slot.kind==='overflow'?' overflow-slot':slot.kind==='street'?' street-slot':'';
   const selected=state.selectedParkingId===slot.id?' selected':'';
   const battery=parkingBatteryForSlot(slot);
-  return `<label class="parking-slot${tone}${selected}" title="${esc(slot.label)}" data-parking-select="${esc(slot.id)}"><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}" data-parking-id="${esc(slot.id)}" value="${esc(slot.value||'')}" placeholder=""><em>${battery!==''?`${esc(battery)}%`:''}</em></label>`;
+  const blocked=/^x$/i.test(String(slot.value||''))||slot.kind==='blocked';
+  const charging=slot.kind==='charging'||/\(\d{1,3}%\)/.test(String(slot.value||''));
+  return `<label class="parking-slot${tone}${selected}${blocked?' blocked':''}${charging?' charging':''}" title="${esc(slot.label)}" data-parking-select="${esc(slot.id)}"><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}" data-parking-id="${esc(slot.id)}" value="${esc(slot.value||'')}" placeholder=""><em>${battery!==''?`${esc(battery)}%`:blocked?'BLOCK':charging?'CHG':''}</em></label>`;
 }
 function parkingStack(zone,title,subtitle='') {
   return `<section class="parking-stack ${zone}"><div class="parking-stack-title"><strong>${esc(title)}</strong>${subtitle?`<small>${esc(subtitle)}</small>`:''}</div>${parkingSlots(zone).map(parkingSlotInput).join('')}</section>`;
@@ -558,11 +561,16 @@ function parkingBatteryEditor() {
   const slot=selectedParkingSlot();
   if(!slot)return '';
   const battery=parkingBatteryForSlot(slot);
-  return `<div class="parking-selected-card"><div><span class="eyebrow">Selected van</span><strong>${esc(slot.value||'Empty spot')}</strong><small>${esc(slot.label)} · ${esc(slot.zone)}</small></div><label>Battery %<input data-parking-battery="${esc(slot.id)}" type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="Type %"></label><button class="btn small" data-action="clear-selected-parking">Clear selected</button></div>`;
+  const kinds=['spot','charging','crosswalk','overflow','street','blocked'];
+  return `<div class="parking-selected-card"><div><span class="eyebrow">Selected van</span><strong>${esc(slot.value||'Empty spot')}</strong><small>${esc(slot.label)} · ${esc(slot.zone)}</small></div><label>Battery %<input data-parking-battery="${esc(slot.id)}" type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="Type %"></label><label>Spot type<select data-parking-kind="${esc(slot.id)}">${kinds.map(k=>`<option value="${k}" ${slot.kind===k?'selected':''}>${k}</option>`).join('')}</select></label><div class="parking-selected-actions"><button class="btn small" data-action="clear-selected-parking">Clear selected</button><button class="btn small ghost" data-action="remove-selected-parking">Remove temp spot</button></div></div>`;
+}
+function parkingModeControls() {
+  const modes=[['auto','Auto','Reset to base layout'],['assisted','Assisted','Edit vans + battery'],['manual','Manual','Add/remove custom spots']];
+  return `<div class="parking-mode-controls">${modes.map(([mode,label,detail])=>`<button class="${state.parkingMode===mode?'active':''}" data-action="set-parking-mode" data-mode="${mode}"><b>${esc(label)}</b><span>${esc(detail)}</span></button>`).join('')}<button class="add-temp-spot" data-action="add-parking-spot">${ICONS.plus} Add temp spot</button></div>`;
 }
 function vanParkingSection() {
   const stats=vanParkingStats();
-  return `<article class="van-parking-card" id="van-parking"><div class="van-parking-head"><div><span class="eyebrow">Van Parking</span><h2>Parking Map</h2><p>Closing dispatcher updates this at night. Morning dispatcher uses it to keep each wave parked together and avoid drivers hunting for vans.</p></div><div class="parking-head-actions"><span class="parking-updated">Updated ${esc(state.vanParkingUpdated||'today')}</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking list</button><button class="btn small ghost" data-action="reset-parking">Reset mockup</button></div></div><div class="parking-helper-grid park-easy-stats"><div><strong>${stats.filled}</strong><span>occupied / assigned</span></div><div><strong>${stats.overflow}</strong><span>overflow + crosswalk spots</span></div><div><strong>Click a van</strong><span>Type EV number or battery %.</span></div></div><div class="parking-import-row"><div class="parking-drop" id="parking-drop" tabindex="0"><b>Drop parking list here</b><span>CSV, XLSX, TXT, or a copied Google Sheets export. One EV per row works best.</span><button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Choose file</button></div>${parkingBatteryEditor()}<div class="parking-paste-box"><label for="parking-paste-text">Paste parking list</label><textarea id="parking-paste-text" placeholder="57&#10;2&#10;1&#10;4&#10;...">${esc(state.vanParkingPasteText)}</textarea><button class="btn small" data-action="parse-parking-paste">Fill parking spots</button></div></div><div class="parking-lot sheet-style park-easy-map"><div class="parking-map-grid"><div class="parking-empty-grid"></div><div class="parking-top-block"><div class="parking-lane"></div>${parkingStack('northLeft','', '')}<div class="parking-lane skinny"></div>${parkingStack('northRight','', '')}<div class="parking-lane"></div></div><div class="parking-street-row">${parkingStreetCells()}</div><div class="parking-main-block"><div class="parking-lane vertical"></div>${parkingStack('west','', '')}<div class="parking-crosswalk"><div class="tent-icon">⛺</div><strong>TENT</strong>${parkingStack('crosswalk','', '')}</div>${parkingStack('east','', '')}<div class="parking-lane vertical"></div></div><div class="parking-side-area"><div class="parking-date-box"><strong>DATE LAST UPDATED:</strong><span>${esc(state.vanParkingUpdated||'')}</span></div></div></div></div></article>`;
+  return `<article class="van-parking-card" id="van-parking"><div class="van-parking-head"><div><span class="eyebrow">Van Parking</span><h2>Parking Map</h2><p>Closing dispatcher updates this at night. Morning dispatcher uses it to keep each wave parked together and avoid drivers hunting for vans.</p></div><div class="parking-head-actions"><span class="parking-updated">Updated ${esc(state.vanParkingUpdated||'today')}</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking list</button><button class="btn small ghost" data-action="reset-parking">Reset mockup</button></div></div>${parkingModeControls()}<div class="parking-helper-grid park-easy-stats"><div><strong>${stats.filled}</strong><span>occupied / assigned</span></div><div><strong>${stats.overflow}</strong><span>overflow + crosswalk spots</span></div><div><strong>Click a van</strong><span>Type EV number, battery %, or spot type.</span></div></div><div class="parking-import-row"><div class="parking-drop" id="parking-drop" tabindex="0"><b>Drop parking list here</b><span>CSV, XLSX, TXT, or a copied Google Sheets export. One EV per row works best.</span><button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Choose file</button></div>${parkingBatteryEditor()}<div class="parking-paste-box"><label for="parking-paste-text">Paste parking list</label><textarea id="parking-paste-text" placeholder="57&#10;2&#10;1&#10;4&#10;...">${esc(state.vanParkingPasteText)}</textarea><button class="btn small" data-action="parse-parking-paste">Fill parking spots</button></div></div><div class="parking-lot sheet-style park-easy-map"><div class="parking-map-grid"><div class="parking-empty-grid"></div><div class="parking-top-block"><div class="parking-lane"></div>${parkingStack('northLeft','', '')}<div class="parking-lane skinny"></div>${parkingStack('northRight','', '')}<div class="parking-lane"></div></div><div class="parking-street-row">${parkingStreetCells()}</div><div class="parking-main-block"><div class="parking-lane vertical"></div>${parkingStack('west','', '')}<div class="parking-crosswalk"><div class="tent-icon">⛺</div><strong>TENT</strong>${parkingStack('crosswalk','', '')}</div>${parkingStack('east','', '')}<div class="parking-lane vertical"></div></div><div class="parking-side-area"><div class="parking-date-box"><strong>DATE LAST UPDATED:</strong><span>${esc(state.vanParkingUpdated||'')}</span></div></div></div></div></article>`;
 }
 
 function vanParkingPage() {
@@ -1438,6 +1446,7 @@ function bind() {
     el.addEventListener('input',()=>updateParkingSlot(el.dataset.parkingId,el.value,false));
   });
   document.querySelectorAll('[data-parking-battery]').forEach(el=>el.addEventListener('input',()=>updateParkingBattery(el.dataset.parkingBattery,el.value)));
+  document.querySelectorAll('[data-parking-kind]').forEach(el=>el.addEventListener('change',()=>updateParkingKind(el.dataset.parkingKind,el.value)));
   document.querySelectorAll('[data-edit-field]').forEach(el=>{
     el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);});
     el.addEventListener('mousedown',e=>handleSheetMouseDown(e,el));
@@ -1529,6 +1538,58 @@ function updateParkingBattery(id,value) {
   persist();
 }
 
+function updateParkingKind(id,kind='spot') {
+  const slot=(state.vanParking||[]).find(s=>s.id===id);
+  if(!slot)return;
+  slot.kind=kind;
+  if(kind==='blocked'&&!slot.value)slot.value='X';
+  state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
+  persist();render();
+}
+
+function addParkingSpot() {
+  const id=`manual-${Date.now().toString().slice(-6)}`;
+  const slot={id,zone:'crosswalk',label:`Manual spot ${parkingSlots('crosswalk').length+1}`,value:'',kind:'crosswalk',manual:true};
+  state.vanParking=[...(state.vanParking||[]),slot];
+  state.selectedParkingId=id;
+  state.parkingMode='manual';
+  state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
+  persist();render();
+  toast('Temporary parking spot added to the crosswalk');
+}
+
+function removeSelectedParkingSpot() {
+  const slot=selectedParkingSlot();
+  if(!slot)return toast('No parking spot selected','error');
+  if(!slot.manual) {
+    slot.value='';
+    delete state.vanParkingBatteries?.[slot.id];
+    state.selectedParkingId=slot.id;
+    state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
+    persist();render();
+    return toast('Base spot cleared. Only temporary spots can be removed.');
+  }
+  state.vanParking=(state.vanParking||[]).filter(s=>s.id!==slot.id);
+  delete state.vanParkingBatteries?.[slot.id];
+  state.selectedParkingId='';
+  state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
+  persist();render();
+  toast('Temporary parking spot removed');
+}
+
+function setParkingMode(mode='manual') {
+  state.parkingMode=mode;
+  if(mode==='auto') {
+    state.vanParking=defaultVanParkingSlots();
+    state.selectedParkingId='';
+    state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
+    persist();render();
+    return toast('Auto layout restored to the base parking map');
+  }
+  persist();render();
+  toast(`${mode[0].toUpperCase()+mode.slice(1)} parking mode on`);
+}
+
 function parkingImportValuesFromText(text='') {
   const rows=rowsFromPastedTable(text);
   if(rows.length) {
@@ -1576,6 +1637,7 @@ function resetVanParking() {
   state.vanParkingUpdated='7/6';
   state.vanParkingPasteText='';
   state.selectedParkingId='';
+  state.parkingMode='manual';
   persist();render();
   toast('Van Parking reset to the mockup layout');
 }
@@ -1854,6 +1916,9 @@ function action(name,el) {
   if (name==='reset-parking') return resetVanParking();
   if (name==='parse-parking-paste') return parseParkingPasteAction();
   if (name==='clear-selected-parking') { state.selectedParkingId='';persist();render();return toast('Selected van cleared'); }
+  if (name==='add-parking-spot') return addParkingSpot();
+  if (name==='remove-selected-parking') return removeSelectedParkingSpot();
+  if (name==='set-parking-mode') return setParkingMode(el.dataset.mode||'manual');
   if (name==='copy-refresh-missing-vins') return copyRefreshMissingVins();
   if (name==='copy-visible-fleet-vins') return copyVisibleFleetVins();
   if (name==='copy') return copyRows();
@@ -2882,7 +2947,7 @@ function downloadFleetTemplate(){const h=['Source','Vehicle Name','VIN','License
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function persist(){
-  localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');
+  localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');
 }
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
