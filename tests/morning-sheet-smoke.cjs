@@ -341,14 +341,14 @@ const checks = `
   state.copyMode = true;
   state.editMode = false;
   const copyModeHtml = morningSheetPage();
-  if (!copyModeHtml.includes('copy-ops-sheet') || !copyModeHtml.includes('sheet-letters-row') || !copyModeHtml.includes('data-sheet-copy-cell="true"') || !copyModeHtml.includes('Copy selected cells') || !copyModeHtml.includes('STOP COUNT') || !copyModeHtml.includes('PACKAGE COUNT') || !copyModeHtml.includes('PLANNED RTS') || copyModeHtml.includes('PRE DVIC') || !copyModeHtml.includes('Driver–Staging → B3')) throw new Error('Copy mode should be Sheets-like and paste-block focused');
+  if (!copyModeHtml.includes('copy-ops-sheet') || !copyModeHtml.includes('morning-template-sheet') || !copyModeHtml.includes('sheet-letters-row') || !copyModeHtml.includes('data-sheet-copy-cell="true"') || !copyModeHtml.includes('data-sheet-section="0"') || !copyModeHtml.includes('Copy selected cells') || !copyModeHtml.includes('STOP COUNT') || !copyModeHtml.includes('PACKAGE COUNT') || !copyModeHtml.includes('PLANNED RTS') || !copyModeHtml.includes('11:15 (1)') || copyModeHtml.includes('PRE DVIC') || !copyModeHtml.includes('spacer columns I and L')) throw new Error('Copy mode should be Sheets-like and match the A-M morning template');
   const copyModeRows = morningCopyRowsForSections(morningSections(filteredMorningRows()));
-  if (copyModeRows[0].values.length !== 11 || copyModeRows[0].values[0] !== 'WAVE 1 11:15 (1)' || copyModeRows[0].values[5] !== 'F33' || String(copyModeRows[0].values[8]) !== '177' || String(copyModeRows[0].values[9]) !== '340') throw new Error('Copy mode rows should include Wave through Portable plus Stop/Package/Planned RTS');
+  if (copyModeRows[0].values.length !== 13 || copyModeRows[0].values[0] !== 'WAVE 1' || copyModeRows[0].values[5] !== 'F33' || copyModeRows[0].values[8] !== '' || String(copyModeRows[0].values[9]) !== '177' || String(copyModeRows[0].values[10]) !== '340') throw new Error('Copy mode rows should include the A-M template columns');
   state.copyMode = false;
   const tsv = morningSheetTsv();
   const tsvRows = tsv.split('\\n').map(row => row.split('\\t'));
-  if (!tsv.startsWith('WAVE 1 11:15 (1)\\tTaylor Driver') || tsvRows.some(row => row.length !== 22) || tsvRows[0][8] !== '' || tsvRows[0][13] !== '' || tsv.includes('WAVE\\tDRIVER\\tROUTE')) throw new Error('Google Sheets TSV output should match the 22-column template body pasted at A3');
-  if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 14) throw new Error('Template row padding missing');
+  if (!tsv.startsWith('WAVE 1\\tTaylor Driver') || !tsv.includes('\\n11:15 (1)\\t') || tsvRows.some(row => row.length !== 13) || tsvRows[0][8] !== '' || tsvRows[0][11] !== '' || tsv.includes('WAVE\\tDRIVER\\tROUTE')) throw new Error('Google Sheets TSV output should match the A-M template body pasted at A3');
+  if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 12) throw new Error('Template row padding missing');
   state.fitMorningRows = true;
   if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 1) throw new Error('Fit-to-drivers row sizing failed');
   if (!morningSheetPage().includes('✓ Fit to drivers')) throw new Error('Fit-to-drivers toggle missing');
@@ -358,7 +358,7 @@ const checks = `
   let capturedFormattedMorning = null;
   downloadBlob = (data,type,name) => { capturedFormattedMorning = { data, type, name }; };
   exportMorningTemplateSheet();
-  if (!capturedFormattedMorning || capturedFormattedMorning.name !== 'LLOL-opening-operations-formatted.xls' || capturedFormattedMorning.type !== 'application/vnd.ms-excel' || !capturedFormattedMorning.data.includes('rowspan="14"') || !capturedFormattedMorning.data.includes('WAVE 1 11:15 (1)') || !capturedFormattedMorning.data.includes('class="spacer"')) throw new Error('Formatted morning XLS export missing template layout');
+  if (!capturedFormattedMorning || capturedFormattedMorning.name !== 'LLOL-opening-operations-formatted.xls' || capturedFormattedMorning.type !== 'application/vnd.ms-excel' || !capturedFormattedMorning.data.includes('rowspan="12"') || !capturedFormattedMorning.data.includes('WAVE 1') || !capturedFormattedMorning.data.includes('11:15 (1)') || !capturedFormattedMorning.data.includes('class="spacer"')) throw new Error('Formatted morning XLS export missing template layout');
   state.screenshotPreview = 'data:image/jpeg;base64,demo'; state.modal = 'screenshot';
   if (!modal().includes('Approve & save JPEG') || !modal().includes('Driver/Helper')) throw new Error('JPEG approval dialog missing');
   globalThis.__parseXlsx = parseXlsxArrayBuffer;
