@@ -633,7 +633,7 @@ function fleetosRosterCoverageStrip() {
   const tone=expected&&!short&&stats.fleetos.size?'ok':'warn';
   const missing=[...stats.amazon].filter(vin=>!stats.fleetos.has(vin)).slice(0,4);
   const copy=tone==='ok'?'FleetOS battery rows cover the full expected EV roster.':'FleetOS export may be partial — upload the full tracker list or review missing battery VINs.';
-  const action=tone==='ok'?'<button class="btn small lime" data-action="refresh-fleet">Review refresh</button>':'<div class="portal-match-actions"><button class="btn small" data-action="fleet-filter-quick" data-filter="missing-fleetos">Show missing battery</button><button class="btn small primary" data-action="export-fleetos-missing">Download missing battery CSV</button></div>';
+  const action=tone==='ok'?'<button class="btn small lime" data-action="refresh-fleet">Review refresh</button>':'<div class="portal-match-actions"><button class="btn small" data-action="fleet-filter-quick" data-filter="missing-fleetos">Show missing battery</button><button class="btn small" data-action="copy-fleetos-missing">Copy missing VINs</button><button class="btn small primary" data-action="export-fleetos-missing">Download missing battery CSV</button></div>';
   return `<div class="fleetos-roster-coverage ${tone}"><div><strong>FleetOS battery roster coverage</strong><span>${esc(copy)}</span><div class="portal-coverage-meter"><span><b>FleetOS coverage</b><i style="width:${pct}%"></i></span><em>${covered}/${expected||covered} EVs have battery/range rows${target.source!=='none'?` · target from ${esc(target.source)}`:''}</em></div></div><div class="fleetos-roster-stats"><span class="${short?'warn':'ok'}"><b>${short}</b>missing battery rows</span><span><b>${covered}</b>FleetOS battery EVs</span><span><b>${expected||'Set'}</b>${esc(target.shortLabel)}</span></div><small>Missing battery VINs: ${esc(missing.join(', ')||'None')}</small>${action}</div>`;
 }
 
@@ -1426,6 +1426,7 @@ function action(name,el) {
   if (name==='export-fleet-csv') return exportFleetCSV();
   if (name==='export-fleet-gaps') return exportFleetGapsCSV();
   if (name==='export-fleetos-missing') return exportMissingFleetosCSV();
+  if (name==='copy-fleetos-missing') return copyMissingFleetosVins();
   if (name==='copy') return copyRows();
   if (name==='template-csv') return downloadTemplate();
   if (name==='equipment-template-csv') return downloadEquipmentTemplate();
@@ -2162,6 +2163,8 @@ function missingFleetosRows() {
   });
 }
 function exportMissingFleetosCSV(){const h=['VIN','Vehicle Name','License Plate','Active','Operational Status','Amazon Uploaded At','FleetOS Uploaded At','Fix'];const rows=missingFleetosRows();downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8','relayops-missing-fleetos-battery.csv');toast(rows.length?`${rows.length} missing FleetOS battery row${rows.length===1?'':'s'} downloaded`:'No missing FleetOS battery rows found');}
+function missingFleetosVinText(){return missingFleetosRows().map(r=>r[0]).filter(Boolean).join('\n');}
+async function copyMissingFleetosVins(){const rows=missingFleetosRows(), text=missingFleetosVinText();if(!rows.length)return toast('No missing FleetOS battery VINs to copy');const ok=await writeClipboardText(text);toast(ok?`${rows.length} missing FleetOS VIN${rows.length===1?'':'s'} copied`:'Clipboard access was blocked — download the missing battery CSV instead',ok?'':'error');return ok;}
 function exportExcel(){
   const rows=[exportHeaders,...exportRows()];
   const xml=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1D4D35" ss:Pattern="Solid"/></Style><Style ss:ID="Cell"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E6DF"/></Borders></Style></Styles><Worksheet ss:Name="Daily Roster"><Table>${rows.map((r,i)=>`<Row>${r.map(v=>`<Cell ss:StyleID="${i===0?'Header':'Cell'}"><Data ss:Type="${typeof v==='number'?'Number':'String'}">${xmlEscape(v)}</Data></Cell>`).join('')}</Row>`).join('')}</Table><AutoFilter xmlns="urn:schemas-microsoft-com:office:excel" x:Range="R1C1:R${rows.length}C${exportHeaders.length}" xmlns:x="urn:schemas-microsoft-com:office:excel"/></Worksheet></Workbook>`;

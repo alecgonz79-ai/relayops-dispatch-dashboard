@@ -202,7 +202,7 @@ const checks = `
   state.fleetExpectedCount = 2;
   const gapRows = fleetGapRows();
   if (!gapRows.some(row => row[0] === 'HIGH' && row[1] === 'Missing FleetOS battery/range' && row[2] === '7FCEHEB79PN014816' && row[9] === 'Amazon only — battery needs FleetOS' && row[10] === 2 && row[11] === '2026-07-05T12:00:00.000Z') || !gapRows.some(row => row[0] === 'MED' && row[1] === 'Expected EV count short' && row[9] === 'Expected count from Amazon fleet list')) throw new Error('Fleet gap rows should include missing FleetOS and expected count shortage');
-  if (!fleetosRosterCoverageStrip().includes('Download missing battery CSV') || !fleetosRosterCoverageStrip().includes('export-fleetos-missing')) throw new Error('FleetOS coverage strip should offer a focused missing-battery export');
+  if (!fleetosRosterCoverageStrip().includes('Download missing battery CSV') || !fleetosRosterCoverageStrip().includes('Copy missing VINs') || !fleetosRosterCoverageStrip().includes('export-fleetos-missing') || !fleetosRosterCoverageStrip().includes('copy-fleetos-missing')) throw new Error('FleetOS coverage strip should offer focused missing-battery actions');
   let capturedGapCsv = null;
   downloadBlob = (data,type,name) => { capturedGapCsv = { data, type, name }; };
   exportFleetGapsCSV();
@@ -211,6 +211,7 @@ const checks = `
   downloadBlob = (data,type,name) => { capturedMissingFleetosCsv = { data, type, name }; };
   exportMissingFleetosCSV();
   if (!capturedMissingFleetosCsv || capturedMissingFleetosCsv.name !== 'relayops-missing-fleetos-battery.csv' || !capturedMissingFleetosCsv.data.includes('VIN,Vehicle Name,License Plate') || !capturedMissingFleetosCsv.data.includes('7FCEHEB79PN014816') || !capturedMissingFleetosCsv.data.includes('Upload FleetOS tracker row for this VIN')) throw new Error('Focused missing FleetOS CSV export failed');
+  if (missingFleetosVinText() !== '7FCEHEB79PN014816') throw new Error('Focused missing FleetOS VIN copy text failed');
   state.fleetExpectedCount = 0;
   state.fleetFilter = 'amazon-only';
   if (!fleetPage().includes('Amazon only') || !fleetPage().includes('Upload missing source') || !fleetPage().includes('Partial source view') || !fleetPage().includes('Not uploaded yet') || !fleetPage().includes('Review missing FleetOS') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'Amazon only')) throw new Error('Amazon-only fleet filter failed');
