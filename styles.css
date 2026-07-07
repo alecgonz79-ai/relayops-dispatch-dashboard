@@ -821,6 +821,16 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-full-roster-grid b, .fleet-full-roster-grid em { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .fleet-full-roster-grid b { color:#172019; font:1000 13px "Manrope"; line-height:1; margin-bottom:3px; }
 .fleet-full-roster-grid em { color:inherit; opacity:.75; font-style:normal; font-size:6px; text-transform:uppercase; letter-spacing:.07em; }
+.fleet-dispatcher-proof { display:grid; grid-template-columns:.85fr 2fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:12px; border-radius:14px; border:1px solid #ebcf83; background:#fff8e6; }
+.fleet-dispatcher-proof.ok { border-color:#b9ddb0; background:#f3fbef; }
+.fleet-dispatcher-proof strong { display:block; color:#172019; font:1000 12px "Manrope"; margin-bottom:3px; }
+.fleet-dispatcher-proof > div:first-child span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
+.fleet-dispatcher-proof-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; }
+.fleet-dispatcher-proof-grid span { min-width:0; padding:8px; border-radius:10px; border:1px solid #ebcf83; background:#fff2cf; color:#8a5d08; font-size:8px; font-weight:1000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-dispatcher-proof-grid span.ok { border-color:#cfe8c7; background:#fff; color:#275c1f; }
+.fleet-dispatcher-proof-grid b, .fleet-dispatcher-proof-grid em { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-dispatcher-proof-grid b { color:#172019; font:1000 13px "Manrope"; line-height:1; margin-bottom:3px; }
+.fleet-dispatcher-proof-grid em { color:inherit; opacity:.75; font-style:normal; font-size:6px; text-transform:uppercase; letter-spacing:.07em; }
 .fleet-source-health { display:grid; grid-template-columns:.8fr 2fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
 .fleet-source-health.ok { background:#f3fbef; border-color:#cfe8c7; }
 .fleet-source-health strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
@@ -1006,11 +1016,12 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-sync-steps { grid-template-columns:1fr; }
   .fleet-source-checks { grid-template-columns:1fr; }
   .fleet-coverage-strip { grid-template-columns:1fr 1fr; }
-  .fleet-portal-guide, .fleet-next-step, .fleet-trust-strip, .fleet-dispatch-checklist, .fleet-gap-audit, .fleet-source-map, .fleet-source-health, .fleet-row-count-check, .fleet-name-lock-strip, .fleet-full-roster-readiness { grid-template-columns:1fr; }
+  .fleet-portal-guide, .fleet-next-step, .fleet-trust-strip, .fleet-dispatch-checklist, .fleet-gap-audit, .fleet-source-map, .fleet-source-health, .fleet-row-count-check, .fleet-name-lock-strip, .fleet-dispatcher-proof, .fleet-full-roster-readiness { grid-template-columns:1fr; }
   .fleet-source-map-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-row-count-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-name-lock-preview { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-full-roster-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .fleet-dispatcher-proof-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .fleet-source-health-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .trust-mini, .dispatch-check-items { grid-template-columns:1fr; }
   .fleet-portal-match, .fleetos-roster-coverage { grid-template-columns:1fr; }
