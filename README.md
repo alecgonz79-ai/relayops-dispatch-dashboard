@@ -6,6 +6,12 @@ A dispatcher-first opening operations dashboard for LLOL dispatchers, with origi
 
 GitHub Pages publishes this static dashboard directly from the root of `main`. Every push to `main` updates the public site automatically.
 
+Dispatcher share link:
+
+https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/
+
+Send the full `https://` URL so GroupMe, Slack, text messages, and email turn it into a clickable link.
+
 ## Local preview
 
 Serve this folder with any static web server, then open `index.html` through that server. The prototype has no build step.
