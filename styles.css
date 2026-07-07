@@ -760,6 +760,11 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-refresh-impact small { margin-top:4px; color:#516158; font-size:7px; font-weight:1000; line-height:1.25; }
 .fleet-refresh-impact em { margin-top:5px; color:#275c1f; font-style:normal; font-size:7px; font-weight:1000; text-transform:uppercase; letter-spacing:.06em; }
 .fleet-refresh-impact .warn em { color:#8a5d08; }
+.fleet-refresh-decision { display:flex; align-items:center; gap:10px; margin:0 0 12px; padding:10px 11px; border-radius:13px; border:1px solid #cfe8c7; background:#f3fbef; }
+.fleet-refresh-decision.warn { border-color:#ebcf83; background:#fff8e6; }
+.fleet-refresh-decision b { width:42px; height:28px; border-radius:10px; display:grid; place-items:center; background:#2c7c4b; color:#fff; font:1000 10px "Manrope"; letter-spacing:.08em; }
+.fleet-refresh-decision.warn b { background:#c98211; }
+.fleet-refresh-decision span { color:#26362d; font-size:9px; font-weight:1000; line-height:1.35; }
 .fleet-refresh-fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin:0 0 12px; padding:10px; border-radius:13px; background:#fbfcfa; border:1px solid #dfe7dd; }
 .fleet-refresh-fields strong { grid-column:1/-1; color:#172019; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }
 .fleet-refresh-fields span { padding:8px; border-radius:9px; background:#f5f7f4; color:#66726b; font-size:8px; font-weight:1000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
