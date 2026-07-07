@@ -169,7 +169,8 @@ const checks = `
   applyFleetVehicles(fleetDetailsFromRows(duplicateFleetRows,'amazon fleet list.csv'),{silent:true});
   if (state.fleetUpdateSummary.duplicates !== 1 || !state.fleetUpdateSummary.duplicateVins.includes('7FCEHEB79PN014816') || !fleetPage().includes('duplicate VINs') || !fleetTrustStrip().includes('1 duplicate VIN in upload') || !fleetDispatchChecklist().includes('No duplicate VINs') || !fleetDispatchChecklist().includes('1 duplicate VIN') || !fleetAccuracyGate().includes('1 duplicate VIN') || !fleetPage().includes('7FCEHEB79PN014816') || !fleetGapRows().some(row => row[0] === 'HIGH' && row[1] === 'Duplicate VIN in upload' && row[2] === '7FCEHEB79PN014816')) throw new Error('Fleet duplicate VIN warning failed');
   const duplicatePreview = fleetRefreshPreviewFromVehicles(fleetDetailsFromRows(duplicateFleetRows,'amazon fleet list.csv'));
-  if (!duplicatePreview.blockers.some(x => x.includes('duplicate VIN')) || duplicatePreview.duplicates !== 1) throw new Error('Fleet refresh preview should block duplicate VIN approval');
+  state.fleetRefreshPreview = duplicatePreview; state.modal = 'fleet-refresh';
+  if (!duplicatePreview.blockers.some(x => x.includes('duplicate VIN')) || duplicatePreview.duplicates !== 1 || !modal().includes('Duplicate VINs in upload') || !modal().includes('7FCEHEB79PN014816')) throw new Error('Fleet refresh preview should block duplicate VIN approval');
   applyFleetVehicles(mergedFleet,{silent:true});
   state.fleetFilter = 'grounded';
   if (!fleetPage().includes('LLOL EV 21') || sortedRivianFleet().some(v => v.operational !== 'Grounded')) throw new Error('Grounded fleet filter failed');
