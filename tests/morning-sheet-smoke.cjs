@@ -332,7 +332,7 @@ const checks = `
   if (!state.equipmentImport || state.equipmentImport.details['37'].device !== '31') throw new Error('Equipment paste shortcut failed');
   state.editMode = true;
   const editableHtml = morningSheetPage();
-  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('data-sheet-cell="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('sheet-spacer-col') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('VAN/DEV/PORT Import') || !editableHtml.includes('EV 1-57 Low → High') || !editableHtml.includes('Randomize EVs') || !editableHtml.includes('Assign Gas Vehicles') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG') || !editableHtml.includes('Click and drag white cells')) throw new Error('Editable sheet or JPEG control missing');
+  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('data-sheet-cell="true"') || !editableHtml.includes('<th>PORTABLE</th>') || !editableHtml.includes('sheet-spacer-col') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('VAN/DEV/PORT Import') || !editableHtml.includes('EV 1-57 Low → High') || !editableHtml.includes('Randomize EVs') || !editableHtml.includes('Assign Gas Vehicles') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Formatted XLS') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG') || !editableHtml.includes('Click and drag white cells')) throw new Error('Editable sheet or JPEG control missing');
   assignElectricVehicles('low');
   if (state.morningRoutes[0].ev !== '1') throw new Error('Lowest-to-highest EV assignment failed');
   assignGasVehicles();
@@ -347,6 +347,10 @@ const checks = `
   state.fitMorningRows = false;
   state.sheetCopyText = tsv; state.modal = 'sheets-helper';
   if (!modal().includes('Paste-ready morning sheet') || !modal().includes('Paste in A3') || !modal().includes('sheets-copy-text')) throw new Error('Google Sheets paste helper missing');
+  let capturedFormattedMorning = null;
+  downloadBlob = (data,type,name) => { capturedFormattedMorning = { data, type, name }; };
+  exportMorningTemplateSheet();
+  if (!capturedFormattedMorning || capturedFormattedMorning.name !== 'LLOL-opening-operations-formatted.xls' || capturedFormattedMorning.type !== 'application/vnd.ms-excel' || !capturedFormattedMorning.data.includes('rowspan="14"') || !capturedFormattedMorning.data.includes('WAVE 1 11:15 (1)') || !capturedFormattedMorning.data.includes('class="spacer"')) throw new Error('Formatted morning XLS export missing template layout');
   state.screenshotPreview = 'data:image/jpeg;base64,demo'; state.modal = 'screenshot';
   if (!modal().includes('Approve & save JPEG') || !modal().includes('Driver/Helper')) throw new Error('JPEG approval dialog missing');
   globalThis.__parseXlsx = parseXlsxArrayBuffer;
