@@ -2007,13 +2007,20 @@ async function parseXlsxArrayBuffer(buffer) {
   const paths=[]; const sheetRe=/<(?:\w+:)?sheet\b([^>]*?)(?:\/>|>[\s\S]*?<\/(?:\w+:)?sheet>)/gi; let sheet;
   while((sheet=sheetRe.exec(workbook))) { const id=(sheet[1].match(/\br:id="([^"]+)"/i)||[])[1], target=relationMap[id]; if(target){const clean=target.replace(/^\//,'').replace(/^\.\.\//,'');paths.push(clean.startsWith('xl/')?clean:`xl/${clean}`);} }
   if(!paths.length) paths.push(...Object.keys(zip.files).filter(p=>/^xl\/worksheets\/sheet\d+\.xml$/i.test(p)).sort());
-  let fallback=[];
+  let fallback=[], bestVinSheet=null;
   for(const path of paths) {
     const rows=parseWorksheetXml(await read(path),shared); if(!rows.length)continue; if(!fallback.length)fallback=rows;
     const header=rows.findIndex(row=>{const cells=row.map(v=>String(v).toLowerCase().replace(/[^a-z0-9]/g,''));return cells.includes('dsp')&&cells.includes('routecode')&&cells.includes('wave')&&cells.includes('staginglocation');});
     if(header>=0) return rows.slice(header);
+    const vinHeader=rows.findIndex(row=>row.map(headerKey).some(h=>['vin','vinnumber','vehiclevin','vehicleidentificationnumber'].includes(h)));
+    if(vinHeader>=0) {
+      const keys=rows[vinHeader].map(headerKey);
+      const fleetCols=['vin','vinnumber','vehiclevin','vehicleidentificationnumber','vehiclename','licenseplate','active','operational','battery','batterypercent','soc','stateofcharge','rangemiles','estimatedrange'];
+      const score=(rows.length-vinHeader)*10+keys.filter(h=>fleetCols.includes(h)).length;
+      if(!bestVinSheet||score>bestVinSheet.score) bestVinSheet={score,rows:rows.slice(vinHeader)};
+    }
   }
-  return fallback;
+  return bestVinSheet?.rows||fallback;
 }
 
 function applyImport() {
