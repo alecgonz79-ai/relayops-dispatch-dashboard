@@ -222,7 +222,11 @@ const checks = `
   applyFleetVehicles(fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx'),{silent:true});
   state.fleetFilter = 'fleetos-only';
   state.fleetImport = { name: 'FleetOS tracker.xlsx', vehicles: fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx'), uploadedAt: new Date().toISOString() };
-  if (!fleetPage().includes('FleetOS only') || !fleetPage().includes('Needs Amazon') || !fleetPage().includes('missing Amazon') || !fleetPage().includes('FleetOS roster view is showing') || !fleetPage().includes('FleetOS EV count') || !fleetPage().includes('Need Amazon') || !fleetPage().includes('FleetOS-only VINs need Amazon fleet-list name/status rows') || !fleetPage().includes('Review missing Amazon') || !fleetPage().includes('Copy Amazon VINs') || missingAmazonVinText() !== '7FCEHEB79PN014816' || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('FleetOS-only fleet filter failed');
+  if (!fleetPage().includes('FleetOS only') || !fleetPage().includes('Needs Amazon') || !fleetPage().includes('missing Amazon') || !fleetPage().includes('FleetOS roster view is showing') || !fleetPage().includes('FleetOS EV count') || !fleetPage().includes('Need Amazon') || !fleetPage().includes('FleetOS-only VINs need Amazon fleet-list name/status rows') || !fleetPage().includes('Review missing Amazon') || !fleetPage().includes('Copy Amazon VINs') || !fleetPage().includes('Download missing Amazon CSV') || missingAmazonVinText() !== '7FCEHEB79PN014816' || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('FleetOS-only fleet filter failed');
+  let capturedMissingAmazonCsv = null;
+  downloadBlob = (data,type,name) => { capturedMissingAmazonCsv = { data, type, name }; };
+  exportMissingAmazonCSV();
+  if (!capturedMissingAmazonCsv || capturedMissingAmazonCsv.name !== 'relayops-missing-amazon-name-status.csv' || !capturedMissingAmazonCsv.data.includes('VIN,Temporary Name,Battery %') || !capturedMissingAmazonCsv.data.includes('7FCEHEB79PN014816') || !capturedMissingAmazonCsv.data.includes('Upload Amazon fleet-list row for this VIN')) throw new Error('Focused missing Amazon CSV export failed');
   resetFleetDemo();
   applyFleetVehicles(messyFleet,{silent:true});
   if (rivianFleet[0].name === 'LLOL EV 34' || rivianFleet[0].name !== '7FCTGAAA9PN999999' || fleetPage().includes('<h3>LLOL EV 34</h3>')) throw new Error('FleetOS-only names should not replace official Amazon fleet names');
