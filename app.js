@@ -440,14 +440,14 @@ function fleetPortalQuickStart() {
 
 function fleetHeaderAccuracyBadge() {
   const stats=fleetPortalMatchStats(), coverage=fleetCoverageStats(), expected=Number(state.fleetExpectedCount)||0;
-  const amazonAge=fleetSourceAge('amazon'), fleetosAge=fleetSourceAge('fleetos'), duplicateCount=state.fleetUpdateSummary?.duplicates||0;
+  const amazonAge=fleetSourceAge('amazon'), fleetosAge=fleetSourceAge('fleetos'), duplicateCount=state.fleetUpdateSummary?.duplicates||0, conflictCount=state.fleetUpdateSummary?.conflicts||0;
   const short=expected?Math.max(0,expected-stats.uniqueVins.size):0;
   const stale=(amazonAge.hasUpload&&amazonAge.stale)||(fleetosAge.hasUpload&&fleetosAge.stale);
-  const verified=stats.rows.length&&stats.amazon.size&&stats.fleetos.size&&!duplicateCount&&!coverage.needsData&&!short&&!stats.amazonOnly.length&&!stats.fleetosOnly.length&&!stale&&coverage.verified===coverage.total;
+  const verified=stats.rows.length&&stats.amazon.size&&stats.fleetos.size&&!duplicateCount&&!conflictCount&&!coverage.needsData&&!short&&!stats.amazonOnly.length&&!stats.fleetosOnly.length&&!stale&&coverage.verified===coverage.total;
   let tone='demo', label='DEMO', detail='Upload Amazon + FleetOS before trusting EV battery/status.';
   if(verified){tone='ok';label='VERIFIED';detail=`${coverage.verified}/${coverage.total} EVs matched by VIN · sources fresh`;}
   else if(stale){tone='stale';label='STALE';detail=`Upload fresh files: Amazon ${amazonAge.label}, FleetOS ${fleetosAge.label}`;}
-  else if(stats.rows.length){tone='warn';label='NOT READY';detail=`${coverage.verified}/${coverage.total} verified · ${coverage.needsData+stats.amazonOnly.length+stats.fleetosOnly.length+short+duplicateCount} issue${coverage.needsData+stats.amazonOnly.length+stats.fleetosOnly.length+short+duplicateCount===1?'':'s'} to fix`;}
+  else if(stats.rows.length){const issueCount=coverage.needsData+stats.amazonOnly.length+stats.fleetosOnly.length+short+duplicateCount+conflictCount;tone='warn';label='NOT READY';detail=`${coverage.verified}/${coverage.total} verified · ${issueCount} issue${issueCount===1?'':'s'} to fix`;}
   return `<div class="fleet-header-badge ${tone}" title="${esc(detail)}"><b>Header status: ${esc(label)}</b><span>${esc(detail)}</span></div>`;
 }
 
@@ -463,7 +463,7 @@ function fleetSourceTimestampStrip() {
 function fleetNextStepBox() {
   const stats=fleetPortalMatchStats(), coverage=fleetCoverageStats(), amazonAge=fleetSourceAge('amazon'), fleetosAge=fleetSourceAge('fleetos');
   const expected=Number(state.fleetExpectedCount)||0, expectedShort=expected?Math.max(0,expected-stats.uniqueVins.size):0;
-  const duplicates=state.fleetUpdateSummary?.duplicates||0, grounded=rivianFleet.filter(v=>v.operational==='Grounded').length, low=rivianFleet.filter(v=>v.battery<40).length;
+  const duplicates=state.fleetUpdateSummary?.duplicates||0, conflicts=state.fleetUpdateSummary?.conflicts||0, grounded=rivianFleet.filter(v=>v.operational==='Grounded').length, low=rivianFleet.filter(v=>v.battery<40).length;
   const hasAmazon=stats.amazon.size>0||coverage.amazonOnly>0||coverage.verified>0;
   const hasFleetos=stats.fleetos.size>0||coverage.fleetosOnly>0||coverage.verified>0;
   let step={tone:'warn',badge:'1',title:'Upload today’s Amazon + FleetOS files',detail:'Start here: upload both portal exports so EV names, VINs, status, and battery % can match.',action:'fleet-import',button:'Upload files'};
@@ -472,6 +472,7 @@ function fleetNextStepBox() {
   else if(hasFleetos&&!hasAmazon) step={tone:'warn',badge:'2',title:'Upload Amazon fleet list next',detail:'FleetOS battery is loaded. Add Amazon so every VIN gets the official van name, plate, and status.',action:'fleet-import',button:'Upload Amazon'};
   else if((amazonAge.hasUpload&&amazonAge.stale)||(fleetosAge.hasUpload&&fleetosAge.stale)) step={tone:'warn',badge:'!',title:'Upload fresh portal exports',detail:`Saved data is stale: Amazon ${amazonAge.label}, FleetOS ${fleetosAge.label}. Upload fresh files before dispatch.`,action:'fleet-import',button:'Upload fresh files'};
   else if(duplicates) step={tone:'warn',badge:'!',title:'Fix duplicate VINs before trusting the board',detail:`${duplicates} duplicate VIN${duplicates===1?'':'s'} found. Download the gap CSV or clean the source file.`,action:'export-fleet-gaps',button:'Gap CSV'};
+  else if(conflicts) step={tone:'warn',badge:'!',title:'Fix conflicting VIN data',detail:`${conflicts} conflicting field${conflicts===1?'':'s'} found for the same VIN/source. Clean the export before refresh.`,action:'export-fleet-gaps',button:'Gap CSV'};
   else if(expectedShort) step={tone:'warn',badge:'!',title:'Fleet list is short',detail:`${expectedShort} EV${expectedShort===1?' is':'s are'} missing from expected ${expected}. Check if the export was partial.`,action:'export-fleet-gaps',button:'Gap CSV'};
   else if(coverage.needsData) step={tone:'warn',badge:'3',title:'Review EVs missing data',detail:`${coverage.needsData} card${coverage.needsData===1?' needs':'s need'} plate, status, Amazon name, or FleetOS battery data.`,action:'fleet-filter-quick',filter:'needs-data',button:'Show needs data'};
   else if(grounded||low) step={tone:'caution',badge:'4',title:'Review grounded or low-battery EVs',detail:`${grounded} grounded · ${low} below 40%. Decide what needs charge, swap, or maintenance follow-up.`,action:'fleet-filter-quick',filter:grounded?'grounded':'low',button:'Review EVs'};
@@ -484,11 +485,13 @@ function fleetTrustStrip() {
   const amazonAge=fleetSourceAge('amazon'), fleetosAge=fleetSourceAge('fleetos');
   const short=expected?Math.max(0,expected-stats.uniqueVins.size):0;
   const duplicateCount=state.fleetUpdateSummary?.duplicates||0;
+  const conflictCount=state.fleetUpdateSummary?.conflicts||0;
   const issues=[];
   if(!stats.rows.length)issues.push('No real portal upload yet');
   if(!stats.amazon.size)issues.push('Amazon names/status missing');
   if(!stats.fleetos.size)issues.push('FleetOS battery missing');
   if(duplicateCount)issues.push(`${duplicateCount} duplicate VIN${duplicateCount===1?'':'s'} in upload`);
+  if(conflictCount)issues.push(`${conflictCount} conflicting field${conflictCount===1?'':'s'} in upload`);
   if(stats.amazonOnly.length)issues.push(`${stats.amazonOnly.length} VIN${stats.amazonOnly.length===1?'':'s'} missing FleetOS`);
   if(stats.fleetosOnly.length)issues.push(`${stats.fleetosOnly.length} VIN${stats.fleetosOnly.length===1?'':'s'} missing Amazon`);
   if(coverage.needsData)issues.push(`${coverage.needsData} card${coverage.needsData===1?'':'s'} need data`);
@@ -506,6 +509,7 @@ function fleetDispatchChecklist() {
   const amazonAge=fleetSourceAge('amazon'), fleetosAge=fleetSourceAge('fleetos');
   const expected=Number(state.fleetExpectedCount)||0, expectedShort=expected?Math.max(0,expected-stats.uniqueVins.size):0;
   const duplicateVins=state.fleetUpdateSummary?.duplicateVins||[], duplicateCount=duplicateVins.length;
+  const conflictCount=state.fleetUpdateSummary?.conflicts||0;
   const grounded=rivianFleet.filter(v=>v.operational==='Grounded').length, low=rivianFleet.filter(v=>v.battery<40).length;
   const missingPortalFilter=stats.amazonOnly.length?'missing-fleetos':stats.fleetosOnly.length?'missing-amazon':'';
   const items=[
@@ -514,6 +518,7 @@ function fleetDispatchChecklist() {
     {ok:stats.both.length>0&&!stats.amazonOnly.length&&!stats.fleetosOnly.length,label:'VINs match both portals',detail:stats.uniqueVins.size?`${stats.both.length}/${stats.uniqueVins.size} matched`:'No portal VINs yet',action:missingPortalFilter?'fleet-filter-quick':'export-fleet-gaps',filter:missingPortalFilter,button:missingPortalFilter?'Review':'Gap CSV'},
     {ok:expected>0&&!expectedShort,label:'Expected EV count covered',detail:expected?`${stats.uniqueVins.size}/${expected} portal VINs loaded`:'Need Amazon fleet count',action:expectedShort?'export-fleet-gaps':'fleet-import',button:expectedShort?'Gap CSV':'Upload'},
     {ok:duplicateCount===0,label:'No duplicate VINs',detail:duplicateCount?`${duplicateCount} duplicate VIN${duplicateCount===1?'':'s'}`:'No duplicate rows',action:'export-fleet-gaps',button:'Gap CSV'},
+    {ok:conflictCount===0,label:'No conflicting VIN data',detail:conflictCount?`${conflictCount} conflict${conflictCount===1?'':'s'} to clean`:'No field conflicts',action:'export-fleet-gaps',button:'Gap CSV'},
     {ok:coverage.needsData===0,label:'No missing card data',detail:coverage.needsData?`${coverage.needsData} need review`:'All cards filled',action:'fleet-filter-quick',filter:'needs-data',button:'Review'},
     {ok:grounded===0&&low===0,label:'No grounded / low battery surprises',detail:`${grounded} grounded · ${low} low`,action:grounded?'fleet-filter-quick':'fleet-filter-quick',filter:grounded?'grounded':'low',button:'Review'}
   ];
@@ -525,7 +530,8 @@ function fleetUpdateSummary() {
   const s=state.fleetUpdateSummary;
   if(!s)return '';
   const duplicateList=(s.duplicateVins||[]).slice(0,3).join(', ');
-  return `<div class="fleet-update-summary"><span><b>${s.input}</b> rows read</span><span><b>${s.updated}</b> updated</span><span><b>${s.newCount}</b> new</span><span class="${s.duplicates?'warn':''}"><b>${s.duplicates||0}</b> duplicate VINs${duplicateList?`<em>${esc(duplicateList)}${s.duplicateVins.length>3?'…':''}</em>`:''}</span><span><b>${s.removed||0}</b> not in upload</span><span><b>${s.visible}</b> showing now</span></div>`;
+  const conflictList=(s.conflictVins||[]).slice(0,3).join(', ');
+  return `<div class="fleet-update-summary"><span><b>${s.input}</b> rows read</span><span><b>${s.updated}</b> updated</span><span><b>${s.newCount}</b> new</span><span class="${s.duplicates?'warn':''}"><b>${s.duplicates||0}</b> duplicate VINs${duplicateList?`<em>${esc(duplicateList)}${s.duplicateVins.length>3?'…':''}</em>`:''}</span><span class="${s.conflicts?'warn':''}"><b>${s.conflicts||0}</b> field conflicts${conflictList?`<em>${esc(conflictList)}${s.conflictVins.length>3?'…':''}</em>`:''}</span><span><b>${s.removed||0}</b> not in upload</span><span><b>${s.visible}</b> showing now</span></div>`;
 }
 
 function fleetResultBar(visible=0,filterLabel='Show all EVs') {
@@ -875,9 +881,11 @@ function fleetAccuracyGate() {
   const short=expected?Math.max(0,expected-stats.uniqueVins.size):0;
   const fleetosAge=fleetSourceAge('fleetos'), amazonAge=fleetSourceAge('amazon');
   const duplicateCount=state.fleetUpdateSummary?.duplicates||0;
+  const conflictCount=state.fleetUpdateSummary?.conflicts||0;
   const issues=[];
   if(!stats.rows.length)issues.push('upload Amazon + FleetOS');
   if(duplicateCount)issues.push(`${duplicateCount} duplicate VIN${duplicateCount===1?'':'s'}`);
+  if(conflictCount)issues.push(`${conflictCount} field conflict${conflictCount===1?'':'s'}`);
   if(coverage.demo)issues.push('replace demo cards');
   if(coverage.amazonOnly)issues.push(`${coverage.amazonOnly} need FleetOS battery`);
   if(coverage.fleetosOnly)issues.push(`${coverage.fleetosOnly} need Amazon names/status`);
@@ -1134,11 +1142,12 @@ function modal() {
     const statusReview=(p.statusChanges||[]).map(x=>`<span class="${esc(x.tone||'')}"><b>${esc(x.name)}</b>${(x.lines||[]).map(line=>`<small>${esc(line)}</small>`).join('')}</span>`).join('');
     const removedPreview=(p.removedVehicles||[]).slice(0,6).map(v=>`<span><b>${esc(v.name||v.vin)}</b>${esc(v.vin||'')}</span>`).join('');
     const duplicatePreview=(p.duplicateVins||[]).slice(0,6).map(vin=>`<span><b>${esc(vin)}</b>Duplicate source row</span>`).join('');
+    const conflictPreview=(p.conflictRows||[]).slice(0,6).map(x=>`<span><b>${esc(x.vin)}</b>${esc(x.source)} · ${esc(x.field)}<small>${esc((x.values||[]).join(' vs '))}</small></span>`).join('');
     const missingVinPreview=(p.missingVinPreview||[]).map(x=>`<span><b>${esc(x.vin)}</b>${esc(x.issue)}<small>${esc(x.source)}</small></span>`).join('');
     const unknownShortage=p.unknownExpectedShort?`<div class="fleet-refresh-unknown-short"><strong>Unknown missing EV</strong><span>${esc(p.unknownExpectedShort)} expected EV${p.unknownExpectedShort===1?' is':'s are'} not in the uploaded rows yet. Upload the full Amazon fleet list and FleetOS tracker so RelayOps can identify the exact VIN.</span></div>`:'';
     const decision=blockers.length?`Wait — ${blockers.length} item${blockers.length===1?'':'s'} need review before approving.`:'Safe to approve — no duplicate, missing-source, partial-upload, or expected-count blockers found.';
     const approvalSummary=`<div class="fleet-refresh-approval-summary ${blockers.length?'warn':'ok'}"><strong>Approval summary</strong><span class="${blockers.length?'warn':'ok'}"><b>${blockers.length?'WAIT':'SAFE'}</b>${blockers.length?`${blockers.length} blocker${blockers.length===1?'':'s'} before approval`:'Ready to approve after review'}</span><span><b>${p.updated}</b>card${p.updated===1?'':'s'} changing</span><span><b>${(p.statusChanges||[]).length}</b>Amazon status/name changes</span><span><b>${(p.batteryChanges||[]).length}</b>FleetOS battery/range changes</span><span class="${missing.length?'warn':'ok'}"><b>${missing.length?missing.join(' + '):'Both'}</b>${missing.length?'source missing':'sources present'}</span></div>`;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-refresh-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">REVIEW BEFORE REFRESH</span><h2 id="fleet-refresh-title">Approve fleet refresh</h2><p>RelayOps found saved portal data. Review the counts, then approve to update the EV grid.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="fleet-refresh-decision ${blockers.length?'warn':'ok'}"><b>${blockers.length?'WAIT':'SAFE'}</b><span>${esc(decision)}</span></div>${approvalSummary}<div class="fleet-refresh-preview ${tone}"><span><b>${p.input}</b>source rows read</span><span><b>${p.total}</b>EV cards after refresh</span><span><b>${p.updated}</b>cards will change</span><span><b>${p.newCount}</b>new EVs</span><span class="${p.removed?'warn':''}"><b>${p.removed||0}</b>not in upload</span><span class="${p.duplicates?'warn':''}"><b>${p.duplicates}</b>duplicate VINs</span><span class="${p.expectedShort?'warn':''}"><b>${p.expected?p.expectedShort:'Set'}</b>${p.expected?p.expectedShort?`short of expected ${p.expected}`:`expected ${p.expected} covered`:'expected EV count'}</span><span class="${p.fleetosShort?'warn':''}"><b>${p.expected?`${p.fleetosCount}/${p.expected}`:'Set'}</b>${p.expected?p.fleetosShort?'FleetOS battery coverage short':'FleetOS battery covered':'FleetOS target'}</span><span class="${missing.length?'warn':''}"><b>${missing.length?missing.join(' + '):'Ready'}</b>${missing.length?'missing source':'both sources matched'}</span></div>${blockers.length?`<div class="fleet-refresh-blockers"><strong>Fix before approving</strong>${blockers.map(x=>`<span>${esc(x)}</span>`).join('')}</div>`:''}${unknownShortage}${missingVinPreview?`<div class="fleet-refresh-missing-vins"><strong>Missing source VINs</strong><button class="btn small" data-action="copy-refresh-missing-vins">Copy shown VINs</button>${missingVinPreview}${p.missingVinCount>p.missingVinPreview.length?`<em>${p.missingVinCount-p.missingVinPreview.length} more missing source VIN${p.missingVinCount-p.missingVinPreview.length===1?'':'s'} not shown</em>`:''}</div>`:''}${duplicatePreview?`<div class="fleet-refresh-removed"><strong>Duplicate VINs in upload</strong>${duplicatePreview}${p.duplicates>6?`<em>${p.duplicates-6} more duplicate VIN${p.duplicates-6===1?'':'s'} not shown</em>`:''}</div>`:''}${removedPreview?`<div class="fleet-refresh-removed"><strong>EVs not in this upload</strong>${removedPreview}${p.removed>6?`<em>${p.removed-6} more EV${p.removed-6===1?'':'s'} not shown</em>`:''}</div>`:''}<div class="fleet-refresh-impact"><strong>Refresh will update</strong>${impact}</div>${statusReview?`<div class="fleet-refresh-status"><strong>Amazon status changes to review</strong>${statusReview}${(p.statusChanges||[]).length>=8?`<em>Showing first 8 Amazon name/status changes</em>`:''}</div>`:''}${batteryReview?`<div class="fleet-refresh-battery"><strong>Battery changes to review</strong>${batteryReview}${(p.batteryChanges||[]).length>=8?`<em>Showing first 8 EV battery/range changes</em>`:''}</div>`:''}${fieldBreakdown?`<div class="fleet-refresh-fields"><strong>Changed fields by source</strong>${fieldBreakdown}</div>`:''}<div class="fleet-refresh-rule"><strong>Accuracy reminder</strong><span>Refresh uses the latest files saved in RelayOps. If Amazon or FleetOS changed after those uploads, upload fresh exports first before approving.</span></div>${p.changedPreview?.length?`<div class="fleet-refresh-change-list"><strong>First changes to review</strong>${p.changedPreview.map(x=>`<span><b>${esc(x.name)}</b>${esc(x.fields.join(', '))}</span>`).join('')}</div>`:''}<p class="upload-help">Nothing changes until you approve. If the counts look wrong, go back and upload the latest Amazon + FleetOS files first.</p><div class="modal-actions"><button class="btn" data-action="fleet-import">Upload newer files</button><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary ${blockers.length?'warn-approve':''}" data-action="approve-fleet-refresh">${blockers.length?'Approve anyway':'Approve refresh'}</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-refresh-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">REVIEW BEFORE REFRESH</span><h2 id="fleet-refresh-title">Approve fleet refresh</h2><p>RelayOps found saved portal data. Review the counts, then approve to update the EV grid.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="fleet-refresh-decision ${blockers.length?'warn':'ok'}"><b>${blockers.length?'WAIT':'SAFE'}</b><span>${esc(decision)}</span></div>${approvalSummary}<div class="fleet-refresh-preview ${tone}"><span><b>${p.input}</b>source rows read</span><span><b>${p.total}</b>EV cards after refresh</span><span><b>${p.updated}</b>cards will change</span><span><b>${p.newCount}</b>new EVs</span><span class="${p.removed?'warn':''}"><b>${p.removed||0}</b>not in upload</span><span class="${p.duplicates?'warn':''}"><b>${p.duplicates}</b>duplicate VINs</span><span class="${p.conflicts?'warn':''}"><b>${p.conflicts||0}</b>field conflicts</span><span class="${p.expectedShort?'warn':''}"><b>${p.expected?p.expectedShort:'Set'}</b>${p.expected?p.expectedShort?`short of expected ${p.expected}`:`expected ${p.expected} covered`:'expected EV count'}</span><span class="${p.fleetosShort?'warn':''}"><b>${p.expected?`${p.fleetosCount}/${p.expected}`:'Set'}</b>${p.expected?p.fleetosShort?'FleetOS battery coverage short':'FleetOS battery covered':'FleetOS target'}</span><span class="${missing.length?'warn':''}"><b>${missing.length?missing.join(' + '):'Ready'}</b>${missing.length?'missing source':'both sources matched'}</span></div>${blockers.length?`<div class="fleet-refresh-blockers"><strong>Fix before approving</strong>${blockers.map(x=>`<span>${esc(x)}</span>`).join('')}</div>`:''}${unknownShortage}${missingVinPreview?`<div class="fleet-refresh-missing-vins"><strong>Missing source VINs</strong><button class="btn small" data-action="copy-refresh-missing-vins">Copy shown VINs</button>${missingVinPreview}${p.missingVinCount>p.missingVinPreview.length?`<em>${p.missingVinCount-p.missingVinPreview.length} more missing source VIN${p.missingVinCount-p.missingVinPreview.length===1?'':'s'} not shown</em>`:''}</div>`:''}${duplicatePreview?`<div class="fleet-refresh-removed"><strong>Duplicate VINs in upload</strong>${duplicatePreview}${p.duplicates>6?`<em>${p.duplicates-6} more duplicate VIN${p.duplicates-6===1?'':'s'} not shown</em>`:''}</div>`:''}${conflictPreview?`<div class="fleet-refresh-conflicts"><strong>Conflicting portal values</strong>${conflictPreview}${p.conflicts>6?`<em>${p.conflicts-6} more conflict${p.conflicts-6===1?'':'s'} not shown</em>`:''}</div>`:''}${removedPreview?`<div class="fleet-refresh-removed"><strong>EVs not in this upload</strong>${removedPreview}${p.removed>6?`<em>${p.removed-6} more EV${p.removed-6===1?'':'s'} not shown</em>`:''}</div>`:''}<div class="fleet-refresh-impact"><strong>Refresh will update</strong>${impact}</div>${statusReview?`<div class="fleet-refresh-status"><strong>Amazon status changes to review</strong>${statusReview}${(p.statusChanges||[]).length>=8?`<em>Showing first 8 Amazon name/status changes</em>`:''}</div>`:''}${batteryReview?`<div class="fleet-refresh-battery"><strong>Battery changes to review</strong>${batteryReview}${(p.batteryChanges||[]).length>=8?`<em>Showing first 8 EV battery/range changes</em>`:''}</div>`:''}${fieldBreakdown?`<div class="fleet-refresh-fields"><strong>Changed fields by source</strong>${fieldBreakdown}</div>`:''}<div class="fleet-refresh-rule"><strong>Accuracy reminder</strong><span>Refresh uses the latest files saved in RelayOps. If Amazon or FleetOS changed after those uploads, upload fresh exports first before approving.</span></div>${p.changedPreview?.length?`<div class="fleet-refresh-change-list"><strong>First changes to review</strong>${p.changedPreview.map(x=>`<span><b>${esc(x.name)}</b>${esc(x.fields.join(', '))}</span>`).join('')}</div>`:''}<p class="upload-help">Nothing changes until you approve. If the counts look wrong, go back and upload the latest Amazon + FleetOS files first.</p><div class="modal-actions"><button class="btn" data-action="fleet-import">Upload newer files</button><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary ${blockers.length?'warn-approve':''}" data-action="approve-fleet-refresh">${blockers.length?'Approve anyway':'Approve refresh'}</button></div></div></div></div>`;
   }
   if (state.modal === 'screenshot' && state.screenshotPreview) return `<div class="modal-backdrop" data-action="close-modal"><div class="modal screenshot-modal" role="dialog" aria-modal="true" aria-labelledby="screenshot-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">APPROVAL REQUIRED</span><h2 id="screenshot-title">Approve GroupMe JPEG</h2><p>Only Wave, Driver/Helper, Route, Staging, Pad, EV, Device, and Portable are included.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="jpeg-preview"><img src="${state.screenshotPreview}" alt="Wave sheet JPEG preview"></div><div class="modal-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="save-wave-screenshot">Approve & save JPEG</button></div></div></div></div>`;
   return '';
@@ -1845,6 +1854,42 @@ function fleetChangedFields(before={},after={}) {
   const labels={name:'name',plate:'plate',battery:'battery',miles:'range',active:'active status',operational:'operational state'};
   return Object.entries(labels).filter(([key])=>String(before[key]??'')!==String(after[key]??'')).map(([,label])=>label);
 }
+function fleetComparableValue(value,field='') {
+  if(value===undefined||value===null)return '';
+  const raw=String(value).trim();
+  if(!raw)return '';
+  if(['battery','miles'].includes(field)){
+    const n=numberFrom(raw,undefined);
+    return n===undefined?'':String(n);
+  }
+  return raw.toLowerCase().replace(/\s+/g,' ');
+}
+function fleetImportConflicts(imports=[]) {
+  const labels={name:'Name',plate:'License plate',active:'Active/Inactive',operational:'Operational/Grounded',battery:'Battery %',miles:'Range miles'};
+  const hasFlag={name:'hasName',plate:'hasPlate',active:'hasActive',operational:'hasOperational',battery:'hasBattery',miles:'hasMiles'};
+  const fields=Object.keys(labels), groups=new Map(), conflicts=[];
+  imports.forEach(item=>{
+    const vin=cleanVin(item.vin); if(!vin)return;
+    const sourceKey=fleetSourceKey(item.source), sourceLabel=sourceKey==='amazon'?'Amazon fleet list':sourceKey==='fleetos'?'FleetOS tracker':(item.source||'Fleet export');
+    const key=`${vin}|${sourceKey}`;
+    if(!groups.has(key))groups.set(key,{vin,source:sourceLabel,values:Object.fromEntries(fields.map(f=>[f,new Map()]))});
+    const group=groups.get(key);
+    fields.forEach(field=>{
+      if(!item[hasFlag[field]])return;
+      const comparable=fleetComparableValue(item[field],field);
+      if(!comparable)return;
+      const display=String(item[field]).trim();
+      if(!group.values[field].has(comparable))group.values[field].set(comparable,display);
+    });
+  });
+  groups.forEach(group=>{
+    fields.forEach(field=>{
+      const values=[...group.values[field].values()];
+      if(values.length>1)conflicts.push({vin:group.vin,source:group.source,field:labels[field],values});
+    });
+  });
+  return conflicts;
+}
 function mergeFleetVehicles(imports=[]) {
   const previousByVin=new Map(rivianFleet.map(v=>{
     const normalized=normalizeFleetVehicle(v);
@@ -1854,7 +1899,7 @@ function mergeFleetVehicles(imports=[]) {
   }));
   const byVin=new Map();
   const nowIso=new Date().toISOString();
-  const touched=new Set(), newVins=new Set(), seenImportRows=new Set(), duplicateVins=new Set();
+  const touched=new Set(), newVins=new Set(), seenImportRows=new Set(), duplicateVins=new Set(), conflicts=fleetImportConflicts(imports);
   imports.forEach(item=>{
     const vin=cleanVin(item.vin); if(!vin)return;
     const rowKey=`${vin}|${item.source||'unknown'}`;
@@ -1892,7 +1937,7 @@ function mergeFleetVehicles(imports=[]) {
   const updated=rows.filter(v=>touched.has(cleanVin(v.vin))&&v.updated).length;
   const removedVins=[...previousByVin.keys()].filter(vin=>!touched.has(vin));
   const removed=removedVins.length;
-  rows.summary={input:imports.length,touched:touched.size,newCount:newVins.size,updated,unchanged:Math.max(0,touched.size-updated),removed,removedVins,removedVehicles:removedVins.map(vin=>previousByVin.get(vin)).filter(Boolean),duplicates:duplicateVins.size,duplicateVins:[...duplicateVins]};
+  rows.summary={input:imports.length,touched:touched.size,newCount:newVins.size,updated,unchanged:Math.max(0,touched.size-updated),removed,removedVins,removedVehicles:removedVins.map(vin=>previousByVin.get(vin)).filter(Boolean),duplicates:duplicateVins.size,duplicateVins:[...duplicateVins],conflicts:conflicts.length,conflictVins:[...new Set(conflicts.map(x=>x.vin))],conflictRows:conflicts};
   return rows;
 }
 function applyFleetVehicles(vehicles=[],options={}) {
@@ -1924,6 +1969,7 @@ function fleetRefreshPreviewFromVehicles(vehicles=[]) {
     uploadAge.stale?`Saved fleet upload is ${uploadAge.label} old — upload fresh Amazon/FleetOS exports before approving`:'',
     ...missingSources.map(source=>`${source} is missing — upload it for full accuracy`),
     merged.summary?.duplicates?`${merged.summary.duplicates} duplicate VIN${merged.summary.duplicates===1?'':'s'} — remove duplicate source rows first`:'',
+    merged.summary?.conflicts?`${merged.summary.conflicts} conflicting field${merged.summary.conflicts===1?'':'s'} found in portal rows — clean same-VIN disagreements before approving`:'',
     merged.summary?.removed?`${merged.summary.removed} existing EV card${merged.summary.removed===1?'':'s'} not in this upload — check for a partial export before approving`:'',
     fleetosShort?`${fleetosShort} FleetOS battery row${fleetosShort===1?'':'s'} missing vs expected ${expected} — upload the full tracker export`:'',
     expectedShort?`${expectedShort} EV${expectedShort===1?'':'s'} short of expected ${expected} — check Amazon/FleetOS exports`:''
@@ -1980,6 +2026,9 @@ function fleetRefreshPreviewFromVehicles(vehicles=[]) {
     removedVehicles:merged.summary?.removedVehicles||[],
     duplicates:merged.summary?.duplicates||0,
     duplicateVins:merged.summary?.duplicateVins||[],
+    conflicts:merged.summary?.conflicts||0,
+    conflictVins:merged.summary?.conflictVins||[],
+    conflictRows:merged.summary?.conflictRows||[],
     expected,
     expectedShort,
     unknownExpectedShort:Math.max(0,expectedShort-missingVinPreview.length),
@@ -2235,6 +2284,7 @@ function fleetGapRows() {
   stats.amazonOnly.forEach(vin=>vehicleRow('HIGH','Missing FleetOS battery/range',vin,'Upload FleetOS tracker row for this VIN'));
   stats.fleetosOnly.forEach(vin=>vehicleRow('HIGH','Missing Amazon name/status',vin,'Upload Amazon fleet-list row for this VIN'));
   (state.fleetUpdateSummary?.duplicateVins||[]).forEach(vin=>vehicleRow('HIGH','Duplicate VIN in upload',vin,'Remove duplicate VIN row from the source export before refresh'));
+  (state.fleetUpdateSummary?.conflictRows||[]).forEach(x=>vehicleRow('HIGH',`Conflicting ${x.field}`,x.vin,`Clean ${x.source} rows for this VIN: ${(x.values||[]).join(' vs ')}`));
   const expected=Number(state.fleetExpectedCount)||0, short=Math.max(0,expected-stats.uniqueVins.size);
   if(short) rows.push(['MED','Expected EV count short','',`Tracked ${stats.uniqueVins.size} of expected ${expected}`,'','','','','','Expected count from Amazon fleet list',expected,fleetSourceUploadedAt('amazon','iso'),fleetSourceUploadedAt('fleetos','iso'),`Find ${short} missing VIN${short===1?'':'s'} in Amazon/FleetOS exports`]);
   return rows;
