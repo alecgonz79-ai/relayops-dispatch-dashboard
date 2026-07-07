@@ -807,6 +807,13 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-refresh-decision b { width:42px; height:28px; border-radius:10px; display:grid; place-items:center; background:#2c7c4b; color:#fff; font:1000 10px "Manrope"; letter-spacing:.08em; }
 .fleet-refresh-decision.warn b { background:#c98211; }
 .fleet-refresh-decision span { color:#26362d; font-size:9px; font-weight:1000; line-height:1.35; }
+.fleet-refresh-approval-summary { display:grid; grid-template-columns:1fr repeat(5,minmax(0,1fr)); gap:7px; align-items:stretch; margin:0 0 12px; padding:10px; border-radius:13px; border:1px solid #cfe8c7; background:#f3fbef; }
+.fleet-refresh-approval-summary.warn { border-color:#ebcf83; background:#fff8e6; }
+.fleet-refresh-approval-summary > strong { display:flex; align-items:center; color:#172019; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }
+.fleet-refresh-approval-summary span { min-width:0; padding:8px; border-radius:10px; background:#fff; border:1px solid #dce8d7; color:#506158; font-size:7px; font-weight:1000; text-transform:uppercase; letter-spacing:.05em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-refresh-approval-summary span.warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
+.fleet-refresh-approval-summary span.ok { background:#eef7ea; border-color:#cfe8c7; color:#275c1f; }
+.fleet-refresh-approval-summary b { display:block; color:#172019; font-size:13px; line-height:1; margin-bottom:4px; text-transform:none; letter-spacing:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .fleet-refresh-fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin:0 0 12px; padding:10px; border-radius:13px; background:#fbfcfa; border:1px solid #dfe7dd; }
 .fleet-refresh-fields strong { grid-column:1/-1; color:#172019; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }
 .fleet-refresh-fields span { padding:8px; border-radius:9px; background:#f5f7f4; color:#66726b; font-size:8px; font-weight:1000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -928,7 +935,7 @@ tbody tr:last-child td { border-bottom:0; }
   .portal-match-grid { grid-template-columns:1fr 1fr; }
   .fleetos-roster-stats { grid-template-columns:1fr 1fr 1fr; }
   .fleet-refresh-readiness, .refresh-update-map, .fleet-refresh-guide, .fleet-refresh-guide-map { grid-template-columns:1fr; }
-  .fleet-refresh-preview, .fleet-refresh-impact, .fleet-refresh-fields, .fleet-refresh-removed, .fleet-refresh-change-list, .fleet-refresh-battery, .fleet-refresh-status, .rivian-id-summary { grid-template-columns:1fr; }
+  .fleet-refresh-preview, .fleet-refresh-impact, .fleet-refresh-fields, .fleet-refresh-removed, .fleet-refresh-change-list, .fleet-refresh-battery, .fleet-refresh-status, .fleet-refresh-approval-summary, .rivian-id-summary { grid-template-columns:1fr; }
   .fleet-refresh-impact > strong { grid-column:auto; }
   .fleet-full-list { grid-template-columns:1fr; }
   .fleet-full-list-steps { grid-template-columns:1fr 1fr 1fr; }
