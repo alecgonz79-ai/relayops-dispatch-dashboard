@@ -1084,7 +1084,7 @@ tbody tr:last-child td { border-bottom:0; }
 .parking-helper-grid strong, .parking-helper-grid span { display:block; }
 .parking-helper-grid strong { color:#172019; font:1000 14px "Manrope"; }
 .parking-helper-grid span { margin-top:3px; color:#607064; font-size:8px; font-weight:900; line-height:1.35; }
-.parking-import-row { display:grid; grid-template-columns:1.1fr .9fr; gap:10px; margin-bottom:12px; }
+.parking-import-row { display:grid; grid-template-columns:1.05fr .95fr .95fr; gap:10px; margin-bottom:12px; align-items:stretch; }
 .parking-drop { min-height:92px; display:grid; align-content:center; justify-items:start; gap:5px; padding:13px; border:2px dashed #b9c5bb; border-radius:15px; background:#fafcf8; transition:.2s; }
 .parking-drop.drag { border-color:#8fb438; background:#f7ffe5; }
 .parking-drop b { color:#172019; font:1000 11px "Manrope"; }
@@ -1093,27 +1093,39 @@ tbody tr:last-child td { border-bottom:0; }
 .parking-paste-box label { grid-column:1/-1; color:#5e6a62; font-size:8px; font-weight:1000; text-transform:uppercase; letter-spacing:.06em; }
 .parking-paste-box textarea { width:100%; height:54px; resize:vertical; border:1px solid #dce4de; border-radius:10px; padding:8px; color:#172019; font-size:10px; font-weight:850; outline:none; }
 .parking-paste-box textarea:focus { border-color:#82c66b; box-shadow:0 0 0 3px rgba(130,198,107,.18); }
-.parking-lot { padding:0; border-radius:4px; background:#fff; border:1px solid #d7dcd8; overflow:auto; }
-.parking-lot.sheet-style { background-color:#fff; background-image:linear-gradient(#e3e7e4 1px,transparent 1px),linear-gradient(90deg,#e3e7e4 1px,transparent 1px); background-size:64px 28px; }
+.parking-selected-card { display:grid; grid-template-columns:1fr 120px auto; gap:10px; align-items:center; padding:12px; border:1px solid #e2e8f4; border-radius:16px; background:#fff; box-shadow:0 10px 26px rgba(25,55,120,.06); }
+.parking-selected-card strong, .parking-selected-card small { display:block; }
+.parking-selected-card strong { color:#111827; font:1000 18px "Manrope"; letter-spacing:-.03em; }
+.parking-selected-card small { margin-top:3px; color:#6b7280; font-size:8px; font-weight:900; text-transform:uppercase; letter-spacing:.05em; }
+.parking-selected-card label { color:#4b5563; font-size:8px; font-weight:1000; text-transform:uppercase; letter-spacing:.06em; }
+.parking-selected-card input { width:100%; height:36px; margin-top:4px; border:1px solid #d8e0ee; border-radius:11px; padding:0 9px; color:#0b56e8; font:1000 16px "Manrope"; text-align:center; outline:none; }
+.parking-selected-card input:focus { border-color:#0b56e8; box-shadow:0 0 0 3px rgba(11,86,232,.14); }
+.parking-lot { padding:0; border-radius:4px; background:#f7f8fc; border:1px solid #d7dce8; overflow:auto; }
+.parking-lot.sheet-style { background-color:#f7f8fc; background-image:linear-gradient(#edf0f7 1px,transparent 1px),linear-gradient(90deg,#edf0f7 1px,transparent 1px); background-size:64px 28px; }
 .parking-map-grid { min-width:1050px; display:grid; grid-template-columns:565px 520px; grid-template-rows:150px 58px auto; align-items:start; }
 .parking-empty-grid { grid-column:1; grid-row:1; min-height:150px; }
-.parking-top-block { grid-column:2; grid-row:1; display:grid; grid-template-columns:70px 1fr 62px 1fr 70px; align-items:stretch; background:#050505; padding:18px 0; min-height:132px; }
+.parking-top-block { grid-column:2; grid-row:1; display:grid; grid-template-columns:70px 1fr 62px 1fr 70px; align-items:stretch; background:#1f2430; padding:18px 0; min-height:132px; }
 .parking-street-row { grid-column:1/3; grid-row:2; display:grid; grid-template-columns:60px 205px 48px 200px 70px 200px 205px 60px; gap:0; align-items:stretch; border-top:1px solid #050505; border-bottom:1px solid #050505; background:#fff; }
-.parking-main-block { grid-column:1; grid-row:3; display:grid; grid-template-columns:60px 205px 48px 200px 60px; align-items:stretch; background:#050505; }
+.parking-main-block { grid-column:1; grid-row:3; display:grid; grid-template-columns:60px 205px 58px 200px 60px; align-items:stretch; background:#1f2430; }
 .parking-side-area { grid-column:2; grid-row:3; min-height:430px; position:relative; }
 .parking-date-box { position:absolute; top:56px; right:58px; width:230px; min-height:58px; display:grid; place-items:center; align-content:center; background:#fff; border:1px solid #111; text-align:center; }
 .parking-date-box strong, .parking-date-box span { display:block; color:#111; font:1000 15px "Manrope"; }
 .parking-date-box span { margin-top:6px; font-size:18px; }
-.parking-lane { background:#050505; min-height:44px; }
+.parking-lane { background:#1f2430; min-height:44px; }
 .parking-lane.skinny { min-width:62px; }
 .parking-lane.vertical { min-height:100%; }
-.parking-stack { display:grid; gap:0; background:#050505; padding:0; align-content:start; }
+.parking-stack { display:grid; gap:8px; background:transparent; padding:8px 12px; align-content:start; }
 .parking-stack-title { display:none; }
 .parking-stack-title strong { font-size:9px; font-weight:1000; text-transform:uppercase; letter-spacing:.08em; }
 .parking-stack-title small { color:rgba(255,255,255,.72); font-size:7px; font-weight:850; }
-.parking-slot { min-height:28px; display:grid; grid-template-columns:1fr; align-items:center; gap:0; padding:0; background:#fff; border:1px solid #101010; }
+.parking-slot { min-height:40px; position:relative; display:grid; grid-template-columns:1fr; align-items:center; gap:0; padding:0; background:#fff; border:1px solid #edf1f7; border-radius:9px; box-shadow:0 8px 18px rgba(25,55,120,.08); transition:.16s ease; }
+.parking-slot:hover { transform:translateY(-1px); border-color:#b8c7f8; box-shadow:0 12px 22px rgba(25,55,120,.12); }
+.parking-slot.selected { background:#0b56e8; border-color:#0b56e8; box-shadow:0 14px 24px rgba(11,86,232,.25); }
 .parking-slot span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
-.parking-slot input { width:100%; height:27px; border:0; background:transparent; color:#050505; text-align:center; font:1000 17px "Manrope"; outline:none; }
+.parking-slot input { width:100%; height:28px; border:0; background:transparent; color:#0b56e8; text-align:center; font:1000 16px "Manrope"; outline:none; }
+.parking-slot.selected input { color:#fff; }
+.parking-slot em { position:absolute; right:5px; bottom:3px; color:#23a455; font-style:normal; font-size:7px; font-weight:1000; }
+.parking-slot.selected em { color:#dbeafe; }
 .parking-slot input:focus { background:#e8f0fe; box-shadow:inset 0 0 0 2px #1a73e8; border-radius:5px; }
 .parking-slot.crosswalk-slot, .parking-slot.overflow-slot { background:#fff; }
 .parking-slot.street-slot { min-height:28px; background:#fff; }
@@ -1122,10 +1134,13 @@ tbody tr:last-child td { border-bottom:0; }
 .street-cell { min-height:28px; display:grid; place-items:center; border:1px solid #111; color:#111; background:#fff; font:1000 11px "Manrope"; text-align:center; }
 .street-cell.wide { justify-content:end; padding-right:10px; }
 .street-cell.editable-street { padding:0; }
-.parking-crosswalk { display:grid; grid-template-rows:repeat(22,28px); background:#ffe8a3; border-left:1px solid #111; border-right:1px solid #111; color:#172019; text-align:center; }
+.parking-crosswalk { position:relative; display:grid; grid-template-rows:repeat(22,48px); background:#ffe8a3; border-left:1px solid #111; border-right:1px solid #111; color:#172019; text-align:center; overflow:hidden; }
 .parking-crosswalk::before, .parking-crosswalk::after { content:''; border-bottom:1px solid rgba(17,17,17,.18); }
-.parking-crosswalk .tent-icon { grid-row:4; align-self:center; justify-self:center; width:30px; height:24px; display:grid; place-items:center; border-radius:5px; background:#25e452; font-size:17px; box-shadow:inset 0 0 0 1px rgba(0,0,0,.15); }
-.parking-crosswalk strong { grid-row:4; align-self:end; justify-self:center; transform:translateY(19px); font:1000 18px "Manrope"; color:#00d735; -webkit-text-stroke:.5px #055815; }
+.parking-crosswalk .tent-icon { position:absolute; top:138px; left:50%; transform:translateX(-50%); z-index:3; width:34px; height:28px; display:grid; place-items:center; border-radius:7px; background:#25e452; font-size:18px; box-shadow:inset 0 0 0 1px rgba(0,0,0,.15); }
+.parking-crosswalk > strong { position:absolute; top:164px; left:50%; transform:translateX(-50%); z-index:3; font:1000 18px "Manrope"; color:#00d735; -webkit-text-stroke:.5px #055815; }
+.parking-crosswalk .parking-stack { grid-row:1/-1; z-index:2; padding:8px 6px; gap:8px; }
+.parking-crosswalk .parking-slot { min-height:40px; background:rgba(255,255,255,.78); }
+.park-easy-stats div { background:#fff; border-color:#e4e9f5; box-shadow:0 10px 24px rgba(25,55,120,.05); }
 .drop-zone { border:2px dashed #b9c5bb; border-radius:15px; background:#fafcf8; min-height:190px; display:grid; place-items:center; text-align:center; padding:22px; transition:.2s; }
 .drop-zone.drag { border-color:#8fb438; background:#f7ffe5; }
 .drop-zone.has-file { border-style:solid; border-color:#a9d6b6; background:#f2faf4; }

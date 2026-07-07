@@ -31,7 +31,7 @@ const NAV = [
     ['dashboard','Today','dashboard'], ['morning','Morning sheet','calendar'], ['roster','Opening roster','roster'], ['live','Live routes','live','3']
   ]},
   { section: 'Operations', items: [
-    ['team','Drivers & team','users'], ['fleet','Fleet Health','van'], ['checklists','Checklists','check'], ['inbox','Team inbox','inbox','4'], ['inventory','Inventory','box']
+    ['team','Drivers & team','users'], ['fleet','Fleet Health','van'], ['parking','Van Parking','check'], ['inbox','Team inbox','inbox','4'], ['inventory','Inventory','box']
   ]},
   { section: 'Improve', items: [
     ['performance','Performance','chart'], ['coaching','Coaching','coach','6'], ['reports','Reports & export','report']
@@ -152,11 +152,13 @@ function defaultVanParkingSlots() {
   const west=['57','2','1','4','6','36','55','29','9','40','5','13','42','14','20','16','24','18','30','50','35','51'];
   const east=['38','58','52','15','33','43','31','23','11','28','26','34','53','48','22','21','45','49','44','19'];
   const topLeft=['X','X','X','X','X'], topRight=['47','27','56','54','53'];
+  const crosswalk=['','','','15','','','','','','','','','','','','','','','','50','',''];
   const slots=[];
   topLeft.forEach((value,i)=>slots.push({id:`north-left-${i+1}`,zone:'northLeft',label:`North overflow ${i+1}`,value,kind:'overflow'}));
   topRight.forEach((value,i)=>slots.push({id:`north-right-${i+1}`,zone:'northRight',label:`North row ${i+1}`,value,kind:'spot'}));
   ['10(93%)','','','','39'].forEach((value,i)=>slots.push({id:`street-${i+1}`,zone:'street',label:i===0?'Street charge':'Street curb',value,kind:'street'}));
   west.forEach((value,i)=>slots.push({id:`west-${String(i+1).padStart(2,'0')}`,zone:'west',label:`Left row ${i+1}`,value,kind:i===19?'crosswalk':'spot'}));
+  crosswalk.forEach((value,i)=>slots.push({id:`crosswalk-${String(i+1).padStart(2,'0')}`,zone:'crosswalk',label:`Crosswalk ${i+1}`,value,kind:'crosswalk'}));
   east.forEach((value,i)=>slots.push({id:`east-${String(i+1).padStart(2,'0')}`,zone:'east',label:`Right row ${i+1}`,value,kind:i===3?'crosswalk':'spot'}));
   return slots;
 }
@@ -166,7 +168,10 @@ function loadVanParkingSlots() {
     const saved=JSON.parse(localStorage.getItem('relayops_van_parking')||'null');
     if(Array.isArray(saved)&&saved.length) {
       const defaults=new Map(defaultVanParkingSlots().map(s=>[s.id,s]));
-      return saved.map(slot=>({...defaults.get(slot.id),...slot})).filter(slot=>slot.id);
+      const merged=saved.map(slot=>({...defaults.get(slot.id),...slot})).filter(slot=>slot.id);
+      const seen=new Set(merged.map(slot=>slot.id));
+      defaultVanParkingSlots().forEach(slot=>{if(!seen.has(slot.id))merged.push(slot);});
+      return merged;
     }
   } catch {}
   return defaultVanParkingSlots();
@@ -198,6 +203,8 @@ let state = {
   vanParking: loadVanParkingSlots(),
   vanParkingUpdated: localStorage.getItem('relayops_van_parking_updated') || '7/6',
   vanParkingPasteText: '',
+  vanParkingBatteries: JSON.parse(localStorage.getItem('relayops_van_parking_batteries') || 'null') || {},
+  selectedParkingId: localStorage.getItem('relayops_selected_parking_id') || '',
   fleetChangedVins: {},
   fleetUpdateSummary: null,
   fleetRefreshPreview: null,
@@ -258,7 +265,7 @@ function sidebar() {
 const pageInfo = {
   dashboard:['Today’s command','A clear view from load-out through RTS'], morning:['Morning operations sheet','DSP-only routes, grouped by earliest wave, staging, and pad'], roster:['Opening roster','Resolve exceptions, assign equipment, then publish'],
   live:['Live routes','Spot pressure early and document every rescue'], team:['Drivers & team','Availability, compliance, recognition, and history'],
-  fleet:['Fleet Health','Simple Rivian battery, status, and source health'], performance:['Performance','Scorecard trends and driver-level focus areas'],
+  fleet:['Fleet Health','Simple Rivian battery, status, and source health'], parking:['Van Parking','Interactive parking map for closing and morning dispatch'], performance:['Performance','Scorecard trends and driver-level focus areas'],
   coaching:['Coaching','Turn scorecard signals into consistent follow-through'], checklists:['Checklists','Repeatable opening, load-out, and closeout routines'],
   inbox:['Team inbox','Calls, messages, and announcements in one place'], inventory:['Inventory','Devices, uniforms, supplies, and assignments'],
   reports:['Reports & export','Google Sheets-ready operational data'], admin:['Admin control','People, permissions, connections, and audit history']
@@ -294,7 +301,7 @@ function dashboard() {
   </section>
   <section class="grid dashboard-grid">
     <div class="grid">
-      <article class="card"><div class="card-head"><div class="card-title"><h2>Opening readiness</h2><p>Every critical handoff before the first wave</p></div><button class="btn small" data-page="checklists">Open checklist</button></div><div class="readiness"><div class="readiness-top"><div class="readiness-ring"><div><strong>93%</strong><span>READY</span></div></div><div class="readiness-steps"><div class="step"><div class="step-status">✓</div><strong>Roster matched</strong><span>${state.routes.length}/${state.routes.length} routes staffed</span></div><div class="step"><div class="step-status">✓</div><strong>Equipment assigned</strong><span>Vans + devices confirmed</span></div><div class="step warn"><div class="step-status">!</div><strong>Fleet exceptions</strong><span>2 notes need review</span></div></div></div></div></article>
+      <article class="card"><div class="card-head"><div class="card-title"><h2>Opening readiness</h2><p>Every critical handoff before the first wave</p></div><button class="btn small" data-page="parking">Open van parking</button></div><div class="readiness"><div class="readiness-top"><div class="readiness-ring"><div><strong>93%</strong><span>READY</span></div></div><div class="readiness-steps"><div class="step"><div class="step-status">✓</div><strong>Roster matched</strong><span>${state.routes.length}/${state.routes.length} routes staffed</span></div><div class="step"><div class="step-status">✓</div><strong>Equipment assigned</strong><span>Vans + devices confirmed</span></div><div class="step warn"><div class="step-status">!</div><strong>Fleet exceptions</strong><span>2 notes need review</span></div></div></div></div></article>
       ${routesTable(state.routes.slice(0,5),'Route health','Live operational position from Cortex inputs')}
     </div>
     <div class="grid">
@@ -473,7 +480,6 @@ function fleetPage() {
   <article class="card rivian-panel"><div class="card-head fleet-clean-head"><div class="card-title"><h2>Fleet Health</h2><span class="assistive-text">FleetOS + Amazon EV live board · Refresh battery %</span><p>Simple Rivian health board. Amazon fleet names are used first after import; VIN stays below each card for matching. Last refresh: ${esc(state.fleetLastRefresh)}.</p>${fleetHeaderAccuracyBadge()}</div><div class="head-actions fleet-primary-actions"><input class="fleet-search-input" data-fleet-search placeholder="Find EV, VIN, or plate" value="${esc(state.fleetSearch)}"><select class="filter-select" data-fleet-filter>${filters.map(value=>`<option value="${value}" ${state.fleetFilter===value?'selected':''}>${labels[value]}</option>`).join('')}</select><button class="btn small ghost" data-action="clear-fleet-search">Clear</button><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><button class="btn small lime" data-action="refresh-fleet">${ICONS.download} Refresh battery %</button><button class="btn small primary" data-action="fleet-import">${ICONS.upload} Upload / paste fleet list</button></div></div>
   ${fleetHealthSummary()}
   ${fleetChargeRecommendations()}
-  ${vanParkingSection()}
   <div class="fleet-clean-toolbar"><div class="fleet-view-controls"><label class="fleet-count-label">Expected EVs<input class="fleet-count-input" data-fleet-expected type="number" min="0" inputmode="numeric" value="${state.fleetExpectedCount||''}" placeholder="all"></label>${fleetViewSwitcher()}</div><div class="fleet-secondary-actions"><button class="btn small" data-action="fleet-live-setup">${ICONS.link} Live setup</button><button class="btn small" data-action="export-fleet-csv">${ICONS.download} EV CSV</button><button class="btn small" data-action="export-fleet-gaps">${ICONS.download} Gap CSV</button><button class="btn small ghost" data-action="reset-fleet-demo">Clear upload</button><a class="btn small" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">FleetOS</a><a class="btn small" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">Amazon</a></div></div>
   ${fleetDataDrawer()}
   ${fleetQuickFilterChips()}${fleetResultBar(rivians.length,labels[state.fleetFilter]||'Show all EVs')}<section class="grid rivian-grid ${fleetViewClass()}">${rivians.length?rivians.map(v=>rivianCard(v)).join(''):`<div class="empty-state">No EVs match this search/filter. Press Clear to show every EV again.</div>`}</section></article>`;
@@ -520,9 +526,18 @@ function fleetChargeRecommendations() {
 function parkingSlots(zone) {
   return (state.vanParking||[]).filter(slot=>slot.zone===zone);
 }
+function parkingBatteryForSlot(slot={}) {
+  const key=slot.id;
+  const bySlot=state.vanParkingBatteries?.[key];
+  if(bySlot!==undefined&&bySlot!=='')return bySlot;
+  const ev=String(slot.value||'').replace(/[^\w]/g,'').toUpperCase();
+  return state.vanParkingBatteries?.[ev] || '';
+}
 function parkingSlotInput(slot) {
   const tone=slot.kind==='crosswalk'?' crosswalk-slot':slot.kind==='overflow'?' overflow-slot':slot.kind==='street'?' street-slot':'';
-  return `<label class="parking-slot${tone}" title="${esc(slot.label)}"><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}" data-parking-id="${esc(slot.id)}" value="${esc(slot.value||'')}" placeholder=""></label>`;
+  const selected=state.selectedParkingId===slot.id?' selected':'';
+  const battery=parkingBatteryForSlot(slot);
+  return `<label class="parking-slot${tone}${selected}" title="${esc(slot.label)}" data-parking-select="${esc(slot.id)}"><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}" data-parking-id="${esc(slot.id)}" value="${esc(slot.value||'')}" placeholder=""><em>${battery!==''?`${esc(battery)}%`:''}</em></label>`;
 }
 function parkingStack(zone,title,subtitle='') {
   return `<section class="parking-stack ${zone}"><div class="parking-stack-title"><strong>${esc(title)}</strong>${subtitle?`<small>${esc(subtitle)}</small>`:''}</div>${parkingSlots(zone).map(parkingSlotInput).join('')}</section>`;
@@ -536,9 +551,22 @@ function vanParkingStats() {
   const nums=values.filter(v=>/\d/.test(v));
   return {filled:nums.length,total:(state.vanParking||[]).length,overflow:(state.vanParking||[]).filter(s=>s.kind==='crosswalk'||s.kind==='overflow').filter(s=>String(s.value||'').trim()).length};
 }
+function selectedParkingSlot() {
+  return (state.vanParking||[]).find(s=>s.id===state.selectedParkingId) || (state.vanParking||[]).find(s=>String(s.value||'').trim()) || (state.vanParking||[])[0];
+}
+function parkingBatteryEditor() {
+  const slot=selectedParkingSlot();
+  if(!slot)return '';
+  const battery=parkingBatteryForSlot(slot);
+  return `<div class="parking-selected-card"><div><span class="eyebrow">Selected van</span><strong>${esc(slot.value||'Empty spot')}</strong><small>${esc(slot.label)} · ${esc(slot.zone)}</small></div><label>Battery %<input data-parking-battery="${esc(slot.id)}" type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="Type %"></label><button class="btn small" data-action="clear-selected-parking">Clear selected</button></div>`;
+}
 function vanParkingSection() {
   const stats=vanParkingStats();
-  return `<article class="van-parking-card" id="van-parking"><div class="van-parking-head"><div><span class="eyebrow">Fleet Health</span><h2>Van Parking</h2><p>Closing dispatcher updates this at night. Morning dispatcher uses it to keep each wave parked together and avoid drivers hunting for vans.</p></div><div class="parking-head-actions"><span class="parking-updated">Updated ${esc(state.vanParkingUpdated||'today')}</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking list</button><button class="btn small ghost" data-action="reset-parking">Reset mockup</button></div></div><div class="parking-helper-grid"><div><strong>${stats.filled}</strong><span>spots filled</span></div><div><strong>${stats.overflow}</strong><span>overflow/crosswalk</span></div><div><strong>Simple rule</strong><span>Type EV number in the real spot. Put “X” if blocked.</span></div></div><div class="parking-import-row"><div class="parking-drop" id="parking-drop" tabindex="0"><b>Drop parking list here</b><span>CSV, XLSX, TXT, or a copied Google Sheets export. One EV per row works best.</span><button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Choose file</button></div><div class="parking-paste-box"><label for="parking-paste-text">Paste parking list</label><textarea id="parking-paste-text" placeholder="57&#10;2&#10;1&#10;4&#10;...">${esc(state.vanParkingPasteText)}</textarea><button class="btn small" data-action="parse-parking-paste">Fill parking spots</button></div></div><div class="parking-lot sheet-style"><div class="parking-map-grid"><div class="parking-empty-grid"></div><div class="parking-top-block"><div class="parking-lane"></div>${parkingStack('northLeft','', '')}<div class="parking-lane skinny"></div>${parkingStack('northRight','', '')}<div class="parking-lane"></div></div><div class="parking-street-row">${parkingStreetCells()}</div><div class="parking-main-block"><div class="parking-lane vertical"></div>${parkingStack('west','', '')}<div class="parking-crosswalk"><div class="tent-icon">⛺</div><strong>TENT</strong></div>${parkingStack('east','', '')}<div class="parking-lane vertical"></div></div><div class="parking-side-area"><div class="parking-date-box"><strong>DATE LAST UPDATED:</strong><span>${esc(state.vanParkingUpdated||'')}</span></div></div></div></div></article>`;
+  return `<article class="van-parking-card" id="van-parking"><div class="van-parking-head"><div><span class="eyebrow">Van Parking</span><h2>Parking Map</h2><p>Closing dispatcher updates this at night. Morning dispatcher uses it to keep each wave parked together and avoid drivers hunting for vans.</p></div><div class="parking-head-actions"><span class="parking-updated">Updated ${esc(state.vanParkingUpdated||'today')}</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking list</button><button class="btn small ghost" data-action="reset-parking">Reset mockup</button></div></div><div class="parking-helper-grid park-easy-stats"><div><strong>${stats.filled}</strong><span>occupied / assigned</span></div><div><strong>${stats.overflow}</strong><span>overflow + crosswalk spots</span></div><div><strong>Click a van</strong><span>Type EV number or battery %.</span></div></div><div class="parking-import-row"><div class="parking-drop" id="parking-drop" tabindex="0"><b>Drop parking list here</b><span>CSV, XLSX, TXT, or a copied Google Sheets export. One EV per row works best.</span><button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Choose file</button></div>${parkingBatteryEditor()}<div class="parking-paste-box"><label for="parking-paste-text">Paste parking list</label><textarea id="parking-paste-text" placeholder="57&#10;2&#10;1&#10;4&#10;...">${esc(state.vanParkingPasteText)}</textarea><button class="btn small" data-action="parse-parking-paste">Fill parking spots</button></div></div><div class="parking-lot sheet-style park-easy-map"><div class="parking-map-grid"><div class="parking-empty-grid"></div><div class="parking-top-block"><div class="parking-lane"></div>${parkingStack('northLeft','', '')}<div class="parking-lane skinny"></div>${parkingStack('northRight','', '')}<div class="parking-lane"></div></div><div class="parking-street-row">${parkingStreetCells()}</div><div class="parking-main-block"><div class="parking-lane vertical"></div>${parkingStack('west','', '')}<div class="parking-crosswalk"><div class="tent-icon">⛺</div><strong>TENT</strong>${parkingStack('crosswalk','', '')}</div>${parkingStack('east','', '')}<div class="parking-lane vertical"></div></div><div class="parking-side-area"><div class="parking-date-box"><strong>DATE LAST UPDATED:</strong><span>${esc(state.vanParkingUpdated||'')}</span></div></div></div></div></article>`;
+}
+
+function vanParkingPage() {
+  return `${contextBar(`<button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Import parking</button><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button>`)}${vanParkingSection()}`;
 }
 
 function fleetSourceNote() {
@@ -1380,7 +1408,7 @@ function modal() {
 }
 
 function pageContent() {
-  return ({dashboard,morning:morningSheetPage,roster:rosterPage,live:livePage,team:teamPage,fleet:fleetPage,performance:performancePage,coaching:coachingPage,checklists:checklistsPage,inbox:inboxPage,inventory:inventoryPage,reports:reportsPage,admin:adminPage}[state.page] || dashboard)();
+  return ({dashboard,morning:morningSheetPage,roster:rosterPage,live:livePage,team:teamPage,fleet:fleetPage,parking:vanParkingPage,performance:performancePage,coaching:coachingPage,checklists:checklistsPage,inbox:inboxPage,inventory:inventoryPage,reports:reportsPage,admin:adminPage}[state.page] || dashboard)();
 }
 
 function render() {
@@ -1404,7 +1432,12 @@ function bind() {
   document.querySelectorAll('[data-fleet-view]').forEach(el=>el.addEventListener('change',()=>{state.fleetView=el.value;persist();render();}));
   document.querySelectorAll('[data-fleet-search]').forEach(el=>el.addEventListener('input',()=>{state.fleetSearch=el.value;persist();render();const s=document.querySelector('[data-fleet-search]');if(s){s.focus();s.setSelectionRange(state.fleetSearch.length,state.fleetSearch.length);}}));
   document.querySelectorAll('[data-fleet-expected]').forEach(el=>el.addEventListener('input',()=>{state.fleetExpectedCount=Math.max(0,Number(el.value)||0);persist();render();const s=document.querySelector('[data-fleet-expected]');if(s){s.focus();s.setSelectionRange(s.value.length,s.value.length);}}));
-  document.querySelectorAll('[data-parking-id]').forEach(el=>el.addEventListener('input',()=>updateParkingSlot(el.dataset.parkingId,el.value,false)));
+  document.querySelectorAll('[data-parking-select]').forEach(el=>el.addEventListener('click',e=>{if(e.target?.matches?.('[data-parking-id]'))return;selectParkingSlot(el.dataset.parkingSelect);}));
+  document.querySelectorAll('[data-parking-id]').forEach(el=>{
+    el.addEventListener('focus',()=>selectParkingSlot(el.dataset.parkingId,false));
+    el.addEventListener('input',()=>updateParkingSlot(el.dataset.parkingId,el.value,false));
+  });
+  document.querySelectorAll('[data-parking-battery]').forEach(el=>el.addEventListener('input',()=>updateParkingBattery(el.dataset.parkingBattery,el.value)));
   document.querySelectorAll('[data-edit-field]').forEach(el=>{
     el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);});
     el.addEventListener('mousedown',e=>handleSheetMouseDown(e,el));
@@ -1475,9 +1508,25 @@ function updateParkingSlot(id,value,rerender=true) {
   const slot=(state.vanParking||[]).find(s=>s.id===id);
   if(!slot)return;
   slot.value=String(value||'').trim().toUpperCase();
+  state.selectedParkingId=id;
   state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
   persist();
   if(rerender)render();
+}
+
+function selectParkingSlot(id,rerender=true) {
+  if(!id)return;
+  state.selectedParkingId=id;
+  persist();
+  if(rerender)render();
+}
+
+function updateParkingBattery(id,value) {
+  const clean=String(value||'').replace(/[^\d]/g,'').slice(0,3);
+  const n=clean===''?'':Math.max(0,Math.min(100,Number(clean)));
+  state.vanParkingBatteries={...(state.vanParkingBatteries||{}),[id]:n};
+  state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
+  persist();
 }
 
 function parkingImportValuesFromText(text='') {
@@ -1513,7 +1562,7 @@ function parseParkingPasteAction() {
 }
 
 function parkingListText() {
-  return (state.vanParking||[]).map(slot=>`${slot.label}\t${slot.value||''}`).join('\n');
+  return (state.vanParking||[]).map(slot=>`${slot.label}\t${slot.value||''}\t${parkingBatteryForSlot(slot)}`).join('\n');
 }
 
 async function copyParkingList() {
@@ -1526,6 +1575,7 @@ function resetVanParking() {
   state.vanParking=defaultVanParkingSlots();
   state.vanParkingUpdated='7/6';
   state.vanParkingPasteText='';
+  state.selectedParkingId='';
   persist();render();
   toast('Van Parking reset to the mockup layout');
 }
@@ -1803,6 +1853,7 @@ function action(name,el) {
   if (name==='copy-parking-list') return copyParkingList();
   if (name==='reset-parking') return resetVanParking();
   if (name==='parse-parking-paste') return parseParkingPasteAction();
+  if (name==='clear-selected-parking') { state.selectedParkingId='';persist();render();return toast('Selected van cleared'); }
   if (name==='copy-refresh-missing-vins') return copyRefreshMissingVins();
   if (name==='copy-visible-fleet-vins') return copyVisibleFleetVins();
   if (name==='copy') return copyRows();
@@ -2831,7 +2882,7 @@ function downloadFleetTemplate(){const h=['Source','Vehicle Name','VIN','License
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function persist(){
-  localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');
+  localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');
 }
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
