@@ -1921,9 +1921,27 @@ function copySelectedSheetCells() {
 const waveCopyBlocks={all:null,setup:[0,7],counts:[9,10],rts:[12,12]};
 const waveCopyBlockLabels={all:'full A–M',setup:'A–H setup',counts:'J–K counts',rts:'M Planned RTS'};
 function copyRowsClipboardHtml(items=[],left=0,right=12) {
+  const routeRows=items.filter(item=>!item.time&&!item.separator).length;
+  let routeIndex=0;
   const body=items.map(item=>{
     const type=item.separator?'separator':item.time?'time':item.row?._blank?'blank':'route';
-    return clipboardTr(item.values.slice(left,right+1).map((value,i)=>clipboardTd(value,left+i,sheetSpacerColumns.has(left+i)?'spacer':type==='separator'?'separator':'cell')).join(''),type);
+    const cells=[];
+    for(let col=left;col<=right;col++) {
+      const value=item.values[col]||'';
+      if(type==='separator') { cells.push(clipboardTd(value,col,'separator')); continue; }
+      if(col===0&&item.row) {
+        if(routeIndex===0) cells.push(clipboardTd(value,col,'wave',`rowspan="${routeRows}"`));
+        continue;
+      }
+      if(col===4&&item.row) {
+        if(routeIndex===0) cells.push(clipboardTd(value,col,'pad',`rowspan="${routeRows+1}"`));
+        continue;
+      }
+      if(col===4&&item.time) continue;
+      cells.push(clipboardTd(value,col,sheetSpacerColumns.has(col)?'spacer':type==='time'&&col===0?'time':'cell'));
+    }
+    if(item.row)routeIndex+=1;
+    return clipboardTr(cells.join(''),type);
   }).join('');
   return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${morningClipboardColgroup(left,right)}${body}</table>`);
 }

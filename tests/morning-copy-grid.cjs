@@ -102,9 +102,9 @@ const checks = `
   const setupHtml = copyRowsClipboardHtml(firstWaveItems,0,7);
   const countsHtml = copyRowsClipboardHtml(firstWaveItems,9,10);
   const rtsHtml = copyRowsClipboardHtml(firstWaveItems,12,12);
-  if (!setupHtml.includes('width:132px') || setupHtml.includes('width:18px')) throw new Error('A-H wave setup copy should include setup widths without divider columns');
-  if (!countsHtml.includes('width:96px') || countsHtml.includes('width:132px') || countsHtml.includes('width:18px')) throw new Error('J-K counts copy should include count widths only');
-  if (!rtsHtml.includes('width:96px') || rtsHtml.includes('width:132px') || rtsHtml.includes('width:18px')) throw new Error('M planned RTS copy should include planned RTS width only');
+  if (!setupHtml.includes('width:132px') || setupHtml.includes('width:18px') || !setupHtml.includes('rowspan=') || !setupHtml.includes('WAVE 1') || !setupHtml.includes('background:#eef3ff;font-size:22pt')) throw new Error('A-H wave setup copy should include setup widths and merged Wave/Pad cells without divider columns');
+  if (!countsHtml.includes('width:96px') || countsHtml.includes('width:132px') || countsHtml.includes('width:18px') || countsHtml.includes('rowspan=')) throw new Error('J-K counts copy should include count widths only without merge cells');
+  if (!rtsHtml.includes('width:96px') || rtsHtml.includes('width:132px') || rtsHtml.includes('width:18px') || rtsHtml.includes('rowspan=')) throw new Error('M planned RTS copy should include planned RTS width only without merge cells');
   if (!exportMorningTemplateSheet.toString().includes('morningClipboardColumnWidths') || !exportMorningTemplateSheet.toString().includes('separatorCell') || !exportMorningTemplateSheet.toString().includes('FreezePanes') || !exportMorningTemplateSheet.toString().includes('SplitHorizontal>1') || !exportMorningTemplateSheet.toString().includes('Morning Operations') || exportMorningTemplateSheet.toString().includes('colspan="13"')) throw new Error('Formatted sheet export should use fixed widths, frozen row 1 metadata, and real A-M divider cells');
   const payload = morningSheetsConnectorPayload();
   if (payload.version !== 'relayops-morning-v1') throw new Error('Morning Sheets connector payload version missing');
