@@ -2933,29 +2933,7 @@ function exportExcel(){
 }
 async function copyRows(){const text=[exportHeaders,...exportRows()].map(r=>r.join('\t')).join('\n');if(await writeClipboardText(text)){state.modal=null;render();toast('Copied — paste into cell A1 in Google Sheets');}else toast('Clipboard access was blocked; use CSV download instead','error');}
 function morningSheetCopyRows() {
-  const lines=[];
-  morningSections(filteredMorningRows()).forEach(section=>{
-    const rows=morningDisplayRows(section);
-    const waveLabel=section.dsp?'DSP':section.label;
-    const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
-    rows.forEach((r,i)=>lines.push([
-      i===0?waveLabel:'',
-      r.driver||'',
-      r._blank?'':r.route||'',
-      r.staging||'',
-      i===0?pad:'',
-      r.ev||'',
-      r.deviceName||'',
-      r.portable||'',
-      '',
-      r.stops||'',
-      r.packages||'',
-      '',
-      r.plannedRts||''
-    ]));
-    lines.push([morningWaveTimeText(section),'','','','','','','','','','','','']);
-  });
-  return lines;
+  return morningCopyRowsForSections().map(item=>item.values);
 }
 function morningSheetTsv(){ return morningSheetCopyRows().map(row=>row.join('\t')).join('\n'); }
 function morningSheetsConnectorPayload() {
@@ -2966,21 +2944,7 @@ function morningSheetsConnectorPayload() {
     const startRow=index+3;
     const waveLabel=section.dsp?'DSP':section.label;
     display.forEach((r,i)=>{
-      rows.push([
-        i===0?waveLabel:'',
-        r.driver||'',
-        r._blank?'':r.route||'',
-        r.staging||'',
-        i===0?pad:'',
-        r.ev||'',
-        r.deviceName||'',
-        r.portable||'',
-        '',
-        r.stops||'',
-        r.packages||'',
-        '',
-        r.plannedRts||''
-      ]);
+      rows.push(sheetCopyFields.map(field=>copyCellValue(r,field,i===0?waveLabel:'',i===0?pad:'')));
       rowTypes.push(r._blank?'blank':'route');
       index+=1;
     });

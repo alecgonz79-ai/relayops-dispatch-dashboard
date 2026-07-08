@@ -84,10 +84,14 @@ const checks = `
   if (payload.headers.length !== 13) throw new Error('Morning Sheets connector should use 13 A-M headers');
   if (payload.headers[0] !== 'WAVE' || payload.headers[12] !== 'PLANNED RTS') throw new Error('Morning Sheets connector headers should match the A-M template');
   if (!payload.rows.length || !payload.sections.length) throw new Error('Morning Sheets connector payload missing rows or sections');
+  const normalizedPayloadRows = payload.rows.map(row => row.map(cell => String(cell ?? '')));
+  if (JSON.stringify(normalizedPayloadRows) !== JSON.stringify(rows.map(row => row.split('\\t')))) throw new Error('Copy TSV rows and connector payload rows must match exactly as visible cell values');
   if (!Array.isArray(payload.rowTypes) || payload.rowTypes.length !== payload.rows.length) throw new Error('Morning Sheets connector rowTypes should match row count');
   if (!payload.rowTypes.includes('blank') || !payload.rowTypes.includes('separator') || !payload.rowTypes.includes('time')) throw new Error('Morning Sheets connector should explicitly mark blank, time, and separator rows');
   const blankIndex = payload.rowTypes.indexOf('blank');
   if (blankIndex < 0 || payload.rows[blankIndex].some(cell => String(cell || '') !== '')) throw new Error('Test expected a truly empty blank driver row');
+  const separatorIndex = payload.rowTypes.indexOf('separator');
+  if (separatorIndex < 0 || payload.rows[separatorIndex].some(cell => String(cell || '') !== '')) throw new Error('Explicit separator row should be empty and marked separately from blank driver rows');
   payload.rows.forEach((row, index) => {
     if (row.length !== 13) throw new Error('Connector row ' + (index + 1) + ' has ' + row.length + ' columns instead of 13');
   });
