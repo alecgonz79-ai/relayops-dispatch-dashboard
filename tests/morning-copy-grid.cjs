@@ -39,6 +39,7 @@ const checks = `
   if (!${JSON.stringify(css)}.includes('.ops-sheet thead tr:nth-child(2) th { top:25px; z-index:11; }')) throw new Error('Second sticky header row must sit below column letters');
   if (!${JSON.stringify(css)}.includes('.ops-sheet .sheet-letters-row th { top:0; z-index:12;')) throw new Error('Column letters sticky header layer missing');
   if (!${JSON.stringify(css)}.includes('background-clip:padding-box')) throw new Error('Sticky header background clipping missing');
+  if (!${JSON.stringify(css)}.includes('.sheets-preflight-grid') || !${JSON.stringify(css)}.includes('.sheets-preflight-grid span.warn')) throw new Error('Sheets preflight styling missing');
   toast = () => {};
   state.page = 'morning';
   state.copyMode = true;
@@ -88,6 +89,10 @@ const checks = `
   if (payload.headers.length !== 13) throw new Error('Morning Sheets connector should use 13 A-M headers');
   if (payload.headers[0] !== 'WAVE' || payload.headers[12] !== 'PLANNED RTS') throw new Error('Morning Sheets connector headers should match the A-M template');
   if (!payload.rows.length || !payload.sections.length) throw new Error('Morning Sheets connector payload missing rows or sections');
+  const preflight = morningSheetsPreflight(payload);
+  if (!preflight.ready || preflight.checks.length !== 6 || !preflight.checks.every(check => check.ok)) throw new Error('Morning Sheets preflight should pass for the current A-M payload');
+  const preflightHtml = morningSheetsPreflightHtml(payload);
+  if (!preflightHtml.includes('Preflight ready') || !preflightHtml.includes('Every row has 13 columns') || !preflightHtml.includes('Black dividers are real rows') || !preflightHtml.includes('Wave/Pad merge map ready') || !preflightHtml.includes('Target cell A3')) throw new Error('Morning Sheets preflight UI missing required checks');
   const normalizedPayloadRows = payload.rows.map(row => row.map(cell => String(cell ?? '')));
   if (JSON.stringify(normalizedPayloadRows) !== JSON.stringify(rows.map(row => row.split('\\t')))) throw new Error('Copy TSV rows and connector payload rows must match exactly as visible cell values');
   if (!Array.isArray(payload.rowTypes) || payload.rowTypes.length !== payload.rows.length) throw new Error('Morning Sheets connector rowTypes should match row count');
@@ -110,7 +115,7 @@ const checks = `
   if (!script.includes('sheet.setFrozenRows(1)') || !script.includes('setValues([headers])') || !script.includes("sheet.setRowHeight(1, 28)") || !script.includes("sheet.getRange(1, 9).setBackground('#050505')") || !script.includes("sheet.getRange(1, 13).setBackground('#b4a7d6')")) throw new Error('Apps Script should restore the frozen A-M header row');
   if (script.trim() !== ${JSON.stringify(connectorFile.trim())}) throw new Error('Copyable Apps Script and downloadable .gs connector should stay identical');
   const connectorHtml = (state.modal = 'morning-sheets-connector', modal());
-  if (!connectorHtml.includes('GOOGLE SHEETS CONNECTOR') || !connectorHtml.includes('Copy Apps Script') || !connectorHtml.includes('Download .gs file') || !connectorHtml.includes('RelayOps menu') || !connectorHtml.includes(MORNING_APPS_SCRIPT_URL) || !connectorHtml.includes('Test connector') || !connectorHtml.includes('Send to Google Sheet') || !connectorHtml.includes('Connector payload preview')) throw new Error('Morning Sheets connector modal missing');
+  if (!connectorHtml.includes('GOOGLE SHEETS CONNECTOR') || !connectorHtml.includes('Copy Apps Script') || !connectorHtml.includes('Download .gs file') || !connectorHtml.includes('RelayOps menu') || !connectorHtml.includes('Preflight ready') || !connectorHtml.includes('Every row has 13 columns') || !connectorHtml.includes(MORNING_APPS_SCRIPT_URL) || !connectorHtml.includes('Test connector') || !connectorHtml.includes('Send to Google Sheet') || !connectorHtml.includes('Connector payload preview')) throw new Error('Morning Sheets connector modal missing');
   if (!${JSON.stringify(connectorFile)}.includes('function onOpen') || !${JSON.stringify(connectorFile)}.includes("createMenu('RelayOps')") || !${JSON.stringify(connectorFile)}.includes('LockService.getDocumentLock()') || !${JSON.stringify(connectorFile)}.includes('function doPost') || !${JSON.stringify(connectorFile)}.includes('writeRelayOpsMorningSheet') || !${JSON.stringify(connectorFile)}.includes("rowType === 'separator'") || !${JSON.stringify(connectorFile)}.includes('sheet: result.sheetName')) throw new Error('Permanent Apps Script connector file missing required behavior');
   if (connectorUrlWithPing('https://script.google.com/macros/s/demo/exec') !== 'https://script.google.com/macros/s/demo/exec?relayops=ping') throw new Error('Connector ping URL without query failed');
   if (connectorUrlWithPing('https://script.google.com/macros/s/demo/exec?x=1') !== 'https://script.google.com/macros/s/demo/exec?x=1&relayops=ping') throw new Error('Connector ping URL with query failed');
