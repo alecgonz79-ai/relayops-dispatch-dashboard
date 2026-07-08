@@ -54,6 +54,8 @@ function doPost(e) {
         sheet: sheet.getName(),
         startCell: payload.startCell,
         writeRange: payload.writeRange,
+        writtenRange: 'A3:M' + ((payload.rows || []).length + 2),
+        lastCell: 'M' + ((payload.rows || []).length + 2),
         rows: (payload.rows || []).length,
         sections: (payload.sections || []).length,
         layout: layout,
@@ -69,6 +71,8 @@ function doPost(e) {
       sheet: result.sheetName,
       startCell: result.startCell,
       writeRange: result.writeRange,
+      writtenRange: result.writtenRange,
+      lastCell: result.lastCell,
       rows: (payload.rows || []).length,
       sections: (payload.sections || []).length,
       preflight: validation,
@@ -230,7 +234,8 @@ function writeRelayOpsMorningSheet(payload) {
     sheet.getRange(start, 5, count + 1, 1).merge().setValue(section.pad || '')
       .setFontSize(22).setFontWeight('bold').setBackground('#eef3ff');
   });
-  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_WRITE_RANGE};
+  const lastRow = rows.length + RELAYOPS_START_ROW - 1;
+  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_WRITE_RANGE, writtenRange: 'A3:M' + lastRow, lastCell: 'M' + lastRow};
 }
 
 function findRelayOpsMorningSheet(payload) {

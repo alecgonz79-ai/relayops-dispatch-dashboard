@@ -193,6 +193,7 @@ if (sheet.getFormat(6, 1, 'background') !== '#050505' || sheet.rowHeights.get(6)
 if (!sheet.merges.some(merge => merge.row === 3 && merge.col === 1 && merge.numRows === 2 && merge.numCols === 1)) throw new Error('Connector should merge Wave cells for route rows');
 if (!sheet.merges.some(merge => merge.row === 3 && merge.col === 5 && merge.numRows === 3 && merge.numCols === 1)) throw new Error('Connector should merge Pad cells through the time row');
 if (sheet.columnWidths.get(9) !== 18 || sheet.columnWidths.get(12) !== 18) throw new Error('Connector should keep black spacer columns I and L slim');
+if (resultContext.__result.writeRange !== 'A3:M' || resultContext.__result.writtenRange !== 'A3:M6' || resultContext.__result.lastCell !== 'M6') throw new Error('Connector should return exact written range proof without changing A-M write scope');
 
 const sentinelSheet = new FakeSheet('Morning Operations', 130, 16);
 sentinelSheet.setCell(3, 14, 'DO NOT TOUCH N3');

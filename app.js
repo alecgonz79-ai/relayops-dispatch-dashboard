@@ -3159,6 +3159,8 @@ function doPost(e) {
         sheet: sheet.getName(),
         startCell: payload.startCell,
         writeRange: payload.writeRange,
+        writtenRange: 'A3:M' + ((payload.rows || []).length + 2),
+        lastCell: 'M' + ((payload.rows || []).length + 2),
         rows: (payload.rows || []).length,
         sections: (payload.sections || []).length,
         layout: layout,
@@ -3174,6 +3176,8 @@ function doPost(e) {
       sheet: result.sheetName,
       startCell: result.startCell,
       writeRange: result.writeRange,
+      writtenRange: result.writtenRange,
+      lastCell: result.lastCell,
       rows: (payload.rows || []).length,
       sections: (payload.sections || []).length,
       preflight: validation,
@@ -3335,7 +3339,8 @@ function writeRelayOpsMorningSheet(payload) {
     sheet.getRange(start, 5, count + 1, 1).merge().setValue(section.pad || '')
       .setFontSize(22).setFontWeight('bold').setBackground('#eef3ff');
   });
-  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_WRITE_RANGE};
+  const lastRow = rows.length + RELAYOPS_START_ROW - 1;
+  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_WRITE_RANGE, writtenRange: 'A3:M' + lastRow, lastCell: 'M' + lastRow};
 }
 
 function findRelayOpsMorningSheet(payload) {
@@ -3498,7 +3503,7 @@ async function dryRunMorningToSheets() {
     state.modal='morning-sheets-connector';
     persist(); render();
     const layoutNote=result.layout&&(!result.layout.hasEnoughRows||!result.layout.hasEnoughColumns)?' · template will auto-expand':'';
-    toast(`Dry run confirmed · ${result.sheet||payload.sheetName} ${result.writeRange||payload.writeRange} · ${result.rows||payload.rows.length} rows${layoutNote}`);
+    toast(`Dry run confirmed · ${result.sheet||payload.sheetName} ${result.writtenRange||result.writeRange||payload.writeRange} · ${result.rows||payload.rows.length} rows${layoutNote}`);
     return true;
   } catch(error) {
     state.morningSheetsLastError=error?.message||'Google Sheets dry run failed';
@@ -3527,7 +3532,7 @@ async function sendMorningToSheets() {
     const result=parseMorningSheetsResponse(text,response.status);
     const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastPush=sentAt;
-    state.morningSheetsLastReceipt={sheet:result.sheet||payload.sheetName,startCell:result.startCell||payload.startCell,writeRange:result.writeRange||payload.writeRange,rows:result.rows||payload.rows.length,sections:result.sections||payload.sections.length,status:'confirmed',updatedAt:result.updatedAt||sentAt,sentAt};
+    state.morningSheetsLastReceipt={sheet:result.sheet||payload.sheetName,startCell:result.startCell||payload.startCell,writeRange:result.writtenRange||result.writeRange||payload.writeRange,lastCell:result.lastCell||'',rows:result.rows||payload.rows.length,sections:result.sections||payload.sections.length,status:'confirmed',updatedAt:result.updatedAt||sentAt,sentAt};
     state.morningSheetsLastError='';
     persist(); render();
     toast(`Google confirmed Morning Sheet update · ${result.rows||payload.rows.length} rows`);
