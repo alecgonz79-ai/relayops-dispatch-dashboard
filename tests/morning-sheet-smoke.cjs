@@ -442,7 +442,7 @@ const checks = `
   if (!morningSheetPage().includes('✓ Fit to drivers')) throw new Error('Fit-to-drivers toggle missing');
   state.fitMorningRows = false;
   state.sheetCopyText = tsv; state.modal = 'sheets-helper';
-  if (!modal().includes('Paste-ready morning sheet') || !modal().includes('Paste in A3') || !modal().includes('sheets-copy-text')) throw new Error('Google Sheets paste helper missing');
+  if (!modal().includes('Paste-ready morning sheet') || !modal().includes('Expected filled range: A3:M') || !modal().includes('Paste A3:M') || !modal().includes('sheets-copy-text')) throw new Error('Google Sheets paste helper missing');
   let capturedFormattedMorning = null;
   downloadBlob = (data,type,name) => { capturedFormattedMorning = { data, type, name }; };
   exportMorningTemplateSheet();
