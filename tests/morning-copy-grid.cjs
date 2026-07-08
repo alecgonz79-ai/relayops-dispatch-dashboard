@@ -38,11 +38,13 @@ const connectorFile = fs.readFileSync(require.resolve('../google-sheets/relayops
 const readme = fs.readFileSync(require.resolve('../README.md'), 'utf8');
 const checks = `
   if (!${JSON.stringify(readme)}.includes('Morning Sheet connectors') || !${JSON.stringify(readme)}.includes('Google Sheets connector — ready now') || !${JSON.stringify(readme)}.includes('Slack / day-of-operations connector — demo/import mode today') || !${JSON.stringify(readme)}.includes('Cortex / Amazon Logistics connector — upload mode today') || !${JSON.stringify(readme)}.includes('writes only \`A3:M\`')) throw new Error('README should explain the Morning Sheet connector map');
-  if (!${JSON.stringify(css)}.includes('.ops-sheet thead tr:nth-child(2) th { top:25px; z-index:11; }')) throw new Error('Second sticky header row must sit below column letters');
+  if (!${JSON.stringify(css)}.includes('.sheet-scroll { width:100%; overflow:auto; max-height:calc(100vh - 278px); position:relative; background:#fff; isolation:isolate;')) throw new Error('Sheet scroll area should isolate the sticky Google-style header');
+  if (!${JSON.stringify(css)}.includes('border-collapse:separate; border-spacing:0;')) throw new Error('Morning sheet table should use separate borders so sticky headers do not float over filled cells');
+  if (!${JSON.stringify(css)}.includes('.ops-sheet thead tr:nth-child(2) th { top:24px; z-index:11; box-shadow:0 1px 0 #111; }')) throw new Error('Second sticky header row must sit directly below column letters');
   if (!${JSON.stringify(css)}.includes('.ops-sheet .sheet-letters-row th { top:0; z-index:12;')) throw new Error('Column letters sticky header layer missing');
   if (!${JSON.stringify(css)}.includes('background-clip:padding-box')) throw new Error('Sticky header background clipping missing');
   if (!${JSON.stringify(css)}.includes('.sheets-preflight-grid') || !${JSON.stringify(css)}.includes('.sheets-preflight-grid span.warn')) throw new Error('Sheets preflight styling missing');
-  if (!${JSON.stringify(css)}.includes('.sheets-receipt') || !${JSON.stringify(css)}.includes('.sheets-receipt.needs-check') || !${JSON.stringify(css)}.includes('grid-template-columns:repeat(6,minmax(0,1fr))')) throw new Error('Sheets receipt styling missing');
+  if (!${JSON.stringify(css)}.includes('.sheets-receipt') || !${JSON.stringify(css)}.includes('.sheets-receipt.needs-check') || !${JSON.stringify(css)}.includes('grid-template-columns:repeat(7,minmax(0,1fr))')) throw new Error('Sheets receipt styling missing');
   if (!${JSON.stringify(css)}.includes('.sheets-proof') || !${JSON.stringify(css)}.includes('.sheets-proof.warn')) throw new Error('Sheets handoff proof styling missing');
   if (!${JSON.stringify(css)}.includes('.handoff-readiness') || !${JSON.stringify(css)}.includes('.handoff-readiness.copy-ready') || !${JSON.stringify(css)}.includes('.handoff-readiness-grid')) throw new Error('Morning handoff readiness styling missing');
   if (!${JSON.stringify(css)}.includes('.wave-copy-group') || !${JSON.stringify(css)}.includes('.wave-copy-group .btn.small')) throw new Error('Wave block copy button styling missing');

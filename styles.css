@@ -291,12 +291,12 @@ tbody tr:last-child td { border-bottom:0; }
 .sheets-helper-steps span { padding:7px 9px; border-radius:999px; background:#e8f6c7; color:#2f4728; font-size:8px; font-weight:900; white-space:nowrap; }
 .sheets-helper-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
 .morning-board { border-radius:0 0 16px 16px; box-shadow:none; overflow:hidden; }
-.sheet-scroll { width:100%; overflow:auto; max-height:calc(100vh - 278px); }
-.ops-sheet { min-width:1920px; width:100%; table-layout:fixed; border-collapse:collapse; font-family:Arial,sans-serif; color:#0b0d0c; user-select:text; }
+.sheet-scroll { width:100%; overflow:auto; max-height:calc(100vh - 278px); position:relative; background:#fff; isolation:isolate; }
+.ops-sheet { min-width:1920px; width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-family:Arial,sans-serif; color:#0b0d0c; user-select:text; }
 .ops-sheet th { padding:7px 5px; color:#020403; background:#86e8ed; border:2px solid #111; font-size:8px; letter-spacing:.01em; text-align:center; text-transform:uppercase; }
 .ops-sheet thead th { position:sticky; top:0; z-index:7; background-clip:padding-box; }
 .ops-sheet .sheet-letters-row th { top:0; z-index:12; height:22px; padding:3px 5px; color:#4b504c; background:#f1f3f4; border:1px solid #c7cbc7; font-size:10px; font-weight:800; text-transform:none; }
-.ops-sheet thead tr:nth-child(2) th { top:25px; z-index:11; }
+.ops-sheet thead tr:nth-child(2) th { top:24px; z-index:11; box-shadow:0 1px 0 #111; }
 .ops-sheet .sheet-corner, .ops-sheet .sheet-row-num { width:42px !important; min-width:42px; color:#4b504c; background:#f1f3f4 !important; border:1px solid #c7cbc7 !important; font-size:10px; font-weight:800; text-align:center; text-transform:none; }
 .ops-sheet tbody .sheet-row-num { position:sticky; left:0; z-index:3; }
 .ops-sheet thead .sheet-corner, .ops-sheet thead .sheet-row-num { left:0; z-index:14; }
