@@ -1,0 +1,71 @@
+const fs = require('fs');
+const vm = require('vm');
+const JSZip = require('../vendor/jszip.min.js');
+
+const app = { innerHTML: '' };
+const fileInput = { addEventListener() {}, click() {} };
+const storage = new Map();
+const element = () => ({
+  addEventListener() {}, appendChild() {}, remove() {}, classList: { add() {}, remove() {}, toggle() {} },
+  setAttribute() {}, style: {}, focus() {}, setSelectionRange() {}, click() {}
+});
+
+const context = {
+  console,
+  Intl,
+  Blob,
+  URL,
+  setTimeout,
+  clearTimeout,
+  navigator: { clipboard: { writeText: async () => true } },
+  JSZip,
+  window: { scrollTo() {} },
+  localStorage: {
+    getItem: key => storage.has(key) ? storage.get(key) : null,
+    setItem: (key, value) => storage.set(key, String(value))
+  },
+  document: {
+    body: { appendChild() {} },
+    getElementById: id => id === 'app' ? app : id === 'file-input' ? fileInput : null,
+    querySelectorAll: () => [],
+    createElement: element
+  }
+};
+
+const source = fs.readFileSync(require.resolve('../app.js'), 'utf8');
+const checks = `
+  toast = () => {};
+  state.page = 'morning';
+  state.copyMode = true;
+  state.editMode = false;
+  const html = morningSheetPage();
+  if (!html.includes('Connector setup for clean Google Sheets handoff')) throw new Error('Morning connector guide missing');
+  if (!html.includes(MORNING_TEMPLATE_URL)) throw new Error('Google Sheets template link missing');
+  if (!html.includes('Copy/paste cannot reliably transfer merged-cell formatting')) throw new Error('Merged-cell paste warning missing');
+  if (!html.includes('sheet-letters-row')) throw new Error('Column letters header missing');
+  if (!html.includes('<th class="sheet-row-num">#</th>')) throw new Error('Copy-mode header row marker missing');
+  state.copyMode = false;
+  const viewHtml = morningSheetPage();
+  if (!viewHtml.includes('<th class="sheet-row-num">1</th>')) throw new Error('View/edit header row number missing');
+  state.copyMode = true;
+  if (html.includes('class="wave-separator"') && html.includes('colspan="13"')) throw new Error('Separator rows must be real A-M grid cells, not colspan');
+  const sepMatch = html.match(/<tr class="wave-separator[\\s\\S]*?<\\/tr>/);
+  if (!sepMatch) throw new Error('Separator row missing');
+  const sepCellCount = (sepMatch[0].match(/<td/g) || []).length;
+  if (sepCellCount !== 13) throw new Error('Separator row should contain 13 A-M cells, got ' + sepCellCount);
+  const tsv = morningSheetTsv();
+  const rows = tsv.split('\\n');
+  if (rows.length < 10) throw new Error('Morning TSV too short');
+  rows.forEach((row, index) => {
+    const cols = row.split('\\t');
+    if (cols.length !== 13) throw new Error('TSV row ' + (index + 1) + ' has ' + cols.length + ' columns instead of 13');
+  });
+  const hasSeparator = rows.some(row => row.split('\\t').every(cell => cell === ''));
+  if (!hasSeparator) throw new Error('TSV should include blank separator rows for black divider rows');
+  if (sheetCopyZone(8).join(',') !== '0,12' || sheetCopyZone(11).join(',') !== '0,12') throw new Error('Black spacer columns must be selectable/copyable');
+  if (sheetCopyZone(12).join(',') !== '0,12') throw new Error('Planned RTS column should be in the same copy boundary');
+`;
+
+vm.createContext(context);
+vm.runInContext(source + checks, context, { filename: 'app.js' });
+console.log('Morning copy grid test passed');
