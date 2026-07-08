@@ -234,6 +234,11 @@ tbody tr:last-child td { border-bottom:0; }
 .sheets-preflight-grid span.warn b { background:#b96b1d; }
 .sheets-preflight-grid em { color:#1f2a22; font-size:8.5px; font-style:normal; font-weight:1000; }
 .sheets-preflight-grid small { color:#657066; font-size:7.5px; font-weight:800; line-height:1.3; }
+.sheets-receipt { margin-top:10px; display:grid; gap:8px; padding:11px 12px; border-radius:13px; border:1px solid #cfe8b8; background:#f5ffe9; }
+.sheets-receipt strong { color:#1f2a22; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.05em; }
+.sheets-receipt div { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; }
+.sheets-receipt span { display:grid; gap:2px; padding:7px; border-radius:10px; background:#fff; color:#213027; font-size:8px; font-weight:900; }
+.sheets-receipt b { color:#647366; font-size:7px; text-transform:uppercase; letter-spacing:.08em; }
 .sheets-connector-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
 .connector-step { display:grid; gap:8px; align-content:start; padding:12px; border:1px solid #dce7f5; border-radius:14px; background:#fbfdff; }
 .connector-step b { display:grid; place-items:center; width:26px; height:26px; border-radius:9px; color:#fff; background:#17345d; font-size:10px; }

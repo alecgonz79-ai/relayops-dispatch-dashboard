@@ -40,6 +40,7 @@ const checks = `
   if (!${JSON.stringify(css)}.includes('.ops-sheet .sheet-letters-row th { top:0; z-index:12;')) throw new Error('Column letters sticky header layer missing');
   if (!${JSON.stringify(css)}.includes('background-clip:padding-box')) throw new Error('Sticky header background clipping missing');
   if (!${JSON.stringify(css)}.includes('.sheets-preflight-grid') || !${JSON.stringify(css)}.includes('.sheets-preflight-grid span.warn')) throw new Error('Sheets preflight styling missing');
+  if (!${JSON.stringify(css)}.includes('.sheets-receipt') || !${JSON.stringify(css)}.includes('grid-template-columns:repeat(5,minmax(0,1fr))')) throw new Error('Sheets receipt styling missing');
   toast = () => {};
   state.page = 'morning';
   state.copyMode = true;
@@ -125,7 +126,13 @@ const checks = `
   let rejected = false;
   try { parseMorningSheetsResponse('{"ok":false,"error":"Row 1 must have 13 columns"}', 200); } catch(error) { rejected = error.relayOpsConfirmed && error.message.includes('13 columns'); }
   if (!rejected) throw new Error('Connector response parser must reject ok:false without fallback');
-  if (!sendMorningToSheets.toString().includes('morningSheetsPreflight(payload)') || !sendMorningToSheets.toString().includes('error?.relayOpsConfirmed') || !sendMorningToSheets.toString().includes('Google Sheets connector rejected send')) throw new Error('Send to Sheets should gate preflight and reject confirmed connector errors');
+  if (!sendMorningToSheets.toString().includes('morningSheetsPreflight(payload)') || !sendMorningToSheets.toString().includes('state.morningSheetsLastReceipt') || !sendMorningToSheets.toString().includes('error?.relayOpsConfirmed') || !sendMorningToSheets.toString().includes('Google Sheets connector rejected send')) throw new Error('Send to Sheets should gate preflight, store receipt, and reject confirmed connector errors');
+  state.morningSheetsLastReceipt = {sheet:'Morning Operations',startCell:'A3',rows:44,sections:5,updatedAt:'2026-07-08T12:00:00.000Z'};
+  const receiptHtml = morningSheetsReceiptHtml();
+  if (!receiptHtml.includes('Last confirmed Google write') || !receiptHtml.includes('Morning Operations') || !receiptHtml.includes('A3') || !receiptHtml.includes('44') || !receiptHtml.includes('5')) throw new Error('Morning Sheets receipt UI missing confirmed write details');
+  const receiptConnectorHtml = (state.modal = 'morning-sheets-connector', modal());
+  if (!receiptConnectorHtml.includes('Last confirmed Google write')) throw new Error('Morning Sheets connector modal should show confirmed write receipt');
+  if (!persist.toString().includes('relayops_morning_sheets_last_receipt')) throw new Error('Morning Sheets receipt should persist locally');
   state.modal = null;
 `;
 
