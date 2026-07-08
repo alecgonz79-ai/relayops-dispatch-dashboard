@@ -64,6 +64,15 @@ const checks = `
   if (!hasSeparator) throw new Error('TSV should include blank separator rows for black divider rows');
   if (sheetCopyZone(8).join(',') !== '0,12' || sheetCopyZone(11).join(',') !== '0,12') throw new Error('Black spacer columns must be selectable/copyable');
   if (sheetCopyZone(12).join(',') !== '0,12') throw new Error('Planned RTS column should be in the same copy boundary');
+  if (typeof writeClipboardTable !== 'function') throw new Error('Rich clipboard table writer missing');
+  const clipHtml = morningSheetClipboardHtml();
+  if (!clipHtml.includes('<table')) throw new Error('Clipboard HTML table missing');
+  if (!clipHtml.includes('rowspan=')) throw new Error('Clipboard HTML should include merged-cell rowspans for wave/pad cells');
+  if (!clipHtml.includes('background:#050505')) throw new Error('Clipboard HTML should preserve black divider/spacer styling');
+  if (!clipHtml.includes('background:#b4a7d6')) throw new Error('Clipboard HTML should preserve planned RTS purple styling');
+  if (!clipHtml.includes('WAVE 1')) throw new Error('Clipboard HTML should include wave labels');
+  const fallbackHtml = tsvToHtmlTable(tsv);
+  if (!fallbackHtml.includes('<td') || !fallbackHtml.includes('table-layout:fixed')) throw new Error('TSV HTML fallback table missing');
 `;
 
 vm.createContext(context);

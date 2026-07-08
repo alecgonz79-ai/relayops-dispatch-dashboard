@@ -1833,7 +1833,7 @@ function copySelectedSheetCells() {
   const text=selectedSheetTsv();
   if(!text)return false;
   state.sheetCopyText=text;
-  writeClipboardText(text).then(ok=>toast(ok?`Copied selected ${selectedSheetCells().length} cell${selectedSheetCells().length===1?'':'s'} for Google Sheets`:'Clipboard access was blocked — use the paste box',ok?'':'error'));
+  writeClipboardTable(text,selectedSheetHtml()||tsvToHtmlTable(text)).then(ok=>toast(ok?`Copied selected ${selectedSheetCells().length} cell${selectedSheetCells().length===1?'':'s'} for Google Sheets`:'Clipboard access was blocked — use the paste box',ok?'':'error'));
   return true;
 }
 function copyWaveByIndex(index=0) {
@@ -1845,7 +1845,7 @@ function copyWaveByIndex(index=0) {
   const sectionIndex=morningSections(filteredMorningRows()).findIndex(s=>s.label===group.label&&s.wave===group.wave);
   document.querySelectorAll('.wave-pulse,.sheet-selected-wave').forEach(el=>el.classList.remove('wave-pulse','sheet-selected-wave'));
   if(sectionIndex>=0) document.querySelectorAll(`[data-sheet-section="${sectionIndex}"], .wave-section-${sectionIndex}`).forEach(el=>el.classList.add('sheet-selected-wave','wave-pulse'));
-  writeClipboardText(rows).then(ok=>toast(ok?`Copied ${group.label} ${morningWaveTimeText(group)} for Google Sheets`:'Clipboard access was blocked — use the paste box',ok?'':'error'));
+  writeClipboardTable(rows,morningSheetClipboardHtml([group])).then(ok=>toast(ok?`Copied ${group.label} ${morningWaveTimeText(group)} for Google Sheets`:'Clipboard access was blocked — use the paste box',ok?'':'error'));
   return true;
 }
 function handleSheetSelectionCopy(e) {
@@ -1854,6 +1854,7 @@ function handleSheetSelectionCopy(e) {
   if(!text)return;
   e.preventDefault();
   e.clipboardData?.setData('text/plain',text);
+  e.clipboardData?.setData('text/html',selectedSheetHtml()||tsvToHtmlTable(text));
   state.sheetCopyText=text;
   toast(`Copied selected ${selectedSheetCells().length} cell${selectedSheetCells().length===1?'':'s'} for Google Sheets`);
 }
@@ -2797,6 +2798,66 @@ async function writeClipboardText(text) {
     document.body.appendChild(area); area.select(); const ok=document.execCommand('copy'); area.remove(); return ok;
   } catch { return false; }
 }
+async function writeClipboardTable(text,html) {
+  try {
+    if(navigator.clipboard?.write&&typeof ClipboardItem!=='undefined'&&html) {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/plain': new Blob([text],{type:'text/plain'}),
+        'text/html': new Blob([html],{type:'text/html'})
+      })]);
+      return true;
+    }
+  } catch {}
+  return writeClipboardText(text);
+}
+function clipboardHtmlShell(tableHtml) {
+  return `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableHtml}</body></html>`;
+}
+function clipboardCellStyle(colIndex,type='cell') {
+  const base='border:1px solid #111;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;font-size:10pt;font-weight:700;height:21px;mso-number-format:"\\@";';
+  if(type==='separator')return `${base}background:#050505;color:#050505;border-color:#050505;height:14px;`;
+  if(type==='wave')return `${base}background:#eef3ff;font-size:24pt;font-weight:900;writing-mode:vertical-rl;transform:rotate(180deg);min-width:72px;`;
+  if(type==='time')return `${base}background:#eef3ff;font-size:11pt;font-weight:900;`;
+  if(type==='pad')return `${base}background:#eef3ff;font-size:22pt;font-weight:900;min-width:52px;`;
+  if(type==='spacer'||sheetSpacerColumns.has(colIndex))return `${base}background:#050505;color:#050505;border-color:#050505;min-width:14px;width:14px;`;
+  if(colIndex===12)return `${base}background:#b4a7d6;min-width:78px;`;
+  if([1,2,3,5,6,7,9,10].includes(colIndex))return `${base}background:#eef3ff;min-width:${colIndex===1?122:colIndex===3?82:70}px;`;
+  return `${base}background:#eef3ff;min-width:70px;`;
+}
+function clipboardTd(value='',colIndex=0,type='cell',attrs='') {
+  return `<td ${attrs} style="${clipboardCellStyle(colIndex,type)}">${xmlEscape(value)}</td>`;
+}
+function morningSheetClipboardHtml(sections=morningSections(filteredMorningRows())) {
+  const body=sections.map(section=>{
+    const display=morningDisplayRows(section), waveLabel=section.dsp?'DSP':section.label;
+    const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
+    const rows=display.map((r,i)=>`<tr>${i===0?clipboardTd(waveLabel,0,'wave',`rowspan="${display.length}"`):''}${clipboardTd(r.driver||'',1)}${clipboardTd(r._blank?'':r.route||'',2)}${clipboardTd(r.staging||'',3)}${i===0?clipboardTd(pad,4,'pad',`rowspan="${display.length+1}"`):''}${clipboardTd(r.ev||'',5)}${clipboardTd(r.deviceName||'',6)}${clipboardTd(r.portable||'',7)}${clipboardTd('',8,'spacer')}${clipboardTd(r.stops||'',9)}${clipboardTd(r.packages||'',10)}${clipboardTd('',11,'spacer')}${clipboardTd(r.plannedRts||'',12)}</tr>`).join('');
+    const time=`<tr>${clipboardTd(morningWaveTimeText(section),0,'time')}${clipboardTd('',1)}${clipboardTd('',2)}${clipboardTd('',3)}${clipboardTd('',5)}${clipboardTd('',6)}${clipboardTd('',7)}${clipboardTd('',8,'spacer')}${clipboardTd('',9)}${clipboardTd('',10)}${clipboardTd('',11,'spacer')}${clipboardTd('',12)}</tr>`;
+    const separator=`<tr>${sheetCopyFields.map((_,i)=>clipboardTd('',i,'separator')).join('')}</tr>`;
+    return rows+time+separator;
+  }).join('');
+  return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${body}</table>`);
+}
+function tsvToHtmlTable(text='') {
+  const rows=String(text).split('\n').map(row=>row.split('\t'));
+  return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${rows.map(row=>`<tr>${row.map((value,i)=>clipboardTd(value,i)).join('')}</tr>`).join('')}</table>`);
+}
+function selectedSheetHtml() {
+  const bounds=sheetSelectionBounds();
+  if(!bounds)return '';
+  const rows=[];
+  for(let row=bounds.top;row<=bounds.bottom;row++) {
+    const cells=[];
+    for(let col=bounds.left;col<=bounds.right;col++) {
+      const el=cellAt(row,col,bounds.section);
+      const text=el?.textContent?.trim()||'';
+      const type=el?.closest?.('tr')?.classList?.contains('wave-separator')?'separator':el?.classList?.contains('wave-time-cell')?'time':el?.classList?.contains('pad-label')?'pad':el?.classList?.contains('wave-label')?'wave':sheetSpacerColumns.has(col)?'spacer':'cell';
+      cells.push(clipboardTd(text,col,type));
+    }
+    rows.push(`<tr>${cells.join('')}</tr>`);
+  }
+  return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${rows.join('')}</table>`);
+}
 function exportCSV(){const csv=[exportHeaders,...exportRows()].map(r=>r.map(csvEscape).join(',')).join('\r\n');downloadBlob('\ufeff'+csv,'text/csv;charset=utf-8','relayops-daily-roster.csv');state.modal=null;render();toast('CSV downloaded — ready for Google Sheets');}
 function fleetExportRows() {
   return sortedRivianFleet().map(v=>{
@@ -2887,7 +2948,7 @@ async function copyMorningVisible(){
   state.sheetCopyText=morningSheetTsv();
   const board=document.querySelector('.morning-board');
   if(board){board.classList.add('sheet-copy-highlight');setTimeout(()=>board.classList.remove('sheet-copy-highlight'),1400);}
-  if(await writeClipboardText(state.sheetCopyText)) toast('Google Sheets template data copied — click A3 in Google Sheets and paste');
+  if(await writeClipboardTable(state.sheetCopyText,morningSheetClipboardHtml())) toast('Google Sheets template data copied — click A3 in Google Sheets and paste');
   else toast('Clipboard access was blocked; use Export sheet instead','error');
 }
 function selectSheetsText(){
