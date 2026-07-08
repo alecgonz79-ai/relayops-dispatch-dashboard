@@ -2929,13 +2929,17 @@ function clipboardCellStyle(colIndex,type='cell') {
 function clipboardTd(value='',colIndex=0,type='cell',attrs='') {
   return `<td ${attrs} style="${clipboardCellStyle(colIndex,type)}">${xmlEscape(value)}</td>`;
 }
+function clipboardTr(cells='',type='route') {
+  const height=type==='separator'?14:type==='time'?25:type==='blank'?18:21;
+  return `<tr style="height:${height}px;mso-height-source:userset">${cells}</tr>`;
+}
 function morningSheetClipboardHtml(sections=morningSections(filteredMorningRows())) {
   const body=sections.map(section=>{
     const display=morningDisplayRows(section), waveLabel=section.dsp?'DSP':section.label;
     const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
-    const rows=display.map((r,i)=>`<tr>${i===0?clipboardTd(waveLabel,0,'wave',`rowspan="${display.length}"`):''}${clipboardTd(r.driver||'',1)}${clipboardTd(r._blank?'':r.route||'',2)}${clipboardTd(r.staging||'',3)}${i===0?clipboardTd(pad,4,'pad',`rowspan="${display.length+1}"`):''}${clipboardTd(r.ev||'',5)}${clipboardTd(r.deviceName||'',6)}${clipboardTd(r.portable||'',7)}${clipboardTd('',8,'spacer')}${clipboardTd(r.stops||'',9)}${clipboardTd(r.packages||'',10)}${clipboardTd('',11,'spacer')}${clipboardTd(r.plannedRts||'',12)}</tr>`).join('');
-    const time=`<tr>${clipboardTd(morningWaveTimeText(section),0,'time')}${clipboardTd('',1)}${clipboardTd('',2)}${clipboardTd('',3)}${clipboardTd('',5)}${clipboardTd('',6)}${clipboardTd('',7)}${clipboardTd('',8,'spacer')}${clipboardTd('',9)}${clipboardTd('',10)}${clipboardTd('',11,'spacer')}${clipboardTd('',12)}</tr>`;
-    const separator=`<tr>${sheetCopyFields.map((_,i)=>clipboardTd('',i,'separator')).join('')}</tr>`;
+    const rows=display.map((r,i)=>clipboardTr(`${i===0?clipboardTd(waveLabel,0,'wave',`rowspan="${display.length}"`):''}${clipboardTd(r.driver||'',1)}${clipboardTd(r._blank?'':r.route||'',2)}${clipboardTd(r.staging||'',3)}${i===0?clipboardTd(pad,4,'pad',`rowspan="${display.length+1}"`):''}${clipboardTd(r.ev||'',5)}${clipboardTd(r.deviceName||'',6)}${clipboardTd(r.portable||'',7)}${clipboardTd('',8,'spacer')}${clipboardTd(r.stops||'',9)}${clipboardTd(r.packages||'',10)}${clipboardTd('',11,'spacer')}${clipboardTd(r.plannedRts||'',12)}`,r._blank?'blank':'route')).join('');
+    const time=clipboardTr(`${clipboardTd(morningWaveTimeText(section),0,'time')}${clipboardTd('',1)}${clipboardTd('',2)}${clipboardTd('',3)}${clipboardTd('',5)}${clipboardTd('',6)}${clipboardTd('',7)}${clipboardTd('',8,'spacer')}${clipboardTd('',9)}${clipboardTd('',10)}${clipboardTd('',11,'spacer')}${clipboardTd('',12)}`,'time');
+    const separator=clipboardTr(sheetCopyFields.map((_,i)=>clipboardTd('',i,'separator')).join(''),'separator');
     return rows+time+separator;
   }).join('');
   return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${morningClipboardColgroup()}${body}</table>`);
@@ -2943,7 +2947,7 @@ function morningSheetClipboardHtml(sections=morningSections(filteredMorningRows(
 function tsvToHtmlTable(text='') {
   const rows=String(text).split('\n').map(row=>row.split('\t'));
   const maxCols=rows.reduce((max,row)=>Math.max(max,row.length),0);
-  return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${morningClipboardColgroup(0,Math.max(0,maxCols-1))}${rows.map(row=>`<tr>${row.map((value,i)=>clipboardTd(value,i)).join('')}</tr>`).join('')}</table>`);
+  return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${morningClipboardColgroup(0,Math.max(0,maxCols-1))}${rows.map(row=>clipboardTr(row.map((value,i)=>clipboardTd(value,i)).join(''),row.every(cell=>String(cell||'')==='')?'separator':'route')).join('')}</table>`);
 }
 function selectedSheetHtml() {
   const bounds=sheetSelectionBounds();
@@ -2957,7 +2961,9 @@ function selectedSheetHtml() {
       const type=el?.closest?.('tr')?.classList?.contains('wave-separator')?'separator':el?.classList?.contains('wave-time-cell')?'time':el?.classList?.contains('pad-label')?'pad':el?.classList?.contains('wave-label')?'wave':sheetSpacerColumns.has(col)?'spacer':'cell';
       cells.push(clipboardTd(text,col,type));
     }
-    rows.push(`<tr>${cells.join('')}</tr>`);
+    const rowEl=cellAt(row,bounds.left,bounds.section)?.closest?.('tr');
+    const rowType=rowEl?.classList?.contains('wave-separator')?'separator':rowEl?.classList?.contains('wave-time-row')?'time':rowEl?.classList?.contains('blank-row')?'blank':'route';
+    rows.push(clipboardTr(cells.join(''),rowType));
   }
   return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${morningClipboardColgroup(bounds.left,bounds.right)}${rows.join('')}</table>`);
 }
