@@ -3030,7 +3030,9 @@ function writeRelayOpsMorningSheet(payload) {
   const sheet = ss.getSheets()[0];
   const rows = payload.rows || [];
   const rowTypes = payload.rowTypes || [];
+  const headers = (payload.headers || []).slice(0, RELAYOPS_COLS);
   if (!rows.length) throw new Error('No morning rows sent');
+  while (headers.length < RELAYOPS_COLS) headers.push('');
   const rowCount = Math.max(rows.length, 120);
   const target = sheet.getRange(RELAYOPS_START_ROW, RELAYOPS_START_COL, rowCount, RELAYOPS_COLS);
   target.breakApart();
@@ -3041,6 +3043,16 @@ function writeRelayOpsMorningSheet(payload) {
   sheet.getRange(RELAYOPS_START_ROW, RELAYOPS_START_COL, rows.length, RELAYOPS_COLS).setValues(rows);
 
   sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, RELAYOPS_COLS).setValues([headers])
+    .setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle')
+    .setBorder(true, true, true, true, true, true, '#111111', SpreadsheetApp.BorderStyle.SOLID);
+  sheet.getRange(1, 1).setBackground('#b4a7d6');
+  sheet.getRange(1, 2, 1, 7).setBackground('#86e8ed').setFontColor('#000000');
+  sheet.getRange(1, 9).setBackground('#050505').setFontColor('#050505');
+  sheet.getRange(1, 10, 1, 2).setBackground('#86e8ed').setFontColor('#000000');
+  sheet.getRange(1, 12).setBackground('#050505').setFontColor('#050505');
+  sheet.getRange(1, 13).setBackground('#b4a7d6').setFontColor('#000000');
+  sheet.setRowHeight(1, 28);
   sheet.setColumnWidths(1, 1, 75);
   sheet.setColumnWidths(2, 1, 132);
   sheet.setColumnWidths(3, 2, 74);
@@ -3078,14 +3090,13 @@ function writeRelayOpsMorningSheet(payload) {
     sheet.getRange(start, 5, count + 1, 1).merge().setValue(section.pad || '')
       .setFontSize(22).setFontWeight('bold').setBackground('#eef3ff');
   });
-
-  sheet.getRange(1, 1, 1, RELAYOPS_COLS).setFontWeight('bold');
   return true;
 }
 
 function testRelayOpsMorningSheet() {
   const sample = {
     version: 'relayops-morning-v1',
+    headers: ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','STOP COUNT','PACKAGE COUNT','','PLANNED RTS'],
     rows: [['WAVE 1','Demo Driver','CX200','STG.V.1','A','21','3','-','','188','331','','6:20 PM'], ['11:15 (1)','','','','','','','','','','','',''], ['','','','','','','','','','','','','']],
     rowTypes: ['route','time','separator'],
     sections: [{label:'WAVE 1', wave:'11:15 AM', waveTime:'11:15 (1)', pad:'A', startRow:3, rowCount:1, timeRow:4, separatorRow:5}]

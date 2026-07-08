@@ -82,6 +82,7 @@ const checks = `
   if (payload.version !== 'relayops-morning-v1') throw new Error('Morning Sheets connector payload version missing');
   if (payload.startCell !== 'A3') throw new Error('Morning Sheets connector should target A3');
   if (payload.headers.length !== 13) throw new Error('Morning Sheets connector should use 13 A-M headers');
+  if (payload.headers[0] !== 'WAVE' || payload.headers[12] !== 'PLANNED RTS') throw new Error('Morning Sheets connector headers should match the A-M template');
   if (!payload.rows.length || !payload.sections.length) throw new Error('Morning Sheets connector payload missing rows or sections');
   if (!Array.isArray(payload.rowTypes) || payload.rowTypes.length !== payload.rows.length) throw new Error('Morning Sheets connector rowTypes should match row count');
   if (!payload.rowTypes.includes('blank') || !payload.rowTypes.includes('separator') || !payload.rowTypes.includes('time')) throw new Error('Morning Sheets connector should explicitly mark blank, time, and separator rows');
@@ -94,6 +95,7 @@ const checks = `
   const script = morningSheetsAppsScript();
   if (!script.includes('function doGet') || !script.includes('relayops-morning-v1') || !script.includes('function doPost') || !script.includes('writeRelayOpsMorningSheet') || !script.includes('breakApart') || !script.includes('merge()')) throw new Error('Morning Sheets Apps Script connector missing required writer code');
   if (!script.includes("rowType === 'separator'") || script.includes('row.every(function(cell)')) throw new Error('Apps Script should use explicit rowTypes, not blank-row guessing, for separators');
+  if (!script.includes('sheet.setFrozenRows(1)') || !script.includes('setValues([headers])') || !script.includes("sheet.setRowHeight(1, 28)") || !script.includes("sheet.getRange(1, 9).setBackground('#050505')") || !script.includes("sheet.getRange(1, 13).setBackground('#b4a7d6')")) throw new Error('Apps Script should restore the frozen A-M header row');
   const connectorHtml = (state.modal = 'morning-sheets-connector', modal());
   if (!connectorHtml.includes('GOOGLE SHEETS CONNECTOR') || !connectorHtml.includes('Copy Apps Script') || !connectorHtml.includes('Test connector') || !connectorHtml.includes('Send to Google Sheet') || !connectorHtml.includes('Connector payload preview')) throw new Error('Morning Sheets connector modal missing');
   if (connectorUrlWithPing('https://script.google.com/macros/s/demo/exec') !== 'https://script.google.com/macros/s/demo/exec?relayops=ping') throw new Error('Connector ping URL without query failed');
