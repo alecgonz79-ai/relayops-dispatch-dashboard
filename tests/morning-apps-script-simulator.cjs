@@ -1,0 +1,198 @@
+const fs = require('fs');
+const vm = require('vm');
+
+class FakeRange {
+  constructor(sheet, row, col, numRows = 1, numCols = 1) {
+    this.sheet = sheet;
+    this.row = row;
+    this.col = col;
+    this.numRows = numRows;
+    this.numCols = numCols;
+  }
+  eachCell(fn) {
+    for (let r = 0; r < this.numRows; r += 1) {
+      for (let c = 0; c < this.numCols; c += 1) fn(this.row + r, this.col + c);
+    }
+  }
+  setValues(values) {
+    values.forEach((row, r) => row.forEach((value, c) => this.sheet.setCell(this.row + r, this.col + c, value)));
+    return this;
+  }
+  setValue(value) {
+    this.eachCell((row, col) => this.sheet.setCell(row, col, value));
+    return this;
+  }
+  clearContent() {
+    this.eachCell((row, col) => this.sheet.setCell(row, col, ''));
+    return this;
+  }
+  breakApart() {
+    this.sheet.breakApartCalls.push({ row: this.row, col: this.col, numRows: this.numRows, numCols: this.numCols });
+    this.sheet.merges = this.sheet.merges.filter(merge =>
+      merge.row < this.row || merge.row > this.row + this.numRows - 1 || merge.col < this.col || merge.col > this.col + this.numCols - 1
+    );
+    return this;
+  }
+  merge() {
+    this.sheet.merges.push({ row: this.row, col: this.col, numRows: this.numRows, numCols: this.numCols });
+    return this;
+  }
+  setBackground(value) {
+    this.eachCell((row, col) => this.sheet.setFormat(row, col, 'background', value));
+    return this;
+  }
+  setFontColor(value) {
+    this.eachCell((row, col) => this.sheet.setFormat(row, col, 'fontColor', value));
+    return this;
+  }
+  setFontWeight(value) {
+    this.eachCell((row, col) => this.sheet.setFormat(row, col, 'fontWeight', value));
+    return this;
+  }
+  setHorizontalAlignment(value) {
+    this.eachCell((row, col) => this.sheet.setFormat(row, col, 'horizontalAlignment', value));
+    return this;
+  }
+  setVerticalAlignment(value) {
+    this.eachCell((row, col) => this.sheet.setFormat(row, col, 'verticalAlignment', value));
+    return this;
+  }
+  setBorder() { return this; }
+  setFontSize(value) {
+    this.eachCell((row, col) => this.sheet.setFormat(row, col, 'fontSize', value));
+    return this;
+  }
+  setTextRotation(value) {
+    this.eachCell((row, col) => this.sheet.setFormat(row, col, 'textRotation', value));
+    return this;
+  }
+}
+
+class FakeSheet {
+  constructor(name, rows, cols) {
+    this.name = name;
+    this.maxRows = rows;
+    this.maxColumns = cols;
+    this.values = new Map();
+    this.formats = new Map();
+    this.rowHeights = new Map();
+    this.columnWidths = new Map();
+    this.merges = [];
+    this.breakApartCalls = [];
+    this.frozenRows = 0;
+  }
+  key(row, col) { return `${row}:${col}`; }
+  getName() { return this.name; }
+  getMaxRows() { return this.maxRows; }
+  getMaxColumns() { return this.maxColumns; }
+  getFrozenRows() { return this.frozenRows; }
+  insertRowsAfter(after, count) {
+    if (after !== this.maxRows) throw new Error(`Expected rows to insert after current max ${this.maxRows}, got ${after}`);
+    this.maxRows += count;
+  }
+  insertColumnsAfter(after, count) {
+    if (after !== this.maxColumns) throw new Error(`Expected columns to insert after current max ${this.maxColumns}, got ${after}`);
+    this.maxColumns += count;
+  }
+  getRange(row, col, numRows = 1, numCols = 1) {
+    if (row + numRows - 1 > this.maxRows) throw new Error(`Range exceeds rows: ${row}:${numRows} > ${this.maxRows}`);
+    if (col + numCols - 1 > this.maxColumns) throw new Error(`Range exceeds columns: ${col}:${numCols} > ${this.maxColumns}`);
+    return new FakeRange(this, row, col, numRows, numCols);
+  }
+  setFrozenRows(value) { this.frozenRows = value; return this; }
+  setRowHeight(row, value) { this.rowHeights.set(row, value); return this; }
+  setColumnWidths(startCol, count, width) {
+    for (let col = startCol; col < startCol + count; col += 1) this.columnWidths.set(col, width);
+    return this;
+  }
+  setCell(row, col, value) { this.values.set(this.key(row, col), value); }
+  getCell(row, col) { return this.values.get(this.key(row, col)); }
+  setFormat(row, col, field, value) {
+    const key = this.key(row, col);
+    const format = this.formats.get(key) || {};
+    format[field] = value;
+    this.formats.set(key, format);
+  }
+  getFormat(row, col, field) {
+    return (this.formats.get(this.key(row, col)) || {})[field];
+  }
+}
+
+class FakeSpreadsheet {
+  constructor(sheet) { this.sheet = sheet; }
+  getSheetByName(name) { return name === this.sheet.getName() ? this.sheet : null; }
+  getActiveSheet() { return this.sheet; }
+  getSheets() { return [this.sheet]; }
+}
+
+function runConnectorWithSheet(sheet, payload) {
+  const connector = fs.readFileSync(require.resolve('../google-sheets/relayops-morning-connector.gs'), 'utf8');
+  const spreadsheet = new FakeSpreadsheet(sheet);
+  const sandbox = {
+    console,
+    SpreadsheetApp: {
+      getActiveSpreadsheet: () => spreadsheet,
+      BorderStyle: { SOLID: 'SOLID' }
+    },
+    ContentService: {
+      MimeType: { JSON: 'application/json' },
+      createTextOutput: text => ({ text, setMimeType() { return this; } })
+    }
+  };
+  vm.runInNewContext(`${connector}
+    globalThis.__validation = validateRelayOpsMorningPayload(globalThis.__payload);
+    globalThis.__layoutBefore = relayOpsTemplateLayout(findRelayOpsMorningSheet(globalThis.__payload), globalThis.__payload.rows.length);
+    globalThis.__result = writeRelayOpsMorningSheet(globalThis.__payload);
+    globalThis.__layoutAfter = relayOpsTemplateLayout(findRelayOpsMorningSheet(globalThis.__payload), globalThis.__payload.rows.length);
+  `, { ...sandbox, __payload: payload });
+  return sandbox;
+}
+
+const payload = {
+  version: 'relayops-morning-v1',
+  startCell: 'A3',
+  writeRange: 'A3:M',
+  headers: ['WAVE', 'DRIVER', 'ROUTE', 'STAGING', 'PAD', 'EV', 'DEVICE', 'PORTABLE', '', 'STOP COUNT', 'PACKAGE COUNT', '', 'PLANNED RTS'],
+  sheetName: 'Morning Operations',
+  sheetNameCandidates: ['Opening Operations', 'Sheet1'],
+  rows: [
+    ['WAVE 1', 'Driver One', 'CX201', 'STG.V.1', 'A', '21', '3', '-', '', '188', '331', '', '5:35 PM'],
+    ['', 'Driver Two', 'CX202', 'STG.V.2', '', '22', '4', '8', '', '190', '340', '', '6:05 PM'],
+    ['11:15 (2)', '', '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '']
+  ],
+  rowTypes: ['route', 'route', 'time', 'separator'],
+  sections: [{ label: 'WAVE 1', waveTime: '11:15 (2)', pad: 'A', startRow: 3, rowCount: 2, timeRow: 5, separatorRow: 6 }]
+};
+
+const sheet = new FakeSheet('Morning Operations', 5, 8);
+runConnectorWithSheet(sheet, payload);
+
+if (sheet.getMaxRows() < 122) throw new Error(`Connector should expand rows to at least 122, got ${sheet.getMaxRows()}`);
+if (sheet.getMaxColumns() !== 13) throw new Error(`Connector should expand only to A-M, got ${sheet.getMaxColumns()} columns`);
+if (sheet.frozenRows !== 1) throw new Error('Connector should freeze row 1');
+if (sheet.getCell(1, 1) !== 'WAVE' || sheet.getCell(1, 13) !== 'PLANNED RTS') throw new Error('Connector should restore A-M headers');
+if (sheet.getCell(3, 2) !== 'Driver One' || sheet.getCell(4, 3) !== 'CX202') throw new Error('Connector should write route rows starting at A3');
+if (sheet.getCell(5, 1) !== '11:15 (2)') throw new Error('Connector should write wave time under the wave label');
+if (sheet.getFormat(6, 1, 'background') !== '#050505' || sheet.rowHeights.get(6) !== 14) throw new Error('Connector should format separator rows as black numbered dividers');
+if (!sheet.merges.some(merge => merge.row === 3 && merge.col === 1 && merge.numRows === 2 && merge.numCols === 1)) throw new Error('Connector should merge Wave cells for route rows');
+if (!sheet.merges.some(merge => merge.row === 3 && merge.col === 5 && merge.numRows === 3 && merge.numCols === 1)) throw new Error('Connector should merge Pad cells through the time row');
+if (sheet.columnWidths.get(9) !== 18 || sheet.columnWidths.get(12) !== 18) throw new Error('Connector should keep black spacer columns I and L slim');
+
+const sentinelSheet = new FakeSheet('Morning Operations', 130, 16);
+sentinelSheet.setCell(3, 14, 'DO NOT TOUCH N3');
+runConnectorWithSheet(sentinelSheet, payload);
+if (sentinelSheet.getMaxColumns() !== 16) throw new Error('Connector should not shrink a wider Google template');
+if (sentinelSheet.getCell(3, 14) !== 'DO NOT TOUCH N3') throw new Error('Connector should not touch columns N and beyond');
+if (sentinelSheet.breakApartCalls.some(call => call.col + call.numCols - 1 > 13)) throw new Error('Connector should not break apart columns beyond M');
+
+const badPayload = { ...payload, writeRange: 'A3:N' };
+let rejected = false;
+try {
+  runConnectorWithSheet(new FakeSheet('Morning Operations', 130, 16), badPayload);
+} catch (error) {
+  rejected = String(error.message).includes('Write range must be A3:M');
+}
+if (!rejected) throw new Error('Connector should reject writes outside A3:M');
+
+console.log('Morning Apps Script connector simulator test passed');
