@@ -4,6 +4,7 @@
 const RELAYOPS_START_ROW = 3;
 const RELAYOPS_START_COL = 1;
 const RELAYOPS_COLS = 13;
+const RELAYOPS_WRITE_RANGE = 'A3:M';
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -44,6 +45,7 @@ function doPost(e) {
         dryRun: true,
         sheet: sheet.getName(),
         startCell: payload.startCell,
+        writeRange: payload.writeRange,
         rows: (payload.rows || []).length,
         sections: (payload.sections || []).length,
         preflight: validation,
@@ -57,6 +59,7 @@ function doPost(e) {
       ok: true,
       sheet: result.sheetName,
       startCell: result.startCell,
+      writeRange: result.writeRange,
       rows: (payload.rows || []).length,
       sections: (payload.sections || []).length,
       preflight: validation,
@@ -85,6 +88,7 @@ function validateRelayOpsMorningPayload(payload) {
   const sections = payload && payload.sections || [];
   if (!payload || payload.version !== 'relayops-morning-v1') errors.push('Wrong payload version');
   if (payload && payload.startCell !== 'A3') errors.push('Start cell must be A3');
+  if (payload && payload.writeRange !== RELAYOPS_WRITE_RANGE) errors.push('Write range must be A3:M');
   if (headers.length !== RELAYOPS_COLS || headers[0] !== 'WAVE' || headers[12] !== 'PLANNED RTS') errors.push('Header row must match A-M template');
   if (!rows.length) errors.push('No morning rows sent');
   rows.forEach(function(row, i) {
@@ -173,7 +177,7 @@ function writeRelayOpsMorningSheet(payload) {
     sheet.getRange(start, 5, count + 1, 1).merge().setValue(section.pad || '')
       .setFontSize(22).setFontWeight('bold').setBackground('#eef3ff');
   });
-  return {sheetName: sheet.getName(), startCell: 'A3'};
+  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_WRITE_RANGE};
 }
 
 function findRelayOpsMorningSheet(payload) {
@@ -189,6 +193,8 @@ function findRelayOpsMorningSheet(payload) {
 function testRelayOpsMorningSheet() {
   const sample = {
     version: 'relayops-morning-v1',
+    startCell: 'A3',
+    writeRange: 'A3:M',
     headers: ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','STOP COUNT','PACKAGE COUNT','','PLANNED RTS'],
     sheetName: 'Morning Operations',
     sheetNameCandidates: ['Morning Operations','Opening Operations','Morning Sheet','Sheet1'],
