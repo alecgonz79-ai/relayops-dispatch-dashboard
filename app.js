@@ -1399,7 +1399,7 @@ function modal() {
   if (state.modal === 'sheets-helper') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="sheets-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS PASTE BOX</span><h2 id="sheets-title">Paste-ready morning sheet</h2><p>If one-click copy does not work, click Select all, copy, then paste into Google Sheets cell A3 so the template headers stay formatted.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="paste-guide"><span><b>1</b> Select all</span><span><b>2</b> Copy</span><span><b>3</b> Paste in A3</span></div><textarea id="sheets-copy-text" class="sheets-copy-text" readonly>${esc(state.sheetCopyText||morningSheetTsv())}</textarea><div class="modal-actions"><button class="btn" data-action="select-sheets-text">Select all text</button><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy again</button></div></div></div></div>`;
   if (state.modal === 'morning-sheets-connector') {
     const payload=morningSheetsConnectorPayload(), rows=payload.rows.length, sections=payload.sections.length;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="morning-sheets-connector-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS CONNECTOR</span><h2 id="morning-sheets-connector-title">Send directly to the opening template</h2><p>This is the reliable path for merged cells. Google Sheets owns the formatting; RelayOps sends exact A–M data and wave merge instructions.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheets-connector-status ${state.morningSheetsEndpoint?'ready':'warn'}"><strong>${state.morningSheetsEndpoint?'Connector saved':'Connector not set yet'}</strong><span>${state.morningSheetsEndpoint?`Last send: ${esc(state.morningSheetsLastPush||'not sent yet')}`:'Copy the Apps Script, deploy it as a web app, then paste the web app URL below.'}</span></div><div class="sheets-connector-grid"><div class="connector-step"><b>1</b><strong>Install script in Google Sheets</strong><span>Open Extensions → Apps Script in the template, paste the script, deploy as Web app, and allow access.</span><button class="btn small" data-action="copy-morning-apps-script">${ICONS.copy} Copy Apps Script</button></div><div class="connector-step"><b>2</b><strong>Paste web app endpoint</strong><span>Use the Apps Script deployment URL. Do not paste Google passwords or Amazon/Rivian credentials.</span><input id="morning-sheets-endpoint" value="${esc(state.morningSheetsEndpoint)}" placeholder="https://script.google.com/macros/s/.../exec"><button class="btn small" data-action="save-morning-sheets-connector">Save endpoint</button></div><div class="connector-step"><b>3</b><strong>Send checked sheet</strong><span>${rows} A–M rows · ${sections} sections · starts at A3. The script rewrites values, dividers, wave labels, pad labels, and Planned RTS color.</span><button class="btn small primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send to Google Sheet</button><button class="btn small ghost" data-action="copy-morning-sheets-payload">${ICONS.copy} Copy payload JSON</button></div></div>${state.morningSheetsLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Last connector issue</strong><span>${esc(state.morningSheetsLastError)}</span></div></div>`:''}<div class="sheets-connector-preview"><strong>Connector payload preview</strong><span>DSP ${esc(payload.dsp)} · Start ${esc(payload.startCell)} · Headers ${payload.headers.length} · Rows ${rows}</span><textarea readonly>${esc(JSON.stringify(payload,null,2).slice(0,1800))}${JSON.stringify(payload).length>1800?'\n...':''}</textarea></div><div class="modal-actions"><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open template</a><button class="btn" data-action="copy-morning-apps-script">Copy script</button><button class="btn primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send now</button></div><p class="upload-help">If your browser blocks the send because Apps Script/CORS is picky, copy the payload JSON and paste it into the Apps Script test function. The production-safe version is a small backend connector, but this gets the Google template workflow ready.</p></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="morning-sheets-connector-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS CONNECTOR</span><h2 id="morning-sheets-connector-title">Send directly to the opening template</h2><p>This is the reliable path for merged cells. Google Sheets owns the formatting; RelayOps sends exact A–M data and wave merge instructions.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheets-connector-status ${state.morningSheetsEndpoint?'ready':'warn'}"><strong>${state.morningSheetsEndpoint?'Connector saved':'Connector not set yet'}</strong><span>${state.morningSheetsEndpoint?`Last send: ${esc(state.morningSheetsLastPush||'not sent yet')}`:'Copy the Apps Script, deploy it as a web app, then paste the web app URL below.'}</span></div><div class="sheets-connector-grid"><div class="connector-step"><b>1</b><strong>Install script in Google Sheets</strong><span>Open Extensions → Apps Script in the template, paste the script, deploy as Web app, and allow access.</span><button class="btn small" data-action="copy-morning-apps-script">${ICONS.copy} Copy Apps Script</button></div><div class="connector-step"><b>2</b><strong>Paste web app endpoint</strong><span>Use the Apps Script deployment URL. Do not paste Google passwords or Amazon/Rivian credentials.</span><input id="morning-sheets-endpoint" value="${esc(state.morningSheetsEndpoint)}" placeholder="https://script.google.com/macros/s/.../exec"><button class="btn small" data-action="save-morning-sheets-connector">Save endpoint</button><button class="btn small ghost" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button></div><div class="connector-step"><b>3</b><strong>Send checked sheet</strong><span>${rows} A–M rows · ${sections} sections · starts at A3. The script rewrites values, dividers, wave labels, pad labels, and Planned RTS color.</span><button class="btn small primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send to Google Sheet</button><button class="btn small ghost" data-action="copy-morning-sheets-payload">${ICONS.copy} Copy payload JSON</button></div></div>${state.morningSheetsLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Connector note</strong><span>${esc(state.morningSheetsLastError)}</span></div></div>`:''}<div class="sheets-connector-preview"><strong>Connector payload preview</strong><span>DSP ${esc(payload.dsp)} · Start ${esc(payload.startCell)} · Headers ${payload.headers.length} · Rows ${rows}</span><textarea readonly>${esc(JSON.stringify(payload,null,2).slice(0,1800))}${JSON.stringify(payload).length>1800?'\n...':''}</textarea></div><div class="modal-actions"><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open template</a><button class="btn" data-action="copy-morning-apps-script">Copy script</button><button class="btn" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button><button class="btn primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send now</button></div><p class="upload-help">Best case: Google confirms the write. If Apps Script blocks browser confirmation, RelayOps still sends with a safe fallback and tells you to check the sheet instead of pretending it was verified.</p></div></div></div>`;
   }
   if (state.modal === 'equipment') {
     const count=state.equipmentImport?Object.keys(state.equipmentImport.details||{}).length:0;
@@ -1968,6 +1968,7 @@ function action(name,el) {
   if (name==='save-morning-sheets-connector') return saveMorningSheetsConnector();
   if (name==='copy-morning-apps-script') return copyMorningAppsScript();
   if (name==='copy-morning-sheets-payload') return copyMorningSheetsPayload();
+  if (name==='test-morning-sheets-connector') return testMorningSheetsConnector();
   if (name==='send-morning-to-sheets') return sendMorningToSheets();
   if (name==='open-sheets-helper') { state.sheetCopyText=morningSheetTsv(); state.modal='sheets-helper'; return render(); }
   if (name==='select-sheets-text') return selectSheetsText();
@@ -3000,6 +3001,15 @@ const RELAYOPS_START_ROW = 3;
 const RELAYOPS_START_COL = 1;
 const RELAYOPS_COLS = 13;
 
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    ok: true,
+    connector: 'relayops-morning-v1',
+    sheet: SpreadsheetApp.getActiveSpreadsheet().getName(),
+    checkedAt: new Date().toISOString()
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
 function doPost(e) {
   const payload = JSON.parse(e.postData.contents || '{}');
   writeRelayOpsMorningSheet(payload);
@@ -3095,22 +3105,56 @@ async function copyMorningSheetsPayload() {
   toast(ok?'Morning Sheet connector payload copied':'Clipboard blocked — use the preview box',ok?'':'error');
   return ok;
 }
+function connectorUrlWithPing(endpoint='') {
+  if(!endpoint)return '';
+  const join=endpoint.includes('?')?'&':'?';
+  return `${endpoint}${join}relayops=ping`;
+}
+async function testMorningSheetsConnector() {
+  const endpoint=(state.morningSheetsEndpoint||'').trim();
+  if(!endpoint) { state.modal='morning-sheets-connector'; render(); return toast('Paste your Google Apps Script web app URL first','error'); }
+  try {
+    const response=await fetch(connectorUrlWithPing(endpoint),{method:'GET'});
+    const text=await response.text();
+    if(!response.ok||!/relayops-morning-v1/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
+    state.morningSheetsLastError='';
+    persist(); render();
+    toast('Google Sheets connector confirmed');
+    return true;
+  } catch(error) {
+    state.morningSheetsLastError='Browser could not confirm the connector. If this is an Apps Script CORS block, Send can still use fallback mode; verify the Google Sheet after sending.';
+    persist(); render();
+    toast('Could not confirm connector from the browser — use Send, then check the sheet','error');
+    return false;
+  }
+}
 async function sendMorningToSheets() {
   const endpoint=(state.morningSheetsEndpoint||'').trim();
   if(!endpoint) { state.modal='morning-sheets-connector'; render(); return toast('Paste your Google Apps Script web app URL first','error'); }
   const payload=morningSheetsConnectorPayload();
   try {
-    await fetch(endpoint,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)});
+    const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
+    const text=await response.text();
+    if(!response.ok||!/ok|rows|updatedAt/i.test(text))throw new Error(`Connector returned ${response.status}`);
     state.morningSheetsLastPush=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastError='';
     persist(); render();
-    toast(`Morning Sheet sent to Google connector · ${payload.rows.length} rows`);
+    toast(`Google confirmed Morning Sheet update · ${payload.rows.length} rows`);
     return true;
   } catch(error) {
-    state.morningSheetsLastError=error?.message||'Google Sheets connector failed';
-    persist(); render();
-    toast('Google Sheets connector failed — copy the payload JSON as backup','error');
-    return false;
+    try {
+      await fetch(endpoint,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)});
+      state.morningSheetsLastPush=`${new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date())} · check sheet`;
+      state.morningSheetsLastError='Sent with fallback mode, but the browser could not read Google’s confirmation. Open the Google Sheet and confirm the rows updated.';
+      persist(); render();
+      toast(`Morning Sheet sent in fallback mode · verify Google Sheet`);
+      return true;
+    } catch(fallbackError) {
+      state.morningSheetsLastError=fallbackError?.message||error?.message||'Google Sheets connector failed';
+      persist(); render();
+      toast('Google Sheets connector failed — copy the payload JSON as backup','error');
+      return false;
+    }
   }
 }
 async function copyMorningVisible(){
