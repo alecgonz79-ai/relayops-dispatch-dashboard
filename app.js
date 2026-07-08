@@ -204,6 +204,7 @@ let state = {
   morningSheetsLastPush: localStorage.getItem('relayops_morning_sheets_last_push') || '',
   morningSheetsLastError: localStorage.getItem('relayops_morning_sheets_last_error') || '',
   morningSheetsLastReceipt: JSON.parse(localStorage.getItem('relayops_morning_sheets_last_receipt') || 'null'),
+  morningSheetsLastDryRun: localStorage.getItem('relayops_morning_sheets_last_dry_run') || '',
   fleetAmazonUrl: localStorage.getItem('relayops_fleet_amazon_url') || AMAZON_FLEET_PORTAL_URL,
   fleetFleetosUrl: localStorage.getItem('relayops_fleet_fleetos_url') || FLEETOS_PORTAL_URL,
   fleetLiveLastPull: localStorage.getItem('relayops_fleet_live_last_pull') || '',
@@ -1404,7 +1405,7 @@ function modal() {
   if (state.modal === 'sheets-helper') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="sheets-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS PASTE BOX</span><h2 id="sheets-title">Paste-ready morning sheet</h2><p>If one-click copy does not work, click Select all, copy, then paste into Google Sheets cell A3 so the template headers stay formatted.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="paste-guide"><span><b>1</b> Select all</span><span><b>2</b> Copy</span><span><b>3</b> Paste in A3</span></div><textarea id="sheets-copy-text" class="sheets-copy-text" readonly>${esc(state.sheetCopyText||morningSheetTsv())}</textarea><div class="modal-actions"><button class="btn" data-action="select-sheets-text">Select all text</button><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy again</button></div></div></div></div>`;
   if (state.modal === 'morning-sheets-connector') {
     const payload=morningSheetsConnectorPayload(), rows=payload.rows.length, sections=payload.sections.length;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="morning-sheets-connector-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS CONNECTOR</span><h2 id="morning-sheets-connector-title">Send directly to the opening template</h2><p>This is the reliable path for merged cells. Google Sheets owns the formatting; RelayOps sends exact A–M data and wave merge instructions.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheets-connector-status ${state.morningSheetsEndpoint?'ready':'warn'}"><strong>${state.morningSheetsEndpoint?'Connector saved':'Connector not set yet'}</strong><span>${state.morningSheetsEndpoint?`Last send: ${esc(state.morningSheetsLastPush||'not sent yet')}`:'Copy the Apps Script, deploy it as a web app, then paste the web app URL below.'}</span></div>${morningSheetsPreflightHtml(payload)}${morningSheetsReceiptHtml()}<div class="sheets-connector-grid"><div class="connector-step"><b>1</b><strong>Install script in Google Sheets</strong><span>Open Extensions → Apps Script in the template, paste the script, reload the Sheet, and look for the RelayOps menu to confirm it installed. Then deploy as Web app and allow access.</span><button class="btn small" data-action="copy-morning-apps-script">${ICONS.copy} Copy Apps Script</button><a class="btn small ghost" href="${MORNING_APPS_SCRIPT_URL}" download>Download .gs file</a></div><div class="connector-step"><b>2</b><strong>Paste web app endpoint</strong><span>Use the Apps Script deployment URL. Do not paste Google passwords or Amazon/Rivian credentials.</span><input id="morning-sheets-endpoint" value="${esc(state.morningSheetsEndpoint)}" placeholder="https://script.google.com/macros/s/.../exec"><button class="btn small" data-action="save-morning-sheets-connector">Save endpoint</button><button class="btn small ghost" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button></div><div class="connector-step"><b>3</b><strong>Send checked sheet</strong><span>${rows} A–M rows · ${sections} sections · target tab ${esc(payload.sheetName)} · starts at A3.</span><button class="btn small primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send to Google Sheet</button><button class="btn small ghost" data-action="copy-morning-sheets-payload">${ICONS.copy} Copy payload JSON</button></div></div>${state.morningSheetsLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Connector note</strong><span>${esc(state.morningSheetsLastError)}</span></div></div>`:''}<div class="sheets-connector-preview"><strong>Connector payload preview</strong><span>DSP ${esc(payload.dsp)} · Tab ${esc(payload.sheetName)} · Start ${esc(payload.startCell)} · Headers ${payload.headers.length} · Rows ${rows}</span><textarea readonly>${esc(JSON.stringify(payload,null,2).slice(0,1800))}${JSON.stringify(payload).length>1800?'\n...':''}</textarea></div><div class="modal-actions"><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open template</a><a class="btn" href="${MORNING_APPS_SCRIPT_URL}" download>Download script</a><button class="btn" data-action="copy-morning-apps-script">Copy script</button><button class="btn" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button><button class="btn primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send now</button></div><p class="upload-help">Best case: Google confirms the write. If Apps Script blocks browser confirmation, RelayOps still sends with a safe fallback and tells you to check the sheet instead of pretending it was verified.</p></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="morning-sheets-connector-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS CONNECTOR</span><h2 id="morning-sheets-connector-title">Send directly to the opening template</h2><p>This is the reliable path for merged cells. Google Sheets owns the formatting; RelayOps sends exact A–M data and wave merge instructions.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheets-connector-status ${state.morningSheetsEndpoint?'ready':'warn'}"><strong>${state.morningSheetsEndpoint?'Connector saved':'Connector not set yet'}</strong><span>${state.morningSheetsEndpoint?`Last send: ${esc(state.morningSheetsLastPush||'not sent yet')}${state.morningSheetsLastDryRun?` · Dry run: ${esc(state.morningSheetsLastDryRun)}`:''}`:'Copy the Apps Script, deploy it as a web app, then paste the web app URL below.'}</span></div>${morningSheetsPreflightHtml(payload)}${morningSheetsReceiptHtml()}<div class="sheets-connector-grid"><div class="connector-step"><b>1</b><strong>Install script in Google Sheets</strong><span>Open Extensions → Apps Script in the template, paste the script, reload the Sheet, and look for the RelayOps menu to confirm it installed. Then deploy as Web app and allow access.</span><button class="btn small" data-action="copy-morning-apps-script">${ICONS.copy} Copy Apps Script</button><a class="btn small ghost" href="${MORNING_APPS_SCRIPT_URL}" download>Download .gs file</a></div><div class="connector-step"><b>2</b><strong>Paste web app endpoint</strong><span>Use the Apps Script deployment URL. Do not paste Google passwords or Amazon/Rivian credentials.</span><input id="morning-sheets-endpoint" value="${esc(state.morningSheetsEndpoint)}" placeholder="https://script.google.com/macros/s/.../exec"><button class="btn small" data-action="save-morning-sheets-connector">Save endpoint</button><button class="btn small ghost" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button></div><div class="connector-step"><b>3</b><strong>Send checked sheet</strong><span>${rows} A–M rows · ${sections} sections · target tab ${esc(payload.sheetName)} · starts at A3. Dry run validates in Google without writing cells.</span><button class="btn small ghost" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn small primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send to Google Sheet</button><button class="btn small ghost" data-action="copy-morning-sheets-payload">${ICONS.copy} Copy payload JSON</button></div></div>${state.morningSheetsLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Connector note</strong><span>${esc(state.morningSheetsLastError)}</span></div></div>`:''}<div class="sheets-connector-preview"><strong>Connector payload preview</strong><span>DSP ${esc(payload.dsp)} · Tab ${esc(payload.sheetName)} · Start ${esc(payload.startCell)} · Headers ${payload.headers.length} · Rows ${rows}</span><textarea readonly>${esc(JSON.stringify(payload,null,2).slice(0,1800))}${JSON.stringify(payload).length>1800?'\n...':''}</textarea></div><div class="modal-actions"><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open template</a><a class="btn" href="${MORNING_APPS_SCRIPT_URL}" download>Download script</a><button class="btn" data-action="copy-morning-apps-script">Copy script</button><button class="btn" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button><button class="btn" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send now</button></div><p class="upload-help">Best case: Google confirms the write. If Apps Script blocks browser confirmation, RelayOps still sends with a safe fallback and tells you to check the sheet instead of pretending it was verified.</p></div></div></div>`;
   }
   if (state.modal === 'equipment') {
     const count=state.equipmentImport?Object.keys(state.equipmentImport.details||{}).length:0;
@@ -1974,6 +1975,7 @@ function action(name,el) {
   if (name==='copy-morning-apps-script') return copyMorningAppsScript();
   if (name==='copy-morning-sheets-payload') return copyMorningSheetsPayload();
   if (name==='test-morning-sheets-connector') return testMorningSheetsConnector();
+  if (name==='dry-run-morning-to-sheets') return dryRunMorningToSheets();
   if (name==='send-morning-to-sheets') return sendMorningToSheets();
   if (name==='open-sheets-helper') { state.sheetCopyText=morningSheetTsv(); state.modal='sheets-helper'; return render(); }
   if (name==='select-sheets-text') return selectSheetsText();
@@ -3027,6 +3029,19 @@ function doPost(e) {
     const payload = JSON.parse(e.postData.contents || '{}');
     const validation = validateRelayOpsMorningPayload(payload);
     if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
+    if (payload.dryRun) {
+      const sheet = findRelayOpsMorningSheet(payload);
+      return relayOpsJson({
+        ok: true,
+        dryRun: true,
+        sheet: sheet.getName(),
+        startCell: payload.startCell,
+        rows: (payload.rows || []).length,
+        sections: (payload.sections || []).length,
+        preflight: validation,
+        updatedAt: new Date().toISOString()
+      });
+    }
     lock = LockService.getDocumentLock();
     lock.waitLock(20000);
     const result = writeRelayOpsMorningSheet(payload);
@@ -3087,11 +3102,7 @@ function writeRelayOpsMorningSheet(payload) {
   const validation = validateRelayOpsMorningPayload(payload);
   if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetNames = [payload.sheetName].concat(payload.sheetNameCandidates || []).filter(Boolean);
-  let sheet = null;
-  for (var s = 0; s < sheetNames.length && !sheet; s++) sheet = ss.getSheetByName(sheetNames[s]);
-  sheet = sheet || ss.getActiveSheet() || ss.getSheets()[0];
-  if (!sheet) throw new Error('No target sheet tab found');
+  const sheet = findRelayOpsMorningSheet(payload);
   const rows = payload.rows || [];
   const rowTypes = payload.rowTypes || [];
   const headers = (payload.headers || []).slice(0, RELAYOPS_COLS);
@@ -3157,6 +3168,16 @@ function writeRelayOpsMorningSheet(payload) {
   return {sheetName: sheet.getName(), startCell: 'A3'};
 }
 
+function findRelayOpsMorningSheet(payload) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetNames = [payload.sheetName].concat(payload.sheetNameCandidates || []).filter(Boolean);
+  let sheet = null;
+  for (var s = 0; s < sheetNames.length && !sheet; s++) sheet = ss.getSheetByName(sheetNames[s]);
+  sheet = sheet || ss.getActiveSheet() || ss.getSheets()[0];
+  if (!sheet) throw new Error('No target sheet tab found');
+  return sheet;
+}
+
 function testRelayOpsMorningSheet() {
   const sample = {
     version: 'relayops-morning-v1',
@@ -3175,6 +3196,7 @@ function saveMorningSheetsConnector() {
   state.morningSheetsEndpoint=(input?.value||'').trim();
   state.morningSheetsLastError='';
   state.morningSheetsLastReceipt=null;
+  state.morningSheetsLastDryRun='';
   persist(); render();
   toast(state.morningSheetsEndpoint?'Google Sheets connector endpoint saved':'Google Sheets connector endpoint cleared');
 }
@@ -3217,6 +3239,38 @@ async function testMorningSheetsConnector() {
     state.morningSheetsLastError='Browser could not confirm the connector. If this is an Apps Script CORS block, Send can still use fallback mode; verify the Google Sheet after sending.';
     persist(); render();
     toast('Could not confirm connector from the browser — use Send, then check the sheet','error');
+    return false;
+  }
+}
+async function dryRunMorningToSheets() {
+  const endpoint=(state.morningSheetsEndpoint||'').trim();
+  if(!endpoint) { state.modal='morning-sheets-connector'; render(); return toast('Paste your Google Apps Script web app URL first','error'); }
+  const payload={...morningSheetsConnectorPayload(),dryRun:true};
+  const preflight=morningSheetsPreflight(payload);
+  if(!preflight.ready) {
+    state.morningSheetsLastError=`Preflight failed: ${preflight.checks.filter(check=>!check.ok).map(check=>check.label).join(', ')}`;
+    state.modal='morning-sheets-connector';
+    persist(); render();
+    toast('Morning Sheet preflight failed — review the connector checks before dry run','error');
+    return false;
+  }
+  try {
+    const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
+    const text=await response.text();
+    if(!response.ok)throw new Error(`Connector returned ${response.status}`);
+    const result=parseMorningSheetsResponse(text,response.status);
+    if(!result.dryRun)throw new Error('Connector did not confirm dry run mode');
+    state.morningSheetsLastDryRun=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
+    state.morningSheetsLastError='';
+    state.modal='morning-sheets-connector';
+    persist(); render();
+    toast(`Dry run confirmed · ${result.sheet||payload.sheetName} ${result.startCell||payload.startCell} · ${result.rows||payload.rows.length} rows`);
+    return true;
+  } catch(error) {
+    state.morningSheetsLastError=error?.message||'Google Sheets dry run failed';
+    state.modal='morning-sheets-connector';
+    persist(); render();
+    toast(`Google Sheets dry run failed: ${state.morningSheetsLastError}`,'error');
     return false;
   }
 }
@@ -3338,7 +3392,7 @@ function downloadFleetTemplate(){const h=['Source','Vehicle Name','VIN','License
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function persist(){
-localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');
+localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_morning_sheets_last_dry_run',state.morningSheetsLastDryRun||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');
 }
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 

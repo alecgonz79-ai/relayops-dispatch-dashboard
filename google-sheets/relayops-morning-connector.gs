@@ -37,6 +37,19 @@ function doPost(e) {
     const payload = JSON.parse(e.postData.contents || '{}');
     const validation = validateRelayOpsMorningPayload(payload);
     if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
+    if (payload.dryRun) {
+      const sheet = findRelayOpsMorningSheet(payload);
+      return relayOpsJson({
+        ok: true,
+        dryRun: true,
+        sheet: sheet.getName(),
+        startCell: payload.startCell,
+        rows: (payload.rows || []).length,
+        sections: (payload.sections || []).length,
+        preflight: validation,
+        updatedAt: new Date().toISOString()
+      });
+    }
     lock = LockService.getDocumentLock();
     lock.waitLock(20000);
     const result = writeRelayOpsMorningSheet(payload);
@@ -97,11 +110,7 @@ function writeRelayOpsMorningSheet(payload) {
   const validation = validateRelayOpsMorningPayload(payload);
   if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetNames = [payload.sheetName].concat(payload.sheetNameCandidates || []).filter(Boolean);
-  let sheet = null;
-  for (var s = 0; s < sheetNames.length && !sheet; s++) sheet = ss.getSheetByName(sheetNames[s]);
-  sheet = sheet || ss.getActiveSheet() || ss.getSheets()[0];
-  if (!sheet) throw new Error('No target sheet tab found');
+  const sheet = findRelayOpsMorningSheet(payload);
   const rows = payload.rows || [];
   const rowTypes = payload.rowTypes || [];
   const headers = (payload.headers || []).slice(0, RELAYOPS_COLS);
@@ -165,6 +174,16 @@ function writeRelayOpsMorningSheet(payload) {
       .setFontSize(22).setFontWeight('bold').setBackground('#eef3ff');
   });
   return {sheetName: sheet.getName(), startCell: 'A3'};
+}
+
+function findRelayOpsMorningSheet(payload) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetNames = [payload.sheetName].concat(payload.sheetNameCandidates || []).filter(Boolean);
+  let sheet = null;
+  for (var s = 0; s < sheetNames.length && !sheet; s++) sheet = ss.getSheetByName(sheetNames[s]);
+  sheet = sheet || ss.getActiveSheet() || ss.getSheets()[0];
+  if (!sheet) throw new Error('No target sheet tab found');
+  return sheet;
 }
 
 function testRelayOpsMorningSheet() {
