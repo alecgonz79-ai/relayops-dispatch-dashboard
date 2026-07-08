@@ -46,6 +46,7 @@ const checks = `
   if (!${JSON.stringify(css)}.includes('.sheets-preflight-grid') || !${JSON.stringify(css)}.includes('.sheets-preflight-grid span.warn')) throw new Error('Sheets preflight styling missing');
   if (!${JSON.stringify(css)}.includes('.sheets-receipt') || !${JSON.stringify(css)}.includes('.sheets-receipt.needs-check') || !${JSON.stringify(css)}.includes('grid-template-columns:repeat(7,minmax(0,1fr))')) throw new Error('Sheets receipt styling missing');
   if (!${JSON.stringify(css)}.includes('.sheets-proof') || !${JSON.stringify(css)}.includes('.sheets-proof.warn')) throw new Error('Sheets handoff proof styling missing');
+  if (!${JSON.stringify(css)}.includes('.copy-fallback-proof') || !${JSON.stringify(css)}.includes('.copy-fallback-proof.warn')) throw new Error('Copy fallback proof styling missing');
   if (!${JSON.stringify(css)}.includes('.sheets-row-audit') || !${JSON.stringify(css)}.includes('.sheets-row-audit.warn')) throw new Error('Sheets row audit styling missing');
   if (!${JSON.stringify(css)}.includes('.sheets-live-proof') || !${JSON.stringify(css)}.includes('grid-template-columns:repeat(6,minmax(0,1fr))')) throw new Error('Live Google proof styling missing');
   if (!${JSON.stringify(css)}.includes('.handoff-readiness') || !${JSON.stringify(css)}.includes('.handoff-readiness.copy-ready') || !${JSON.stringify(css)}.includes('.handoff-readiness-grid')) throw new Error('Morning handoff readiness styling missing');
