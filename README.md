@@ -26,12 +26,37 @@ Serve this folder with any static web server, then open `index.html` through tha
 - Working CSV and `.xlsx` roster import with flexible Amazon-style column mapping
 - Working CSV and Excel-compatible `.xls` export
 - Tab-separated copy for Google Sheets
+- Google Sheets Apps Script connector for exact Morning Sheet handoff into `A3:M`
 - Responsive desktop, tablet, and mobile layouts
 - Local demo persistence through browser storage
 
 ## Current boundary
 
 This GitHub Pages version is a functional front-end prototype. It is suitable for workflow validation and file exports, but GitHub Pages is static hosting: it cannot safely hold Amazon or FleetOS credentials or enforce shared user accounts by itself. Real authentication, role enforcement, shared cloud data, true XLSX export, notifications, and approved Amazon/FleetOS connectivity require a secure backend. The intended production architecture is documented in `PRODUCTION_BUILD_BRIEF.md` and can be implemented with a backend provider while GitHub remains the source of truth.
+
+## Morning Sheet connectors
+
+There are three connector types in the Morning Sheet workflow:
+
+1. Google Sheets connector — ready now.
+   - Use this for the exact-format handoff.
+   - Open the Google Sheet template, go to Extensions → Apps Script, and paste the RelayOps Apps Script from the dashboard or `google-sheets/relayops-morning-connector.gs`.
+   - Deploy it as a Web app with Execute as: Me and access: Anyone with the link.
+   - Paste the generated `/exec` URL into Morning Sheet → Google Sheets Connector.
+   - Run Test connector, then Dry run, then Send to Google Sheet.
+   - It writes only `A3:M`, freezes row 1, restores A–M headers, formats divider rows, and merges Wave/Pad cells. Columns `N+` are left alone for normal operations data entry.
+
+2. Slack / day-of-operations connector — demo/import mode today.
+   - Use the dashboard upload/demo flow for now.
+   - A production Slack connector should use a Slack app or secure backend file picker that passes the DAYOFOPSPLAN file to RelayOps.
+   - Do not paste Slack tokens into the GitHub Pages dashboard.
+
+3. Cortex / Amazon Logistics connector — upload mode today.
+   - Use `.xlsx` or CSV exports from Amazon/Cortex today.
+   - A true live Amazon Logistics connector must run through a secure backend because GitHub Pages cannot safely store Amazon credentials, cookies, or session tokens.
+   - The browser dashboard should receive clean route rows only, not Amazon login secrets.
+
+Browser copy/paste remains available as a fallback, but it cannot guarantee merged-cell formatting in Google Sheets. The Apps Script connector is the intended path for the “perfect” Morning Sheet template handoff.
 
 ## Live Fleet connector
 

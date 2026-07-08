@@ -35,7 +35,9 @@ const context = {
 const source = fs.readFileSync(require.resolve('../app.js'), 'utf8');
 const css = fs.readFileSync(require.resolve('../styles.css'), 'utf8');
 const connectorFile = fs.readFileSync(require.resolve('../google-sheets/relayops-morning-connector.gs'), 'utf8');
+const readme = fs.readFileSync(require.resolve('../README.md'), 'utf8');
 const checks = `
+  if (!${JSON.stringify(readme)}.includes('Morning Sheet connectors') || !${JSON.stringify(readme)}.includes('Google Sheets connector — ready now') || !${JSON.stringify(readme)}.includes('Slack / day-of-operations connector — demo/import mode today') || !${JSON.stringify(readme)}.includes('Cortex / Amazon Logistics connector — upload mode today') || !${JSON.stringify(readme)}.includes('writes only \`A3:M\`')) throw new Error('README should explain the Morning Sheet connector map');
   if (!${JSON.stringify(css)}.includes('.ops-sheet thead tr:nth-child(2) th { top:25px; z-index:11; }')) throw new Error('Second sticky header row must sit below column letters');
   if (!${JSON.stringify(css)}.includes('.ops-sheet .sheet-letters-row th { top:0; z-index:12;')) throw new Error('Column letters sticky header layer missing');
   if (!${JSON.stringify(css)}.includes('background-clip:padding-box')) throw new Error('Sticky header background clipping missing');
@@ -48,6 +50,7 @@ const checks = `
   state.editMode = false;
   const html = morningSheetPage();
   if (!html.includes('Connector setup for exact Google Sheets handoff')) throw new Error('Morning connector guide missing');
+  if (!html.includes('Google Sheets is ready through Apps Script') || !html.includes('Slack/Cortex live pulls need a secure backend later') || !html.includes('never paste Amazon passwords, cookies, or session tokens') || !html.includes('Web app /exec URL')) throw new Error('Morning connector guide should distinguish Apps Script from secure backend connectors');
   if (!html.includes('PERFECT GOOGLE SHEETS HANDOFF') || !html.includes('Set up exact-format connector') || !html.includes('Copy fallback') || !html.includes('Handoff proof') || !html.includes('Google range') || !html.includes('Connector rows')) throw new Error('Exact-format handoff UI should prioritize the Sheets connector and show row-proof details');
   if (!html.includes(MORNING_TEMPLATE_URL)) throw new Error('Google Sheets template link missing');
   if (!html.includes('Copy/paste cannot reliably transfer merged-cell formatting')) throw new Error('Merged-cell paste warning missing');
