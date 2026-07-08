@@ -216,6 +216,22 @@ tbody tr:last-child td { border-bottom:0; }
 .morning-connector-grid strong { color:#17345d; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }
 .morning-connector-grid span { color:#526478; font-size:8px; font-weight:850; line-height:1.35; }
 .morning-connectors p { margin:0; padding:0 14px 12px; color:#6b5a12; font-size:8px; font-weight:900; line-height:1.4; }
+.sheets-connector-status { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:11px 12px; border-radius:13px; border:1px solid #dbe7f3; background:#f7fbff; }
+.sheets-connector-status strong, .sheets-connector-status span { display:block; }
+.sheets-connector-status strong { color:#17345d; font:1000 12px "Manrope"; }
+.sheets-connector-status span { color:#536174; font-size:9px; font-weight:850; }
+.sheets-connector-status.ready { border-color:#cfe8b8; background:#f5ffe9; }
+.sheets-connector-status.warn { border-color:#f0dfaa; background:#fff9e8; }
+.sheets-connector-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
+.connector-step { display:grid; gap:8px; align-content:start; padding:12px; border:1px solid #dce7f5; border-radius:14px; background:#fbfdff; }
+.connector-step b { display:grid; place-items:center; width:26px; height:26px; border-radius:9px; color:#fff; background:#17345d; font-size:10px; }
+.connector-step strong { color:#1f2a22; font:1000 11px "Manrope"; }
+.connector-step span { color:#56645c; font-size:8.5px; font-weight:850; line-height:1.45; }
+.connector-step input { width:100%; height:34px; border:1px solid #d4ddd8; border-radius:10px; padding:0 10px; font-size:9px; outline:0; }
+.sheets-connector-preview { margin-top:12px; display:grid; gap:7px; }
+.sheets-connector-preview strong { font:1000 11px "Manrope"; color:#1f2a22; }
+.sheets-connector-preview span { color:#5b665f; font-size:8.5px; font-weight:850; }
+.sheets-connector-preview textarea { min-height:150px; border:1px solid #d6dfda; border-radius:12px; padding:10px; font:9px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; color:#223026; background:#fbfdfb; resize:vertical; }
 .sheet-toolbar { display:flex; align-items:flex-end; flex-wrap:wrap; gap:8px; padding:11px 12px; background:#1a211c; border-radius:14px 14px 0 0; }
 .sheet-filter { min-width:125px; }
 .sheet-filter label { display:block; color:#86948a; font-size:7px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; margin:0 0 4px; }
@@ -1216,6 +1232,7 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-charge-recommendations { grid-template-columns:1fr; }
   .fleet-charge-preview { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .morning-connector-grid { grid-template-columns:1fr; }
+  .sheets-connector-grid { grid-template-columns:1fr; }
   .van-parking-head, .parking-import-row { grid-template-columns:1fr; flex-direction:column; }
   .parking-mode-controls { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .parking-selected-card { grid-template-columns:1fr 1fr; }

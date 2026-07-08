@@ -73,6 +73,20 @@ const checks = `
   if (!clipHtml.includes('WAVE 1')) throw new Error('Clipboard HTML should include wave labels');
   const fallbackHtml = tsvToHtmlTable(tsv);
   if (!fallbackHtml.includes('<td') || !fallbackHtml.includes('table-layout:fixed')) throw new Error('TSV HTML fallback table missing');
+  const payload = morningSheetsConnectorPayload();
+  if (payload.version !== 'relayops-morning-v1') throw new Error('Morning Sheets connector payload version missing');
+  if (payload.startCell !== 'A3') throw new Error('Morning Sheets connector should target A3');
+  if (payload.headers.length !== 13) throw new Error('Morning Sheets connector should use 13 A-M headers');
+  if (!payload.rows.length || !payload.sections.length) throw new Error('Morning Sheets connector payload missing rows or sections');
+  payload.rows.forEach((row, index) => {
+    if (row.length !== 13) throw new Error('Connector row ' + (index + 1) + ' has ' + row.length + ' columns instead of 13');
+  });
+  if (payload.sections[0].startRow !== 3 || payload.sections[0].separatorRow <= payload.sections[0].timeRow) throw new Error('Connector section row numbering is wrong');
+  const script = morningSheetsAppsScript();
+  if (!script.includes('function doPost') || !script.includes('writeRelayOpsMorningSheet') || !script.includes('breakApart') || !script.includes('merge()')) throw new Error('Morning Sheets Apps Script connector missing required writer code');
+  const connectorHtml = (state.modal = 'morning-sheets-connector', modal());
+  if (!connectorHtml.includes('GOOGLE SHEETS CONNECTOR') || !connectorHtml.includes('Copy Apps Script') || !connectorHtml.includes('Send to Google Sheet') || !connectorHtml.includes('Connector payload preview')) throw new Error('Morning Sheets connector modal missing');
+  state.modal = null;
 `;
 
 vm.createContext(context);
