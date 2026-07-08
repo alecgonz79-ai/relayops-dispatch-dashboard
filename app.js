@@ -3546,6 +3546,14 @@ async function dryRunMorningToSheets() {
     toast('Morning Sheet preflight failed — review the connector checks before dry run','error');
     return false;
   }
+  const proof=morningSheetsHandoffProof(payload);
+  if(!proof.ready) {
+    state.morningSheetsLastError=`Row audit failed: visible rows ${proof.visibleRows}, connector rows ${proof.rows}${proof.mismatchIndex>=0?`, mismatch at row ${proof.mismatchIndex+3}`:''}`;
+    state.modal='morning-sheets-connector';
+    persist(); render();
+    toast('Morning Sheet row audit failed — review before dry run','error');
+    return false;
+  }
   try {
     const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
     const text=await response.text();
@@ -3577,6 +3585,14 @@ async function sendMorningToSheets() {
     state.modal='morning-sheets-connector';
     persist(); render();
     toast('Morning Sheet preflight failed — review the connector checks before sending','error');
+    return false;
+  }
+  const proof=morningSheetsHandoffProof(payload);
+  if(!proof.ready) {
+    state.morningSheetsLastError=`Row audit failed: visible rows ${proof.visibleRows}, connector rows ${proof.rows}${proof.mismatchIndex>=0?`, mismatch at row ${proof.mismatchIndex+3}`:''}`;
+    state.modal='morning-sheets-connector';
+    persist(); render();
+    toast('Morning Sheet row audit failed — review before sending','error');
     return false;
   }
   try {
