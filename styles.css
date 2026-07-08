@@ -248,6 +248,23 @@ tbody tr:last-child td { border-bottom:0; }
 .sheets-proof span { display:grid; gap:2px; padding:7px; border-radius:10px; background:#fff; color:#1f2a22; font-size:8px; font-weight:950; border:1px solid #e0ecd9; }
 .sheets-proof b { color:#5d6d5f; font-size:7px; text-transform:uppercase; letter-spacing:.08em; }
 .sheets-proof small { color:#647066; font-size:8px; font-weight:850; }
+.handoff-readiness { display:grid; gap:9px; padding:12px 14px; border-left:1px solid var(--line); border-right:1px solid var(--line); border-top:1px solid #f0dfaa; background:#fff9e8; }
+.handoff-readiness.ready { border-top-color:#cfe8b8; background:#f5ffe9; }
+.handoff-readiness.copy-ready { border-top-color:#bdd8ff; background:#f4f9ff; }
+.handoff-readiness-title { display:flex; align-items:center; gap:10px; }
+.handoff-readiness-title > span { display:grid; place-items:center; width:28px; height:28px; border-radius:10px; color:#fff; background:#bd7820; font-size:13px; font-weight:1000; }
+.handoff-readiness.ready .handoff-readiness-title > span { background:#3f8a35; }
+.handoff-readiness.copy-ready .handoff-readiness-title > span { background:#3168b8; }
+.handoff-readiness-title strong, .handoff-readiness-title small { display:block; }
+.handoff-readiness-title strong { color:#1f2a22; font:1000 12px "Manrope"; }
+.handoff-readiness-title small { margin-top:3px; color:#5f6c62; font-size:8.5px; font-weight:850; line-height:1.35; }
+.handoff-readiness-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; }
+.handoff-readiness-grid span { display:grid; grid-template-columns:auto 1fr; gap:2px 6px; padding:8px; border-radius:10px; border:1px solid #dcebd5; background:#fff; }
+.handoff-readiness-grid span.warn { border-color:#f0cda2; background:#fffaf0; }
+.handoff-readiness-grid b { grid-row:1 / span 2; display:grid; place-items:center; width:17px; height:17px; border-radius:999px; color:#fff; background:#4d8a36; font-size:9px; }
+.handoff-readiness-grid span.warn b { background:#b96b1d; }
+.handoff-readiness-grid em { color:#1f2a22; font-size:8px; font-style:normal; font-weight:1000; }
+.handoff-readiness-grid small { color:#637066; font-size:7.5px; font-weight:800; line-height:1.3; }
 .sheets-connector-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
 .connector-step { display:grid; gap:8px; align-content:start; padding:12px; border:1px solid #dce7f5; border-radius:14px; background:#fbfdff; }
 .connector-step b { display:grid; place-items:center; width:26px; height:26px; border-radius:9px; color:#fff; background:#17345d; font-size:10px; }
@@ -1345,6 +1362,7 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-recent-changes { grid-template-columns:1fr; }
   .fleet-change-list { grid-template-columns:1fr; }
   .import-proof-grid { grid-template-columns:1fr; }
+  .handoff-readiness-grid { grid-template-columns:1fr; }
   .rivian-card.expanded { grid-column:auto; }
   .rivian-card { align-items:flex-start; flex-direction:column; }
   .rivian-van-art { align-self:center; }

@@ -44,6 +44,7 @@ const checks = `
   if (!${JSON.stringify(css)}.includes('.sheets-preflight-grid') || !${JSON.stringify(css)}.includes('.sheets-preflight-grid span.warn')) throw new Error('Sheets preflight styling missing');
   if (!${JSON.stringify(css)}.includes('.sheets-receipt') || !${JSON.stringify(css)}.includes('.sheets-receipt.needs-check') || !${JSON.stringify(css)}.includes('grid-template-columns:repeat(6,minmax(0,1fr))')) throw new Error('Sheets receipt styling missing');
   if (!${JSON.stringify(css)}.includes('.sheets-proof') || !${JSON.stringify(css)}.includes('.sheets-proof.warn')) throw new Error('Sheets handoff proof styling missing');
+  if (!${JSON.stringify(css)}.includes('.handoff-readiness') || !${JSON.stringify(css)}.includes('.handoff-readiness.copy-ready') || !${JSON.stringify(css)}.includes('.handoff-readiness-grid')) throw new Error('Morning handoff readiness styling missing');
   toast = () => {};
   state.page = 'morning';
   state.copyMode = true;
@@ -51,7 +52,7 @@ const checks = `
   const html = morningSheetPage();
   if (!html.includes('Connector setup for exact Google Sheets handoff')) throw new Error('Morning connector guide missing');
   if (!html.includes('Google Sheets is ready through Apps Script') || !html.includes('Slack/Cortex live pulls need a secure backend later') || !html.includes('never paste Amazon passwords, cookies, or session tokens') || !html.includes('Web app /exec URL')) throw new Error('Morning connector guide should distinguish Apps Script from secure backend connectors');
-  if (!html.includes('PERFECT GOOGLE SHEETS HANDOFF') || !html.includes('Set up exact-format connector') || !html.includes('Copy fallback') || !html.includes('Handoff proof') || !html.includes('Google range') || !html.includes('Connector rows')) throw new Error('Exact-format handoff UI should prioritize the Sheets connector and show row-proof details');
+  if (!html.includes('PERFECT GOOGLE SHEETS HANDOFF') || !html.includes('Set up exact-format connector') || !html.includes('Copy fallback') || !html.includes('Handoff proof') || !html.includes('Google range') || !html.includes('Connector rows') || !html.includes('Ready for copy fallback') || !html.includes('Import / route source') || !html.includes('Visible rows = payload') || !html.includes('Exact connector')) throw new Error('Exact-format handoff UI should prioritize the Sheets connector and show row-proof details');
   if (!html.includes(MORNING_TEMPLATE_URL)) throw new Error('Google Sheets template link missing');
   if (!html.includes('Copy/paste cannot reliably transfer merged-cell formatting')) throw new Error('Merged-cell paste warning missing');
   if (!html.includes('sheet-letters-row')) throw new Error('Column letters header missing');
@@ -108,6 +109,10 @@ const checks = `
   if (!proof.ready || proof.rows !== payload.rows.length || proof.visibleRows !== payload.rows.length || proof.range !== ('A3:M' + (payload.rows.length + 2)) || proof.dividers !== payload.sections.length) throw new Error('Morning Sheets handoff proof should match visible rows to connector payload rows');
   const proofHtml = morningSheetsHandoffProofHtml(payload);
   if (!proofHtml.includes('Handoff proof') || !proofHtml.includes('Google range') || !proofHtml.includes('Divider rows') || !proofHtml.includes('Visible Morning Sheet rows match')) throw new Error('Morning Sheets handoff proof UI missing required details');
+  const readiness = morningHandoffReadiness(payload);
+  if (readiness.ready || !readiness.canCopy || readiness.rows <= 0 || !readiness.checks.some(check => check.label === 'Exact connector' && !check.ok)) throw new Error('Morning handoff readiness should allow copy while requiring exact connector setup');
+  const readinessHtml = morningHandoffReadinessHtml(payload);
+  if (!readinessHtml.includes('Ready for copy fallback') || !readinessHtml.includes('target A3:M') || !readinessHtml.includes('Google format payload') || !readinessHtml.includes('Exact connector')) throw new Error('Morning handoff readiness UI missing required checks');
   const normalizedPayloadRows = payload.rows.map(row => row.map(cell => String(cell ?? '')));
   if (JSON.stringify(normalizedPayloadRows) !== JSON.stringify(rows.map(row => row.split('\\t')))) throw new Error('Copy TSV rows and connector payload rows must match exactly as visible cell values');
   if (!Array.isArray(payload.rowTypes) || payload.rowTypes.length !== payload.rows.length) throw new Error('Morning Sheets connector rowTypes should match row count');
