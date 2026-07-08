@@ -75,8 +75,10 @@ const checks = `
   });
   const hasSeparator = rows.some(row => row.split('\\t').every(cell => cell === ''));
   if (!hasSeparator) throw new Error('TSV should include blank separator rows for black divider rows');
-  if (sheetCopyZone(8).join(',') !== '0,12' || sheetCopyZone(11).join(',') !== '0,12') throw new Error('Black spacer columns must be selectable/copyable');
-  if (sheetCopyZone(12).join(',') !== '0,12') throw new Error('Planned RTS column should be in the same copy boundary');
+  if (sheetCopyZone(0).join(',') !== '0,7' || sheetCopyZone(7).join(',') !== '0,7') throw new Error('Wave setup copy block should stop before black divider column I');
+  if (sheetCopyZone(8).join(',') !== '8,8' || sheetCopyZone(11).join(',') !== '11,11') throw new Error('Black spacer columns must be real selectable copy boundaries');
+  if (sheetCopyZone(9).join(',') !== '9,10' || sheetCopyZone(10).join(',') !== '9,10') throw new Error('Stop/package count copy block should stay between black dividers');
+  if (sheetCopyZone(12).join(',') !== '12,12') throw new Error('Planned RTS column should copy as its own bounded block');
   if (typeof writeClipboardTable !== 'function') throw new Error('Rich clipboard table writer missing');
   const clipHtml = morningSheetClipboardHtml();
   if (!clipHtml.includes('<table')) throw new Error('Clipboard HTML table missing');

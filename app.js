@@ -373,7 +373,7 @@ function morningSheetPage() {
   <div class="sheets-helper card"><div class="sheets-helper-copy"><span class="eyebrow">PERFECT GOOGLE SHEETS HANDOFF</span><h3>Send into the opening template</h3><p>For merged cells, frozen row 1, black dividers, row heights, and A–M formatting, use the Sheets connector. Copy/paste stays here as a backup for quick or partial transfers.</p></div><div class="sheets-helper-steps"><span>1 Review ${handoffRowsCount} numbered rows</span><span>2 Send to Google Sheet</span><span>3 Google formats merges</span></div><div class="sheets-helper-actions"><button class="btn primary" data-action="${sheetsConnected?'send-morning-to-sheets':'morning-sheets-connector'}">${sheetsConnected?`${ICONS.link} Send to Google Sheet`:`${ICONS.link} Set up exact-format connector`}</button><button class="btn" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn" data-action="open-sheets-helper">Open paste box</button></div></div>
   ${morningSheetsHandoffProofHtml()}
   ${state.copyMode?copyModeToolbar(groups):''}
-  ${state.copyMode?`<div class="edit-help copy-help">Copy mode is on. Drag across cells exactly like Google Sheets, watch the blue highlight, then press ⌘C on Mac or Ctrl+C on Windows. Click a wave button to pulse/highlight that whole wave before copying it. The layout matches the new A–M Google template with spacer columns I and L.</div>`:state.editMode?`<div class="edit-help">Editing is on. Columns and rows are labeled like Google Sheets. Click and drag white cells to select a rectangle, press ⌘C to copy, or paste tabbed rows from Sheets to fill across/down.</div>`:''}
+  ${state.copyMode?`<div class="edit-help copy-help">Copy mode is on. Drag across cells exactly like Google Sheets, watch the blue highlight, then press ⌘C on Mac or Ctrl+C on Windows. Click a wave button to pulse/highlight that whole wave before copying it. Divider columns I and L split manual copy into A–H, J–K, and M blocks.</div>`:state.editMode?`<div class="edit-help">Editing is on. Columns and rows are labeled like Google Sheets. Click and drag white cells to select a rectangle, press ⌘C to copy, or paste tabbed rows from Sheets to fill across/down.</div>`:''}
   <article class="card morning-board ${state.copyMode?'copy-board':state.editMode?'edit-board':'view-board'}"><div class="sheet-scroll"><table class="ops-sheet morning-template-sheet ${state.copyMode?'copy-ops-sheet':''}"><thead>${sheetModeHeader(morningTemplateHeaders,sheetMode)}</thead><tbody>${groups.length?groups.map((section,sectionIndex)=>morningWaveGroup(section,sectionIndex)).join(''):`<tr><td colspan="14"><div class="empty-state"><h3>No routes match these filters</h3><p>Clear a filter or upload a new day-of-operations file.</p></div></td></tr>`}</tbody></table></div></article>
   <div class="dispatcher-rating card"><div><strong>How easy was this opening sheet?</strong><span>Your 5-star tap helps find what needs to be smoother next.</span></div><div class="stars">${[1,2,3,4,5].map(n=>`<button class="${state.rating>=n?'active':''}" data-action="rate-service" data-rating="${n}" aria-label="${n} stars">★</button>`).join('')}</div></div>`;
 }
@@ -420,7 +420,7 @@ function copyModeToolbar(groups=[]) {
     const label=g.wave?`${g.label} ${morningWaveTimeText(g)}`:g.label;
     return `<button class="btn small" data-action="copy-wave" data-wave-index="${i}">${ICONS.copy} ${esc(label||`Wave ${i+1}`)}</button>`;
   }).join('');
-  return `<div class="copy-mode-toolbar card"><div><strong>Copy mode</strong><span>Select only the cells you want. The visible grid is built for clean Google Sheets copy/paste.</span></div><div class="copy-mode-buttons"><button class="btn small primary" data-action="copy-selected-cells">Copy selected cells</button>${buttons}</div></div>`;
+  return `<div class="copy-mode-toolbar card"><div><strong>Copy mode</strong><span>Drag inside one block at a time: A–H setup, J–K counts, or M planned RTS. Black divider columns I and L are real boundaries so the paste lines up in Google Sheets.</span></div><div class="copy-mode-buttons"><button class="btn small primary" data-action="copy-selected-cells">Copy selected cells</button>${buttons}</div></div>`;
 }
 function morningWaveTimeText(section) {
   return section.wave?`${String(section.wave).replace(/\s*[AP]M/i,'')} (${section.rows.length})`:'';
@@ -1713,7 +1713,11 @@ function updateSheetRowRoute(el,route) {
 function sheetCells() { return [...document.querySelectorAll('[data-sheet-cell="true"]')]; }
 function sheetCopyZone(col) {
   const n=Number(col);
-  if(n>=0&&n<=12)return [0,12];
+  if(n>=0&&n<=7)return [0,7];
+  if(n===8)return [8,8];
+  if(n>=9&&n<=10)return [9,10];
+  if(n===11)return [11,11];
+  if(n===12)return [12,12];
   return null;
 }
 function inSameSheetBoundary(anchor,cell) {
