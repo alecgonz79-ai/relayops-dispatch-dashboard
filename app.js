@@ -2959,7 +2959,7 @@ function morningSheetCopyRows() {
 }
 function morningSheetTsv(){ return morningSheetCopyRows().map(row=>row.join('\t')).join('\n'); }
 function morningSheetsConnectorPayload() {
-  const sections=morningSections(filteredMorningRows()), rows=[], sectionMeta=[];
+  const sections=morningSections(filteredMorningRows()), rows=[], rowTypes=[], sectionMeta=[];
   let index=0;
   sections.forEach(section=>{
     const display=morningDisplayRows(section), pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
@@ -2981,17 +2981,20 @@ function morningSheetsConnectorPayload() {
         '',
         r.plannedRts||''
       ]);
+      rowTypes.push(r._blank?'blank':'route');
       index+=1;
     });
     rows.push([morningWaveTimeText(section),'','','','','','','','','','','','']);
+    rowTypes.push('time');
     const timeRow=index+3;
     index+=1;
     rows.push(['','','','','','','','','','','','','']);
+    rowTypes.push('separator');
     const separatorRow=index+3;
     index+=1;
     sectionMeta.push({label:waveLabel,wave:section.wave||'',waveTime:morningWaveTimeText(section),pad,startRow,rowCount:display.length,timeRow,separatorRow,dsp:Boolean(section.dsp)});
   });
-  return {version:'relayops-morning-v1',templateUrl:MORNING_TEMPLATE_URL,dsp:state.dspCode,generatedAt:new Date().toISOString(),startCell:'A3',headers:morningTemplateHeaders,rows,sections:sectionMeta};
+  return {version:'relayops-morning-v1',templateUrl:MORNING_TEMPLATE_URL,dsp:state.dspCode,generatedAt:new Date().toISOString(),startCell:'A3',headers:morningTemplateHeaders,rows,rowTypes,sections:sectionMeta};
 }
 function morningSheetsAppsScript() {
   return `// RelayOps Morning Sheet connector
@@ -3026,6 +3029,7 @@ function writeRelayOpsMorningSheet(payload) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheets()[0];
   const rows = payload.rows || [];
+  const rowTypes = payload.rowTypes || [];
   if (!rows.length) throw new Error('No morning rows sent');
   const rowCount = Math.max(rows.length, 120);
   const target = sheet.getRange(RELAYOPS_START_ROW, RELAYOPS_START_COL, rowCount, RELAYOPS_COLS);
@@ -3049,7 +3053,8 @@ function writeRelayOpsMorningSheet(payload) {
 
   rows.forEach(function(row, i) {
     const sheetRow = RELAYOPS_START_ROW + i;
-    if (row.every(function(cell) { return String(cell || '') === ''; })) {
+    const rowType = rowTypes[i] || '';
+    if (rowType === 'separator') {
       sheet.getRange(sheetRow, RELAYOPS_START_COL, 1, RELAYOPS_COLS)
         .setBackground('#050505').setFontColor('#050505').setBorder(true, true, true, true, true, true, '#050505', SpreadsheetApp.BorderStyle.SOLID);
       sheet.setRowHeight(sheetRow, 14);
@@ -3059,7 +3064,7 @@ function writeRelayOpsMorningSheet(payload) {
       sheet.getRange(sheetRow, 10, 1, 2).setBackground('#eef3ff');
       sheet.getRange(sheetRow, 12, 1, 1).setBackground('#050505').setFontColor('#050505');
       sheet.getRange(sheetRow, 13, 1, 1).setBackground('#b4a7d6');
-      sheet.setRowHeight(sheetRow, 21);
+      sheet.setRowHeight(sheetRow, rowType === 'blank' ? 18 : 21);
     }
   });
 
@@ -3082,6 +3087,7 @@ function testRelayOpsMorningSheet() {
   const sample = {
     version: 'relayops-morning-v1',
     rows: [['WAVE 1','Demo Driver','CX200','STG.V.1','A','21','3','-','','188','331','','6:20 PM'], ['11:15 (1)','','','','','','','','','','','',''], ['','','','','','','','','','','','','']],
+    rowTypes: ['route','time','separator'],
     sections: [{label:'WAVE 1', wave:'11:15 AM', waveTime:'11:15 (1)', pad:'A', startRow:3, rowCount:1, timeRow:4, separatorRow:5}]
   };
   writeRelayOpsMorningSheet(sample);
