@@ -5,6 +5,23 @@ const RELAYOPS_START_ROW = 3;
 const RELAYOPS_START_COL = 1;
 const RELAYOPS_COLS = 13;
 
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('RelayOps')
+    .addItem('Connector status', 'relayOpsConnectorStatus')
+    .addItem('Run demo write', 'testRelayOpsMorningSheet')
+    .addToUi();
+}
+
+function relayOpsConnectorStatus() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  SpreadsheetApp.getUi().alert(
+    'RelayOps connector is installed',
+    'Spreadsheet: ' + ss.getName() + '\nDeploy this Apps Script as a Web app, then paste the /exec URL into the RelayOps dashboard.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({
     ok: true,
@@ -16,15 +33,21 @@ function doGet(e) {
 
 function doPost(e) {
   const payload = JSON.parse(e.postData.contents || '{}');
-  const result = writeRelayOpsMorningSheet(payload);
-  return ContentService.createTextOutput(JSON.stringify({
-    ok: true,
-    sheet: result.sheetName,
-    startCell: result.startCell,
-    rows: (payload.rows || []).length,
-    sections: (payload.sections || []).length,
-    updatedAt: new Date().toISOString()
-  })).setMimeType(ContentService.MimeType.JSON);
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(20000);
+  try {
+    const result = writeRelayOpsMorningSheet(payload);
+    return ContentService.createTextOutput(JSON.stringify({
+      ok: true,
+      sheet: result.sheetName,
+      startCell: result.startCell,
+      rows: (payload.rows || []).length,
+      sections: (payload.sections || []).length,
+      updatedAt: new Date().toISOString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function writeRelayOpsMorningSheet(payload) {
