@@ -53,6 +53,8 @@ const checks = `
   if (state.morningRoutes.length !== 2) throw new Error('DSP filter failed');
   if (state.lastImportExcluded !== 1) throw new Error('Excluded count failed');
   if (state.morningRoutes[0].wave !== '11:15 AM') throw new Error('Imported wave ordering failed');
+  const importTemplateProofHtml = morningImportTemplateProofHtml();
+  if (!importTemplateProofHtml.includes('Import → Template proof') || !importTemplateProofHtml.includes('DSP filter') || !importTemplateProofHtml.includes('2 LLOL kept · 1 excluded') || !importTemplateProofHtml.includes('Earliest wave') || !importTemplateProofHtml.includes('11:15 AM') || !importTemplateProofHtml.includes('First driver names') || !importTemplateProofHtml.includes('Template rows')) throw new Error('Morning import-to-template proof missing after DAYOFOPSPLAN import');
   state.modal = 'import';
   const uploadHtml = modal();
   if (!uploadHtml.includes('Make my morning sheet')) throw new Error('Simple upload heading missing');
@@ -356,6 +358,8 @@ const checks = `
   };
   applyImport();
   if (state.morningRoutes[0].driver !== 'Taylor Driver' || state.morningRoutes[0].stops !== 177) throw new Error('CX route merge failed');
+  const matchedTemplateProof = morningImportTemplateProofHtml();
+  if (!matchedTemplateProof.includes('DAYOFOPSPLAN.xlsx + ROUTE_DJT6.xlsx') || !matchedTemplateProof.includes('CX matches') || !matchedTemplateProof.includes('1 matched to ROUTE_DJT6') || matchedTemplateProof.includes('Taylor Driver|Helper Name')) throw new Error('ROUTE_DJT6 import proof should show CX matching and first-driver-only cleanup');
   state.morningRoutes[0].ev = '21';
   const equipment = equipmentDetailsFromText('EV/VAN "21" Device "3" Portable "-"');
   if (equipment['21'].device !== '3' || equipment['21'].portable !== '-') throw new Error('EV/device text parsing failed');

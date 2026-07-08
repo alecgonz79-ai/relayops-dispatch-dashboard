@@ -371,6 +371,7 @@ function morningSheetPage() {
   <div class="sheet-toolbar"><div class="sheet-filter"><label>DSP</label><select data-morning-filter="dsp"><option>${state.dspCode}</option></select></div><div class="sheet-filter"><label>Wave</label><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Staging location</label><select data-morning-filter="staging"><option value="all">All staging</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Pad</label><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></div><button class="btn small" data-action="clear-morning-filters">Clear filters</button><span class="filter-note">Sorted ${ICONS.chevron} earliest launch first</span><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Done editing':'✎ Edit mode'}</button><button class="btn small ${state.copyMode?'lime':''}" data-action="toggle-morning-copy">${state.copyMode?'✓ Copy mode':'Copy mode'}</button><button class="btn small ${state.fitMorningRows?'lime':''}" data-action="toggle-fit-rows">${state.fitMorningRows?'✓ Fit to drivers':'Remove blank rows'}</button><button class="btn small" data-action="assign-ev-low">EV 1-57 Low → High</button><button class="btn small" data-action="assign-ev-random">Randomize EVs</button><button class="btn small" data-action="assign-gas-vans">Assign Gas Vehicles</button><button class="btn small lime" data-action="${sheetsConnected?'send-morning-to-sheets':'morning-sheets-connector'}">${sheetsConnected?`${ICONS.link} Send to Sheets`:`${ICONS.link} Set up Sheets`}</button><button class="btn small" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn small lime" data-action="export-morning-template">${ICONS.download} Formatted XLS</button><button class="btn small" data-action="preview-wave-screenshot">${ICONS.download} Preview JPEG</button><button class="btn small" data-action="export-morning">${ICONS.download} Export CSV</button></div>
   <div class="sheet-kpis"><span><strong>${rows.length}</strong> routes</span><span><strong>${rows.reduce((n,r)=>n+r.packages,0).toLocaleString()}</strong> packages</span><span><strong>${rows.reduce((n,r)=>n+r.stops,0).toLocaleString()}</strong> stops</span><span><strong>${irregular}</strong> RTS flags</span></div>
   ${morningHandoffReadinessHtml()}
+  ${morningImportTemplateProofHtml()}
   <div class="sheets-helper card"><div class="sheets-helper-copy"><span class="eyebrow">PERFECT GOOGLE SHEETS HANDOFF</span><h3>Send into the opening template</h3><p>For merged cells, frozen row 1, black dividers, row heights, and A–M formatting, use the Sheets connector. Copy/paste stays here as a backup for quick or partial transfers.</p></div><div class="sheets-helper-steps"><span>1 Review ${handoffRowsCount} numbered rows</span><span>2 Send to Google Sheet</span><span>3 Google formats merges</span></div><div class="sheets-helper-actions"><button class="btn primary" data-action="${sheetsConnected?'send-morning-to-sheets':'morning-sheets-connector'}">${sheetsConnected?`${ICONS.link} Send to Google Sheet`:`${ICONS.link} Set up exact-format connector`}</button><button class="btn" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn" data-action="open-sheets-helper">Open paste box</button></div></div>
   ${morningSheetsHandoffProofHtml()}
   ${morningCopyFallbackProofHtml()}
@@ -1457,6 +1458,29 @@ function importPreflightHtml(file=state.importedFile) {
   const title=file?.kind==='rts'?`${proof.included} Planned RTS time${proof.included===1?'':'s'} ready`:file?.kind==='details'?`${proof.included} CX detail row${proof.included===1?'':'s'} ready`:`${proof.included} ${state.dspCode} route${proof.included===1?'':'s'} ready`;
   const subtitle=file?.kind==='rts'?'Purple Planned RTS cells will fill by CX route.':file?.kind==='details'?'Driver names and stop counts will update by CX route.':`${proof.excluded} other-DSP route${proof.excluded===1?'':'s'} will be left out automatically${proof.matched?` · ${proof.matched} CX route${proof.matched===1?'':'s'} matched ROUTE_DJT6`:''}.`;
   return `<div class="import-proof ${proof.ready?'ready':'warn'}"><div class="import-proof-head"><span class="preview-check">${proof.ready?'✓':'!'}</span><div><strong>${esc(title)}</strong><span>${esc(subtitle)}</span></div></div><div class="import-proof-grid">${proof.checks.map(check=>`<div class="${check.ok?'ok':'warn'}"><b>${check.ok?'✓':'!'}</b><span>${esc(check.label)}</span><small>${esc(check.detail)}</small></div>`).join('')}</div></div>`;
+}
+
+function morningImportTemplateProofHtml(file=state.importedFile,payload=morningSheetsConnectorPayload()) {
+  const rows=filteredMorningRows(), proof=file?importPreflight(file):null;
+  const waves=morningSections(rows).filter(section=>section.label.startsWith('WAVE')&&section.rows.length);
+  const earliest=waves[0]?.wave||rows[0]?.wave||'No wave loaded';
+  const matchedRoutes=rows.filter(r=>r.route&&!String(r.route).startsWith('__blank_')&&file?.routeDetails?.[String(r.route).trim().toUpperCase()]).length;
+  const helperNames=rows.filter(r=>String(r.driver||'').includes('|')).length;
+  const firstDriverOk=helperNames===0;
+  const ready=Boolean(rows.length)&&(!proof||proof.ready)&&firstDriverOk&&payload.rows.length>0;
+  const source=file?.name||'Current dashboard rows';
+  const included=proof?proof.included:rows.length;
+  const excluded=proof?proof.excluded:Number(state.lastImportExcluded)||0;
+  const chips=[
+    {label:'Source',value:source,ok:Boolean(rows.length)},
+    {label:'DSP filter',value:proof?`${included} ${state.dspCode} kept · ${excluded} excluded`:`${rows.length} ${state.dspCode} rows visible`,ok:!proof||proof.checks?.find(c=>c.label==='DSP filter')?.ok!==false},
+    {label:'Earliest wave',value:earliest,ok:Boolean(rows.length)},
+    {label:'Wave boxes',value:`${waves.length} wave section${waves.length===1?'':'s'} created`,ok:waves.length>0},
+    {label:'CX matches',value:file?.routeDetailsCount?`${matchedRoutes} matched to ROUTE_DJT6`:'No ROUTE_DJT6 file applied',ok:!file?.routeDetailsCount||matchedRoutes>0},
+    {label:'First driver names',value:firstDriverOk?'Helper names removed after |':'A driver cell still has helper text',ok:firstDriverOk},
+    {label:'Template rows',value:`${payload.rows.length} numbered A–M row${payload.rows.length===1?'':'s'}`,ok:payload.rows.length>0}
+  ];
+  return `<div class="import-template-proof ${ready?'ready':'warn'}"><div><strong>Import → Template proof</strong><small>${ready?'Files are shaped into the Morning Sheet before copy/send.':'Review the yellow items before copying or sending to Google Sheets.'}</small></div><div>${chips.map(chip=>`<span class="${chip.ok?'ok':'warn'}"><b>${chip.ok?'✓':'!'}</b><em>${esc(chip.label)}</em><small>${esc(chip.value)}</small></span>`).join('')}</div></div>`;
 }
 
 function modal() {
