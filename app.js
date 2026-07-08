@@ -3034,6 +3034,7 @@ function doPost(e) {
     if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
     if (payload.dryRun) {
       const sheet = findRelayOpsMorningSheet(payload);
+      const layout = relayOpsTemplateLayout(sheet, (payload.rows || []).length);
       return relayOpsJson({
         ok: true,
         dryRun: true,
@@ -3042,6 +3043,7 @@ function doPost(e) {
         writeRange: payload.writeRange,
         rows: (payload.rows || []).length,
         sections: (payload.sections || []).length,
+        layout: layout,
         preflight: validation,
         updatedAt: new Date().toISOString()
       });
@@ -3104,6 +3106,25 @@ function validateRelayOpsMorningPayload(payload) {
   return {ready: errors.length === 0, errors: errors};
 }
 
+function relayOpsTemplateLayout(sheet, sentRows) {
+  const neededRows = RELAYOPS_START_ROW + Math.max(Number(sentRows) || 0, 120) - 1;
+  return {
+    maxRows: sheet.getMaxRows(),
+    maxColumns: sheet.getMaxColumns(),
+    neededRows: neededRows,
+    neededColumns: RELAYOPS_COLS,
+    hasEnoughRows: sheet.getMaxRows() >= neededRows,
+    hasEnoughColumns: sheet.getMaxColumns() >= RELAYOPS_COLS,
+    frozenRows: sheet.getFrozenRows()
+  };
+}
+
+function ensureRelayOpsTemplateCapacity(sheet, rowCount) {
+  const layout = relayOpsTemplateLayout(sheet, rowCount);
+  if (!layout.hasEnoughRows) sheet.insertRowsAfter(sheet.getMaxRows(), layout.neededRows - sheet.getMaxRows());
+  if (!layout.hasEnoughColumns) sheet.insertColumnsAfter(sheet.getMaxColumns(), RELAYOPS_COLS - sheet.getMaxColumns());
+}
+
 function writeRelayOpsMorningSheet(payload) {
   const validation = validateRelayOpsMorningPayload(payload);
   if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
@@ -3115,6 +3136,7 @@ function writeRelayOpsMorningSheet(payload) {
   if (!rows.length) throw new Error('No morning rows sent');
   while (headers.length < RELAYOPS_COLS) headers.push('');
   const rowCount = Math.max(rows.length, 120);
+  ensureRelayOpsTemplateCapacity(sheet, rows.length);
   const target = sheet.getRange(RELAYOPS_START_ROW, RELAYOPS_START_COL, rowCount, RELAYOPS_COLS);
   target.breakApart();
   target.clearContent();
@@ -3300,7 +3322,8 @@ async function dryRunMorningToSheets() {
     state.morningSheetsLastError='';
     state.modal='morning-sheets-connector';
     persist(); render();
-    toast(`Dry run confirmed · ${result.sheet||payload.sheetName} ${result.startCell||payload.startCell} · ${result.rows||payload.rows.length} rows`);
+    const layoutNote=result.layout&&(!result.layout.hasEnoughRows||!result.layout.hasEnoughColumns)?' · template will auto-expand':'';
+    toast(`Dry run confirmed · ${result.sheet||payload.sheetName} ${result.writeRange||payload.writeRange} · ${result.rows||payload.rows.length} rows${layoutNote}`);
     return true;
   } catch(error) {
     state.morningSheetsLastError=error?.message||'Google Sheets dry run failed';
