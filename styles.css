@@ -235,10 +235,12 @@ tbody tr:last-child td { border-bottom:0; }
 .sheets-preflight-grid em { color:#1f2a22; font-size:8.5px; font-style:normal; font-weight:1000; }
 .sheets-preflight-grid small { color:#657066; font-size:7.5px; font-weight:800; line-height:1.3; }
 .sheets-receipt { margin-top:10px; display:grid; gap:8px; padding:11px 12px; border-radius:13px; border:1px solid #cfe8b8; background:#f5ffe9; }
+.sheets-receipt.needs-check { border-color:#f0cfa2; background:#fff8ec; }
 .sheets-receipt strong { color:#1f2a22; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.05em; }
-.sheets-receipt div { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; }
+.sheets-receipt div { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:7px; }
 .sheets-receipt span { display:grid; gap:2px; padding:7px; border-radius:10px; background:#fff; color:#213027; font-size:8px; font-weight:900; }
 .sheets-receipt b { color:#647366; font-size:7px; text-transform:uppercase; letter-spacing:.08em; }
+.sheets-receipt small { color:#7a5d27; font-size:8px; font-weight:850; line-height:1.35; }
 .sheets-proof { margin:0; display:grid; gap:8px; padding:10px 14px; border-left:1px solid var(--line); border-right:1px solid var(--line); border-top:1px solid #d9ecd0; background:#f8fff3; }
 .sheets-proof.warn { border-color:#f0cfa2; background:#fff9ec; }
 .sheets-proof strong { color:#1f2a22; font:1000 10px "Manrope"; text-transform:uppercase; letter-spacing:.06em; }

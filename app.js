@@ -3003,7 +3003,8 @@ function morningSheetsHandoffProofHtml(payload=morningSheetsConnectorPayload()) 
 function morningSheetsReceiptHtml() {
   const r=state.morningSheetsLastReceipt;
   if(!r)return '';
-  return `<div class="sheets-receipt"><strong>Last confirmed Google write</strong><div><span><b>Sheet</b>${esc(r.sheet||'—')}</span><span><b>Range</b>${esc(r.writeRange||r.startCell||'A3:M')}</span><span><b>Rows</b>${esc(r.rows||0)}</span><span><b>Sections</b>${esc(r.sections||0)}</span><span><b>Confirmed</b>${esc(r.updatedAt||r.sentAt||'—')}</span></div></div>`;
+  const verified=r.status!=='needs-verification';
+  return `<div class="sheets-receipt ${verified?'confirmed':'needs-check'}"><strong>${verified?'Last confirmed Google write':'Sent — verify in Google Sheet'}</strong><div><span><b>Sheet</b>${esc(r.sheet||'—')}</span><span><b>Range</b>${esc(r.writeRange||r.startCell||'A3:M')}</span><span><b>Rows</b>${esc(r.rows||0)}</span><span><b>Sections</b>${esc(r.sections||0)}</span><span><b>Status</b>${verified?'Confirmed':'Needs check'}</span><span><b>Time</b>${esc(r.updatedAt||r.sentAt||'—')}</span></div>${verified?'':`<small>Browser fallback was used, so RelayOps could not read Google’s response. Open the template and confirm ${esc(r.writeRange||'A3:M')} updated before launch.</small>`}</div>`;
 }
 function morningSheetsAppsScript() {
   return `// RelayOps Morning Sheet connector
@@ -3366,7 +3367,7 @@ async function sendMorningToSheets() {
     const result=parseMorningSheetsResponse(text,response.status);
     const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastPush=sentAt;
-    state.morningSheetsLastReceipt={sheet:result.sheet||payload.sheetName,startCell:result.startCell||payload.startCell,rows:result.rows||payload.rows.length,sections:result.sections||payload.sections.length,updatedAt:result.updatedAt||sentAt,sentAt};
+    state.morningSheetsLastReceipt={sheet:result.sheet||payload.sheetName,startCell:result.startCell||payload.startCell,writeRange:result.writeRange||payload.writeRange,rows:result.rows||payload.rows.length,sections:result.sections||payload.sections.length,status:'confirmed',updatedAt:result.updatedAt||sentAt,sentAt};
     state.morningSheetsLastError='';
     persist(); render();
     toast(`Google confirmed Morning Sheet update · ${result.rows||payload.rows.length} rows`);
@@ -3381,7 +3382,9 @@ async function sendMorningToSheets() {
     }
     try {
       await fetch(endpoint,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)});
-      state.morningSheetsLastPush=`${new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date())} · check sheet`;
+      const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
+      state.morningSheetsLastPush=`${sentAt} · check sheet`;
+      state.morningSheetsLastReceipt={sheet:payload.sheetName,startCell:payload.startCell,writeRange:payload.writeRange,rows:payload.rows.length,sections:payload.sections.length,status:'needs-verification',updatedAt:sentAt,sentAt};
       state.morningSheetsLastError='Sent with fallback mode, but the browser could not read Google’s confirmation. Open the Google Sheet and confirm the rows updated.';
       persist(); render();
       toast(`Morning Sheet sent in fallback mode · verify Google Sheet`);
