@@ -10,6 +10,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('RelayOps')
     .addItem('Connector status', 'relayOpsConnectorStatus')
+    .addItem('Validate template layout', 'relayOpsValidateTemplate')
     .addItem('Run demo write', 'testRelayOpsMorningSheet')
     .addToUi();
 }
@@ -24,10 +25,16 @@ function relayOpsConnectorStatus() {
 }
 
 function doGet(e) {
+  const sheet = findRelayOpsMorningSheet(relayOpsDefaultPayload());
+  const layout = relayOpsTemplateLayout(sheet, 0);
   return relayOpsJson({
     ok: true,
     connector: 'relayops-morning-v1',
-    sheet: SpreadsheetApp.getActiveSpreadsheet().getName(),
+    spreadsheet: SpreadsheetApp.getActiveSpreadsheet().getName(),
+    sheet: sheet.getName(),
+    startCell: 'A3',
+    writeRange: RELAYOPS_WRITE_RANGE,
+    layout: layout,
     checkedAt: new Date().toISOString()
   });
 }
@@ -82,6 +89,13 @@ function relayOpsJson(data) {
   return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
 }
 
+function relayOpsDefaultPayload() {
+  return {
+    sheetName: 'Morning Operations',
+    sheetNameCandidates: ['Morning Operations', 'Opening Operations', 'Morning Sheet', 'Sheet1']
+  };
+}
+
 function validateRelayOpsMorningPayload(payload) {
   const errors = [];
   const rows = payload && payload.rows || [];
@@ -110,6 +124,23 @@ function validateRelayOpsMorningPayload(payload) {
     if (!start || start < RELAYOPS_START_ROW || !count || time <= start || separator <= time) errors.push('Section ' + (i + 1) + ' has invalid merge rows');
   });
   return {ready: errors.length === 0, errors: errors};
+}
+
+function relayOpsValidateTemplate() {
+  const sheet = findRelayOpsMorningSheet(relayOpsDefaultPayload());
+  const layout = relayOpsTemplateLayout(sheet, 0);
+  const ready = layout.hasEnoughColumns && layout.maxRows >= RELAYOPS_START_ROW;
+  SpreadsheetApp.getUi().alert(
+    ready ? 'RelayOps template layout is ready' : 'RelayOps template needs review',
+    'Sheet tab: ' + sheet.getName() +
+      '\nWrite range: ' + RELAYOPS_WRITE_RANGE +
+      '\nRows available: ' + layout.maxRows + ' / needs ' + layout.neededRows +
+      '\nColumns available: ' + layout.maxColumns + ' / needs ' + layout.neededColumns +
+      '\nFrozen rows: ' + layout.frozenRows +
+      '\nStatus: ' + (ready ? 'Ready for Dry run / Send' : 'Dry run can auto-expand rows/columns, then Send can format A:M'),
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+  return layout;
 }
 
 function relayOpsTemplateLayout(sheet, sentRows) {

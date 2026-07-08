@@ -120,6 +120,7 @@ class FakeSheet {
 
 class FakeSpreadsheet {
   constructor(sheet) { this.sheet = sheet; }
+  getName() { return 'Fake RelayOps Template'; }
   getSheetByName(name) { return name === this.sheet.getName() ? this.sheet : null; }
   getActiveSheet() { return this.sheet; }
   getSheets() { return [this.sheet]; }
@@ -128,10 +129,18 @@ class FakeSpreadsheet {
 function runConnectorWithSheet(sheet, payload) {
   const connector = fs.readFileSync(require.resolve('../google-sheets/relayops-morning-connector.gs'), 'utf8');
   const spreadsheet = new FakeSpreadsheet(sheet);
+  const ui = {
+    ButtonSet: { OK: 'OK' },
+    alerts: [],
+    alert(title, message) {
+      this.alerts.push({ title, message });
+    }
+  };
   const sandbox = {
     console,
     SpreadsheetApp: {
       getActiveSpreadsheet: () => spreadsheet,
+      getUi: () => ui,
       BorderStyle: { SOLID: 'SOLID' }
     },
     ContentService: {
@@ -139,13 +148,16 @@ function runConnectorWithSheet(sheet, payload) {
       createTextOutput: text => ({ text, setMimeType() { return this; } })
     }
   };
+  const context = { ...sandbox, __payload: payload, __ui: ui };
   vm.runInNewContext(`${connector}
     globalThis.__validation = validateRelayOpsMorningPayload(globalThis.__payload);
+    globalThis.__ping = JSON.parse(doGet({}).text);
+    globalThis.__templateLayout = relayOpsValidateTemplate();
     globalThis.__layoutBefore = relayOpsTemplateLayout(findRelayOpsMorningSheet(globalThis.__payload), globalThis.__payload.rows.length);
     globalThis.__result = writeRelayOpsMorningSheet(globalThis.__payload);
     globalThis.__layoutAfter = relayOpsTemplateLayout(findRelayOpsMorningSheet(globalThis.__payload), globalThis.__payload.rows.length);
-  `, { ...sandbox, __payload: payload });
-  return sandbox;
+  `, context);
+  return context;
 }
 
 const payload = {
@@ -166,8 +178,11 @@ const payload = {
 };
 
 const sheet = new FakeSheet('Morning Operations', 5, 8);
-runConnectorWithSheet(sheet, payload);
+const resultContext = runConnectorWithSheet(sheet, payload);
 
+if (resultContext.__ping.writeRange !== 'A3:M' || resultContext.__ping.sheet !== 'Morning Operations') throw new Error('Connector ping should report the target sheet and A3:M write range');
+if (!resultContext.__templateLayout || resultContext.__templateLayout.neededColumns !== 13) throw new Error('Template validation should return A-M layout details');
+if (!resultContext.__ui.alerts.some(alert => alert.title.includes('RelayOps template'))) throw new Error('Template validation should alert the installer inside Google Sheets');
 if (sheet.getMaxRows() < 122) throw new Error(`Connector should expand rows to at least 122, got ${sheet.getMaxRows()}`);
 if (sheet.getMaxColumns() !== 13) throw new Error(`Connector should expand only to A-M, got ${sheet.getMaxColumns()} columns`);
 if (sheet.frozenRows !== 1) throw new Error('Connector should freeze row 1');
