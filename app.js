@@ -3118,7 +3118,9 @@ function morningSheetsReceiptHtml() {
   const r=state.morningSheetsLastReceipt;
   if(!r)return '';
   const verified=r.status!=='needs-verification';
-  return `<div class="sheets-receipt ${verified?'confirmed':'needs-check'}"><strong>${verified?'Last confirmed Google write':'Sent — verify in Google Sheet'}</strong><div><span><b>Sheet</b>${esc(r.sheet||'—')}</span><span><b>Range</b>${esc(r.writeRange||r.startCell||'A3:M')}</span><span><b>Rows</b>${esc(r.rows||0)}</span><span><b>Sections</b>${esc(r.sections||0)}</span><span><b>Status</b>${verified?'Confirmed':'Needs check'}</span><span><b>Time</b>${esc(r.updatedAt||r.sentAt||'—')}</span></div>${verified?'':`<small>Browser fallback was used, so RelayOps could not read Google’s response. Open the template and confirm ${esc(r.writeRange||'A3:M')} updated before launch.</small>`}</div>`;
+  const range=r.writeRange||r.startCell||'A3:M';
+  const lastCell=r.lastCell||String(range).split(':')[1]||'—';
+  return `<div class="sheets-receipt ${verified?'confirmed':'needs-check'}"><strong>${verified?'Last confirmed Google write':'Sent — verify in Google Sheet'}</strong><div><span><b>Sheet</b>${esc(r.sheet||'—')}</span><span><b>Range</b>${esc(range)}</span><span><b>Last cell</b>${esc(lastCell)}</span><span><b>Rows</b>${esc(r.rows||0)}</span><span><b>Sections</b>${esc(r.sections||0)}</span><span><b>Status</b>${verified?'Confirmed':'Needs check'}</span><span><b>Time</b>${esc(r.updatedAt||r.sentAt||'—')}</span></div>${verified?'':`<small>Browser fallback was used, so RelayOps could not read Google’s response. Open the template and confirm ${esc(range)} updated and the last written cell is ${esc(lastCell)} before launch.</small>`}</div>`;
 }
 function morningSheetsAppsScript() {
   return `// RelayOps Morning Sheet connector
@@ -3425,9 +3427,9 @@ function morningSheetsSetupChecklist() {
     '12. Click Test connector.',
     '13. Click Dry run. This validates the payload in Google without changing cells.',
     '14. If dry run confirms, click Send now.',
-    '15. Check the Last confirmed Google write receipt: sheet tab, A3:M range, row count, and sections.',
+    '15. Check the Last confirmed Google write receipt: sheet tab, exact written range, last cell, row count, and sections.',
     '',
-    'Expected target: Morning Operations tab, write range A3:M only, 13 A-M columns. Columns N+ stay untouched.'
+    'Expected target: Morning Operations tab, protected write scope A3:M only, exact written range like A3:M99, 13 A-M columns. Columns N+ stay untouched.'
   ].join('\n');
 }
 async function copyMorningSheetsSetup() {
@@ -3438,12 +3440,15 @@ async function copyMorningSheetsSetup() {
 function morningSheetsVerificationChecklist(payload=morningSheetsConnectorPayload()) {
   const proof=morningSheetsHandoffProof(payload);
   const firstSection=payload.sections?.[0]||{};
+  const lastCell=proof.range.split(':')[1] || 'M';
   return [
     'RelayOps Google Sheet Send Verification',
     '',
     `Template: ${MORNING_TEMPLATE_URL}`,
     `Target tab: ${payload.sheetName}`,
     `Expected write range: ${proof.range}`,
+    `Expected last cell: ${lastCell}`,
+    'Protected write scope: A3:M only',
     `Rows sent: ${payload.rows.length}`,
     `Wave/Pad merge sections: ${payload.sections.length}`,
     `Black divider rows: ${proof.dividerRows || 'none'}`,
@@ -3452,12 +3457,13 @@ function morningSheetsVerificationChecklist(payload=morningSheetsConnectorPayloa
     `1. Open the Google Sheet template and confirm the ${payload.sheetName} tab is selected.`,
     '2. Row 1 should stay frozen while scrolling.',
     '3. Headers A1:M1 should read: WAVE, DRIVER, ROUTE, STAGING, PAD, EV, DEVICE, PORTABLE, blank I, STOP COUNT, PACKAGE COUNT, blank L, PLANNED RTS.',
-    `4. Confirm the first route starts at A${firstSection.startRow||3} and data ends at ${proof.range.split(':')[1] || 'M'}.`,
+    `4. Confirm the first route starts at A${firstSection.startRow||3} and data ends at ${lastCell}.`,
     '5. Confirm Wave cells in column A and Pad cells in column E are merged like the template.',
     '6. Confirm black divider rows are still black and row-numbered.',
     '7. Confirm columns I and L are slim black spacer columns.',
     '8. Confirm Planned RTS column M is purple.',
     '9. Confirm columns N and beyond were not changed.',
+    `10. Confirm the RelayOps receipt shows Range ${proof.range} and Last cell ${lastCell}.`,
     '',
     'If RelayOps showed “Sent — verify in Google Sheet,” complete this checklist before launch.'
   ].join('\n');
