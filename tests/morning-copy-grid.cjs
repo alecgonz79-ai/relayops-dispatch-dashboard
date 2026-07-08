@@ -80,6 +80,8 @@ const checks = `
   if (!fallbackHtml.includes('<td') || !fallbackHtml.includes('table-layout:fixed')) throw new Error('TSV HTML fallback table missing');
   const payload = morningSheetsConnectorPayload();
   if (payload.version !== 'relayops-morning-v1') throw new Error('Morning Sheets connector payload version missing');
+  if (payload.sheetName !== 'Morning Operations') throw new Error('Morning Sheets connector should include target sheet name');
+  if (!Array.isArray(payload.sheetNameCandidates) || !payload.sheetNameCandidates.includes('Opening Operations') || !payload.sheetNameCandidates.includes('Sheet1')) throw new Error('Morning Sheets connector should include safe target sheet fallbacks');
   if (payload.startCell !== 'A3') throw new Error('Morning Sheets connector should target A3');
   if (payload.headers.length !== 13) throw new Error('Morning Sheets connector should use 13 A-M headers');
   if (payload.headers[0] !== 'WAVE' || payload.headers[12] !== 'PLANNED RTS') throw new Error('Morning Sheets connector headers should match the A-M template');
@@ -98,6 +100,7 @@ const checks = `
   if (payload.sections[0].startRow !== 3 || payload.sections[0].separatorRow <= payload.sections[0].timeRow) throw new Error('Connector section row numbering is wrong');
   const script = morningSheetsAppsScript();
   if (!script.includes('function doGet') || !script.includes('relayops-morning-v1') || !script.includes('function doPost') || !script.includes('writeRelayOpsMorningSheet') || !script.includes('breakApart') || !script.includes('merge()')) throw new Error('Morning Sheets Apps Script connector missing required writer code');
+  if (!script.includes('payload.sheetName') || !script.includes('payload.sheetNameCandidates') || !script.includes('ss.getSheetByName') || !script.includes('No target sheet tab found')) throw new Error('Apps Script should target the intended sheet tab before falling back');
   if (!script.includes("rowType === 'separator'") || script.includes('row.every(function(cell)')) throw new Error('Apps Script should use explicit rowTypes, not blank-row guessing, for separators');
   if (!script.includes('sheet.setFrozenRows(1)') || !script.includes('setValues([headers])') || !script.includes("sheet.setRowHeight(1, 28)") || !script.includes("sheet.getRange(1, 9).setBackground('#050505')") || !script.includes("sheet.getRange(1, 13).setBackground('#b4a7d6')")) throw new Error('Apps Script should restore the frozen A-M header row');
   const connectorHtml = (state.modal = 'morning-sheets-connector', modal());
