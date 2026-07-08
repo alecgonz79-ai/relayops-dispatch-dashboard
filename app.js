@@ -3187,6 +3187,14 @@ function connectorUrlWithPing(endpoint='') {
   const join=endpoint.includes('?')?'&':'?';
   return `${endpoint}${join}relayops=ping`;
 }
+function parseMorningSheetsResponse(text='',status=200) {
+  let data=null;
+  try { data=JSON.parse(text); } catch {}
+  if(data&&data.ok===false){const error=new Error(data.error||`Connector returned ${status}`);error.relayOpsConfirmed=true;throw error;}
+  if(data&&data.ok===true)return data;
+  if(!/("ok"\s*:\s*true|rows|updatedAt)/i.test(text))throw new Error(`Connector returned ${status}`);
+  return data||{ok:true,raw:text};
+}
 async function testMorningSheetsConnector() {
   const endpoint=(state.morningSheetsEndpoint||'').trim();
   if(!endpoint) { state.modal='morning-sheets-connector'; render(); return toast('Paste your Google Apps Script web app URL first','error'); }
@@ -3209,16 +3217,32 @@ async function sendMorningToSheets() {
   const endpoint=(state.morningSheetsEndpoint||'').trim();
   if(!endpoint) { state.modal='morning-sheets-connector'; render(); return toast('Paste your Google Apps Script web app URL first','error'); }
   const payload=morningSheetsConnectorPayload();
+  const preflight=morningSheetsPreflight(payload);
+  if(!preflight.ready) {
+    state.morningSheetsLastError=`Preflight failed: ${preflight.checks.filter(check=>!check.ok).map(check=>check.label).join(', ')}`;
+    state.modal='morning-sheets-connector';
+    persist(); render();
+    toast('Morning Sheet preflight failed — review the connector checks before sending','error');
+    return false;
+  }
   try {
     const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
     const text=await response.text();
-    if(!response.ok||!/ok|rows|updatedAt/i.test(text))throw new Error(`Connector returned ${response.status}`);
+    if(!response.ok)throw new Error(`Connector returned ${response.status}`);
+    const result=parseMorningSheetsResponse(text,response.status);
     state.morningSheetsLastPush=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastError='';
     persist(); render();
-    toast(`Google confirmed Morning Sheet update · ${payload.rows.length} rows`);
+    toast(`Google confirmed Morning Sheet update · ${result.rows||payload.rows.length} rows`);
     return true;
   } catch(error) {
+    if(error?.relayOpsConfirmed) {
+      state.morningSheetsLastError=error.message||'Google Sheets connector rejected the payload';
+      state.modal='morning-sheets-connector';
+      persist(); render();
+      toast(`Google Sheets connector rejected send: ${state.morningSheetsLastError}`,'error');
+      return false;
+    }
     try {
       await fetch(endpoint,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)});
       state.morningSheetsLastPush=`${new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date())} · check sheet`;

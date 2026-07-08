@@ -121,6 +121,11 @@ const checks = `
   if (!${JSON.stringify(connectorFile)}.includes('function onOpen') || !${JSON.stringify(connectorFile)}.includes("createMenu('RelayOps')") || !${JSON.stringify(connectorFile)}.includes('function validateRelayOpsMorningPayload') || !${JSON.stringify(connectorFile)}.includes('ok: false') || !${JSON.stringify(connectorFile)}.includes('LockService.getDocumentLock()') || !${JSON.stringify(connectorFile)}.includes('function doPost') || !${JSON.stringify(connectorFile)}.includes('writeRelayOpsMorningSheet') || !${JSON.stringify(connectorFile)}.includes("rowType === 'separator'") || !${JSON.stringify(connectorFile)}.includes('sheet: result.sheetName')) throw new Error('Permanent Apps Script connector file missing required behavior');
   if (connectorUrlWithPing('https://script.google.com/macros/s/demo/exec') !== 'https://script.google.com/macros/s/demo/exec?relayops=ping') throw new Error('Connector ping URL without query failed');
   if (connectorUrlWithPing('https://script.google.com/macros/s/demo/exec?x=1') !== 'https://script.google.com/macros/s/demo/exec?x=1&relayops=ping') throw new Error('Connector ping URL with query failed');
+  if (parseMorningSheetsResponse('{"ok":true,"rows":12}', 200).rows !== 12) throw new Error('Connector response parser should accept ok:true JSON');
+  let rejected = false;
+  try { parseMorningSheetsResponse('{"ok":false,"error":"Row 1 must have 13 columns"}', 200); } catch(error) { rejected = error.relayOpsConfirmed && error.message.includes('13 columns'); }
+  if (!rejected) throw new Error('Connector response parser must reject ok:false without fallback');
+  if (!sendMorningToSheets.toString().includes('morningSheetsPreflight(payload)') || !sendMorningToSheets.toString().includes('error?.relayOpsConfirmed') || !sendMorningToSheets.toString().includes('Google Sheets connector rejected send')) throw new Error('Send to Sheets should gate preflight and reject confirmed connector errors');
   state.modal = null;
 `;
 
