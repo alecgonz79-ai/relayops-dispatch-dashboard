@@ -43,7 +43,8 @@ const checks = `
   if (!html.includes(MORNING_TEMPLATE_URL)) throw new Error('Google Sheets template link missing');
   if (!html.includes('Copy/paste cannot reliably transfer merged-cell formatting')) throw new Error('Merged-cell paste warning missing');
   if (!html.includes('sheet-letters-row')) throw new Error('Column letters header missing');
-  if (!html.includes('<th class="sheet-row-num">#</th>')) throw new Error('Copy-mode header row marker missing');
+  if (!html.includes('<th class="sheet-row-num">1</th>')) throw new Error('Copy-mode header row number missing');
+  if (html.includes('<th class="sheet-row-num">#</th>')) throw new Error('Copy mode should use normal Google Sheets row numbering, not #');
   state.copyMode = false;
   const viewHtml = morningSheetPage();
   if (!viewHtml.includes('<th class="sheet-row-num">1</th>')) throw new Error('View/edit header row number missing');

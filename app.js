@@ -406,7 +406,7 @@ function sheetColumnLetters(count) {
 function sheetModeHeader(headers=[],mode='view') {
   const labels=headers.map((h,i)=>`<th class="${!h?'sheet-spacer-col':''}">${esc(h)}</th>`).join('');
   if(!['edit','copy'].includes(mode))return `<tr class="sheet-letters-row"><th class="sheet-corner"></th>${sheetColumnLetters(headers.length).map(l=>`<th>${l}</th>`).join('')}</tr><tr><th class="sheet-row-num">1</th>${labels}</tr>`;
-  return `<tr class="sheet-letters-row"><th class="sheet-corner"></th>${sheetColumnLetters(headers.length).map(l=>`<th>${l}</th>`).join('')}</tr><tr><th class="sheet-row-num">${mode==='copy'?'#':'1'}</th>${labels}</tr>`;
+  return `<tr class="sheet-letters-row"><th class="sheet-corner"></th>${sheetColumnLetters(headers.length).map(l=>`<th>${l}</th>`).join('')}</tr><tr><th class="sheet-row-num">1</th>${labels}</tr>`;
 }
 function copyModeToolbar(groups=[]) {
   const buttons=groups.filter(g=>!g.dsp).map((g,i)=>{
