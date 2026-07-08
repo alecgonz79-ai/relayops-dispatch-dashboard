@@ -446,7 +446,7 @@ const checks = `
   let capturedFormattedMorning = null;
   downloadBlob = (data,type,name) => { capturedFormattedMorning = { data, type, name }; };
   exportMorningTemplateSheet();
-  if (!capturedFormattedMorning || capturedFormattedMorning.name !== 'LLOL-opening-operations-formatted.xls' || capturedFormattedMorning.type !== 'application/vnd.ms-excel' || !capturedFormattedMorning.data.includes('rowspan="12"') || !capturedFormattedMorning.data.includes('WAVE 1') || !capturedFormattedMorning.data.includes('11:15 (1)') || !capturedFormattedMorning.data.includes('class="spacer"')) throw new Error('Formatted morning XLS export missing template layout');
+  if (!capturedFormattedMorning || capturedFormattedMorning.name !== 'LLOL-opening-operations-formatted.xls' || capturedFormattedMorning.type !== 'application/vnd.ms-excel' || !capturedFormattedMorning.data.includes('rowspan="12"') || !capturedFormattedMorning.data.includes('WAVE 1') || !capturedFormattedMorning.data.includes('11:15 (1)') || !capturedFormattedMorning.data.includes('class="spacer"') || !capturedFormattedMorning.data.includes('<x:FreezePanes/>') || !capturedFormattedMorning.data.includes('<x:SplitHorizontal>1</x:SplitHorizontal>') || !capturedFormattedMorning.data.includes('<x:Name>Morning Operations</x:Name>')) throw new Error('Formatted morning XLS export missing template layout');
   state.screenshotPreview = 'data:image/jpeg;base64,demo'; state.modal = 'screenshot';
   if (!modal().includes('Approve & save JPEG') || !modal().includes('Driver/Helper')) throw new Error('JPEG approval dialog missing');
   globalThis.__parseXlsx = parseXlsxArrayBuffer;

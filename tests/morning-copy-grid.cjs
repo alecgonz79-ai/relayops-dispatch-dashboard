@@ -105,7 +105,7 @@ const checks = `
   if (!setupHtml.includes('width:132px') || setupHtml.includes('width:18px')) throw new Error('A-H wave setup copy should include setup widths without divider columns');
   if (!countsHtml.includes('width:96px') || countsHtml.includes('width:132px') || countsHtml.includes('width:18px')) throw new Error('J-K counts copy should include count widths only');
   if (!rtsHtml.includes('width:96px') || rtsHtml.includes('width:132px') || rtsHtml.includes('width:18px')) throw new Error('M planned RTS copy should include planned RTS width only');
-  if (!exportMorningTemplateSheet.toString().includes('morningClipboardColumnWidths') || !exportMorningTemplateSheet.toString().includes('separatorCell') || exportMorningTemplateSheet.toString().includes('colspan="13"')) throw new Error('Formatted sheet export should use fixed widths and real A-M divider cells');
+  if (!exportMorningTemplateSheet.toString().includes('morningClipboardColumnWidths') || !exportMorningTemplateSheet.toString().includes('separatorCell') || !exportMorningTemplateSheet.toString().includes('FreezePanes') || !exportMorningTemplateSheet.toString().includes('SplitHorizontal>1') || !exportMorningTemplateSheet.toString().includes('Morning Operations') || exportMorningTemplateSheet.toString().includes('colspan="13"')) throw new Error('Formatted sheet export should use fixed widths, frozen row 1 metadata, and real A-M divider cells');
   const payload = morningSheetsConnectorPayload();
   if (payload.version !== 'relayops-morning-v1') throw new Error('Morning Sheets connector payload version missing');
   if (payload.sheetName !== 'Morning Operations') throw new Error('Morning Sheets connector should include target sheet name');

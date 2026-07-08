@@ -3624,7 +3624,8 @@ function exportMorningTemplateSheet(){
     const data=rows.map((r,i)=>`<tr>${i===0?cell(waveText,section.dsp?'wave dsp':'wave',`rowspan="${rows.length}"`):''}${cell(r.driver||'','driver')}${cell(r._blank?'':r.route||'')}${cell(r.staging||'')}${i===0?cell(pad,'pad',`rowspan="${rows.length+1}"`):''}${cell(r.ev||'')}${cell(r.deviceName||'')}${cell(r.portable||'')}${cell('','spacer')}${cell(r.stops||'')}${cell(r.packages||'')}${cell('','spacer')}${cell(r.plannedRts||'','planned')}</tr>`).join('');
     return `${data}<tr>${cell(morningWaveTimeText(section),'waveTime')}${cell('')}${cell('')}${cell('')}${cell('')}${cell('')}${cell('')}${cell('','spacer')}${cell('')}${cell('')}${cell('','spacer')}${cell('','planned')}</tr><tr class="separator">${headers.map(()=>cell('','separatorCell')).join('')}</tr>`;
   }).join('');
-  const html=`<!doctype html><html><head><meta charset="utf-8"><style>
+  const excelOptions=`<xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Morning Operations</x:Name><x:WorksheetOptions><x:FreezePanes/><x:FrozenNoSplit/><x:SplitHorizontal>1</x:SplitHorizontal><x:TopRowBottomPane>1</x:TopRowBottomPane><x:ActivePane>2</x:ActivePane></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml>`;
+  const html=`<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">${excelOptions}<style>
     table{border-collapse:collapse;font-family:Arial,sans-serif;} td{mso-number-format:"\\@";}
     .head,.waveHead,.plannedHead{height:34px;border:2px solid #111;text-align:center;font-weight:900;font-size:12px;background:#92f4fa;}
     .waveHead,.plannedHead{background:#b4a7d6}.spacer{width:16px;background:#000;border:1px solid #000;color:#000}
