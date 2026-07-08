@@ -44,7 +44,8 @@ const checks = `
   state.copyMode = true;
   state.editMode = false;
   const html = morningSheetPage();
-  if (!html.includes('Connector setup for clean Google Sheets handoff')) throw new Error('Morning connector guide missing');
+  if (!html.includes('Connector setup for exact Google Sheets handoff')) throw new Error('Morning connector guide missing');
+  if (!html.includes('PERFECT GOOGLE SHEETS HANDOFF') || !html.includes('Set up exact-format connector') || !html.includes('Copy fallback')) throw new Error('Exact-format handoff UI should prioritize the Sheets connector and keep copy as fallback');
   if (!html.includes(MORNING_TEMPLATE_URL)) throw new Error('Google Sheets template link missing');
   if (!html.includes('Copy/paste cannot reliably transfer merged-cell formatting')) throw new Error('Merged-cell paste warning missing');
   if (!html.includes('sheet-letters-row')) throw new Error('Column letters header missing');

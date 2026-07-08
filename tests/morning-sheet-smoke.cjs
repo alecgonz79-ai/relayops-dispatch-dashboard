@@ -333,7 +333,7 @@ const checks = `
   action('approve-fleet-refresh',{});
   if (state.fleetLastRefresh === 'Not refreshed yet' || state.modal || state.fleetRefreshPreview || !fleetPage().includes('Last refresh:') || !fleetPage().includes('Refresh readiness')) throw new Error('Approved fleet refresh did not update the board');
   const morningHtml = morningSheetPage();
-  if (!morningHtml.includes('Three easy steps') || !morningHtml.includes('White cells + Google Sheets paste')) throw new Error('Quick start guide missing');
+  if (!morningHtml.includes('Three easy steps') || !morningHtml.includes('Send to Sheet') || !morningHtml.includes('Exact merged template')) throw new Error('Quick start guide missing');
   if (!topbar().includes('data-action="share-dispatcher-link"') || DISPATCHER_SHARE_URL !== 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/' || !DISPATCHER_SHARE_TEXT.includes('https://')) throw new Error('Clickable dispatcher share link missing');
   const details = routeDetailsFromRows([
     ['Route Code','Driver Name','Stop Count','Planned Departure Time'],
@@ -411,7 +411,7 @@ const checks = `
   state.editMode = true;
   state.copyMode = false;
   const editableHtml = morningSheetPage();
-  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('data-sheet-cell="true"') || !editableHtml.includes('sheet-letters-row') || !editableHtml.includes('sheet-row-num') || !editableHtml.includes('PORTABLE') || !editableHtml.includes('sheet-spacer-col') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('VAN/DEV/PORT Import') || !editableHtml.includes('EV 1-57 Low → High') || !editableHtml.includes('Randomize EVs') || !editableHtml.includes('Assign Gas Vehicles') || !editableHtml.includes('Copy mode') || !editableHtml.includes('Copy Google Sheets table') || !editableHtml.includes('Formatted XLS') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG') || !editableHtml.includes('Click and drag white cells')) throw new Error('Editable sheet or JPEG control missing');
+  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('data-sheet-cell="true"') || !editableHtml.includes('sheet-letters-row') || !editableHtml.includes('sheet-row-num') || !editableHtml.includes('PORTABLE') || !editableHtml.includes('sheet-spacer-col') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('VAN/DEV/PORT Import') || !editableHtml.includes('EV 1-57 Low → High') || !editableHtml.includes('Randomize EVs') || !editableHtml.includes('Assign Gas Vehicles') || !editableHtml.includes('Copy mode') || !editableHtml.includes('PERFECT GOOGLE SHEETS HANDOFF') || !editableHtml.includes('Set up exact-format connector') || !editableHtml.includes('Copy fallback') || !editableHtml.includes('Formatted XLS') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG') || !editableHtml.includes('Click and drag white cells')) throw new Error('Editable sheet or JPEG control missing');
   assignElectricVehicles('low');
   if (state.morningRoutes[0].ev !== '1') throw new Error('Lowest-to-highest EV assignment failed');
   assignGasVehicles();
