@@ -2837,16 +2837,21 @@ async function writeClipboardTable(text,html) {
 function clipboardHtmlShell(tableHtml) {
   return `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableHtml}</body></html>`;
 }
+const morningClipboardColumnWidths=[76,132,76,82,76,76,76,76,18,96,96,18,96];
+function morningClipboardColgroup(left=0,right=morningClipboardColumnWidths.length-1) {
+  const widths=morningClipboardColumnWidths.slice(Math.max(0,left),Math.min(morningClipboardColumnWidths.length-1,right)+1);
+  return `<colgroup>${widths.map(width=>`<col style="width:${width}px;min-width:${width}px">`).join('')}</colgroup>`;
+}
 function clipboardCellStyle(colIndex,type='cell') {
-  const base='border:1px solid #111;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;font-size:10pt;font-weight:700;height:21px;mso-number-format:"\\@";';
+  const width=morningClipboardColumnWidths[colIndex]||76;
+  const base=`border:1px solid #111;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;font-size:10pt;font-weight:700;height:21px;width:${width}px;min-width:${width}px;mso-number-format:"\\@";`;
   if(type==='separator')return `${base}background:#050505;color:#050505;border-color:#050505;height:14px;`;
-  if(type==='wave')return `${base}background:#eef3ff;font-size:24pt;font-weight:900;writing-mode:vertical-rl;transform:rotate(180deg);min-width:72px;`;
+  if(type==='wave')return `${base}background:#eef3ff;font-size:24pt;font-weight:900;writing-mode:vertical-rl;transform:rotate(180deg);`;
   if(type==='time')return `${base}background:#eef3ff;font-size:11pt;font-weight:900;`;
-  if(type==='pad')return `${base}background:#eef3ff;font-size:22pt;font-weight:900;min-width:52px;`;
-  if(type==='spacer'||sheetSpacerColumns.has(colIndex))return `${base}background:#050505;color:#050505;border-color:#050505;min-width:14px;width:14px;`;
-  if(colIndex===12)return `${base}background:#b4a7d6;min-width:78px;`;
-  if([1,2,3,5,6,7,9,10].includes(colIndex))return `${base}background:#eef3ff;min-width:${colIndex===1?122:colIndex===3?82:70}px;`;
-  return `${base}background:#eef3ff;min-width:70px;`;
+  if(type==='pad')return `${base}background:#eef3ff;font-size:22pt;font-weight:900;`;
+  if(type==='spacer'||sheetSpacerColumns.has(colIndex))return `${base}background:#050505;color:#050505;border-color:#050505;`;
+  if(colIndex===12)return `${base}background:#b4a7d6;`;
+  return `${base}background:#eef3ff;`;
 }
 function clipboardTd(value='',colIndex=0,type='cell',attrs='') {
   return `<td ${attrs} style="${clipboardCellStyle(colIndex,type)}">${xmlEscape(value)}</td>`;
@@ -2860,11 +2865,12 @@ function morningSheetClipboardHtml(sections=morningSections(filteredMorningRows(
     const separator=`<tr>${sheetCopyFields.map((_,i)=>clipboardTd('',i,'separator')).join('')}</tr>`;
     return rows+time+separator;
   }).join('');
-  return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${body}</table>`);
+  return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${morningClipboardColgroup()}${body}</table>`);
 }
 function tsvToHtmlTable(text='') {
   const rows=String(text).split('\n').map(row=>row.split('\t'));
-  return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${rows.map(row=>`<tr>${row.map((value,i)=>clipboardTd(value,i)).join('')}</tr>`).join('')}</table>`);
+  const maxCols=rows.reduce((max,row)=>Math.max(max,row.length),0);
+  return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${morningClipboardColgroup(0,Math.max(0,maxCols-1))}${rows.map(row=>`<tr>${row.map((value,i)=>clipboardTd(value,i)).join('')}</tr>`).join('')}</table>`);
 }
 function selectedSheetHtml() {
   const bounds=sheetSelectionBounds();
@@ -2880,7 +2886,7 @@ function selectedSheetHtml() {
     }
     rows.push(`<tr>${cells.join('')}</tr>`);
   }
-  return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${rows.join('')}</table>`);
+  return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${morningClipboardColgroup(bounds.left,bounds.right)}${rows.join('')}</table>`);
 }
 function exportCSV(){const csv=[exportHeaders,...exportRows()].map(r=>r.map(csvEscape).join(',')).join('\r\n');downloadBlob('\ufeff'+csv,'text/csv;charset=utf-8','relayops-daily-roster.csv');state.modal=null;render();toast('CSV downloaded — ready for Google Sheets');}
 function fleetExportRows() {
@@ -3486,20 +3492,21 @@ function exportMorningTemplateSheet(){
   const headers=morningTemplateHeaders;
   const cls=(i)=>i===0?'waveHead':i===8||i===11?'spacer':i===12?'plannedHead':'head';
   const cell=(value='',klass='cell',attrs='')=>`<td ${attrs} class="${klass}">${xmlEscape(value)}</td>`;
+  const colgroup=`<colgroup>${morningClipboardColumnWidths.map(width=>`<col style="width:${width}px">`).join('')}</colgroup>`;
   const sections=morningSections(filteredMorningRows());
   const body=sections.map(section=>{
     const rows=morningDisplayRows(section);
     const waveText=section.dsp?'DSP':section.label;
     const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
     const data=rows.map((r,i)=>`<tr>${i===0?cell(waveText,section.dsp?'wave dsp':'wave',`rowspan="${rows.length}"`):''}${cell(r.driver||'','driver')}${cell(r._blank?'':r.route||'')}${cell(r.staging||'')}${i===0?cell(pad,'pad',`rowspan="${rows.length+1}"`):''}${cell(r.ev||'')}${cell(r.deviceName||'')}${cell(r.portable||'')}${cell('','spacer')}${cell(r.stops||'')}${cell(r.packages||'')}${cell('','spacer')}${cell(r.plannedRts||'','planned')}</tr>`).join('');
-    return `${data}<tr>${cell(morningWaveTimeText(section),'waveTime')}${cell('')}${cell('')}${cell('')}${cell('')}${cell('')}${cell('')}${cell('','spacer')}${cell('')}${cell('')}${cell('','spacer')}${cell('','planned')}</tr><tr class="separator"><td colspan="13"></td></tr>`;
+    return `${data}<tr>${cell(morningWaveTimeText(section),'waveTime')}${cell('')}${cell('')}${cell('')}${cell('')}${cell('')}${cell('')}${cell('','spacer')}${cell('')}${cell('')}${cell('','spacer')}${cell('','planned')}</tr><tr class="separator">${headers.map(()=>cell('','separatorCell')).join('')}</tr>`;
   }).join('');
   const html=`<!doctype html><html><head><meta charset="utf-8"><style>
     table{border-collapse:collapse;font-family:Arial,sans-serif;} td{mso-number-format:"\\@";}
     .head,.waveHead,.plannedHead{height:34px;border:2px solid #111;text-align:center;font-weight:900;font-size:12px;background:#92f4fa;}
     .waveHead,.plannedHead{background:#b4a7d6}.spacer{width:16px;background:#000;border:1px solid #000;color:#000}
-    .cell,.driver,.planned{height:24px;min-width:82px;border:1px solid #222;text-align:center;font-weight:700;font-size:10px;background:#eef3ff}.driver{min-width:130px}.wave{min-width:90px;font-size:28px;font-weight:900;writing-mode:vertical-rl;transform:rotate(180deg);background:#eef3ff}.waveTime{font-size:13px;font-weight:900;background:#eef3ff}.dsp{vertical-align:bottom}.pad{font-size:24px;font-weight:900;background:#eef3ff}.planned{background:#b4a7d6}.separator td{height:14px;background:#000;border:1px solid #000}
-  </style></head><body><table><tr>${headers.map((h,i)=>cell(h,cls(i))).join('')}</tr>${body}</table></body></html>`;
+    .cell,.driver,.planned{height:24px;min-width:82px;border:1px solid #222;text-align:center;font-weight:700;font-size:10px;background:#eef3ff}.driver{min-width:130px}.wave{min-width:90px;font-size:28px;font-weight:900;writing-mode:vertical-rl;transform:rotate(180deg);background:#eef3ff}.waveTime{font-size:13px;font-weight:900;background:#eef3ff}.dsp{vertical-align:bottom}.pad{font-size:24px;font-weight:900;background:#eef3ff}.planned{background:#b4a7d6}.separatorCell{height:14px;background:#000;border:1px solid #000;color:#000}
+  </style></head><body><table>${colgroup}<tr>${headers.map((h,i)=>cell(h,cls(i))).join('')}</tr>${body}</table></body></html>`;
   downloadBlob('\ufeff'+html,'application/vnd.ms-excel',`${state.dspCode}-opening-operations-formatted.xls`);
   toast('Formatted opening sheet downloaded — import/open this in Google Sheets to keep layout');
 }
