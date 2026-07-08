@@ -419,9 +419,9 @@ function sheetModeHeader(headers=[],mode='view') {
 function copyModeToolbar(groups=[]) {
   const buttons=groups.filter(g=>!g.dsp).map((g,i)=>{
     const label=g.wave?`${g.label} ${morningWaveTimeText(g)}`:g.label;
-    return `<button class="btn small" data-action="copy-wave" data-wave-index="${i}">${ICONS.copy} ${esc(label||`Wave ${i+1}`)}</button>`;
+    return `<span class="wave-copy-group"><b>${esc(label||`Wave ${i+1}`)}</b><button class="btn small" data-action="copy-wave" data-wave-index="${i}" data-copy-block="all">All</button><button class="btn small" data-action="copy-wave" data-wave-index="${i}" data-copy-block="setup">A–H</button><button class="btn small" data-action="copy-wave" data-wave-index="${i}" data-copy-block="counts">J–K</button><button class="btn small" data-action="copy-wave" data-wave-index="${i}" data-copy-block="rts">M</button></span>`;
   }).join('');
-  return `<div class="copy-mode-toolbar card"><div><strong>Copy mode</strong><span>Drag inside one block at a time: A–H setup, J–K counts, or M planned RTS. Black divider columns I and L are real boundaries so the paste lines up in Google Sheets.</span></div><div class="copy-mode-buttons"><button class="btn small primary" data-action="copy-selected-cells">Copy selected cells</button>${buttons}</div></div>`;
+  return `<div class="copy-mode-toolbar card"><div><strong>Copy mode</strong><span>Drag inside one block at a time, or use a wave shortcut: All, A–H setup, J–K counts, or M planned RTS. Black divider columns I and L are real boundaries so the paste lines up in Google Sheets.</span></div><div class="copy-mode-buttons"><button class="btn small primary" data-action="copy-selected-cells">Copy selected cells</button>${buttons}</div></div>`;
 }
 function morningWaveTimeText(section) {
   return section.wave?`${String(section.wave).replace(/\s*[AP]M/i,'')} (${section.rows.length})`:'';
@@ -1918,16 +1918,28 @@ function copySelectedSheetCells() {
   writeClipboardTable(text,selectedSheetHtml()||tsvToHtmlTable(text)).then(ok=>toast(ok?`Copied selected ${selectedSheetCells().length} cell${selectedSheetCells().length===1?'':'s'} for Google Sheets`:'Clipboard access was blocked — use the paste box',ok?'':'error'));
   return true;
 }
-function copyWaveByIndex(index=0) {
+const waveCopyBlocks={all:null,setup:[0,7],counts:[9,10],rts:[12,12]};
+const waveCopyBlockLabels={all:'full A–M',setup:'A–H setup',counts:'J–K counts',rts:'M Planned RTS'};
+function copyRowsClipboardHtml(items=[],left=0,right=12) {
+  const body=items.map(item=>{
+    const type=item.separator?'separator':item.time?'time':item.row?._blank?'blank':'route';
+    return clipboardTr(item.values.slice(left,right+1).map((value,i)=>clipboardTd(value,left+i,sheetSpacerColumns.has(left+i)?'spacer':type==='separator'?'separator':'cell')).join(''),type);
+  }).join('');
+  return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${morningClipboardColgroup(left,right)}${body}</table>`);
+}
+function copyWaveByIndex(index=0,block='all') {
   const groups=morningSections(filteredMorningRows()).filter(g=>!g.dsp);
   const group=groups[index];
   if(!group)return toast('That wave is not available to copy','error');
-  const rows=morningCopyRowsForSections([group]).map(item=>item.values.join('\t')).join('\n');
+  const range=waveCopyBlocks[block]||waveCopyBlocks.all, copyRows=morningCopyRowsForSections([group]);
+  const left=range?range[0]:0, right=range?range[1]:12;
+  const rows=copyRows.map(item=>item.values.slice(left,right+1).join('\t')).join('\n');
   state.sheetCopyText=rows;
   const sectionIndex=morningSections(filteredMorningRows()).findIndex(s=>s.label===group.label&&s.wave===group.wave);
   document.querySelectorAll('.wave-pulse,.sheet-selected-wave').forEach(el=>el.classList.remove('wave-pulse','sheet-selected-wave'));
   if(sectionIndex>=0) document.querySelectorAll(`[data-sheet-section="${sectionIndex}"], .wave-section-${sectionIndex}`).forEach(el=>el.classList.add('sheet-selected-wave','wave-pulse'));
-  writeClipboardTable(rows,morningSheetClipboardHtml([group])).then(ok=>toast(ok?`Copied ${group.label} ${morningWaveTimeText(group)} for Google Sheets`:'Clipboard access was blocked — use the paste box',ok?'':'error'));
+  const html=range?copyRowsClipboardHtml(copyRows,left,right):morningSheetClipboardHtml([group]);
+  writeClipboardTable(rows,html).then(ok=>toast(ok?`Copied ${group.label} ${waveCopyBlockLabels[block]||waveCopyBlockLabels.all} ${morningWaveTimeText(group)} for Google Sheets`:'Clipboard access was blocked — use the paste box',ok?'':'error'));
   return true;
 }
 function handleSheetSelectionCopy(e) {
@@ -2037,7 +2049,7 @@ function action(name,el) {
   if (name==='export-morning-template') return exportMorningTemplateSheet();
   if (name==='copy-morning-visible') return copyMorningVisible();
   if (name==='copy-selected-cells') return copySelectedSheetCells();
-  if (name==='copy-wave') return copyWaveByIndex(Number(el.dataset.waveIndex)||0);
+  if (name==='copy-wave') return copyWaveByIndex(Number(el.dataset.waveIndex)||0,el.dataset.copyBlock||'all');
   if (name==='morning-sheets-connector') { state.modal='morning-sheets-connector'; return render(); }
   if (name==='save-morning-sheets-connector') return saveMorningSheetsConnector();
   if (name==='copy-morning-apps-script') return copyMorningAppsScript();

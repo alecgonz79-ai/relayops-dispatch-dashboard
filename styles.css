@@ -346,6 +346,9 @@ tbody tr:last-child td { border-bottom:0; }
 .copy-mode-toolbar strong { display:block; font-size:12px; }
 .copy-mode-toolbar span { display:block; margin-top:3px; color:#58645c; font-size:9px; font-weight:700; }
 .copy-mode-buttons { display:flex; flex-wrap:wrap; gap:7px; justify-content:flex-end; }
+.wave-copy-group { display:flex; align-items:center; gap:4px; padding:4px; border:1px solid #d8e5f5; border-radius:10px; background:#fff; }
+.wave-copy-group b { padding:0 5px; color:#24466f; font-size:8px; white-space:nowrap; }
+.wave-copy-group .btn.small { height:24px; padding:0 7px; font-size:7px; }
 .copy-help { background:#eef6ff; border-color:#bfd8ff; color:#24466f; }
 .copy-ops-sheet { min-width:1040px; cursor:cell; }
 .copy-ops-sheet th:nth-child(2) { width:98px; background:#bfb4df; }

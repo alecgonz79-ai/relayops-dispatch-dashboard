@@ -45,6 +45,7 @@ const checks = `
   if (!${JSON.stringify(css)}.includes('.sheets-receipt') || !${JSON.stringify(css)}.includes('.sheets-receipt.needs-check') || !${JSON.stringify(css)}.includes('grid-template-columns:repeat(6,minmax(0,1fr))')) throw new Error('Sheets receipt styling missing');
   if (!${JSON.stringify(css)}.includes('.sheets-proof') || !${JSON.stringify(css)}.includes('.sheets-proof.warn')) throw new Error('Sheets handoff proof styling missing');
   if (!${JSON.stringify(css)}.includes('.handoff-readiness') || !${JSON.stringify(css)}.includes('.handoff-readiness.copy-ready') || !${JSON.stringify(css)}.includes('.handoff-readiness-grid')) throw new Error('Morning handoff readiness styling missing');
+  if (!${JSON.stringify(css)}.includes('.wave-copy-group') || !${JSON.stringify(css)}.includes('.wave-copy-group .btn.small')) throw new Error('Wave block copy button styling missing');
   toast = () => {};
   state.page = 'morning';
   state.copyMode = true;
@@ -53,6 +54,7 @@ const checks = `
   if (!html.includes('Connector setup for exact Google Sheets handoff')) throw new Error('Morning connector guide missing');
   if (!html.includes('Google Sheets is ready through Apps Script') || !html.includes('Slack/Cortex live pulls need a secure backend later') || !html.includes('never paste Amazon passwords, cookies, or session tokens') || !html.includes('Web app /exec URL')) throw new Error('Morning connector guide should distinguish Apps Script from secure backend connectors');
   if (!html.includes('PERFECT GOOGLE SHEETS HANDOFF') || !html.includes('Set up exact-format connector') || !html.includes('Copy fallback') || !html.includes('Handoff proof') || !html.includes('Google range') || !html.includes('Connector rows') || !html.includes('Ready for copy fallback') || !html.includes('Import / route source') || !html.includes('Visible rows = payload') || !html.includes('Exact connector')) throw new Error('Exact-format handoff UI should prioritize the Sheets connector and show row-proof details');
+  if (!html.includes('data-copy-block="all"') || !html.includes('data-copy-block="setup"') || !html.includes('data-copy-block="counts"') || !html.includes('data-copy-block="rts"') || !html.includes('A–H setup') || !html.includes('J–K counts') || !html.includes('M planned RTS')) throw new Error('Copy mode should expose per-wave block copy shortcuts');
   if (!html.includes(MORNING_TEMPLATE_URL)) throw new Error('Google Sheets template link missing');
   if (!html.includes('Copy/paste cannot reliably transfer merged-cell formatting')) throw new Error('Merged-cell paste warning missing');
   if (!html.includes('sheet-letters-row')) throw new Error('Column letters header missing');
@@ -93,6 +95,13 @@ const checks = `
   if (!fallbackHtml.includes('<td') || !fallbackHtml.includes('table-layout:fixed')) throw new Error('TSV HTML fallback table missing');
   if (!fallbackHtml.includes('<colgroup>') || !fallbackHtml.includes('width:132px') || !fallbackHtml.includes('width:18px')) throw new Error('TSV HTML fallback should include fixed A-M column width hints');
   if (!fallbackHtml.includes('height:21px;mso-height-source:userset') || !fallbackHtml.includes('height:14px;mso-height-source:userset')) throw new Error('TSV HTML fallback should include row height hints');
+  const firstWaveItems = morningCopyRowsForSections([morningSections(filteredMorningRows())[0]]);
+  const setupHtml = copyRowsClipboardHtml(firstWaveItems,0,7);
+  const countsHtml = copyRowsClipboardHtml(firstWaveItems,9,10);
+  const rtsHtml = copyRowsClipboardHtml(firstWaveItems,12,12);
+  if (!setupHtml.includes('width:132px') || setupHtml.includes('width:18px')) throw new Error('A-H wave setup copy should include setup widths without divider columns');
+  if (!countsHtml.includes('width:96px') || countsHtml.includes('width:132px') || countsHtml.includes('width:18px')) throw new Error('J-K counts copy should include count widths only');
+  if (!rtsHtml.includes('width:96px') || rtsHtml.includes('width:132px') || rtsHtml.includes('width:18px')) throw new Error('M planned RTS copy should include planned RTS width only');
   if (!exportMorningTemplateSheet.toString().includes('morningClipboardColumnWidths') || !exportMorningTemplateSheet.toString().includes('separatorCell') || exportMorningTemplateSheet.toString().includes('colspan="13"')) throw new Error('Formatted sheet export should use fixed widths and real A-M divider cells');
   const payload = morningSheetsConnectorPayload();
   if (payload.version !== 'relayops-morning-v1') throw new Error('Morning Sheets connector payload version missing');
