@@ -33,7 +33,11 @@ const context = {
 };
 
 const source = fs.readFileSync(require.resolve('../app.js'), 'utf8');
+const css = fs.readFileSync(require.resolve('../styles.css'), 'utf8');
 const checks = `
+  if (!${JSON.stringify(css)}.includes('.ops-sheet thead tr:nth-child(2) th { top:25px; z-index:11; }')) throw new Error('Second sticky header row must sit below column letters');
+  if (!${JSON.stringify(css)}.includes('.ops-sheet .sheet-letters-row th { top:0; z-index:12;')) throw new Error('Column letters sticky header layer missing');
+  if (!${JSON.stringify(css)}.includes('background-clip:padding-box')) throw new Error('Sticky header background clipping missing');
   toast = () => {};
   state.page = 'morning';
   state.copyMode = true;
