@@ -412,6 +412,19 @@ tbody tr:last-child td { border-bottom:0; }
 .import-preview strong, .import-preview span { display:block; }
 .import-preview strong { font-size:10px; }
 .import-preview span { color:#587061; font-size:8px; margin-top:3px; }
+.import-proof { margin-top:12px; padding:12px; border:1px solid #bfe0c8; border-radius:12px; background:#eff9f1; }
+.import-proof.warn { border-color:#e4c58b; background:#fff8e8; }
+.import-proof-head { display:flex; align-items:center; gap:10px; }
+.import-proof-head strong, .import-proof-head span { display:block; }
+.import-proof-head strong { font-size:11px; color:#1d2c21; }
+.import-proof-head span { margin-top:3px; color:#587061; font-size:8px; font-weight:800; }
+.import-proof-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:10px; }
+.import-proof-grid > div { display:grid; grid-template-columns:auto 1fr; gap:2px 7px; padding:8px; border-radius:9px; background:#fff; border:1px solid #dce9df; }
+.import-proof-grid > div.warn { border-color:#efcf95; background:#fffaf0; }
+.import-proof-grid b { grid-row:1 / span 2; display:grid; place-items:center; width:18px; height:18px; border-radius:6px; color:#fff; background:#2c7c4b; font-size:9px; }
+.import-proof-grid .warn b { background:#c57920; }
+.import-proof-grid span { color:#26342b; font-size:8.5px; font-weight:1000; }
+.import-proof-grid small { color:#637066; font-size:7.5px; font-weight:800; line-height:1.35; }
 .auto-match { margin-top:11px; padding:12px; border-radius:12px; background:#f6f7f5; }
 .auto-match > strong { display:block; margin-bottom:8px; font-size:10px; }
 .auto-match > div { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
@@ -1331,6 +1344,7 @@ tbody tr:last-child td { border-bottom:0; }
   .fleet-attention-strip { grid-template-columns:1fr; }
   .fleet-recent-changes { grid-template-columns:1fr; }
   .fleet-change-list { grid-template-columns:1fr; }
+  .import-proof-grid { grid-template-columns:1fr; }
   .rivian-card.expanded { grid-column:auto; }
   .rivian-card { align-items:flex-start; flex-direction:column; }
   .rivian-van-art { align-self:center; }

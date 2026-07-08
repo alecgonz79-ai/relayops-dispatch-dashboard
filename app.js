@@ -1394,13 +1394,75 @@ function importPreviewStats() {
   const included=dsp<0?state.importedFile.rows.length:state.importedFile.rows.filter(r=>String(r[dsp]).trim().toUpperCase()===state.dspCode).length;
   return {included,excluded:state.importedFile.rows.length-included};
 }
+function importColumnIndexes(file=state.importedFile) {
+  const headers=file?.headers||[], norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
+  const index=(...names)=>{const wanted=names.map(norm);return headers.findIndex(h=>wanted.includes(norm(h)));};
+  return {
+    dsp:index('dsp','dspcode','company'),
+    route:index('route','routecode','cxnumber','cxroute','blockid'),
+    driver:index('driver','drivername','transportername','employeename','daname','associatename','da'),
+    wave:index('wave','wavetime','starttime'),
+    staging:index('staging','staginglocation'),
+    stops:index('stops','stopcount','plannedstops','stopsplanned','numstops'),
+    packages:index('packages','packagecount','numpackages')
+  };
+}
+function importPreflight(file=state.importedFile) {
+  if(!file)return null;
+  if(file.kind==='details'||file.kind==='rts') {
+    const count=file.routeDetailsCount||Object.keys(file.routeDetails||{}).length;
+    return {
+      ready:count>0,
+      included:count,
+      excluded:0,
+      matched:count,
+      missing:count?[]:['No CX routes found'],
+      checks:[
+        {label:file.kind==='rts'?'Planned Departure Time found':'ROUTE_DJT6 rows found',ok:count>0,detail:count?`${count} CX route${count===1?'':'s'} ready to match`:'Upload a ROUTE_DJT6 file with Route Code and driver/stops/time columns'},
+        {label:'CX route matching',ok:count>0,detail:'Updates only routes that already exist on the Morning Sheet'}
+      ]
+    };
+  }
+  const ix=importColumnIndexes(file), rows=file.rows||[], required=[
+    ['Route / CX',ix.route],
+    ['Wave time',ix.wave],
+    ['Staging location',ix.staging]
+  ];
+  const candidates=rows.filter(r=>ix.dsp<0||String(r[ix.dsp]).trim().toUpperCase()===state.dspCode);
+  const routeKeys=new Set(candidates.map(r=>String(r[ix.route]||'').trim().toUpperCase()).filter(Boolean));
+  const detailKeys=new Set(Object.keys(file.routeDetails||{}).map(v=>String(v).toUpperCase()));
+  const matched=[...routeKeys].filter(route=>detailKeys.has(route)).length;
+  const missing=required.filter(([,ixValue])=>ixValue<0).map(([label])=>label);
+  const ready=!missing.length&&candidates.length>0;
+  return {
+    ready,
+    included:candidates.length,
+    excluded:rows.length-candidates.length,
+    matched,
+    missing,
+    checks:[
+      {label:'DSP filter',ok:ix.dsp>=0,detail:ix.dsp>=0?`${candidates.length} ${state.dspCode} route${candidates.length===1?'':'s'} kept · ${rows.length-candidates.length} other-DSP route${rows.length-candidates.length===1?'':'s'} excluded`:'No DSP column found — all rows will be treated as your DSP'},
+      {label:'Required columns',ok:!missing.length,detail:missing.length?`Missing: ${missing.join(', ')}`:'Route, Wave, and Staging columns are ready'},
+      {label:'Earliest waves first',ok:ix.wave>=0,detail:ix.wave>=0?'Routes will sort by launch time before hitting the template':'Wave column is required for morning order'},
+      {label:'CX route matching',ok:matched>0||!detailKeys.size,detail:detailKeys.size?`${matched} of ${routeKeys.size} plan CX route${routeKeys.size===1?'':'s'} matched ROUTE_DJT6 details`:'No ROUTE_DJT6 details uploaded — names/stops use the plan file or stay reviewable'},
+      {label:'Template output',ok:ready,detail:ready?'Creates the A–M numbered Morning Sheet rows':'Fix the missing items before creating the sheet'}
+    ]
+  };
+}
+function importPreflightHtml(file=state.importedFile) {
+  const proof=importPreflight(file);
+  if(!proof)return '';
+  const title=file?.kind==='rts'?`${proof.included} Planned RTS time${proof.included===1?'':'s'} ready`:file?.kind==='details'?`${proof.included} CX detail row${proof.included===1?'':'s'} ready`:`${proof.included} ${state.dspCode} route${proof.included===1?'':'s'} ready`;
+  const subtitle=file?.kind==='rts'?'Purple Planned RTS cells will fill by CX route.':file?.kind==='details'?'Driver names and stop counts will update by CX route.':`${proof.excluded} other-DSP route${proof.excluded===1?'':'s'} will be left out automatically${proof.matched?` · ${proof.matched} CX route${proof.matched===1?'':'s'} matched ROUTE_DJT6`:''}.`;
+  return `<div class="import-proof ${proof.ready?'ready':'warn'}"><div class="import-proof-head"><span class="preview-check">${proof.ready?'✓':'!'}</span><div><strong>${esc(title)}</strong><span>${esc(subtitle)}</span></div></div><div class="import-proof-grid">${proof.checks.map(check=>`<div class="${check.ok?'ok':'warn'}"><b>${check.ok?'✓':'!'}</b><span>${esc(check.label)}</span><small>${esc(check.detail)}</small></div>`).join('')}</div></div>`;
+}
 
 function modal() {
   if (!state.modal) return '';
   if (state.modal === 'import') {
-    const stats=importPreviewStats(), isRts=state.importPurpose==='rts';
+    const proof=importPreflight(), isRts=state.importPurpose==='rts';
     const source=state.importSource==='slack'&&!isRts?`<div class="slack-panel"><div class="slack-brand"><div class="slack-logo">S</div><div><strong>Slack Import</strong><span>#morning-operations · demo connection</span></div><span class="demo-tag">DEMO</span></div><button class="slack-file" data-action="load-slack-demo"><span class="file-type">CSV</span><span><strong>Today’s operations file</strong><small>Shared by Operations Bot · ready to use</small></span><span class="btn small">Choose this file</span></button><div class="import-note">For this demo, RelayOps will keep only ${state.dspCode} routes from the Slack file.</div></div>`:`<div class="drop-zone ${state.importedFile?'has-file':''}" id="drop-zone"><div><div class="drop-icon">${state.importedFile?ICONS.check:ICONS.upload}</div><strong>${state.importedFile?`Great! ${esc(state.importedFile.name)} is ready.`:isRts?'Choose the Routes_DJT6 file':'Choose DAYOFOPSPLAN and ROUTE_DJT6'}</strong><span>${state.importedFile?`${state.importedFile.rows.length} rows found${state.importedFile.routeDetailsCount?` · ${state.importedFile.routeDetailsCount} CX rows matched`:''}.`:isRts?'Excel (.xlsx) or CSV is supported. RelayOps pulls only Planned Departure Time into Planned RTS.':'Select both files at the same time. Excel (.xlsx) and CSV are supported.'}</span><button class="btn primary upload-choice" data-action="choose-file">${state.importedFile?'Choose different files':isRts?'Choose Planned RTS file':'Choose Amazon files'}</button></div></div>`;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">${isRts?'PLANNED RTS':'EASY UPLOAD'}</span><h2 id="import-title">${isRts?'Upload Planned RTS times':'Make my morning sheet'}</h2><p>${isRts?'Drop the Routes_DJT6 export. Only the Planned Departure Time column is used.':'Choose the plan and route files. RelayOps joins them by CX route.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="upload-progress"><div class="upload-progress-step active"><b>1</b><span>Choose files</span></div><i></i><div class="upload-progress-step ${state.importedFile?'active':''}"><b>${state.importedFile?'✓':'2'}</b><span>${isRts?'Find planned time':'Match CX routes'}</span></div><i></i><div class="upload-progress-step"><b>3</b><span>${isRts?'Fill purple cells':'Make sheet'}</span></div></div>${!isRts?`<div class="source-tabs import-choice-grid"><button class="source-tab import-choice-card ${state.importSource==='slack'?'active':''}" data-action="set-import-source" data-source="slack"><strong>Slack Import</strong><small>Daily file from the operations channel</small></button><button class="source-tab import-choice-card ${state.importSource==='computer'?'active':''}" data-action="set-import-source" data-source="computer"><strong>Cortex Import</strong><small>Amazon DAYOFOPSPLAN + ROUTE_DJT6 exports</small></button></div>`:''}${source}${state.importedFile?`<div class="import-preview"><span class="preview-check">✓</span><div><strong>${isRts?`${state.importedFile.routeDetailsCount||0} Planned RTS times ready`:`${stats.included} ${state.dspCode} routes matched`}</strong><span>${isRts?'Irregular or missing times will be highlighted light red.':`${stats.excluded} routes from other DSPs will be left out automatically.`}</span></div></div><div class="auto-match"><strong>RelayOps will do these things:</strong><div><span>✓ Earliest wave first</span><span>✓ CX route matching</span><span>${isRts?'✓ Planned RTS purple cells':'✓ First driver name only'}</span></div></div>`:''}<div class="modal-actions easy-actions"><button class="btn sample-button" data-action="template-csv">Need an example file?</button><button class="btn primary create-sheet-button" data-action="apply-import" ${state.importedFile?'':'disabled'}>${state.importedFile?(isRts?'Fill Planned RTS →':'Create my operations sheet →'):'Choose files first'}</button></div><p class="upload-help">Nothing is sent to Amazon. RelayOps reads the files in this browser and keeps the originals unchanged.</p></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">${isRts?'PLANNED RTS':'EASY UPLOAD'}</span><h2 id="import-title">${isRts?'Upload Planned RTS times':'Make my morning sheet'}</h2><p>${isRts?'Drop the Routes_DJT6 export. Only the Planned Departure Time column is used.':'Choose the plan and route files. RelayOps joins them by CX route.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="upload-progress"><div class="upload-progress-step active"><b>1</b><span>Choose files</span></div><i></i><div class="upload-progress-step ${state.importedFile?'active':''}"><b>${state.importedFile?'✓':'2'}</b><span>${isRts?'Find planned time':'Match CX routes'}</span></div><i></i><div class="upload-progress-step"><b>3</b><span>${isRts?'Fill purple cells':'Make sheet'}</span></div></div>${!isRts?`<div class="source-tabs import-choice-grid"><button class="source-tab import-choice-card ${state.importSource==='slack'?'active':''}" data-action="set-import-source" data-source="slack"><strong>Slack Import</strong><small>Daily file from the operations channel</small></button><button class="source-tab import-choice-card ${state.importSource==='computer'?'active':''}" data-action="set-import-source" data-source="computer"><strong>Cortex Import</strong><small>Amazon DAYOFOPSPLAN + ROUTE_DJT6 exports</small></button></div>`:''}${source}${state.importedFile?`${importPreflightHtml()}<div class="auto-match"><strong>RelayOps will do these things:</strong><div><span>✓ Earliest wave first</span><span>✓ CX route matching</span><span>${isRts?'✓ Planned RTS purple cells':'✓ First driver name only'}</span></div></div>`:''}<div class="modal-actions easy-actions"><button class="btn sample-button" data-action="template-csv">Need an example file?</button><button class="btn primary create-sheet-button" data-action="apply-import" ${state.importedFile&&proof?.ready?'':'disabled'}>${state.importedFile?(isRts?'Fill Planned RTS →':'Create my operations sheet →'):'Choose files first'}</button></div><p class="upload-help">Nothing is sent to Amazon. RelayOps reads the files in this browser and keeps the originals unchanged.</p></div></div></div>`;
   }
   if (state.modal === 'export') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()"><div class="modal-head"><div><h2>Export route data</h2><p>Ready for Excel or your Google Sheets template</p></div><button class="icon-button" data-action="close-modal">×</button></div><div class="modal-body"><div class="connection"><div class="connection-logo">CSV</div><div class="connection-copy"><strong>CSV file</strong><span>Fastest option for Google Sheets</span></div><button class="btn small" data-action="export-csv">Download</button></div><div class="connection"><div class="connection-logo" style="background:#1c6e44">XLS</div><div class="connection-copy"><strong>Excel workbook</strong><span>Styled table that opens in Excel</span></div><button class="btn small" data-action="export-excel">Download</button></div><div class="connection"><div class="connection-logo" style="background:#2866b4">TAB</div><div class="connection-copy"><strong>Copy for Google Sheets</strong><span>Paste directly into cell A1</span></div><button class="btn small" data-action="copy">Copy</button></div></div></div></div>`;
   if (state.modal === 'sheets-helper') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="sheets-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS PASTE BOX</span><h2 id="sheets-title">Paste-ready morning sheet</h2><p>If one-click copy does not work, click Select all, copy, then paste into Google Sheets cell A3 so the template headers stay formatted.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="paste-guide"><span><b>1</b> Select all</span><span><b>2</b> Copy</span><span><b>3</b> Paste in A3</span></div><textarea id="sheets-copy-text" class="sheets-copy-text" readonly>${esc(state.sheetCopyText||morningSheetTsv())}</textarea><div class="modal-actions"><button class="btn" data-action="select-sheets-text">Select all text</button><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy again</button></div></div></div></div>`;
@@ -2580,6 +2642,12 @@ async function parseXlsxArrayBuffer(buffer) {
 
 function applyImport() {
   const f=state.importedFile;if(!f)return;
+  const proof=importPreflight(f);
+  if(proof&&!proof.ready) {
+    state.modal='import';
+    render();
+    return toast(`Import needs review: ${proof.missing?.length?proof.missing.join(', '):'no matching routes found'}`,'error');
+  }
   if(f.kind==='details'||f.kind==='rts') {
     let matched=0, flagged=0;
     state.morningRoutes.forEach(route=>{const detail=f.routeDetails?.[String(route.route).toUpperCase()];if(!detail)return;matched++;if(f.kind==='details'){if(detail.driver)route.driver=firstDriverName(detail.driver);if(detail.stops!==null)route.stops=detail.stops;}if(detail.plannedRts){route.plannedRts=detail.plannedRts;route.plannedRtsIssue=isIrregularPlannedRts(detail.plannedRts,route.wave);if(route.plannedRtsIssue)flagged++;}});
