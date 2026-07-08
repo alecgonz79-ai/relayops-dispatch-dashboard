@@ -2981,9 +2981,11 @@ function doGet(e) {
 
 function doPost(e) {
   const payload = JSON.parse(e.postData.contents || '{}');
-  writeRelayOpsMorningSheet(payload);
+  const result = writeRelayOpsMorningSheet(payload);
   return ContentService.createTextOutput(JSON.stringify({
     ok: true,
+    sheet: result.sheetName,
+    startCell: result.startCell,
     rows: (payload.rows || []).length,
     sections: (payload.sections || []).length,
     updatedAt: new Date().toISOString()
@@ -3060,7 +3062,7 @@ function writeRelayOpsMorningSheet(payload) {
     sheet.getRange(start, 5, count + 1, 1).merge().setValue(section.pad || '')
       .setFontSize(22).setFontWeight('bold').setBackground('#eef3ff');
   });
-  return true;
+  return {sheetName: sheet.getName(), startCell: 'A3'};
 }
 
 function testRelayOpsMorningSheet() {
