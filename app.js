@@ -232,6 +232,8 @@ let state = {
   equipmentText: '',
   fleetPasteText: '',
   equipmentImport: null,
+  driverContacts: JSON.parse(localStorage.getItem('relayops_driver_contacts') || 'null') || [],
+  driverContactsLastImport: localStorage.getItem('relayops_driver_contacts_last_import') || '',
   rating: Number(localStorage.getItem('relayops_rating') || 0)
 };
 
@@ -249,6 +251,53 @@ const sheetLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 let sheetSelection = { anchor: null, focus: null };
 
 function initials(name='') { return name.split(/\s+/).map(p => p[0]).join('').slice(0,2).toUpperCase(); }
+function nameKey(name='') { return String(name||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' '); }
+function phoneDisplay(value='') {
+  const raw=String(value||'').trim();
+  const digits=raw.replace(/\D/g,'');
+  if(digits.length===11&&digits.startsWith('1')) return `(${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;
+  if(digits.length===10) return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+  return raw;
+}
+function driverContactsFromRows(rows=[]) {
+  const header=findImportHeader(rows,[['name','driver','drivername','employeename','associate','associatename','da','first','firstname'],['phone','phonenumber','mobile','cell','cellphone','telephone']]);
+  if(header<0)return [];
+  const keys=rows[header].map(headerKey);
+  const index=(...names)=>{const wanted=names.map(headerKey);return keys.findIndex(k=>wanted.includes(k));};
+  const nameIx=index('name','driver','drivername','employeename','associate','associatename','da','full name','fullName');
+  const firstIx=index('first','firstname','first name');
+  const lastIx=index('last','lastname','last name');
+  const phoneIx=index('phone','phonenumber','phone number','mobile','cell','cellphone','cell phone','telephone');
+  const roleIx=index('role','position','jobtitle','job title');
+  const contacts=[], seen=new Set();
+  rows.slice(header+1).forEach(row=>{
+    const combined=[row[firstIx],row[lastIx]].filter(Boolean).join(' ').trim();
+    const name=String((nameIx>=0&&row[nameIx])||combined||'').trim();
+    const phone=phoneDisplay(phoneIx>=0?row[phoneIx]:'');
+    const key=nameKey(name);
+    if(!key||seen.has(key))return;
+    seen.add(key);
+    contacts.push({name,phone,role:roleIx>=0?String(row[roleIx]||'').trim():'',key});
+  });
+  return contacts;
+}
+function mergeDriverContacts(incoming=[]) {
+  const byKey=new Map((state.driverContacts||[]).map(contact=>[contact.key||nameKey(contact.name),contact]));
+  incoming.forEach(contact=>{byKey.set(contact.key||nameKey(contact.name),{...(byKey.get(contact.key)||{}),...contact});});
+  state.driverContacts=[...byKey.values()].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+  return state.driverContacts.length;
+}
+function driverContactForName(name='') {
+  const key=nameKey(firstDriverName(name));
+  return (state.driverContacts||[]).find(contact=>(contact.key||nameKey(contact.name))===key);
+}
+function teamDriverRows() {
+  const imported=(state.driverContacts||[]).filter(contact=>!team.some(d=>nameKey(d[0])===(contact.key||nameKey(contact.name))));
+  return [
+    ...team.map((d,i)=>({name:d[0],role:d[1],status:d[2],quality:d[3],coaching:d[4],id:`DA-${1019+i*7}`,phone:driverContactForName(d[0])?.phone||'',imported:false})),
+    ...imported.map((contact,i)=>({name:contact.name,role:contact.role||'Delivery Associate',status:'Imported',quality:'—',coaching:'—',id:`IMP-${String(i+1).padStart(3,'0')}`,phone:contact.phone||'',imported:true}))
+  ];
+}
 function fmtDate() { return new Intl.DateTimeFormat('en-US',{weekday:'long',month:'short',day:'numeric'}).format(new Date()); }
 function statusClass(status) {
   const s = String(status).toLowerCase();
@@ -374,6 +423,7 @@ function morningSheetPage() {
   ${morningImportTemplateProofHtml()}
   <div class="sheets-helper card"><div class="sheets-helper-copy"><span class="eyebrow">PERFECT GOOGLE SHEETS HANDOFF</span><h3>Send into the opening template</h3><p>For merged cells, frozen row 1, black dividers, row heights, and A–M formatting, use the Sheets connector. Copy/paste stays here as a backup for quick or partial transfers.</p></div><div class="sheets-helper-steps"><span>1 Review ${handoffRowsCount} numbered rows</span><span>2 Send to Google Sheet</span><span>3 Google formats merges</span></div><div class="sheets-helper-actions"><button class="btn primary" data-action="${sheetsConnected?'send-morning-to-sheets':'morning-sheets-connector'}">${sheetsConnected?`${ICONS.link} Send to Google Sheet`:`${ICONS.link} Set up exact-format connector`}</button><button class="btn" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn" data-action="open-sheets-helper">Open paste box</button></div></div>
   ${morningSheetsHandoffProofHtml()}
+  ${morningSheetStructureProofHtml()}
   ${morningCopyFallbackProofHtml()}
   ${state.copyMode?copyModeToolbar(groups):''}
   ${state.copyMode?`<div class="edit-help copy-help">Copy mode is on. Drag across cells exactly like Google Sheets, watch the blue highlight, then press ⌘C on Mac or Ctrl+C on Windows. Click a wave button to pulse/highlight that whole wave before copying it. Divider columns I and L split manual copy into A–H, J–K, and M blocks.</div>`:state.editMode?`<div class="edit-help">Editing is on. Columns and rows are labeled like Google Sheets. Click and drag white cells to select a rectangle, press ⌘C to copy, or paste tabbed rows from Sheets to fill across/down.</div>`:''}
@@ -489,7 +539,11 @@ function livePage() {
 }
 
 function teamPage() {
-  return `${contextBar()}<div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All status</option><option>Active</option><option>Leave</option></select><select class="filter-select"><option>All roles</option><option>Lead DA</option><option>Delivery Associate</option></select></div><button class="btn lime" data-action="invite">${ICONS.plus} Add team member</button></div><section class="grid team-grid">${team.map((d,i)=>`<article class="card entity-card"><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(d[0])}</div><span class="status ${statusClass(d[2])}">${d[2]}</span></div><h3>${d[0]}</h3><p>${d[1]} · ${`DA-${1019+i*7}`}</p><div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${d[3]}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${d[4]}</strong></div></div></article>`).join('')}</section>`;
+  const drivers=teamDriverRows(), contacts=state.driverContacts||[];
+  const onRouteNames=new Set(filteredMorningRows().map(r=>nameKey(r.driver)).filter(Boolean));
+  return `${contextBar()}<div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All status</option><option>Active</option><option>Leave</option></select><select class="filter-select"><option>All roles</option><option>Lead DA</option><option>Delivery Associate</option></select><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}</span></div><div class="toolbar-right"><button class="btn primary" data-action="driver-import">${ICONS.upload} Import drivers CSV</button><button class="btn lime" data-action="invite">${ICONS.plus} Add team member</button></div></div>
+  <div class="driver-message-readiness card"><div><strong>Future text reminder prep</strong><span>After the Morning Sheet is finalized, RelayOps can identify on-route drivers by the visible Morning Sheet names. Texting will need a secure SMS connector and driver opt-in before it sends anything.</span></div><div><b>${drivers.filter(d=>onRouteNames.has(nameKey(d.name))).length}</b><small>current team cards recognized on the Morning Sheet</small></div></div>
+  <section class="grid team-grid">${drivers.map(d=>`<article class="card entity-card"><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(d.name)}</div><span class="status ${statusClass(d.status)}">${d.status}</span></div><h3>${esc(d.name)}</h3><p>${esc(d.role)} · ${esc(d.id)}</p><div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div><div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></article>`).join('')}</section>`;
 }
 
 function fleetPage() {
@@ -2039,6 +2093,7 @@ function action(name,el) {
   if (name==='planned-rts-import') { state.modal='import'; state.importSource='computer'; state.importPurpose='rts'; state.importedFile=null; return render(); }
   if (name==='equipment-import') { state.modal='equipment'; state.importPurpose='equipment'; state.equipmentImport=null; return render(); }
   if (name==='fleet-import') { state.modal='fleet-import'; state.importPurpose='fleet'; return render(); }
+  if (name==='driver-import') { state.importPurpose='drivers'; return fileInput.click(); }
   if (name==='parking-choose-file') { state.importPurpose='parking'; return fileInput.click(); }
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
@@ -2313,6 +2368,16 @@ async function readFiles(files) {
       persist(); render();
       return toast(`${vehicles.length} fleet rows read · ${state.fleetUpdateSummary.updated} changed · ${total} EV cards tracked`);
     }
+    if(state.importPurpose==='drivers') {
+      const contacts=parsed.flatMap(f=>driverContactsFromRows(f.rows||[]));
+      if(!contacts.length) throw new Error('no driver contacts');
+      const total=mergeDriverContacts(contacts);
+      state.driverContactsLastImport=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date());
+      state.importPurpose='morning';
+      state.page='team';
+      persist(); render();
+      return toast(`${contacts.length} driver contact${contacts.length===1?'':'s'} imported · ${total} total saved`);
+    }
     const plan=parsed.find(f=>/day\s*of\s*ops\s*plan/i.test(f.name)||findImportHeader(f.rows,[['route','routecode','cxnumber','cxroute','blockid'],['wave','wavetime','starttime'],['staging','staginglocation']])>=0);
     const routeFile=parsed.find(f=>/route[_\s-]*djt6/i.test(f.name))||parsed.find(f=>f!==plan&&Object.keys(routeDetailsFromRows(f.rows)).length);
     const details=routeFile?routeDetailsFromRows(routeFile.rows):{};
@@ -2323,7 +2388,7 @@ async function readFiles(files) {
     state.importedFile={name:parsed.map(f=>f.name).join(' + '),headers:rows[0],rows:rows.slice(1),kind:state.importPurpose==='rts'?'rts':(plan?'plan':'details'),routeDetails:details,routeDetailsCount:Object.keys(details).length};
     render();toast(`${parsed.length} file${parsed.length===1?'':'s'} ready · CX routes will be matched automatically`);
   } catch(error) {
-    console.error(error);toast(state.importPurpose==='fleet'?'Could not find VIN rows. Use a CSV/XLSX export with a VIN column.':'These files could not be read. Choose DAYOFOPSPLAN and ROUTE_DJT6 as CSV or XLSX.','error');
+    console.error(error);toast(state.importPurpose==='fleet'?'Could not find VIN rows. Use a CSV/XLSX export with a VIN column.':state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV with Name and Phone columns.':'These files could not be read. Choose DAYOFOPSPLAN and ROUTE_DJT6 as CSV or XLSX.','error');
   }
 }
 async function readFile(file) { return readFiles([file]); }
@@ -3142,6 +3207,27 @@ function morningSheetsHandoffProofHtml(payload=morningSheetsConnectorPayload()) 
   const proof=morningSheetsHandoffProof(payload);
   return `<div class="sheets-proof ${proof.ready?'ready':'warn'}"><strong>${proof.ready?'Handoff proof':'Handoff mismatch'}</strong><div><span><b>Google range</b>${esc(proof.range)}</span><span><b>Visible rows</b>${esc(proof.visibleRows)}</span><span><b>Connector rows</b>${esc(proof.rows)}</span><span><b>Divider rows</b>${esc(proof.dividers)}${proof.dividerRows?` · ${esc(proof.dividerRows)}`:''}</span><span><b>Merge sections</b>${esc(proof.sections)}</span></div><small>${proof.ready?'Visible Morning Sheet rows match the connector payload exactly before sending.':`Review before sending: dashboard rows and connector rows do not match.`}</small></div>`;
 }
+function morningSheetStructureProof(payload=morningSheetsConnectorPayload()) {
+  const proof=morningSheetsHandoffProof(payload), preflight=morningSheetsPreflight(payload);
+  const headers=payload.headers||[], rowTypes=payload.rowTypes||[], sections=payload.sections||[];
+  const letters=sheetColumnLetters(headers.length);
+  const dividerRows=sections.map(section=>section.separatorRow).filter(Boolean);
+  const mergeCount=sections.filter(section=>Number(section.startRow)>=3&&Number(section.timeRow)>Number(section.startRow)).length;
+  const checks=[
+    {label:'Column letters',ok:letters.join('')==='ABCDEFGHIJKLM',detail:'A–M labels match Google Sheets.'},
+    {label:'Every row numbered',ok:proof.firstSheetRow===3&&proof.lastSheetRow!=='—'&&proof.rows>0,detail:`Data rows run ${proof.firstSheetRow} through ${proof.lastSheetRow}.`},
+    {label:'Header stays fixed',ok:true,detail:'Row 1 and the A–M letters stay sticky while scrolling.'},
+    {label:'Black divider rows',ok:dividerRows.length>0&&rowTypes.filter(type=>type==='separator').length===dividerRows.length,detail:dividerRows.length?`Numbered divider rows: ${dividerRows.join(', ')}`:'No divider rows found.'},
+    {label:'Black divider columns',ok:headers[8]===''&&headers[11]==='',detail:'Columns I and L are narrow real columns.'},
+    {label:'Merged Wave/Pad map',ok:mergeCount===sections.length&&sections.length>0,detail:`${mergeCount} merge section${mergeCount===1?'':'s'} ready for Google.`},
+    {label:'Exact formatting path',ok:preflight.ready&&proof.ready,detail:'Use Send to Google Sheet for protected merges and row sizes.'}
+  ];
+  return {ready:checks.every(check=>check.ok),checks,range:proof.range};
+}
+function morningSheetStructureProofHtml(payload=morningSheetsConnectorPayload()) {
+  const proof=morningSheetStructureProof(payload);
+  return `<div class="sheet-structure-proof ${proof.ready?'ready':'warn'}"><div><strong>Google Sheets structure proof</strong><small>${proof.ready?`Ready for ${esc(proof.range)} with numbered rows, A–M columns, and real divider boundaries.`:'Review structure warnings before copy/send.'}</small></div><div>${proof.checks.map(check=>`<span class="${check.ok?'ok':'warn'}"><b>${check.ok?'✓':'!'}</b><em>${esc(check.label)}</em><small>${esc(check.detail)}</small></span>`).join('')}</div></div>`;
+}
 function morningCopyFallbackProofHtml(payload=morningSheetsConnectorPayload()) {
   const proof=morningSheetsHandoffProof(payload);
   return `<div class="copy-fallback-proof ${proof.ready?'ready':'warn'}"><strong>Copy fallback readiness</strong><div><span><b>Paste target</b>${esc(proof.range)}</span><span><b>Rows copied</b>${esc(proof.rows)}</span><span><b>Rich HTML</b>Wave/Pad rowspans</span><span><b>Divider rows</b>${esc(proof.dividerRows||'none')}</span><span><b>Exact format</b>Use connector</span></div><small>${proof.ready?'Copy fallback is shaped for A–M. For guaranteed merged cells and frozen row 1, use Send to Google Sheet.':'Copy fallback is not ready because visible rows and connector rows do not match.'}</small></div>`;
@@ -3735,7 +3821,7 @@ function downloadFleetTemplate(){const h=['Source','Vehicle Name','VIN','License
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function persist(){
-localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_morning_sheets_last_dry_run',state.morningSheetsLastDryRun||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');
+localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_morning_sheets_last_dry_run',state.morningSheetsLastDryRun||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');localStorage.setItem('relayops_driver_contacts',JSON.stringify(state.driverContacts||[]));localStorage.setItem('relayops_driver_contacts_last_import',state.driverContactsLastImport||'');
 }
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 

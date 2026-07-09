@@ -125,6 +125,9 @@ const checks = `
   if (!proof.ready || proof.rows !== payload.rows.length || proof.visibleRows !== payload.rows.length || proof.range !== ('A3:M' + (payload.rows.length + 2)) || proof.dividers !== payload.sections.length) throw new Error('Morning Sheets handoff proof should match visible rows to connector payload rows');
   const proofHtml = morningSheetsHandoffProofHtml(payload);
   if (!proofHtml.includes('Handoff proof') || !proofHtml.includes('Google range') || !proofHtml.includes('Divider rows') || !proofHtml.includes('Visible Morning Sheet rows match')) throw new Error('Morning Sheets handoff proof UI missing required details');
+  const structure = morningSheetStructureProof(payload);
+  const structureHtml = morningSheetStructureProofHtml(payload);
+  if (!structure.ready || !structureHtml.includes('Google Sheets structure proof') || !structureHtml.includes('Column letters') || !structureHtml.includes('A–M labels match Google Sheets') || !structureHtml.includes('Every row numbered') || !structureHtml.includes('Header stays fixed') || !structureHtml.includes('Black divider rows') || !structureHtml.includes('Black divider columns') || !structureHtml.includes('Merged Wave/Pad map') || !structureHtml.includes('Exact formatting path') || !structureHtml.includes('Use Send to Google Sheet')) throw new Error('Morning Sheets structure proof should confirm row numbers, A-M letters, dividers, sticky header, merges, and exact connector path');
   const readiness = morningHandoffReadiness(payload);
   if (readiness.ready || !readiness.canCopy || readiness.rows <= 0 || !readiness.checks.some(check => check.label === 'Exact connector' && !check.ok)) throw new Error('Morning handoff readiness should allow copy while requiring exact connector setup');
   const readinessHtml = morningHandoffReadinessHtml(payload);

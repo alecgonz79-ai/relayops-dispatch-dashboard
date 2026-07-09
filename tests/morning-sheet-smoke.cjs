@@ -75,6 +75,19 @@ const checks = `
   if (!fleetHtml.includes('Live connector not connected yet') || !fleetHtml.includes('Set endpoint') || !fleetHtml.includes('Refresh will call the secure backend first') && fleetHtml.includes('Live connector ready')) throw new Error('Fleet live connector setup strip missing');
   state.fleetLiveEndpoint = 'https://relayops.example.com/api/fleet/live';
   if (!fleetLiveConnectorStrip().includes('Live connector ready') || !fleetLiveConnectorStrip().includes('Live refresh') || fleetLiveEndpoint() !== 'https://relayops.example.com/api/fleet/live') throw new Error('Fleet live connector endpoint state failed');
+  const driverContacts = driverContactsFromRows([
+    ['Name','Phone','Role'],
+    ['Maya Collins','5551234567','Lead DA'],
+    ['Vanessa Balderama','(555) 987-6543','Delivery Associate']
+  ]);
+  if (driverContacts.length !== 2 || driverContacts[0].phone !== '(555) 123-4567' || driverContacts[1].name !== 'Vanessa Balderama') throw new Error('Driver CSV contact parser failed');
+  mergeDriverContacts(driverContacts);
+  state.page = 'team';
+  const teamHtml = teamPage();
+  if (!teamHtml.includes('Import drivers CSV') || !teamHtml.includes('(555) 123-4567') || !teamHtml.includes('Vanessa Balderama') || !teamHtml.includes('Future text reminder prep') || !teamHtml.includes('secure SMS connector') || !teamHtml.includes('No phone imported yet')) throw new Error('Drivers & Team CSV import UI missing names, phone numbers, or SMS prep guidance');
+  action('driver-import',{});
+  if (state.importPurpose !== 'drivers') throw new Error('Driver import button should route file uploads to the driver CSV parser');
+  state.importPurpose = 'morning';
   const liveRows = liveFleetVehiclesFromPayload({ amazon:[{vehicleName:'LLOL EV 21',vin:'7FCEHEB79PN014816',licensePlate:'9ABC123',active:'Active',operationalStatus:'Operational'}], fleetos:[{vin:'7FCEHEB79PN014816',batteryPercent:63,rangeMiles:98,status:'Connected'}] });
   if (liveRows.length !== 2 || liveRows[0].source !== 'Amazon fleet list' || liveRows[1].source !== 'FleetOS tracker' || liveRows[0].name !== 'LLOL EV 21' || liveRows[1].battery !== 63 || !liveRows[0].hasName || !liveRows[1].hasBattery) throw new Error('Fleet live connector payload normalization failed');
   state.fleetLiveEndpoint = '';
@@ -345,6 +358,7 @@ const checks = `
   if (state.fleetLastRefresh === 'Not refreshed yet' || state.modal || state.fleetRefreshPreview || !fleetPage().includes('Last refresh:') || !fleetPage().includes('Refresh readiness')) throw new Error('Approved fleet refresh did not update the board');
   const morningHtml = morningSheetPage();
   if (!morningHtml.includes('Three easy steps') || !morningHtml.includes('Send to Sheet') || !morningHtml.includes('Exact merged template')) throw new Error('Quick start guide missing');
+  if (!morningHtml.includes('Google Sheets structure proof') || !morningHtml.includes('Every row numbered') || !morningHtml.includes('Black divider columns') || !morningHtml.includes('Exact formatting path')) throw new Error('Morning page should show Google Sheets structure proof');
   if (!topbar().includes('data-action="share-dispatcher-link"') || DISPATCHER_SHARE_URL !== 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/' || !DISPATCHER_SHARE_TEXT.includes('https://')) throw new Error('Clickable dispatcher share link missing');
   const details = routeDetailsFromRows([
     ['Route Code','Driver Name','Stop Count','Planned Departure Time'],
