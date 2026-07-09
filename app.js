@@ -43,6 +43,7 @@ const DISPATCHER_SHARE_URL = 'https://alecgonz79-ai.github.io/relayops-dispatch-
 const DISPATCHER_SHARE_TEXT = `LLOL Dispatch Opening Operations\n${DISPATCHER_SHARE_URL}`;
 const DISPATCHER_SHARE_NOTE = 'Use this exact full link. GitHub Pages will show 404 if the account name is shortened or changed, like AG79.github.io.';
 const AMAZON_FLEET_PORTAL_URL = 'https://logistics.amazon.com/fleet-management/#vehicles';
+const AMAZON_WORKFORCE_ASSOCIATES_URL = 'https://logistics.amazon.com/workforce?pageId=da_console_associates&station=DJT6&companyId=ab7228f0-51de-4c53-98f3-7d3c3da46724&tabId=da-console-associates-tab';
 const FLEETOS_PORTAL_URL = 'https://business.rivian.com/vehicles/tracker';
 const MORNING_TEMPLATE_URL = 'https://docs.google.com/spreadsheets/d/1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ/edit?gid=0#gid=0';
 const MORNING_TEMPLATE_SHEET_NAME = 'Morning Operations';
@@ -260,14 +261,14 @@ function phoneDisplay(value='') {
   return raw;
 }
 function driverContactsFromRows(rows=[]) {
-  const header=findImportHeader(rows,[['name','driver','drivername','employeename','associate','associatename','da','first','firstname'],['phone','phonenumber','mobile','cell','cellphone','telephone']]);
+  const header=findImportHeader(rows,[['name','preferredname','fullname','driver','drivername','employeename','associate','associatename','deliveryassociate','da','first','firstname'],['phone','phonenumber','primaryphone','mobile','mobilephone','cell','cellphone','telephone']]);
   if(header<0)return [];
   const keys=rows[header].map(headerKey);
   const index=(...names)=>{const wanted=names.map(headerKey);return keys.findIndex(k=>wanted.includes(k));};
-  const nameIx=index('name','driver','drivername','employeename','associate','associatename','da','full name','fullName');
+  const nameIx=index('name','preferred name','preferredname','full name','fullName','driver','drivername','employee name','employeename','associate','associate name','associatename','delivery associate','deliveryassociate','da');
   const firstIx=index('first','firstname','first name');
   const lastIx=index('last','lastname','last name');
-  const phoneIx=index('phone','phonenumber','phone number','mobile','cell','cellphone','cell phone','telephone');
+  const phoneIx=index('phone','phonenumber','phone number','primary phone','primaryphone','mobile','mobile phone','mobilephone','cell','cellphone','cell phone','telephone');
   const roleIx=index('role','position','jobtitle','job title');
   const contacts=[], seen=new Set();
   rows.slice(header+1).forEach(row=>{
@@ -541,7 +542,8 @@ function livePage() {
 function teamPage() {
   const drivers=teamDriverRows(), contacts=state.driverContacts||[];
   const onRouteNames=new Set(filteredMorningRows().map(r=>nameKey(r.driver)).filter(Boolean));
-  return `${contextBar()}<div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All status</option><option>Active</option><option>Leave</option></select><select class="filter-select"><option>All roles</option><option>Lead DA</option><option>Delivery Associate</option></select><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}</span></div><div class="toolbar-right"><button class="btn primary" data-action="driver-import">${ICONS.upload} Import drivers CSV</button><button class="btn lime" data-action="invite">${ICONS.plus} Add team member</button></div></div>
+  return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All status</option><option>Active</option><option>Leave</option></select><select class="filter-select"><option>All roles</option><option>Lead DA</option><option>Delivery Associate</option></select><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import associates CSV</button><button class="btn lime" data-action="invite">${ICONS.plus} Add team member</button></div></div>
+  <div class="driver-workforce-import card"><div><strong>Amazon Workforce contact import</strong><span>Open the DJT6 associates page, export or copy the associate list, then import the CSV here. RelayOps reads driver name + phone only and adds them to these cards.</span></div><div><a class="btn small" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">Open Workforce</a><button class="btn small primary" data-action="driver-import">Import CSV</button></div><small>Codex/browser can help create a CSV from visible rows if you are logged in, but RelayOps will not store Amazon passwords, cookies, or session tokens.</small></div>
   <div class="driver-message-readiness card"><div><strong>Future text reminder prep</strong><span>After the Morning Sheet is finalized, RelayOps can identify on-route drivers by the visible Morning Sheet names. Texting will need a secure SMS connector and driver opt-in before it sends anything.</span></div><div><b>${drivers.filter(d=>onRouteNames.has(nameKey(d.name))).length}</b><small>current team cards recognized on the Morning Sheet</small></div></div>
   <section class="grid team-grid">${drivers.map(d=>`<article class="card entity-card"><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(d.name)}</div><span class="status ${statusClass(d.status)}">${d.status}</span></div><h3>${esc(d.name)}</h3><p>${esc(d.role)} · ${esc(d.id)}</p><div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div><div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></article>`).join('')}</section>`;
 }

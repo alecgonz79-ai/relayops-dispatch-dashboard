@@ -81,10 +81,15 @@ const checks = `
     ['Vanessa Balderama','(555) 987-6543','Delivery Associate']
   ]);
   if (driverContacts.length !== 2 || driverContacts[0].phone !== '(555) 123-4567' || driverContacts[1].name !== 'Vanessa Balderama') throw new Error('Driver CSV contact parser failed');
+  const amazonWorkforceContacts = driverContactsFromRows([
+    ['Preferred Name','Primary Phone','Job Title'],
+    ['Jordan Lee','15554443333','Delivery Associate']
+  ]);
+  if (amazonWorkforceContacts.length !== 1 || amazonWorkforceContacts[0].phone !== '(555) 444-3333' || amazonWorkforceContacts[0].role !== 'Delivery Associate') throw new Error('Amazon Workforce associate columns should map to driver contacts');
   mergeDriverContacts(driverContacts);
   state.page = 'team';
   const teamHtml = teamPage();
-  if (!teamHtml.includes('Import drivers CSV') || !teamHtml.includes('(555) 123-4567') || !teamHtml.includes('Vanessa Balderama') || !teamHtml.includes('Future text reminder prep') || !teamHtml.includes('secure SMS connector') || !teamHtml.includes('No phone imported yet')) throw new Error('Drivers & Team CSV import UI missing names, phone numbers, or SMS prep guidance');
+  if (!teamHtml.includes('Amazon Workforce contact import') || !teamHtml.includes('Open Amazon Workforce') || !teamHtml.includes('logistics.amazon.com/workforce?pageId=da_console_associates') || !teamHtml.includes('Import associates CSV') || !teamHtml.includes('(555) 123-4567') || !teamHtml.includes('Vanessa Balderama') || !teamHtml.includes('Future text reminder prep') || !teamHtml.includes('secure SMS connector') || !teamHtml.includes('No phone imported yet') || !teamHtml.includes('will not store Amazon passwords')) throw new Error('Drivers & Team Workforce import UI missing names, phone numbers, Amazon link, or SMS prep guidance');
   action('driver-import',{});
   if (state.importPurpose !== 'drivers') throw new Error('Driver import button should route file uploads to the driver CSV parser');
   state.importPurpose = 'morning';
