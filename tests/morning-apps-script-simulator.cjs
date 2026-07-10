@@ -202,6 +202,12 @@ if (sentinelSheet.getMaxColumns() !== 16) throw new Error('Connector should not 
 if (sentinelSheet.getCell(3, 14) !== 'DO NOT TOUCH N3') throw new Error('Connector should not touch columns N and beyond');
 if (sentinelSheet.breakApartCalls.some(call => call.col + call.numCols - 1 > 13)) throw new Error('Connector should not break apart columns beyond M');
 
+const sheet1Template = new FakeSheet('Sheet1', 130, 16);
+const sheet1Context = runConnectorWithSheet(sheet1Template, payload);
+if (sheet1Context.__result.sheetName !== 'Sheet1' || sheet1Template.getCell(3, 2) !== 'Driver One') {
+  throw new Error('Connector should target Sheet1 when the Google template tab has not been renamed');
+}
+
 const badPayload = { ...payload, writeRange: 'A3:N' };
 let rejected = false;
 try {
