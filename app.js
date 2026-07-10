@@ -162,9 +162,9 @@ function defaultVanParkingSlots() {
   topLeft.forEach((value,i)=>slots.push({id:`north-left-${i+1}`,zone:'northLeft',label:`North overflow ${i+1}`,value,kind:'overflow'}));
   topRight.forEach((value,i)=>slots.push({id:`north-right-${i+1}`,zone:'northRight',label:`North row ${i+1}`,value,kind:'spot'}));
   ['10(93%)','','','','39'].forEach((value,i)=>slots.push({id:`street-${i+1}`,zone:'street',label:i===0?'Street charge':'Street curb',value,kind:'street'}));
-  west.forEach((value,i)=>slots.push({id:`west-${String(i+1).padStart(2,'0')}`,zone:'west',label:`Left row ${i+1}`,value,kind:i===19?'crosswalk':'spot'}));
+  west.forEach((value,i)=>slots.push({id:`west-${String(i+1).padStart(2,'0')}`,zone:'west',label:`Left row ${i+1}`,value,kind:['4','50'].includes(value)?'crosswalk':'spot'}));
   crosswalk.forEach((value,i)=>slots.push({id:`crosswalk-${String(i+1).padStart(2,'0')}`,zone:'crosswalk',label:`Crosswalk ${i+1}`,value,kind:'crosswalk'}));
-  east.forEach((value,i)=>slots.push({id:`east-${String(i+1).padStart(2,'0')}`,zone:'east',label:`Right row ${i+1}`,value,kind:i===3?'crosswalk':'spot'}));
+  east.forEach((value,i)=>slots.push({id:`east-${String(i+1).padStart(2,'0')}`,zone:'east',label:`Right row ${i+1}`,value,kind:i===3||value==='19'?'crosswalk':'spot'}));
   return slots;
 }
 
@@ -619,7 +619,9 @@ function parkingSlotInput(slot) {
   const battery=parkingBatteryForSlot(slot);
   const blocked=/^x$/i.test(String(slot.value||''))||slot.kind==='blocked';
   const charging=slot.kind==='charging'||/\(\d{1,3}%\)/.test(String(slot.value||''));
-  return `<label class="parking-slot${tone}${selected}${blocked?' blocked':''}${charging?' charging':''}" title="${esc(slot.label)}" data-parking-select="${esc(slot.id)}"><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}" data-parking-id="${esc(slot.id)}" value="${esc(slot.value||'')}" placeholder=""><em>${battery!==''?`${esc(battery)}%`:blocked?'BLOCK':charging?'CHG':''}</em></label>`;
+  const showBatteryBox=['west','east','northLeft','northRight'].includes(slot.zone);
+  const status=battery!==''?`${esc(battery)}%`:blocked?'BLOCK':charging?'CHG':'';
+  return `<div class="parking-slot parking-slot-row${tone}${selected}${blocked?' blocked':''}${charging?' charging':''}" title="${esc(slot.label)}"><label class="parking-van-cell" data-parking-select="${esc(slot.id)}"><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}" data-parking-id="${esc(slot.id)}" value="${esc(slot.value||'')}" placeholder="">${!showBatteryBox&&status?`<em>${status}</em>`:''}</label>${showBatteryBox?`<label class="parking-battery-mini" title="Battery % for ${esc(slot.value||slot.label)}"><input aria-label="Battery percent for ${esc(slot.value||slot.label)}" data-parking-battery="${esc(slot.id)}" type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="--"></label>`:''}</div>`;
 }
 function parkingStack(zone,title,subtitle='') {
   return `<section class="parking-stack ${zone}"><div class="parking-stack-title"><strong>${esc(title)}</strong>${subtitle?`<small>${esc(subtitle)}</small>`:''}</div>${parkingSlots(zone).map(parkingSlotInput).join('')}</section>`;
