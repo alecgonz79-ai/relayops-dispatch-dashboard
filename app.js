@@ -613,15 +613,30 @@ function parkingBatteryForSlot(slot={}) {
   const ev=String(slot.value||'').replace(/[^\w]/g,'').toUpperCase();
   return state.vanParkingBatteries?.[ev] || '';
 }
+function parkingBatteryTone(value) {
+  const n=Number(String(value??'').replace(/[^\d]/g,''));
+  if(!Number.isFinite(n)||String(value??'')==='')return 'empty';
+  if(n>=90)return 'green';
+  if(n>=70&&n<=80)return 'yellow';
+  if(n<=60)return 'red';
+  return 'neutral';
+}
+function applyParkingBatteryTone(input,value) {
+  const chip=input?.closest?.('.parking-battery-mini');
+  if(!chip)return;
+  chip.classList.remove('battery-empty','battery-neutral','battery-green','battery-yellow','battery-red');
+  chip.classList.add(`battery-${parkingBatteryTone(value)}`);
+}
 function parkingSlotInput(slot) {
   const tone=slot.kind==='crosswalk'?' crosswalk-slot':slot.kind==='overflow'?' overflow-slot':slot.kind==='street'?' street-slot':'';
   const selected=state.selectedParkingId===slot.id?' selected':'';
   const battery=parkingBatteryForSlot(slot);
+  const batteryTone=parkingBatteryTone(battery);
   const blocked=/^x$/i.test(String(slot.value||''))||slot.kind==='blocked';
   const charging=slot.kind==='charging'||/\(\d{1,3}%\)/.test(String(slot.value||''));
   const showBatteryBox=['west','east','northLeft','northRight'].includes(slot.zone);
   const status=battery!==''?`${esc(battery)}%`:blocked?'BLOCK':charging?'CHG':'';
-  return `<div class="parking-slot parking-slot-row${tone}${selected}${blocked?' blocked':''}${charging?' charging':''}" title="${esc(slot.label)}"><label class="parking-van-cell" data-parking-select="${esc(slot.id)}"><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}" data-parking-id="${esc(slot.id)}" value="${esc(slot.value||'')}" placeholder="">${!showBatteryBox&&status?`<em>${status}</em>`:''}</label>${showBatteryBox?`<label class="parking-battery-mini" title="Battery % for ${esc(slot.value||slot.label)}"><input aria-label="Battery percent for ${esc(slot.value||slot.label)}" data-parking-battery="${esc(slot.id)}" type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="--"></label>`:''}</div>`;
+  return `<div class="parking-slot parking-slot-row${tone}${selected}${blocked?' blocked':''}${charging?' charging':''}" title="${esc(slot.label)}"><label class="parking-van-cell" data-parking-select="${esc(slot.id)}"><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}" data-parking-id="${esc(slot.id)}" value="${esc(slot.value||'')}" placeholder="">${!showBatteryBox&&status?`<em>${status}</em>`:''}</label>${showBatteryBox?`<label class="parking-battery-mini battery-${batteryTone}" title="Battery % for ${esc(slot.value||slot.label)}"><input aria-label="Battery percent for ${esc(slot.value||slot.label)}" data-parking-battery="${esc(slot.id)}" type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="--"></label>`:''}</div>`;
 }
 function parkingStack(zone,title,subtitle='') {
   return `<section class="parking-stack ${zone}"><div class="parking-stack-title"><strong>${esc(title)}</strong>${subtitle?`<small>${esc(subtitle)}</small>`:''}</div>${parkingSlots(zone).map(parkingSlotInput).join('')}</section>`;
@@ -1615,7 +1630,7 @@ function bind() {
     el.addEventListener('focus',()=>selectParkingSlot(el.dataset.parkingId,false));
     el.addEventListener('input',()=>updateParkingSlot(el.dataset.parkingId,el.value,false));
   });
-  document.querySelectorAll('[data-parking-battery]').forEach(el=>el.addEventListener('input',()=>updateParkingBattery(el.dataset.parkingBattery,el.value)));
+  document.querySelectorAll('[data-parking-battery]').forEach(el=>el.addEventListener('input',()=>{updateParkingBattery(el.dataset.parkingBattery,el.value);applyParkingBatteryTone(el,el.value);}));
   document.querySelectorAll('[data-parking-kind]').forEach(el=>el.addEventListener('change',()=>updateParkingKind(el.dataset.parkingKind,el.value)));
   document.querySelectorAll('[data-edit-field]').forEach(el=>{
     el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);});
