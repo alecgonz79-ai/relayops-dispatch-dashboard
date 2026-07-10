@@ -325,6 +325,9 @@ tbody tr:last-child td { border-bottom:0; }
 .sheets-helper-steps { display:flex; flex-wrap:wrap; gap:6px; }
 .sheets-helper-steps span { padding:7px 9px; border-radius:999px; background:#e8f6c7; color:#2f4728; font-size:8px; font-weight:900; white-space:nowrap; }
 .sheets-helper-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.ops-log-helper { border-color:#c9e4cf; background:linear-gradient(135deg,#f0fbf2,#fff); }
+.ops-log-helper .sheets-helper-copy h3 { color:#1d5f35; }
+.ops-log-send-btn { font-weight:1000; box-shadow:0 6px 16px rgba(38,111,57,.14); }
 .morning-board { border-radius:0 0 16px 16px; box-shadow:none; overflow:hidden; }
 .sheet-scroll { width:100%; overflow:auto; max-height:calc(100vh - 278px); position:relative; background:#fff; isolation:isolate; }
 .ops-sheet { min-width:1920px; width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-family:Arial,sans-serif; color:#0b0d0c; user-select:text; }
