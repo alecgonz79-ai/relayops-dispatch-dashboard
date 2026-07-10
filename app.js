@@ -162,7 +162,7 @@ function defaultVanParkingSlots() {
   topLeft.forEach((value,i)=>slots.push({id:`north-left-${i+1}`,zone:'northLeft',label:`North overflow ${i+1}`,value,kind:'overflow'}));
   topRight.forEach((value,i)=>slots.push({id:`north-right-${i+1}`,zone:'northRight',label:`North row ${i+1}`,value,kind:'spot'}));
   ['10(93%)','','','','39'].forEach((value,i)=>slots.push({id:`street-${i+1}`,zone:'street',label:i===0?'Street charge':'Street curb',value,kind:'street'}));
-  ['','','','',''].forEach((value,i)=>slots.push({id:`street-lower-${i+1}`,zone:'streetLower',label:'Street lower curb',value,kind:'street'}));
+  Array.from({length:8}).forEach((_,i)=>slots.push({id:`street-lower-${i+1}`,zone:'streetLower',label:`Street lower spot ${i+1}`,value:'',kind:'street'}));
   west.forEach((value,i)=>slots.push({id:`west-${String(i+1).padStart(2,'0')}`,zone:'west',label:`Left row ${i+1}`,value,kind:['4','50'].includes(value)?'crosswalk':'spot'}));
   crosswalk.forEach((value,i)=>slots.push({id:`crosswalk-${String(i+1).padStart(2,'0')}`,zone:'crosswalk',label:`Crosswalk ${i+1}`,value,kind:'crosswalk'}));
   east.forEach((value,i)=>slots.push({id:`east-${String(i+1).padStart(2,'0')}`,zone:'east',label:`Right row ${i+1}`,value,kind:i===3||value==='19'?'crosswalk':'spot'}));
@@ -644,6 +644,9 @@ function parkingStack(zone,title,subtitle='') {
 }
 function parkingStreetCells(zone='street') {
   const slots=parkingSlots(zone);
+  if(zone==='streetLower') {
+    return Array.from({length:8}).map((_,i)=>`<div class="street-cell editable-street street-spot-cell">${slots[i]?parkingSlotInput(slots[i]):''}</div>`).join('');
+  }
   return `<div class="street-cell">STREET</div><div class="street-cell editable-street">${slots[0]?parkingSlotInput(slots[0]):''}</div><div class="street-cell">STREET</div><div class="street-cell">STREET</div><div class="street-cell wide">STREET</div><div class="street-cell">STREET</div><div class="street-cell editable-street">${slots[4]?parkingSlotInput(slots[4]):''}</div><div class="street-cell">STREET</div>`;
 }
 function parkingStreetRows() {
