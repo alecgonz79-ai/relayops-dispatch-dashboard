@@ -1265,10 +1265,12 @@ tbody tr:last-child td { border-bottom:0; }
 .parking-selected-actions { display:grid; gap:5px; }
 .parking-lot { padding:0; border-radius:4px; background:#f7f8fc; border:1px solid #d7dce8; overflow:auto; }
 .parking-lot.sheet-style { background-color:#f7f8fc; background-image:linear-gradient(#edf0f7 1px,transparent 1px),linear-gradient(90deg,#edf0f7 1px,transparent 1px); background-size:64px 28px; }
-.parking-map-grid { min-width:1320px; display:grid; grid-template-columns:705px 615px; grid-template-rows:340px 64px auto; align-items:start; }
+.parking-map-grid { min-width:1320px; display:grid; grid-template-columns:705px 615px; grid-template-rows:340px 96px auto; align-items:start; }
 .parking-empty-grid { grid-column:1; grid-row:1; min-height:340px; }
 .parking-top-block { grid-column:2; grid-row:1; display:grid; grid-template-columns:88px 230px 78px 230px 88px; align-items:stretch; justify-content:center; background:#1f2430; padding:18px 0; min-height:322px; }
-.parking-street-row { grid-column:1/3; grid-row:2; display:grid; grid-template-columns:82px 260px 82px 230px 112px 230px 260px 82px; gap:0; align-items:stretch; border-top:1px solid #050505; border-bottom:1px solid #050505; background:#fff; overflow:hidden; }
+.parking-street-zone { grid-column:1/3; grid-row:2; display:grid; grid-template-rows:repeat(2,34px); align-items:stretch; background:#fff; overflow:hidden; }
+.parking-street-row { display:grid; grid-template-columns:82px 260px 82px 230px 112px 230px 260px 82px; gap:0; align-items:stretch; border-top:1px solid #050505; border-bottom:1px solid #050505; background:#fff; overflow:hidden; }
+.parking-street-row.street-secondary { border-top:0; }
 .parking-main-block { grid-column:1; grid-row:3; display:grid; grid-template-columns:82px 280px 82px 280px 82px; align-items:stretch; background:#1f2430; }
 .parking-side-area { grid-column:2; grid-row:3; min-height:430px; position:relative; padding:44px 34px 28px; display:flex; align-items:flex-start; justify-content:flex-end; pointer-events:none; }
 .parking-date-box { width:230px; min-height:58px; display:grid; place-items:center; align-content:center; background:#fff; border:1px solid #111; text-align:center; box-shadow:0 10px 24px rgba(17,24,39,.08); pointer-events:auto; }
@@ -1292,6 +1294,8 @@ tbody tr:last-child td { border-bottom:0; }
 .parking-slot.charging .parking-van-cell { border-color:#42b56b; box-shadow:0 8px 18px rgba(35,164,85,.16); }
 .parking-slot span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
 .parking-slot input { width:100%; height:28px; border:0; background:transparent; color:#0b56e8; text-align:center; font:1000 16px "Manrope"; outline:none; }
+.parking-slot input::-webkit-outer-spin-button, .parking-slot input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+.parking-slot input[type=number] { appearance:textfield; -moz-appearance:textfield; }
 .parking-slot.selected .parking-van-cell input { color:#fff; }
 .parking-slot.blocked .parking-van-cell input { color:#1f2937; }
 .parking-slot em { position:absolute; right:5px; bottom:3px; color:#23a455; font-style:normal; font-size:7px; font-weight:1000; }
@@ -1307,7 +1311,8 @@ tbody tr:last-child td { border-bottom:0; }
 .parking-battery-mini.battery-yellow input, .parking-battery-mini.battery-yellow::after { color:#855f00; }
 .parking-battery-mini.battery-red { background:#ffe4df; border-color:#e14d3f; }
 .parking-battery-mini.battery-red input, .parking-battery-mini.battery-red::after { color:#a92218; }
-.parking-slot.crosswalk-slot .parking-van-cell, .parking-slot.overflow-slot.crosswalk-slot .parking-van-cell { background:#ffe69a; border-color:#d9af38; color:#172019; }
+.parking-slot.crosswalk-slot .parking-van-cell, .parking-slot.overflow-slot.crosswalk-slot .parking-van-cell { background:#ffe69a; border-color:#d9af38; color:#0b56e8; }
+.parking-slot.crosswalk-slot .parking-van-cell input { color:#0b56e8; }
 .parking-slot.overflow-slot .parking-van-cell { background:#fff; }
 .parking-slot.street-slot { min-height:28px; grid-template-columns:1fr; }
 .parking-slot.street-slot .parking-van-cell { min-height:28px; border:0; border-radius:0; box-shadow:none; }
