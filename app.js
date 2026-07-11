@@ -273,6 +273,8 @@ let state = {
   driverContacts: JSON.parse(localStorage.getItem('relayops_driver_contacts') || 'null') || [],
   driverContactsLastImport: localStorage.getItem('relayops_driver_contacts_last_import') || '',
   pendingDriverText: null,
+  messageQueueTemplate: localStorage.getItem('relayops_message_queue_template') || 'standup',
+  messageQueueStatus: JSON.parse(localStorage.getItem('relayops_message_queue_status') || 'null') || {},
   removedDriverKeys: JSON.parse(localStorage.getItem('relayops_removed_driver_keys') || 'null') || [],
   pendingDriverRemoval: null,
   cloudStatus: window.RelayOpsCloud?.configured?'connecting':'setup-required',
@@ -1819,14 +1821,35 @@ function pageContent() {
   return ({dashboard,morning:morningSheetPage,roster:rosterPage,live:livePage,team:teamPage,fleet:fleetPage,parking:vanParkingPage,performance:performancePage,coaching:coachingPage,checklists:checklistsPage,inbox:inboxPage,inventory:inventoryPage,reports:reportsPage,admin:adminPage}[state.page] || dashboard)();
 }
 
+function messageQueueStatusKey(route='') { return `${state.morningOperationDate}|${route}`; }
+function contactForMorningDriver(name='') {
+  const key=nameKey(firstDriverName(name));
+  const contacts=teamDriverRows();
+  return contacts.find(row=>nameKey(row.name)===key)||contacts.find(row=>{
+    const parts=key.split(' ').filter(Boolean), candidate=nameKey(row.name);
+    return parts.length>1&&candidate.includes(parts[0])&&candidate.includes(parts[parts.length-1]);
+  });
+}
+function morningMessageQueueRows() {
+  return filteredMorningRows().filter(row=>row.route&&!String(row.route).startsWith('__blank_')&&row.driver).map(row=>{
+    const driver=contactForMorningDriver(row.driver),queueKey=messageQueueStatusKey(row.route);
+    return {name:firstDriverName(row.driver),driverKey:nameKey(driver?.name||row.driver),phone:driver?.phone||'',route:row.route,wave:row.wave,staging:row.staging,queueKey,status:state.messageQueueStatus[queueKey]||''};
+  });
+}
 function driverTextDraft(driver) {
   const first=String(driver.name||'').trim().split(/\s+/)[0]||'there';
-  return `Hi ${first}, this is ${state.organizationName} Dispatch. Please reply when you receive this message.`;
+  const templates={
+    standup:`Hi ${first}, this is ${state.organizationName} Dispatch. You are scheduled on route ${driver.route||'today'}${driver.wave?` for the ${driver.wave} wave`:''}. Please be at stand-up by 10:25–10:30 AM. Reply YES to confirm.`,
+    route:`Hi ${first}, your planned route is ${driver.route||'assigned'}${driver.staging?` with staging at ${driver.staging}`:''}${driver.wave?` for ${driver.wave}`:''}. Please contact Dispatch if anything has changed.`,
+    simple:`Hi ${first}, this is ${state.organizationName} Dispatch. Please reply when you receive this message.`
+  };
+  return templates[state.messageQueueTemplate]||templates.standup;
 }
-function openDriverText(key='') {
+function openDriverText(key='',queueKey='') {
   const driver=teamDriverRows().find(row=>nameKey(row.name)===key);
   if(!driver?.phone)return toast('Import a phone number for this driver first','error');
-  state.pendingDriverText={name:driver.name,phone:driver.phone,message:driverTextDraft(driver)};
+  const queue=morningMessageQueueRows().find(row=>row.queueKey===queueKey);
+  state.pendingDriverText={...driver,...queue,name:driver.name,phone:driver.phone,queueKey,message:driverTextDraft({...driver,...queue})};
   state.modal='text-driver';
   render();
 }
@@ -1837,16 +1860,33 @@ async function copyAndOpenGoogleMessages() {
   const driver=state.pendingDriverText;if(!driver)return;
   const message=currentDriverTextMessage();
   await navigator.clipboard.writeText(`${driver.phone}\n${message}`);
+  if(driver.queueKey){state.messageQueueStatus[driver.queueKey]='prepared';persist();}
   window.open('https://messages.google.com/web/','_blank','noopener');
   toast('Phone and message copied — paste into Google Messages, review, then send');
 }
 function openDriverSmsApp() {
   const driver=state.pendingDriverText;if(!driver)return;
+  if(driver.queueKey){state.messageQueueStatus[driver.queueKey]='prepared';persist();}
   const digits=driver.phone.replace(/\D/g,'');
   location.href=`sms:${digits}?&body=${encodeURIComponent(currentDriverTextMessage())}`;
 }
+function markQueueMessageSent(queueKey='') {
+  if(!queueKey)return;
+  state.messageQueueStatus[queueKey]='sent';persist();render();toast('Marked sent — RelayOps will skip this driver');
+}
+function openNextQueueMessage() {
+  const next=morningMessageQueueRows().find(row=>row.phone&&!row.status);
+  if(!next)return toast('No unsent drivers with phone numbers remain');
+  openDriverText(next.driverKey,next.queueKey);
+}
+function morningMessageQueueHtml() {
+  const rows=morningMessageQueueRows(),sent=rows.filter(row=>row.status==='sent').length,prepared=rows.filter(row=>row.status==='prepared').length,missing=rows.filter(row=>!row.phone).length;
+  const options=[['standup','Stand-up reminder · 10:25–10:30'],['route','Route and staging details'],['simple','Simple dispatch check-in']];
+  return `<section class="card morning-message-queue"><div class="message-queue-head"><div><span class="eyebrow">MORNING MESSAGE QUEUE</span><h2>Text confirmed drivers faster</h2><p>${rows.length} Morning Sheet driver${rows.length===1?'':'s'} · ${sent} sent · ${prepared} prepared · ${missing} missing phone</p></div><button class="btn primary" data-action="next-message-driver" ${rows.some(row=>row.phone&&!row.status)?'':'disabled'}>${ICONS.phone} Text next driver</button></div><div class="message-template-row"><label><span>Reusable message</span><select data-message-template>${options.map(([value,label])=>`<option value="${value}" ${state.messageQueueTemplate===value?'selected':''}>${label}</option>`).join('')}</select></label><span>RelayOps skips drivers marked sent so duplicate texts are less likely.</span></div><div class="message-queue-list">${rows.length?rows.map(row=>`<div class="message-queue-row ${row.status||(!row.phone?'missing':'')}"><div><strong>${esc(row.name)}</strong><span>${esc(row.route)} · ${esc(row.wave||'No wave')} · ${row.phone?esc(row.phone):'Phone missing'}</span></div><b class="message-status">${row.status==='sent'?'Sent':row.status==='prepared'?'Prepared':row.phone?'Ready':'Missing phone'}</b><div>${row.phone&&row.status!=='sent'?`<button class="btn small" data-action="text-driver" data-driver-key="${esc(row.driverKey)}" data-queue-key="${esc(row.queueKey)}">${row.status==='prepared'?'Review again':'Review text'}</button>`:''}${row.phone&&row.status!=='sent'?`<button class="btn small lime" data-action="mark-message-sent" data-queue-key="${esc(row.queueKey)}">Mark sent</button>`:''}</div></div>`).join(''):'<div class="message-queue-empty">Import and filter the Morning Sheet to build today’s driver message list.</div>'}</div></section>`;
+}
 function enhanceDriverTextButtons() {
   if(state.page!=='team')return;
+  document.querySelector?.('.team-grid')?.insertAdjacentHTML('beforebegin',morningMessageQueueHtml());
   document.querySelectorAll('.driver-card').forEach(card=>{
     const name=card.querySelector('h3')?.textContent?.trim()||'';
     const driver=teamDriverRows().find(row=>nameKey(row.name)===nameKey(name));
@@ -1875,6 +1915,7 @@ function bind() {
   document.removeEventListener?.('copy',handleSheetSelectionCopy);
   document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>go(el.dataset.page)));
   document.querySelectorAll('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
+  document.querySelectorAll('[data-message-template]').forEach(el=>el.addEventListener('change',()=>{state.messageQueueTemplate=el.value;persist();render();toast('Message template updated');}));
   document.querySelectorAll('[data-phase]').forEach(el=>el.addEventListener('click',()=>{state.phase=Number(el.dataset.phase);persist();render();}));
   document.querySelectorAll('[data-morning-filter]').forEach(el=>el.addEventListener('change',()=>{const key=el.dataset.morningFilter;if(key!=='dsp')state.morningFilters[key]=el.value;render();}));
   document.querySelectorAll('[data-operation-date]').forEach(el=>el.addEventListener('change',()=>{state.morningOperationDate=el.value||defaultOperationDate();state.morningSheetsLastReceipt=null;persist();render();toast(`Google target set to ${operationDateTabNames(state.morningOperationDate).join(' or ')}`);}));
@@ -2503,7 +2544,9 @@ function action(name,el) {
   if (name==='cloud-sign-out') return cloudSignOut();
   if (name==='invite') { if(!window.RelayOpsCloud?.session)return toast('Sign in as the owner before inviting users','error');state.modal='invite-user';return render(); }
   if (name==='send-user-invite') return sendUserInvite();
-  if (name==='text-driver') return openDriverText(el.dataset.driverKey||'');
+  if (name==='text-driver') return openDriverText(el.dataset.driverKey||'',el.dataset.queueKey||'');
+  if (name==='next-message-driver') return openNextQueueMessage();
+  if (name==='mark-message-sent') return markQueueMessageSent(el.dataset.queueKey||'');
   if (name==='open-google-messages') return copyAndOpenGoogleMessages();
   if (name==='open-sms-app') return openDriverSmsApp();
   if (name==='apply-import') return applyImport();
@@ -4533,6 +4576,8 @@ localStorage.setItem('relayops_equipment_import',JSON.stringify(state.equipmentI
 localStorage.setItem('relayops_device_custom_rows',JSON.stringify(state.deviceCustomRows||{ev:[],gas:[],helper:[]}));
 localStorage.setItem('relayops_organization_name',state.organizationName);
 localStorage.setItem('relayops_station_code',state.stationCode);
+localStorage.setItem('relayops_message_queue_template',state.messageQueueTemplate);
+localStorage.setItem('relayops_message_queue_status',JSON.stringify(state.messageQueueStatus||{}));
 localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_morning_sheets_last_dry_run',state.morningSheetsLastDryRun||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');localStorage.setItem('relayops_driver_contacts',JSON.stringify(state.driverContacts||[]));localStorage.setItem('relayops_driver_contacts_last_import',state.driverContactsLastImport||'');localStorage.setItem('relayops_removed_driver_keys',JSON.stringify(state.removedDriverKeys||[]));
 localStorage.setItem('relayops_morning_operation_date',state.morningOperationDate||defaultOperationDate());
 localStorage.setItem('relayops_fleet_name_overrides',JSON.stringify(state.fleetNameOverrides||{}));
@@ -4548,11 +4593,12 @@ function sharedWorkspaceState() {
     fleetNameOverrides:state.fleetNameOverrides,vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,
     vanParkingBatteries:state.vanParkingBatteries,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,
+    messageQueueTemplate:state.messageQueueTemplate,messageQueueStatus:state.messageQueueStatus,
     morningSheetsEndpoint:state.morningSheetsEndpoint
   };
 }
 function applySharedWorkspaceState(payload={}) {
-  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','vanParking','vanParkingUpdated','vanParkingBatteries','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','morningSheetsEndpoint'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','vanParking','vanParkingUpdated','vanParkingBatteries','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','messageQueueTemplate','messageQueueStatus','morningSheetsEndpoint'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   persist();render();

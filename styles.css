@@ -1937,6 +1937,26 @@ body .rivian-card:hover,body .rivian-card.expanded { border-color:#78acd1; box-s
 .driver-text-field { display:grid; gap:8px; color:#26394a; font-size:12px; font-weight:800; }
 .driver-text-field textarea { width:100%; resize:vertical; min-height:118px; border:1px solid #ccdbe6; border-radius:13px; padding:13px 14px; font:500 14px/1.5 Inter,system-ui,sans-serif; color:#172a3b; background:#fff; }
 .driver-text-field textarea:focus { outline:0; border-color:#69a8d3; box-shadow:0 0 0 3px rgba(91,157,205,.13); }
+.morning-message-queue { grid-column:1 / -1; margin:16px 0; padding:18px; }
+.message-queue-head { display:flex; align-items:center; justify-content:space-between; gap:18px; }
+.message-queue-head h2 { margin:4px 0; font-size:20px; }
+.message-queue-head p { margin:0; color:#6a7b89; }
+.message-template-row { display:flex; align-items:end; justify-content:space-between; gap:18px; margin:16px 0 12px; padding:12px 14px; border:1px solid #dbe7ef; border-radius:14px; background:#f7fbfe; color:#647687; font-size:12px; }
+.message-template-row label { display:grid; gap:5px; color:#273b4c; font-weight:800; }
+.message-template-row select { min-width:250px; height:38px; border:1px solid #cedde8; border-radius:10px; padding:0 10px; background:#fff; color:#1f3445; }
+.message-queue-list { display:grid; gap:8px; }
+.message-queue-row { display:grid; grid-template-columns:minmax(200px,1fr) 100px auto; align-items:center; gap:12px; padding:11px 12px; border:1px solid #e0e8ee; border-radius:13px; background:#fff; }
+.message-queue-row > div:first-child { display:grid; gap:3px; }
+.message-queue-row > div:first-child span { color:#71818e; font-size:12px; }
+.message-queue-row > div:last-child { display:flex; justify-content:flex-end; gap:7px; }
+.message-queue-row.prepared { border-color:#e7c96d; background:#fffaf0; }
+.message-queue-row.sent { border-color:#acd9bf; background:#f1fbf5; }
+.message-queue-row.missing { border-color:#efc0bd; background:#fff5f4; }
+.message-status { justify-self:start; padding:5px 8px; border-radius:999px; background:#edf3f7; color:#41586b; font-size:10px; text-transform:uppercase; letter-spacing:.05em; }
+.message-queue-row.sent .message-status { background:#d9f2e2; color:#24613e; }
+.message-queue-row.prepared .message-status { background:#fff0bd; color:#765b08; }
+.message-queue-row.missing .message-status { background:#ffe0dd; color:#8a342d; }
+.message-queue-empty { padding:24px; text-align:center; color:#71818e; border:1px dashed #cbd9e3; border-radius:13px; }
 body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-shadow:0 30px 80px rgba(8,23,36,.28); }
 @media (max-width:1100px) {
   body .app-shell { grid-template-columns:218px minmax(0,1fr); }
@@ -1948,4 +1968,8 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
   body .app-shell { display:block; }
   body .topbar { height:68px; padding:0 14px; }
   body .content { padding:16px 14px 36px; }
+  .message-queue-head,.message-template-row { align-items:stretch; flex-direction:column; }
+  .message-template-row select { min-width:0; width:100%; }
+  .message-queue-row { grid-template-columns:1fr; }
+  .message-queue-row > div:last-child { justify-content:flex-start; flex-wrap:wrap; }
 }

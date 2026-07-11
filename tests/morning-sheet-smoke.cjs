@@ -105,6 +105,16 @@ const checks = `
   confirmDriverRemoval();
   if(teamPage().includes('Vanessa Balderama')||!(state.removedDriverKeys||[]).includes('vanessa balderama')) throw new Error('Confirmed driver removal should delete the DA card and persist its key');
   state.removedDriverKeys=[];mergeDriverContacts(driverContacts);
+  const savedQueueMorning=state.morningRoutes;
+  state.morningRoutes=[{dsp:'LLOL',driver:'Maya Collins',route:'CX777',wave:'11:15 AM',staging:'STG.V.1',padOverride:'',ev:'',deviceName:'',portable:'',stops:188,packages:332}];
+  state.morningFilters={wave:'all',staging:'all',pad:'all'};state.messageQueueStatus={};state.messageQueueTemplate='standup';
+  const queueRows=morningMessageQueueRows(),queueHtml=morningMessageQueueHtml();
+  if(queueRows.length!==1||queueRows[0].phone!=='(555) 123-4567'||!queueHtml.includes('Morning Sheet driver')||!queueHtml.includes('Text next driver')||!queueHtml.includes('Stand-up reminder')||!queueHtml.includes('Review text')||!queueHtml.includes('Mark sent')) throw new Error('Morning Message Queue did not match Morning Sheet drivers to phone contacts');
+  openDriverText(queueRows[0].driverKey,queueRows[0].queueKey);
+  if(!state.pendingDriverText.message.includes('CX777')||!state.pendingDriverText.message.includes('10:25–10:30 AM')) throw new Error('Stand-up template did not include route and arrival time');
+  markQueueMessageSent(queueRows[0].queueKey);
+  if(state.messageQueueStatus[queueRows[0].queueKey]!=='sent'||morningMessageQueueRows()[0].status!=='sent') throw new Error('Message queue duplicate protection did not retain sent state');
+  state.morningRoutes=savedQueueMorning;state.messageQueueStatus={};state.modal=null;state.pendingDriverText=null;
   openDriverText('maya collins');
   if(state.modal!=='text-driver'||!modal().includes('Text Maya Collins')||!modal().includes('Copy & open Google Messages')||!modal().includes('Open SMS app')||!modal().includes('review, and send')) throw new Error('Reviewed Google Messages driver text flow missing');
   state.modal=null;state.pendingDriverText=null;
