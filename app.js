@@ -183,6 +183,20 @@ function loadVanParkingSlots() {
   return defaultVanParkingSlots();
 }
 
+function loadDeviceCustomRows() {
+  try {
+    const saved=JSON.parse(localStorage.getItem('relayops_device_custom_rows')||'null');
+    if(saved&&typeof saved==='object')return {
+      ev:Array.isArray(saved.ev)?saved.ev:[],
+      gas:Array.isArray(saved.gas)?saved.gas:[],
+      helper:Array.isArray(saved.helper)?saved.helper:[]
+    };
+  } catch {}
+  return {ev:[],gas:[],helper:[]};
+}
+
+const gasVehicleIds = ['F33','F34','R35','R36','R37','R54','R55','R62'];
+
 let state = {
   page: localStorage.getItem('relayops_page') || 'dashboard',
   role: localStorage.getItem('relayops_role') || 'admin',
@@ -237,6 +251,7 @@ let state = {
   gasAssignmentRoutes: [],
   gasAssignmentVans: [],
   deviceClearConfirm: null,
+  deviceCustomRows: loadDeviceCustomRows(),
   driverContacts: JSON.parse(localStorage.getItem('relayops_driver_contacts') || 'null') || [],
   driverContactsLastImport: localStorage.getItem('relayops_driver_contacts_last_import') || '',
   rating: Number(localStorage.getItem('relayops_rating') || 0)
@@ -247,7 +262,6 @@ if(state.fleetImport?.vehicles?.length) applyFleetVehicles(state.fleetImport.veh
 
 const app = document.getElementById('app');
 const fileInput = document.getElementById('file-input');
-const gasVehicleIds = ['F33','F34','R35','R36','R37','R54','R55','R62'];
 const sheetEditFields = ['driver','route','staging','padOverride','ev','deviceName','portable','stops','packages','plannedRts'];
 const morningTemplateHeaders = ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','STOP COUNT','PACKAGE COUNT','','PLANNED RTS'];
 const sheetCopyFields = ['waveLabel','driver','route','staging','pad','ev','deviceName','portable','spacerA','stops','packages','spacerB','plannedRts'];
@@ -539,7 +553,7 @@ function morningWaveGroup(section,sectionIndex=0) {
   const waveTitle=section.dsp?'DSP':section.label;
   const waveTime=morningWaveTimeText(section);
   const attrs=(r,field,rowIndex,colIndex,extra='')=>interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}" ${edit?`contenteditable="true" data-edit-route="${esc(r?.route||'')}" data-edit-field="${field}" data-edit-wave="${esc(r?.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''} ${extra}`:'';
-  const cell=(r,field,value,colIndex,cls='')=>`<td class="sheet-edit-cell copy-sheet-cell ${cls} ${r?.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" data-view-route="${esc(r?.route||'')}" data-view-field="${field}" data-view-wave="${esc(r?.wave||section.wave||'')}" title="${edit?'Press Enter to save':'Double-click to edit'}" ${attrs(r,field,rows.indexOf(r),colIndex)}>${esc(value??'')}</td>`;
+  const cell=(r,field,value,colIndex,cls='')=>{const grounded=field==='ev'&&isGroundedEquipmentId(value);return `<td class="sheet-edit-cell copy-sheet-cell ${cls} ${grounded?'grounded-van-cell':''} ${r?.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" data-view-route="${esc(r?.route||'')}" data-view-field="${field}" data-view-wave="${esc(r?.wave||section.wave||'')}" title="${grounded?'Grounded vehicle — reassign before dispatch':edit?'Press Enter to save':'Double-click to edit'}" ${attrs(r,field,rows.indexOf(r),colIndex)}>${esc(value??'')}</td>`;};
   const waveCell=`<td class="wave-label ${section.dsp?'dsp-label':''} copy-sheet-cell" rowspan="${rows.length}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="0"`:''}><span>${esc(waveTitle)}</span></td>`;
   const padCell=`<td class="pad-label sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" rowspan="${rows.length+1}" data-view-field="padOverride" data-view-wave="${esc(section.wave)}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="4" ${edit?`contenteditable="true" data-edit-wave="${esc(section.wave)}" data-edit-field="padOverride"`:''}`:''}><span>${esc(pad)}</span></td>`;
   const body=rows.map((r,i)=>`<tr class="ops-row ${r._blank?'blank-row':''} wave-section-${sectionIndex}" data-wave-section="${sectionIndex}">${showGridLabels?`<th class="sheet-row-num">${rowBase+i}</th>`:''}${i===0?waveCell:''}${cell(r,'driver',r.driver,1,'driver-name')}${cell(r,'route',r._blank?'':r.route,2,'route-id')}${cell(r,'staging',r.staging,3,'staging-code')}${i===0?padCell:''}${cell(r,'ev',r.ev||'',5)}${cell(r,'deviceName',r.deviceName||'',6)}${cell(r,'portable',r.portable||'',7)}<td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+i-3}" data-sheet-col="8"`:''}></td>${cell(r,'stops',r.stops,9,'count-cell')}${cell(r,'packages',r.packages,10,'count-cell')}<td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+i-3}" data-sheet-col="11"`:''}></td>${cell(r,'plannedRts',r.plannedRts||'',12,'planned-rts-cell')}</tr>`).join('');
@@ -553,25 +567,70 @@ function morningWaveGroup(section,sectionIndex=0) {
 function deviceSheetDetails() {
   return state.equipmentImport?.details||{};
 }
-function deviceSheetRows(ids=[]) {
-  const details=deviceSheetDetails();
-  return ids.map(id=>{
-    const key=normalizeEquipmentId(id),item=details[key]||{};
-    return `<tr><th>${esc(id)}</th><td><input aria-label="${esc(id)} device" data-device-sheet-id="${esc(key)}" data-device-sheet-field="device" inputmode="numeric" maxlength="3" value="${esc(item.device||'')}" placeholder="—"></td><td><input aria-label="${esc(id)} portable" data-device-sheet-id="${esc(key)}" data-device-sheet-field="portable" inputmode="numeric" maxlength="4" value="${esc(item.portable||'')}" placeholder="—"></td></tr>`;
+function deviceSheetBaseIds(section='') {
+  if(section==='ev')return Array.from({length:58},(_,i)=>`EV${i+1}`);
+  if(section==='gas')return [...gasVehicleIds];
+  if(section==='helper')return ['H1','H2','H3','H4'];
+  return [];
+}
+function deviceSheetCustomRows(section='') {
+  return Array.isArray(state.deviceCustomRows?.[section])?state.deviceCustomRows[section]:[];
+}
+function deviceSheetAllIds(section='') {
+  return [...deviceSheetBaseIds(section),...deviceSheetCustomRows(section).map(row=>row.label).filter(Boolean)];
+}
+function fleetEquipmentIdentity(vehicle={}) {
+  const name=String(vehicle.name||'').trim(),upper=name.toUpperCase();
+  const ev=upper.match(/(?:^|\b)EV\s*[-#:]?\s*(\d+)\b/);
+  if(ev)return {section:'ev',label:`EV${Number(ev[1])}`};
+  const gasType=/\bFORD\b/.test(upper)?'F':/\b(?:RAM|RENTAL)\b/.test(upper)?'R':'';
+  if(!gasType)return null;
+  const explicit=upper.match(/\b([FR]\d+)\b/),number=upper.match(/\b(\d{1,4})\b/);
+  return {section:'gas',label:explicit?explicit[1]:number?`${gasType}${Number(number[1])}`:name};
+}
+function groundedEquipmentIds() {
+  const ids=new Set();
+  rivianFleet.forEach(vehicle=>{if(normalizeOperational(vehicle.operational||vehicle.status)==='Grounded'){const identity=fleetEquipmentIdentity(vehicle);if(identity?.label)ids.add(normalizeEquipmentId(identity.label));}});
+  return ids;
+}
+function isGroundedEquipmentId(value='') {
+  const key=normalizeEquipmentId(value);return Boolean(key&&groundedEquipmentIds().has(key));
+}
+function syncFleetVehiclesToDeviceSheet(vehicles=[]) {
+  state.deviceCustomRows=state.deviceCustomRows||{ev:[],gas:[],helper:[]};
+  let added=0;
+  vehicles.forEach(vehicle=>{
+    const identity=fleetEquipmentIdentity(vehicle);if(!identity)return;
+    const key=normalizeEquipmentId(identity.label),baseKeys=new Set(deviceSheetBaseIds(identity.section).map(normalizeEquipmentId));
+    const custom=deviceSheetCustomRows(identity.section),existing=custom.find(row=>normalizeEquipmentId(row.label)===key);
+    if(existing){existing.source='fleet';existing.fleetVin=vehicle.vin||existing.fleetVin||'';return;}
+    if(baseKeys.has(key))return;
+    custom.push({uid:`fleet-${identity.section}-${key||Date.now()}`,label:identity.label,device:'',portable:'',source:'fleet',fleetVin:vehicle.vin||''});added++;
+  });
+  return added;
+}
+function deviceSheetRows(section='') {
+  const details=deviceSheetDetails(),grounded=groundedEquipmentIds();
+  const base=deviceSheetBaseIds(section).map(label=>({label,fixed:true})),custom=deviceSheetCustomRows(section);
+  return [...base,...custom].map(row=>{
+    const label=String(row.label||''),key=normalizeEquipmentId(label),item=row.fixed?(details[key]||{}):{...row,device:row.device||details[key]?.device||'',portable:row.portable||details[key]?.portable||''};
+    const isGrounded=Boolean(key&&grounded.has(key)),rowClass=isGrounded?'grounded-vehicle-row':'';
+    const vanCell=row.fixed?`<th>${esc(label)}${isGrounded?'<span>Grounded</span>':''}</th>`:`<th class="custom-van-cell"><input class="device-sheet-van-input" aria-label="${esc(section)} custom van" data-device-custom-uid="${esc(row.uid)}" data-device-custom-field="label" value="${esc(label)}" placeholder="Van name"><button data-action="remove-device-custom-row" data-device-custom-uid="${esc(row.uid)}" aria-label="Remove ${esc(label||'custom van')} row">×</button>${isGrounded?'<span>Grounded</span>':''}</th>`;
+    const field=(name,max)=>`<td><input aria-label="${esc(label||'New van')} ${name}" ${row.fixed?`data-device-sheet-id="${esc(key)}" data-device-sheet-field="${name}"`:`data-device-custom-uid="${esc(row.uid)}" data-device-custom-field="${name}"`} inputmode="numeric" maxlength="${max}" value="${esc(item[name]||'')}" placeholder="—"></td>`;
+    return `<tr class="${rowClass}">${vanCell}${field('device',3)}${field('portable',4)}</tr>`;
   }).join('');
 }
-function deviceSheetTable(title,subtitle,ids=[],kind='') {
-  const section=kind.replace('-list',''),confirming=state.deviceClearConfirm===section;
-  return `<article class="card device-sheet-card ${kind}"><div class="device-sheet-card-head"><div><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><div class="device-sheet-card-actions"><span>${ids.length} rows</span><button class="btn small ${confirming?'danger':''}" data-action="clear-device-sheet-section" data-device-section="${esc(section)}">${confirming?'Click again to clear':'Clear sheet'}</button></div></div><div class="device-sheet-table-wrap"><table class="device-sheet-table"><thead><tr><th>VAN</th><th>DEVICE</th><th>PORTABLE</th></tr></thead><tbody>${deviceSheetRows(ids)}</tbody></table></div></article>`;
+function deviceSheetTable(title,subtitle,section='') {
+  const confirming=state.deviceClearConfirm===section,count=deviceSheetBaseIds(section).length+deviceSheetCustomRows(section).length;
+  return `<article class="card device-sheet-card ${section}-list"><div class="device-sheet-card-head"><div><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><div class="device-sheet-card-actions"><span>${count} rows</span><button class="btn small" data-action="add-device-sheet-row" data-device-section="${esc(section)}">${ICONS.plus} Add row</button><button class="btn small ${confirming?'danger':''}" data-action="clear-device-sheet-section" data-device-section="${esc(section)}">${confirming?'Click again to clear':'Clear sheet'}</button></div></div><div class="device-sheet-table-wrap"><table class="device-sheet-table"><thead><tr><th>VAN</th><th>DEVICE</th><th>PORTABLE</th></tr></thead><tbody>${deviceSheetRows(section)}</tbody></table></div></article>`;
 }
 function livePage() {
-  const evIds=Array.from({length:58},(_,i)=>`EV${i+1}`),helperIds=['H1','H2','H3','H4'];
   const details=deviceSheetDetails(),filled=Object.values(details).filter(item=>String(item?.device||'').trim()||String(item?.portable||'').trim()).length;
   const assigned=state.morningRoutes.filter(route=>route.ev&&details[normalizeEquipmentId(route.ev)]).length;
   return `${contextBar(`<span class="status">${filled} assignments saved</span>`)}
   <section class="device-sheet-intro card"><div><span class="eyebrow">TODAY’S EQUIPMENT</span><h2>Type the Device and Portable beside each van</h2><p>EV labels stay fixed. Click any white box and type today’s number. Your work saves automatically on this device.</p></div><div class="device-sheet-steps"><span><b>1</b>Type numbers</span><span><b>2</b>Check the EV</span><span><b>3</b>Send to Morning Sheet</span></div><button class="btn primary device-sheet-send" data-action="device-sheet-to-morning">Input to Morning Sheet ${ICONS.chevron}</button></section>
   <section class="device-sheet-summary"><span><b>${filled}</b>van rows filled</span><span><b>${assigned}</b>Morning Sheet drivers currently matched</span><span><b>${state.morningRoutes.filter(route=>route.ev).length}</b>drivers have a van assigned</span></section>
-  <section class="device-sheet-layout"><div>${deviceSheetTable('Electric vehicles','EV1 through EV58 — same order as the daily list',evIds,'ev-list')}</div><aside>${deviceSheetTable('Gas vehicles','Enter the device and portable assigned to each gas van',gasVehicleIds,'gas-list')}${deviceSheetTable('Helper bags','Use H1–H4 for helper equipment',helperIds,'helper-list')}</aside></section>
+  <section class="device-sheet-layout"><div>${deviceSheetTable('Electric vehicles','EV1 through EV58 plus Fleet Health and manual additions','ev')}</div><aside>${deviceSheetTable('Gas vehicles','Ford, Ram and rental vans from Fleet Health plus manual additions','gas')}${deviceSheetTable('Helper bags','Use H1–H4 or add another helper bag','helper')}</aside></section>
   <div class="device-sheet-sticky-action"><div><strong>Ready to match equipment?</strong><span>The EV/VAN number is the match key. Driver names and routes stay unchanged.</span></div><button class="btn primary" data-action="device-sheet-to-morning">Input to Morning Sheet</button></div>`;
 }
 
@@ -1687,6 +1746,14 @@ function bind() {
     });
     el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur();}});
   });
+  document.querySelectorAll('[data-device-custom-field]').forEach(el=>{
+    el.addEventListener('input',()=>{
+      const field=el.dataset.deviceCustomField,clean=field==='label'?String(el.value||'').toUpperCase().replace(/[^A-Z0-9 -]/g,'').slice(0,28):String(el.value||'').toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,field==='device'?3:4);
+      if(el.value!==clean)el.value=clean;
+      updateCustomDeviceRow(el.dataset.deviceCustomUid,field,clean);
+    });
+    el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur();}});
+  });
   document.querySelectorAll('[data-edit-field]').forEach(el=>{
     el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);});
     el.addEventListener('mousedown',e=>handleSheetMouseDown(e,el));
@@ -2305,6 +2372,8 @@ function action(name,el) {
   if (name==='parse-equipment-text') return parseEquipmentTextAction();
   if (name==='apply-equipment-import') return applyEquipmentImport();
   if (name==='device-sheet-to-morning') return inputDeviceSheetToMorning();
+  if (name==='add-device-sheet-row') return addDeviceSheetRow(el.dataset.deviceSection||'');
+  if (name==='remove-device-custom-row') return removeCustomDeviceRow(el.dataset.deviceCustomUid||'');
   if (name==='clear-device-sheet-section') return clearDeviceSheetSection(el.dataset.deviceSection||'');
   if (name==='parse-fleet-paste') return parseFleetPasteAction();
   if (name==='rate-service') { state.rating=Number(el.dataset.rating)||0;persist();render();return toast(`Thanks — ${state.rating} stars saved`); }
@@ -2835,8 +2904,9 @@ function mergeFleetVehicles(imports=[]) {
 function applyFleetVehicles(vehicles=[],options={}) {
   const merged=mergeFleetVehicles(vehicles);
   rivianFleet.splice(0,rivianFleet.length,...merged);
+  const deviceRowsAdded=syncFleetVehiclesToDeviceSheet(merged);
   state.fleetChangedVins=Object.fromEntries(merged.filter(v=>v.updated).map(v=>[v.vin,v.changedFields]));
-  state.fleetUpdateSummary={...(merged.summary||{}),visible:sortedRivianFleet().length};
+  state.fleetUpdateSummary={...(merged.summary||{}),visible:sortedRivianFleet().length,deviceRowsAdded};
   if(!options.silent) {
     state.fleetLastRefresh=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     persist();
@@ -3081,17 +3151,44 @@ function updateDeviceSheetCell(id,field,value) {
   state.equipmentImport={name:'Device and Portable Sheet',details};
   persist();
 }
+function addDeviceSheetRow(section='') {
+  if(!['ev','gas','helper'].includes(section))return;
+  state.deviceCustomRows=state.deviceCustomRows||{ev:[],gas:[],helper:[]};
+  state.deviceCustomRows[section]=state.deviceCustomRows[section]||[];
+  state.deviceCustomRows[section].push({uid:`${section}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,label:'',device:'',portable:'',source:'manual'});
+  state.deviceClearConfirm=null;persist();render();
+  const rows=document.querySelectorAll(`.${section}-list [data-device-custom-field="label"]`),last=rows[rows.length-1];if(last)last.focus();
+}
+function updateCustomDeviceRow(uid,field,value) {
+  const sections=['ev','gas','helper'];let row=null;
+  for(const section of sections){row=(state.deviceCustomRows?.[section]||[]).find(item=>item.uid===uid);if(row)break;}
+  if(!row||!['label','device','portable'].includes(field))return;
+  const previousLabel=row.label||'';
+  const clean=field==='label'?String(value??'').toUpperCase().replace(/[^A-Z0-9 -]/g,'').slice(0,28):String(value??'').toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,field==='device'?3:4);
+  row[field]=clean;
+  const details={...deviceSheetDetails()},oldKey=normalizeEquipmentId(previousLabel),newKey=normalizeEquipmentId(row.label);
+  if(field==='label'&&oldKey&&oldKey!==newKey)delete details[oldKey];
+  if(newKey)details[newKey]={device:row.device||'',portable:row.portable||''};
+  state.equipmentImport={name:'Device and Portable Sheet',details};
+  persist();
+}
+function removeCustomDeviceRow(uid='') {
+  for(const section of ['ev','gas','helper']){
+    const rows=state.deviceCustomRows?.[section]||[],index=rows.findIndex(row=>row.uid===uid);
+    if(index<0)continue;
+    const [removed]=rows.splice(index,1),key=normalizeEquipmentId(removed.label),details={...deviceSheetDetails()};if(key)delete details[key];
+    state.equipmentImport={name:'Device and Portable Sheet',details};persist();render();return toast(`${removed.label||'Custom van'} row removed`);
+  }
+}
 function deviceSheetSectionIds(section='') {
-  if(section==='ev')return Array.from({length:58},(_,i)=>String(i+1));
-  if(section==='gas')return gasVehicleIds.map(normalizeEquipmentId);
-  if(section==='helper')return ['H1','H2','H3','H4'];
-  return [];
+  return deviceSheetAllIds(section).map(normalizeEquipmentId).filter(Boolean);
 }
 function clearDeviceSheetSection(section='') {
   const ids=deviceSheetSectionIds(section);
   if(!ids.length)return;
   if(state.deviceClearConfirm!==section){state.deviceClearConfirm=section;render();return toast('Click Clear sheet again to confirm','error');}
   const details={...deviceSheetDetails()};ids.forEach(id=>delete details[normalizeEquipmentId(id)]);
+  deviceSheetCustomRows(section).forEach(row=>{row.device='';row.portable='';});
   state.equipmentImport={name:'Device and Portable Sheet',details};
   state.deviceClearConfirm=null;persist();render();
   toast(`${section==='ev'?'Electric Vehicles':section==='gas'?'Gas Vehicles':'Helper Bags'} boxes cleared`);
@@ -4195,6 +4292,7 @@ function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function persist(){
 localStorage.setItem('relayops_equipment_import',JSON.stringify(state.equipmentImport||null));
+localStorage.setItem('relayops_device_custom_rows',JSON.stringify(state.deviceCustomRows||{ev:[],gas:[],helper:[]}));
 localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_morning_sheets_last_dry_run',state.morningSheetsLastDryRun||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');localStorage.setItem('relayops_driver_contacts',JSON.stringify(state.driverContacts||[]));localStorage.setItem('relayops_driver_contacts_last_import',state.driverContactsLastImport||'');
 }
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
