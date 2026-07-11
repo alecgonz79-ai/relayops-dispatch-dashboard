@@ -5,7 +5,7 @@ const RELAYOPS_START_ROW = 3;
 const RELAYOPS_START_COL = 1;
 const RELAYOPS_COLS = 13;
 const RELAYOPS_WRITE_RANGE = 'A3:M';
-const RELAYOPS_BUILD = '2026-07-10-format-reset';
+const RELAYOPS_BUILD = '2026-07-10-dated-tab';
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -260,6 +260,7 @@ function findRelayOpsMorningSheet(payload) {
   const sheetNames = [payload.sheetName].concat(payload.sheetNameCandidates || []).filter(Boolean);
   let sheet = null;
   for (var s = 0; s < sheetNames.length && !sheet; s++) sheet = ss.getSheetByName(sheetNames[s]);
+  if (!sheet && payload.operationDate) throw new Error('No operations tab found for ' + payload.operationDate + '. Create or rename a tab to ' + sheetNames.join(' or ') + ', then send again. Nothing was written.');
   sheet = sheet || ss.getActiveSheet() || ss.getSheets()[0];
   if (!sheet) throw new Error('No target sheet tab found');
   return sheet;
