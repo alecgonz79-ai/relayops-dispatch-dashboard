@@ -495,6 +495,16 @@ const checks = `
   if(!deviceSheetCustomRows('ev').some(row=>row.label==='EV59')||!deviceSheetCustomRows('gas').some(row=>row.label==='F99')||!deviceSheetCustomRows('gas').some(row=>row.label==='R120')) throw new Error('Fleet import should classify EV, Ford, and rental device rows');
   if(!livePage().includes('grounded-vehicle-row')||!livePage().includes('low-battery-vehicle-row')) throw new Error('Grounded and low-battery fleet vans should be flagged on Device Sheet');
   if(!gasFleetCard(importedFleetRows[2]).includes('gas-can-art')||gasFleetCard(importedFleetRows[2]).includes('Battery %')) throw new Error('Gas fleet card should use gas icon and omit EV battery details');
+  const exactAmazonStatusRows=fleetDetailsFromRows([
+    ['vehicleName','vin','active','operationalStatus'],
+    ['EV 31','1FTYR3XM0KKA12345','Active','Grounded'],
+    ['Route Van 44','3C6LRVAG0ME123456','Active','Operational']
+  ],'Amazon fleet list.xlsx');
+  if(exactAmazonStatusRows.length!==2||exactAmazonStatusRows[0].operational!=='Grounded'||exactAmazonStatusRows[1].operational!=='Operational') throw new Error('Amazon operationalStatus column was not read exactly');
+  if(!exactAmazonStatusRows.every(isGasFleetVehicle)) throw new Error('1FTYR3 and 3C6LRV VIN prefixes must always classify as gas');
+  if(fleetEquipmentIdentity(exactAmazonStatusRows[0]).section!=='gas'||fleetEquipmentIdentity(exactAmazonStatusRows[1]).section!=='gas') throw new Error('Gas VIN prefix must override an EV-like display name');
+  const gasPrefixCard=gasFleetCard(exactAmazonStatusRows[0]);
+  if(!gasPrefixCard.includes('gas-can-art')||!gasPrefixCard.includes('EV 31')||!gasPrefixCard.includes('1FTYR3XM0KKA12345')||!gasPrefixCard.includes('Active')||!gasPrefixCard.includes('Grounded')||gasPrefixCard.includes('Battery')||gasPrefixCard.includes('mi /')||gasPrefixCard.includes('Miles till empty')) throw new Error('Gas VIN card must show only identity/status fields and gas icon');
   const simpleFleetHtml=fleetPage();
   if(!simpleFleetHtml.includes('Amazon Fleet Import')||!simpleFleetHtml.includes('FleetOS Import')||!simpleFleetHtml.includes('fleet-alert-squares')) throw new Error('Simplified Fleet Health import and alert squares missing');
   state.morningRoutes[0].ev='59';
