@@ -5,6 +5,7 @@ const RELAYOPS_START_ROW = 3;
 const RELAYOPS_START_COL = 1;
 const RELAYOPS_COLS = 13;
 const RELAYOPS_WRITE_RANGE = 'A3:M';
+const RELAYOPS_BUILD = '2026-07-10-format-reset';
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -30,6 +31,7 @@ function doGet(e) {
   return relayOpsJson({
     ok: true,
     connector: 'relayops-morning-v1',
+    build: RELAYOPS_BUILD,
     spreadsheet: SpreadsheetApp.getActiveSpreadsheet().getName(),
     sheet: sheet.getName(),
     startCell: 'A3',
@@ -50,6 +52,7 @@ function doPost(e) {
       const layout = relayOpsTemplateLayout(sheet, (payload.rows || []).length);
       return relayOpsJson({
         ok: true,
+        build: RELAYOPS_BUILD,
         dryRun: true,
         sheet: sheet.getName(),
         startCell: payload.startCell,
@@ -68,6 +71,7 @@ function doPost(e) {
     const result = writeRelayOpsMorningSheet(payload);
     return relayOpsJson({
       ok: true,
+      build: RELAYOPS_BUILD,
       sheet: result.sheetName,
       startCell: result.startCell,
       writeRange: result.writeRange,
@@ -166,6 +170,15 @@ function ensureRelayOpsTemplateCapacity(sheet, rowCount) {
   if (!layout.hasEnoughColumns) sheet.insertColumnsAfter(sheet.getMaxColumns(), RELAYOPS_COLS - sheet.getMaxColumns());
 }
 
+function freezeRelayOpsHeader(sheet) {
+  try {
+    sheet.getRange(1, 1, 2, RELAYOPS_COLS).getMergedRanges().forEach(function(range) {
+      if (range.getRow() === 1) range.breakApart();
+    });
+  } catch (error) {}
+  return sheet.getFrozenRows();
+}
+
 function writeRelayOpsMorningSheet(payload) {
   const validation = validateRelayOpsMorningPayload(payload);
   if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
@@ -181,12 +194,14 @@ function writeRelayOpsMorningSheet(payload) {
   const target = sheet.getRange(RELAYOPS_START_ROW, RELAYOPS_START_COL, rowCount, RELAYOPS_COLS);
   target.breakApart();
   target.clearContent();
+  target.clearFormat();
   target.setBackground('#ffffff').setFontColor('#111111').setFontWeight('normal')
+    .setFontSize(10).setTextRotation(0)
     .setHorizontalAlignment('center').setVerticalAlignment('middle')
     .setBorder(true, true, true, true, true, true, '#111111', SpreadsheetApp.BorderStyle.SOLID);
   sheet.getRange(RELAYOPS_START_ROW, RELAYOPS_START_COL, rows.length, RELAYOPS_COLS).setValues(rows);
 
-  sheet.setFrozenRows(1);
+  freezeRelayOpsHeader(sheet);
   sheet.getRange(1, 1, 1, RELAYOPS_COLS).setValues([headers])
     .setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle')
     .setBorder(true, true, true, true, true, true, '#111111', SpreadsheetApp.BorderStyle.SOLID);
@@ -220,6 +235,8 @@ function writeRelayOpsMorningSheet(payload) {
       sheet.getRange(sheetRow, 10, 1, 2).setBackground('#eef3ff');
       sheet.getRange(sheetRow, 12, 1, 1).setBackground('#050505').setFontColor('#050505');
       sheet.getRange(sheetRow, 13, 1, 1).setBackground('#b4a7d6');
+      if (rowType === 'time') sheet.getRange(sheetRow, 1, 1, RELAYOPS_COLS)
+        .setFontSize(10).setTextRotation(0).setFontWeight('bold').setHorizontalAlignment('center');
       sheet.setRowHeight(sheetRow, rowType === 'blank' ? 18 : 21);
     }
   });

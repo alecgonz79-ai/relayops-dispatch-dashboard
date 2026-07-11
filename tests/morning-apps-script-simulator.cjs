@@ -26,6 +26,10 @@ class FakeRange {
     this.eachCell((row, col) => this.sheet.setCell(row, col, ''));
     return this;
   }
+  clearFormat() {
+    this.eachCell((row, col) => this.sheet.formats.delete(`${row}:${col}`));
+    return this;
+  }
   breakApart() {
     this.sheet.breakApartCalls.push({ row: this.row, col: this.col, numRows: this.numRows, numCols: this.numCols });
     this.sheet.merges = this.sheet.merges.filter(merge =>
@@ -185,7 +189,7 @@ if (!resultContext.__templateLayout || resultContext.__templateLayout.neededColu
 if (!resultContext.__ui.alerts.some(alert => alert.title.includes('RelayOps template'))) throw new Error('Template validation should alert the installer inside Google Sheets');
 if (sheet.getMaxRows() < 122) throw new Error(`Connector should expand rows to at least 122, got ${sheet.getMaxRows()}`);
 if (sheet.getMaxColumns() !== 13) throw new Error(`Connector should expand only to A-M, got ${sheet.getMaxColumns()} columns`);
-if (sheet.frozenRows !== 1) throw new Error('Connector should freeze row 1');
+if (sheet.frozenRows !== 0) throw new Error('Connector should preserve the sheet freeze setting instead of changing merged-row boundaries');
 if (sheet.getCell(1, 1) !== 'WAVE' || sheet.getCell(1, 13) !== 'PLANNED RTS') throw new Error('Connector should restore A-M headers');
 if (sheet.getCell(3, 2) !== 'Driver One' || sheet.getCell(4, 3) !== 'CX202') throw new Error('Connector should write route rows starting at A3');
 if (sheet.getCell(5, 1) !== '11:15 (2)') throw new Error('Connector should write wave time under the wave label');

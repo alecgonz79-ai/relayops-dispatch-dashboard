@@ -427,6 +427,34 @@ const checks = `
     ['43','37','cc']
   ]);
   if (cleanDeviceLayout['43'].portable !== 'cc' || cleanDeviceLayout['37'].device !== '31') throw new Error('Clean Google Sheets VAN/DEV/PORT layout parsing failed');
+  const evPrefixedLayout=equipmentDetailsFromRows([['VAN','DEVICE','PORTABLE'],['EV1','1','2']]);
+  if(evPrefixedLayout['1'].device!=='1'||evPrefixedLayout['1'].portable!=='2') throw new Error('EV-prefixed VAN/DEV/PORT matching failed');
+  const mockTsv=['level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext','5\\t1\\t1\\t1\\t1\\t1\\t5\\t5\\t30\\t12\\t95\\tVAN','5\\t1\\t1\\t1\\t1\\t2\\t57\\t5\\t35\\t12\\t95\\tDEVICE','5\\t1\\t1\\t1\\t1\\t3\\t107\\t5\\t40\\t12\\t95\\tPORTABLE','5\\t1\\t1\\t1\\t1\\t4\\t160\\t5\\t30\\t12\\t95\\tVAN','5\\t1\\t1\\t1\\t1\\t5\\t210\\t5\\t35\\t12\\t95\\tDEVICE','5\\t1\\t1\\t1\\t1\\t6\\t260\\t5\\t40\\t12\\t95\\tPORTABLE','5\\t1\\t1\\t1\\t2\\t1\\t5\\t30\\t25\\t12\\t95\\tEV1','5\\t1\\t1\\t1\\t2\\t2\\t60\\t30\\t10\\t12\\t95\\t1','5\\t1\\t1\\t1\\t2\\t3\\t110\\t30\\t10\\t12\\t95\\t2','5\\t1\\t1\\t1\\t2\\t4\\t160\\t30\\t30\\t12\\t95\\tEV38','5\\t1\\t1\\t1\\t2\\t5\\t215\\t30\\t15\\t12\\t95\\t38','5\\t1\\t1\\t1\\t2\\t6\\t265\\t30\\t15\\t12\\t95\\t39'].join('\\n');
+  const positionedOcrRows=equipmentRowsFromOcrTsv(mockTsv,310),positionedOcrDetails=equipmentDetailsFromRows(positionedOcrRows);
+  if(positionedOcrDetails['1'].device!=='1'||positionedOcrDetails['1'].portable!=='2'||positionedOcrDetails['38'].portable!=='39') throw new Error('Coordinate-based screenshot OCR matching failed');
+  const singleTsv=['level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext','5\\t1\\t1\\t1\\t1\\t1\\t10\\t0\\t25\\t10\\t90\\tVAN','5\\t1\\t1\\t1\\t1\\t2\\t85\\t0\\t35\\t10\\t90\\tDEVICE','5\\t1\\t1\\t1\\t1\\t3\\t150\\t0\\t50\\t10\\t90\\tPORTABLE','5\\t1\\t1\\t1\\t2\\t1\\t10\\t20\\t25\\t10\\t80\\tEvi','5\\t1\\t1\\t1\\t2\\t2\\t95\\t20\\t8\\t10\\t90\\t1','5\\t1\\t1\\t1\\t2\\t3\\t170\\t20\\t8\\t10\\t90\\t2','5\\t1\\t1\\t1\\t3\\t1\\t10\\t40\\t25\\t10\\t80\\tEv2','5\\t1\\t1\\t1\\t3\\t2\\t95\\t40\\t8\\t10\\t90\\t2','5\\t1\\t1\\t1\\t3\\t3\\t170\\t40\\t8\\t10\\t90\\t3','5\\t1\\t1\\t1\\t4\\t1\\t10\\t60\\t25\\t10\\t80\\tEva','5\\t1\\t1\\t1\\t4\\t2\\t95\\t60\\t8\\t10\\t90\\t3','5\\t1\\t1\\t1\\t4\\t3\\t170\\t60\\t8\\t10\\t90\\t4','5\\t1\\t1\\t1\\t5\\t1\\t10\\t80\\t25\\t10\\t80\\tEva','5\\t1\\t1\\t1\\t5\\t2\\t95\\t80\\t8\\t10\\t90\\t4','5\\t1\\t1\\t1\\t5\\t3\\t170\\t80\\t8\\t10\\t90\\t5','5\\t1\\t1\\t1\\t6\\t1\\t10\\t100\\t25\\t10\\t80\\tEVs','5\\t1\\t1\\t1\\t6\\t2\\t95\\t100\\t8\\t10\\t90\\t5','5\\t1\\t1\\t1\\t6\\t3\\t170\\t100\\t8\\t10\\t90\\t6'].join('\\n');
+  const singleRows=equipmentRowsFromOcrTsv(singleTsv,215),singleDetails=equipmentDetailsFromRows(singleRows);
+  if(singleRows[1][0]!=='EV1'||singleRows[5][0]!=='EV5'||singleDetails['5'].device!=='5'||singleDetails['5'].portable!=='6') throw new Error('Single-table screenshot OCR layout repair failed');
+  const inkHeader='level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext';
+  const inkWords=[inkHeader,'5\\t1\\t1\\t1\\t1\\t1\\t10\\t0\\t25\\t10\\t90\\tVAN','5\\t1\\t1\\t1\\t1\\t2\\t110\\t0\\t35\\t10\\t90\\tDEVICE','5\\t1\\t1\\t1\\t1\\t3\\t210\\t0\\t50\\t10\\t90\\tPORTABLE'];
+  for(let van=1;van<=8;van++){
+    const y=van*20;
+    inkWords.push('5\\t1\\t1\\t1\\t'+(van+1)+'\\t1\\t10\\t'+y+'\\t25\\t10\\t90\\tEV'+van);
+    inkWords.push('5\\t1\\t1\\t1\\t'+(van+1)+'\\t2\\t120\\t'+y+'\\t8\\t10\\t90\\t'+van);
+    if(van<=4)inkWords.push('5\\t1\\t1\\t1\\t'+(van+1)+'\\t3\\t220\\t'+y+'\\t8\\t10\\t90\\t'+(van+1));
+  }
+  const inkCanvas={width:300,height:190,getContext(){return {getImageData(x,y,width,height){
+    const pixels=new Uint8ClampedArray(width*height*4).fill(255),centerY=y+height/2,portable=x>180;
+    const occupied=!portable||centerY<155;
+    if(occupied){const dash=portable&&centerY>=135,markWidth=dash?12:5,markHeight=dash?2:8;for(let py=0;py<Math.min(height,markHeight);py++)for(let px=0;px<Math.min(width,markWidth);px++){const i=(py*width+px)*4;pixels[i]=pixels[i+1]=pixels[i+2]=0;pixels[i+3]=255;}}
+    return {data:pixels};
+  }};}};
+  const inkRows=equipmentRowsFromOcrTsv(inkWords.join('\\n'),300,inkCanvas),inkDetails=equipmentDetailsFromRows(inkRows);
+  if(inkDetails['5'].portable!=='6'||inkDetails['6'].portable!=='7'||inkDetails['7'].portable!=='-'||inkDetails['8'].portable!=='') throw new Error('Pixel-backed blank/dash screenshot repair failed: '+JSON.stringify(inkDetails));
+  state.equipmentImport=null;state.equipmentText='';
+  mergeEquipmentImport('screenshot-one.png',{'1':{device:'1',portable:'2'}},'EV1 1 2');
+  mergeEquipmentImport('screenshot-two.png',{'38':{device:'38',portable:'39'}},'EV38 38 39');
+  if(!state.equipmentImport.details['1']||state.equipmentImport.details['38'].portable!=='39'||!state.equipmentImport.name.includes('screenshot-two.png')) throw new Error('Multiple screenshot equipment imports should merge');
   state.equipmentImport = { name: 'device list', details: equipment };
   applyEquipmentImport();
   if (state.morningRoutes[0].deviceName !== '3' || state.morningRoutes[0].portable !== '-') throw new Error('EV/device assignment failed');
@@ -443,11 +471,18 @@ const checks = `
   state.editMode = true;
   state.copyMode = false;
   const editableHtml = morningSheetPage();
-  if (!editableHtml.includes('contenteditable="true"') || !editableHtml.includes('data-sheet-cell="true"') || !editableHtml.includes('sheet-letters-row') || !editableHtml.includes('sheet-row-num') || !editableHtml.includes('PORTABLE') || !editableHtml.includes('sheet-spacer-col') || !editableHtml.includes('PLANNED RTS') || !editableHtml.includes('VAN/DEV/PORT Import') || !editableHtml.includes('EV 1-57 Low → High') || !editableHtml.includes('Randomize EVs') || !editableHtml.includes('Assign Gas Vehicles') || !editableHtml.includes('Copy mode') || !editableHtml.includes('ONE-CLICK OPS LOG TRANSFER') || !editableHtml.includes('Send Morning Sheet to Ops Log') || !editableHtml.includes('Connect Ops Log once') || !editableHtml.includes('Copy fallback') || !editableHtml.includes('Copy fallback readiness') || !editableHtml.includes('Wave/Pad rowspans') || !editableHtml.includes('Formatted XLS') || !editableHtml.includes('Open paste box') || !editableHtml.includes('Remove blank rows') || !editableHtml.includes('Preview JPEG') || !editableHtml.includes('Click and drag white cells')) throw new Error('Editable sheet or JPEG control missing');
+  const editableRequirements=['contenteditable="true"','data-view-field="ev"','Press Enter to save','data-sheet-cell="true"','sheet-letters-row','sheet-row-num','PORTABLE','sheet-spacer-col','PLANNED RTS','VAN/DEV/PORT Import','EV 1-57 Low → High','Randomize EVs','Assign Gas Vehicles','Copy cells','Filtered waves','Automatic check','Google Ops Log','Connect Google Sheet','Copy fallback','Copy fallback readiness','Wave/Pad rowspans','Formatted XLS','Open paste box','Remove blank rows','Preview JPEG','Click and drag white cells'];
+  const missingEditableRequirements=editableRequirements.filter(value=>!editableHtml.includes(value));
+  if(missingEditableRequirements.length) throw new Error('Editable sheet or JPEG control missing: '+missingEditableRequirements.join(', '));
   assignElectricVehicles('low');
   if (state.morningRoutes[0].ev !== '1') throw new Error('Lowest-to-highest EV assignment failed');
-  assignGasVehicles();
-  if (state.morningRoutes[0].ev !== 'F33') throw new Error('Gas vehicle assignment failed');
+  openGasVehicleAssignment();
+  const gasModalHtml=modal();
+  if(!gasModalHtml.includes('Choose the driver boxes')||!gasModalHtml.includes('F33')||!gasModalHtml.includes('toggle-gas-driver')) throw new Error('Selectable gas vehicle modal missing');
+  state.gasAssignmentRoutes=[state.morningRoutes[0].route];
+  state.gasAssignmentVans=['F33'];
+  applyGasVehicleAssignment();
+  if (state.morningRoutes[0].ev !== 'F33') throw new Error('Selected gas vehicle assignment failed');
   state.copyMode = true;
   state.editMode = false;
   const copyModeHtml = morningSheetPage();
