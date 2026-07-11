@@ -96,10 +96,15 @@ const checks = `
   mergeDriverContacts(driverContacts);
   state.page = 'team';
   const teamHtml = teamPage();
-  if (!teamHtml.includes('Amazon Workforce contact import') || !teamHtml.includes('Open Amazon Workforce') || !teamHtml.includes('logistics.amazon.com/workforce?pageId=da_console_associates') || !teamHtml.includes('Import AssociateData CSV') || !teamHtml.includes('Add Delivery Associate') || !teamHtml.includes('(555) 123-4567') || !teamHtml.includes('Vanessa Balderama') || !teamHtml.includes('Future text reminder prep') || !teamHtml.includes('secure SMS connector') || !teamHtml.includes('No phone imported yet') || !teamHtml.includes('not embedded in or published')) throw new Error('Drivers & Team Workforce import UI missing private import, manual add, names, phones, Amazon link, or SMS guidance');
+  if (!teamHtml.includes('Driver & phone import') || !teamHtml.includes('Open Amazon Workforce') || !teamHtml.includes('logistics.amazon.com/workforce?pageId=da_console_associates') || !teamHtml.includes('Import Drivers CSV / Excel') || !teamHtml.includes('Choose CSV or Excel') || !teamHtml.includes('Add Delivery Associate') || !teamHtml.includes('(555) 123-4567') || !teamHtml.includes('Vanessa Balderama') || !teamHtml.includes('Future text reminder prep') || !teamHtml.includes('secure SMS connector') || !teamHtml.includes('No phone imported yet') || !teamHtml.includes('not embedded in or published') || !teamHtml.includes('driver-delete-button') || !teamHtml.includes('request-driver-removal')) throw new Error('Drivers & Team Workforce import UI missing CSV/Excel import, deletion, manual add, names, phones, Amazon link, or SMS guidance');
   action('add-delivery-associate',{});
   if(state.modal!=='add-driver'||!modal().includes('manual-driver-name')||!modal().includes('manual-driver-phone')||!modal().includes('manual-driver-id')||!modal().includes('Private on this device')) throw new Error('Manual Add Delivery Associate form missing');
   state.modal=null;
+  requestDriverRemoval('vanessa balderama');
+  if(state.modal!=='remove-driver'||!modal().includes('Remove Vanessa Balderama?')||!modal().includes('Remove DA')||!modal().includes('Are you sure?')) throw new Error('Driver removal confirmation dialog missing');
+  confirmDriverRemoval();
+  if(teamPage().includes('Vanessa Balderama')||!(state.removedDriverKeys||[]).includes('vanessa balderama')) throw new Error('Confirmed driver removal should delete the DA card and persist its key');
+  state.removedDriverKeys=[];mergeDriverContacts(driverContacts);
   action('driver-import',{});
   if (state.importPurpose !== 'drivers') throw new Error('Driver import button should route file uploads to the driver CSV parser');
   state.importPurpose = 'morning';
@@ -576,6 +581,11 @@ const checks = `
   state.screenshotPreview = 'data:image/jpeg;base64,demo'; state.modal = 'screenshot';
   if (!modal().includes('Approve & save JPEG') || !modal().includes('Driver/Helper')) throw new Error('JPEG approval dialog missing');
   globalThis.__parseXlsx = parseXlsxArrayBuffer;
+  globalThis.__parseDriverWorkbook = async buffer => {
+    state.importPurpose='drivers';
+    const rows=await parseXlsxArrayBuffer(buffer);
+    return {rows,contacts:driverContactsFromRows(rows)};
+  };
   globalThis.__readPdfText = readPdfText;
 `;
 
@@ -604,6 +614,13 @@ const fleetCss = fs.readFileSync('styles.css','utf8');
   const fleetWorkbook = await fleetZip.generateAsync({ type: 'nodebuffer' });
   const parsedFleetWorkbook = await context.__parseXlsx(fleetWorkbook);
   if (parsedFleetWorkbook.length !== 2 || parsedFleetWorkbook[0][0] !== 'VIN' || parsedFleetWorkbook[1][0] !== '7FCEHEB79PN014816') throw new Error('XLSX fleet parser should choose the VIN roster tab over workbook instructions');
+  const organizedPath='outputs/organized_associate_data.xlsx';
+  if(fs.existsSync(organizedPath)) {
+    const organizedBuffer=fs.readFileSync(organizedPath);
+    const organized=await context.__parseDriverWorkbook(organizedBuffer.buffer.slice(organizedBuffer.byteOffset,organizedBuffer.byteOffset+organizedBuffer.byteLength));
+    const contacts=organized.contacts;
+    if(contacts.length!==127||contacts[0].name!=='Adrian Anthony Elizondo'||contacts[0].phone!=='(951) 472-9383'||!contacts.some(contact=>contact.name==='Angelique danielle Murray')) throw new Error(`Organized associate workbook import mismatch: ${contacts.length} contacts from ${organized.rows.length} rows; first ${JSON.stringify(organized.rows[0]||[])}`);
+  }
   const pdfLike = Buffer.from('%PDF-1.4\\nBT (1 40 31 37 31 - 2 41 32 38 32 -) Tj ET\\n%%EOF');
   const pdfText = await context.__readPdfText(pdfLike.buffer.slice(pdfLike.byteOffset, pdfLike.byteOffset + pdfLike.byteLength));
   if (!pdfText.includes('1 40 31 37 31 -')) throw new Error('PDF text extraction failed');

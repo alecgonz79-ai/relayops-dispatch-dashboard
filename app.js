@@ -23,7 +23,8 @@ const ICONS = {
   phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/></svg>',
   menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
   link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>',
-  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>'
 };
 
 const NAV = [
@@ -269,6 +270,12 @@ let state = {
   deviceCustomRows: loadDeviceCustomRows(),
   driverContacts: JSON.parse(localStorage.getItem('relayops_driver_contacts') || 'null') || [],
   driverContactsLastImport: localStorage.getItem('relayops_driver_contacts_last_import') || '',
+  removedDriverKeys: JSON.parse(localStorage.getItem('relayops_removed_driver_keys') || 'null') || [],
+  pendingDriverRemoval: null,
+  cloudStatus: window.RelayOpsCloud?.configured?'connecting':'setup-required',
+  cloudUser: '',
+  cloudPresence: [],
+  cloudMembers: [],
   rating: Number(localStorage.getItem('relayops_rating') || 0)
 };
 
@@ -294,14 +301,14 @@ function phoneDisplay(value='') {
   return raw;
 }
 function driverContactsFromRows(rows=[]) {
-  const header=findImportHeader(rows,[['name','nameandid','preferredname','fullname','driver','drivername','employeename','associate','associatename','deliveryassociate','da','first','firstname'],['phone','phonenumber','personalphonenumber','primaryphone','mobile','mobilephone','cell','cellphone','telephone']]);
+  const header=findImportHeader(rows,[['name','nameandid','preferredname','fullname','driver','drivername','employeename','associate','associatename','deliveryassociate','da','first','firstname'],['phone','phonenumber','personalphone','personalphonenumber','primaryphone','mobile','mobilephone','cell','cellphone','telephone']]);
   if(header<0)return [];
   const keys=rows[header].map(headerKey);
   const index=(...names)=>{const wanted=names.map(headerKey);return keys.findIndex(k=>wanted.includes(k));};
   const nameIx=index('name','name and id','nameandid','preferred name','preferredname','full name','fullName','driver','drivername','employee name','employeename','associate','associate name','associatename','delivery associate','deliveryassociate','da');
   const firstIx=index('first','firstname','first name');
   const lastIx=index('last','lastname','last name');
-  const phoneIx=index('personal phone number','personalphonenumber','phone','phonenumber','phone number','primary phone','primaryphone','mobile','mobile phone','mobilephone','cell','cellphone','cell phone','telephone');
+  const phoneIx=index('personal phone','personalphone','personal phone number','personalphonenumber','phone','phonenumber','phone number','primary phone','primaryphone','mobile','mobile phone','mobilephone','cell','cellphone','cell phone','telephone');
   const roleIx=index('role','position','jobtitle','job title'),transporterIx=index('transporterid','transporter id','associate id','associateid'),statusIx=index('status','associate status','associatestatus');
   const contacts=[], seen=new Set();
   rows.slice(header+1).forEach(row=>{
@@ -337,11 +344,23 @@ function driverContactForName(name='') {
   return (state.driverContacts||[]).find(contact=>(contact.key||nameKey(contact.name))===key);
 }
 function teamDriverRows() {
+  const removed=new Set(state.removedDriverKeys||[]);
   const imported=(state.driverContacts||[]).filter(contact=>!team.some(d=>nameKey(d[0])===(contact.key||nameKey(contact.name))));
   return [
     ...team.map((d,i)=>({name:d[0],role:d[1],status:d[2],quality:d[3],coaching:d[4],id:`DA-${1019+i*7}`,phone:driverContactForName(d[0])?.phone||'',imported:false})),
     ...imported.map((contact,i)=>({name:contact.name,role:contact.role||'Delivery Associate',status:String(contact.status||'').toUpperCase()==='ACTIVE'?'Active':'Imported',quality:'—',coaching:'—',id:contact.transporterId||`IMP-${String(i+1).padStart(3,'0')}`,phone:contact.phone||'',imported:true}))
-  ];
+  ].filter(driver=>!removed.has(nameKey(driver.name)));
+}
+function requestDriverRemoval(key='') {
+  const normalized=nameKey(key),driver=teamDriverRows().find(item=>nameKey(item.name)===normalized);
+  if(!driver)return toast('Delivery Associate could not be found','error');
+  state.pendingDriverRemoval={key:normalized,name:driver.name};state.modal='remove-driver';render();
+}
+function confirmDriverRemoval() {
+  const pending=state.pendingDriverRemoval;if(!pending)return;
+  state.driverContacts=(state.driverContacts||[]).filter(contact=>(contact.key||nameKey(contact.name))!==pending.key);
+  state.removedDriverKeys=[...new Set([...(state.removedDriverKeys||[]),pending.key])];
+  const name=pending.name;state.pendingDriverRemoval=null;state.modal=null;persist();render();toast(`${name} removed from Drivers & Team`);
 }
 function fmtDate() { return new Intl.DateTimeFormat('en-US',{weekday:'long',month:'short',day:'numeric'}).format(new Date()); }
 function statusClass(status) {
@@ -381,12 +400,13 @@ function topbar() {
   const fleetClean=state.page==='fleet';
   return `<header class="topbar">
     <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu">${ICONS.menu}</button><div class="page-heading"><h1>${title}</h1><p>${sub}</p></div></div>
-    <div class="top-actions">${fleetClean?'':`<label class="search">${ICONS.search}<input id="global-search" placeholder="Search driver, route, van…" value="${esc(state.search)}" /></label>`}${state.page==='morning'?'<button class="btn info-top-button" data-action="open-morning-diagnostics" title="Setup & diagnostics"><span>ℹ</span><span class="hide-mobile">Setup & diagnostics</span></button>':''}<button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button><button class="icon-button" aria-label="Notifications">${ICONS.bell}<i class="notification-dot"></i></button>${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
+    <div class="top-actions">${fleetClean?'':`<label class="search">${ICONS.search}<input id="global-search" placeholder="Search driver, route, van…" value="${esc(state.search)}" /></label>`}${state.page==='morning'?'<button class="btn info-top-button" data-action="open-morning-diagnostics" title="Setup & diagnostics"><span>ℹ</span><span class="hide-mobile">Setup & diagnostics</span></button>':''}<button class="btn cloud-status-button ${esc(state.cloudStatus)}" data-action="cloud-account"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting…':state.cloudStatus==='signed-out'?'Dispatcher sign in':'Cloud setup'}</span></button><button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button><button class="icon-button" aria-label="Notifications">${ICONS.bell}<i class="notification-dot"></i></button>${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
   </header>`;
 }
 
 function contextBar(extra='') {
-  return `<div class="context-bar"><div class="date-nav"><div class="date-chip">${ICONS.calendar}${fmtDate()}</div>${extra}</div><div class="sync-state"><i class="live-dot"></i> Demo data · last refreshed 6 min ago</div></div>`;
+  const synced=state.cloudStatus==='synced',label=synced?`Shared workspace${state.cloudUser?` · ${state.cloudUser}`:''}`:state.cloudStatus==='signed-out'?'Local cache · sign in to share':state.cloudStatus==='connecting'?'Connecting shared workspace…':'Local cache · cloud setup required';
+  return `<div class="context-bar"><div class="date-nav"><div class="date-chip">${ICONS.calendar}${fmtDate()}</div>${extra}</div><div class="sync-state ${synced?'cloud-live':''}"><i class="live-dot"></i>${esc(label)}</div></div>`;
 }
 
 function kpiCard(label,value,meta,icon,tint='#eef2ed') { return `<article class="card kpi" style="--tint:${tint}"><div class="kpi-top"><span class="kpi-label">${label}</span><span class="kpi-icon">${ICONS[icon]}</span></div><div class="kpi-value">${value}</div><div class="kpi-meta">${meta}</div></article>`; }
@@ -680,10 +700,10 @@ function livePage() {
 function teamPage() {
   const drivers=teamDriverRows(), contacts=state.driverContacts||[];
   const onRouteNames=new Set(filteredMorningRows().map(r=>nameKey(r.driver)).filter(Boolean));
-  return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All status</option><option>Active</option><option>Leave</option></select><select class="filter-select"><option>All roles</option><option>Lead DA</option><option>Delivery Associate</option></select><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import AssociateData CSV</button><button class="btn lime" data-action="add-delivery-associate">${ICONS.plus} Add Delivery Associate</button></div></div>
-  <div class="driver-workforce-import card"><div><strong>Amazon Workforce contact import</strong><span>Import AssociateData CSV. RelayOps matches Name and ID with Personal Phone Number, keeps Transporter ID and Active status, and adds one card per associate.</span></div><div><button class="btn small primary" data-action="driver-import">Import AssociateData</button><button class="btn small" data-action="add-delivery-associate">Add one manually</button></div><small>Contacts stay in this browser’s private storage. They are not embedded in or published with the public GitHub Pages website.</small></div>
+  return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All status</option><option>Active</option><option>Leave</option></select><select class="filter-select"><option>All roles</option><option>Lead DA</option><option>Delivery Associate</option></select><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import Drivers CSV / Excel</button><button class="btn lime" data-action="add-delivery-associate">${ICONS.plus} Add Delivery Associate</button></div></div>
+  <div class="driver-workforce-import card"><div><strong>Driver & phone import</strong><span>Drop in an AssociateData CSV or Excel workbook (.xlsx). RelayOps finds the associate sheet, matches Name with Personal Phone, and keeps Position, Transporter ID, and Active status.</span></div><div><button class="btn small primary" data-action="driver-import">Choose CSV or Excel</button><button class="btn small" data-action="add-delivery-associate">Add one manually</button></div><small>Contacts stay in this browser’s private storage. They are not embedded in or published with the public GitHub Pages website.</small></div>
   <div class="driver-message-readiness card"><div><strong>Future text reminder prep</strong><span>After the Morning Sheet is finalized, RelayOps can identify on-route drivers by the visible Morning Sheet names. Texting will need a secure SMS connector and driver opt-in before it sends anything.</span></div><div><b>${drivers.filter(d=>onRouteNames.has(nameKey(d.name))).length}</b><small>current team cards recognized on the Morning Sheet</small></div></div>
-  <section class="grid team-grid">${drivers.map(d=>`<article class="card entity-card"><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(d.name)}</div><span class="status ${statusClass(d.status)}">${d.status}</span></div><h3>${esc(d.name)}</h3><p>${esc(d.role)} · ${esc(d.id)}</p><div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div><div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></article>`).join('')}</section>`;
+  <section class="grid team-grid">${drivers.map(d=>`<article class="card entity-card driver-card"><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(d.name)}</div><div class="driver-card-actions"><span class="status ${statusClass(d.status)}">${d.status}</span><button class="driver-delete-button" data-action="request-driver-removal" data-driver-key="${esc(nameKey(d.name))}" aria-label="Remove ${esc(d.name)}" title="Remove Delivery Associate">${ICONS.trash}</button></div></div><h3>${esc(d.name)}</h3><p>${esc(d.role)} · ${esc(d.id)}</p><div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div><div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></article>`).join('')}</section>`;
 }
 
 function fleetPage() {
@@ -1727,12 +1747,18 @@ function morningImportTemplateProofHtml(file=state.importedFile,payload=morningS
 
 function modal() {
   if (!state.modal) return '';
+  if (state.modal === 'cloud-account') {
+    const configured=Boolean(window.RelayOpsCloud?.configured),signedIn=Boolean(window.RelayOpsCloud?.session);
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal cloud-account-modal" role="dialog" aria-modal="true" aria-labelledby="cloud-account-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">SHARED RELAYOPS</span><h2 id="cloud-account-title">${!configured?'Connect the shared workspace':signedIn?'Dispatcher account':'Sign in to RelayOps'}</h2><p>${!configured?'Owner setup is required once. After setup, every authorized dispatcher uses the same live operational data.':signedIn?`Signed in as ${esc(state.cloudUser||'authorized dispatcher')}. Changes synchronize with your station in real time.`:'Enter your authorized dispatcher email. RelayOps will send a secure sign-in link.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${!configured?`<div class="cloud-setup-steps"><span><b>1</b>Create the RelayOps Supabase project</span><span><b>2</b>Run <code>supabase/schema.sql</code></span><span><b>3</b>Add project URL, anon key, organization ID, and station ID to <code>supabase/config.js</code></span></div><div class="private-contact-note"><b>Security requirement</b><span>Use only the public anon key here. Never add the Supabase service-role key, Amazon password, FleetOS password, or portal cookies.</span></div>`:signedIn?`<div class="cloud-account-summary"><span><b>✓</b>Authenticated</span><span><b>✓</b>Station access checked by database policies</span><span><b>✓</b>Realtime workspace updates enabled</span></div>`:`<label class="cloud-email-field"><span>Dispatcher email</span><input id="cloud-signin-email" type="email" autocomplete="email" placeholder="dispatcher@company.com"></label><div class="private-contact-note"><b>Passwordless sign-in</b><span>The secure email link identifies the dispatcher. Database roles decide what they can view or edit.</span></div>`}<div class="modal-actions"><button class="btn" data-action="close-modal">Close</button>${configured?(signedIn?'<button class="btn danger" data-action="cloud-sign-out">Sign out</button>':'<button class="btn primary" data-action="cloud-sign-in">Send sign-in link</button>'):''}</div></div></div></div>`;
+  }
+  if (state.modal === 'invite-user') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal invite-user-modal" role="dialog" aria-modal="true" aria-labelledby="invite-user-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">OWNER ACCESS</span><h2 id="invite-user-title">Invite a dispatcher</h2><p>The user receives a secure email link and is limited to the role selected below.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="add-driver-fields"><label><span>Full name</span><input id="invite-user-name" autocomplete="name" placeholder="Dispatcher name"></label><label><span>Company email *</span><input id="invite-user-email" type="email" autocomplete="email" placeholder="dispatcher@company.com"></label><label><span>Role</span><select id="invite-user-role"><option value="dispatcher">Dispatcher</option><option value="fleet_lead">Fleet lead</option><option value="ops_manager">Operations manager</option><option value="viewer">Viewer</option></select></label></div><div class="private-contact-note"><b>Database-enforced access</b><span>Dispatchers can edit daily operations. Fleet leads can update shared fleet data. Viewers cannot modify the workspace.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="send-user-invite">Send secure invitation</button></div></div></div></div>`;
   if (state.modal === 'import') {
     const proof=importPreflight(), isRts=state.importPurpose==='rts';
     const source=state.importSource==='slack'&&!isRts?`<div class="slack-panel"><div class="slack-brand"><div class="slack-logo">S</div><div><strong>Slack Import</strong><span>#morning-operations · demo connection</span></div><span class="demo-tag">DEMO</span></div><button class="slack-file" data-action="load-slack-demo"><span class="file-type">CSV</span><span><strong>Today’s operations file</strong><small>Shared by Operations Bot · ready to use</small></span><span class="btn small">Choose this file</span></button><div class="import-note">For this demo, RelayOps will keep only ${state.dspCode} routes from the Slack file.</div></div>`:`<div class="drop-zone ${state.importedFile?'has-file':''}" id="drop-zone"><div><div class="drop-icon">${state.importedFile?ICONS.check:ICONS.upload}</div><strong>${state.importedFile?`Great! ${esc(state.importedFile.name)} is ready.`:isRts?'Choose the Routes_DJT6 file':'Choose DAYOFOPSPLAN and ROUTE_DJT6'}</strong><span>${state.importedFile?`${state.importedFile.rows.length} rows found${state.importedFile.routeDetailsCount?` · ${state.importedFile.routeDetailsCount} CX rows matched`:''}.`:isRts?'Excel (.xlsx) or CSV is supported. RelayOps pulls only Planned Departure Time into Planned RTS.':'Select both files at the same time. Excel (.xlsx) and CSV are supported.'}</span><button class="btn primary upload-choice" data-action="choose-file">${state.importedFile?'Choose different files':isRts?'Choose Planned RTS file':'Choose Amazon files'}</button></div></div>`;
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">${isRts?'PLANNED RTS':'EASY UPLOAD'}</span><h2 id="import-title">${isRts?'Upload Planned RTS times':'Make my morning sheet'}</h2><p>${isRts?'Drop the Routes_DJT6 export. Only the Planned Departure Time column is used.':'Choose the plan and route files. RelayOps joins them by CX route.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="upload-progress"><div class="upload-progress-step active"><b>1</b><span>Choose files</span></div><i></i><div class="upload-progress-step ${state.importedFile?'active':''}"><b>${state.importedFile?'✓':'2'}</b><span>${isRts?'Find planned time':'Match CX routes'}</span></div><i></i><div class="upload-progress-step"><b>3</b><span>${isRts?'Fill purple cells':'Make sheet'}</span></div></div>${!isRts?`<div class="source-tabs import-choice-grid"><button class="source-tab import-choice-card ${state.importSource==='slack'?'active':''}" data-action="set-import-source" data-source="slack"><strong>Slack Import</strong><small>Daily file from the operations channel</small></button><button class="source-tab import-choice-card ${state.importSource==='computer'?'active':''}" data-action="set-import-source" data-source="computer"><strong>Cortex Import</strong><small>Amazon DAYOFOPSPLAN + ROUTE_DJT6 exports</small></button></div>`:''}${source}${state.importedFile?`${importPreflightHtml()}<div class="auto-match"><strong>RelayOps will do these things:</strong><div><span>✓ Earliest wave first</span><span>✓ CX route matching</span><span>${isRts?'✓ Planned RTS purple cells':'✓ First driver name only'}</span></div></div>`:''}<div class="modal-actions easy-actions"><button class="btn sample-button" data-action="template-csv">Need an example file?</button><button class="btn primary create-sheet-button" data-action="apply-import" ${state.importedFile&&proof?.ready?'':'disabled'}>${state.importedFile?(isRts?'Fill Planned RTS →':'Create my operations sheet →'):'Choose files first'}</button></div><p class="upload-help">Nothing is sent to Amazon. RelayOps reads the files in this browser and keeps the originals unchanged.</p></div></div></div>`;
   }
   if (state.modal === 'add-driver') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal add-driver-modal" role="dialog" aria-modal="true" aria-labelledby="add-driver-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">DRIVERS & TEAM</span><h2 id="add-driver-title">Add Delivery Associate</h2><p>Add one associate without re-importing the full Amazon file.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="add-driver-fields"><label><span>Full name *</span><input id="manual-driver-name" autocomplete="name" placeholder="First and last name"></label><label><span>Personal phone *</span><input id="manual-driver-phone" inputmode="tel" autocomplete="tel" placeholder="(951) 555-0123"></label><label><span>Position</span><select id="manual-driver-role"><option>Delivery Associate</option><option>Helper, Driver</option><option>Lead DA</option><option>Helper</option></select></label><label><span>Transporter ID</span><input id="manual-driver-id" autocomplete="off" placeholder="Optional Amazon ID"></label></div><div class="private-contact-note"><b>Private on this device</b><span>This contact is saved only in this browser and is not published to GitHub Pages.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="save-manual-driver">Add Delivery Associate</button></div></div></div></div>`;
+  if (state.modal === 'remove-driver' && state.pendingDriverRemoval) return `<div class="modal-backdrop" data-action="close-modal"><div class="modal remove-driver-modal" role="alertdialog" aria-modal="true" aria-labelledby="remove-driver-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">CONFIRM REMOVAL</span><h2 id="remove-driver-title">Remove ${esc(state.pendingDriverRemoval.name)}?</h2><p>This Delivery Associate will be removed from the Drivers & Team cards on this device.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="remove-driver-warning">${ICONS.alert}<div><b>Are you sure?</b><span>You can add the associate again later by re-importing the roster or using Add Delivery Associate.</span></div></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn danger" data-action="confirm-driver-removal">${ICONS.trash} Remove DA</button></div></div></div></div>`;
   if (state.modal === 'export') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()"><div class="modal-head"><div><h2>Export route data</h2><p>Ready for Excel or your Google Sheets template</p></div><button class="icon-button" data-action="close-modal">×</button></div><div class="modal-body"><div class="connection"><div class="connection-logo">CSV</div><div class="connection-copy"><strong>CSV file</strong><span>Fastest option for Google Sheets</span></div><button class="btn small" data-action="export-csv">Download</button></div><div class="connection"><div class="connection-logo" style="background:#1c6e44">XLS</div><div class="connection-copy"><strong>Excel workbook</strong><span>Styled table that opens in Excel</span></div><button class="btn small" data-action="export-excel">Download</button></div><div class="connection"><div class="connection-logo" style="background:#2866b4">TAB</div><div class="connection-copy"><strong>Copy for Google Sheets</strong><span>Paste directly into cell A1</span></div><button class="btn small" data-action="copy">Copy</button></div></div></div></div>`;
   if (state.modal === 'sheets-helper') { const pasteRange=morningSheetsHandoffProof().range; return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="sheets-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS PASTE BOX</span><h2 id="sheets-title">Paste-ready morning sheet</h2><p>If one-click copy does not work, click Select all, copy, then paste into Google Sheets cell A3. Expected filled range: ${esc(pasteRange)}.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="paste-guide"><span><b>1</b> Select all</span><span><b>2</b> Copy</span><span><b>3</b> Paste ${esc(pasteRange)}</span></div><textarea id="sheets-copy-text" class="sheets-copy-text" readonly>${esc(state.sheetCopyText||morningSheetTsv())}</textarea><div class="modal-actions"><button class="btn" data-action="select-sheets-text">Select all text</button><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy again</button></div></div></div></div>`; }
   if (state.modal === 'morning-sheets-connector') {
@@ -2356,10 +2382,31 @@ async function shareDispatcherLink() {
   toast(ok?'Clickable dispatcher link copied — paste it into GroupMe, Slack, text, or email':'Clipboard access was blocked — copy the full https:// link from Admin control',ok?'':'error');
   return ok;
 }
+async function cloudSignIn() {
+  const email=String(document.getElementById('cloud-signin-email')?.value||'').trim().toLowerCase();
+  if(!/^\S+@\S+\.\S+$/.test(email))return toast('Enter a complete dispatcher email','error');
+  try{await window.RelayOpsCloud.signIn(email);toast(`Secure sign-in link sent to ${email}`);}
+  catch(error){toast(`Could not send sign-in link: ${error.message||'check cloud setup'}`,'error');}
+}
+async function cloudSignOut() {
+  try{await window.RelayOpsCloud.signOut();state.modal=null;state.cloudStatus='signed-out';state.cloudUser='';render();toast('Signed out · local cache remains on this device');}
+  catch(error){toast(`Could not sign out: ${error.message||'try again'}`,'error');}
+}
+async function refreshCloudMembers() {
+  if(!window.RelayOpsCloud?.session)return [];
+  try{state.cloudMembers=await window.RelayOpsCloud.members();const current=state.cloudMembers.find(member=>member.user_id===window.RelayOpsCloud.session.user.id);if(current?.role)state.role=current.role==='owner'?'admin':current.role;render();return state.cloudMembers;}
+  catch(error){console.warn('Could not load members',error);return[];}
+}
+async function sendUserInvite() {
+  const email=String(document.getElementById('invite-user-email')?.value||'').trim().toLowerCase(),displayName=String(document.getElementById('invite-user-name')?.value||'').trim(),role=String(document.getElementById('invite-user-role')?.value||'dispatcher');
+  if(!/^\S+@\S+\.\S+$/.test(email))return toast('Enter a complete company email','error');
+  try{await window.RelayOpsCloud.inviteMember({email,displayName,role});state.modal=null;await refreshCloudMembers();toast(`${displayName||email} invited as ${role.replace('_',' ')}`);}
+  catch(error){toast(`Invitation failed: ${error.message||'check owner access'}`,'error');}
+}
 
 function go(page) {
   if (page==='admin'&&state.role!=='admin') return toast('Owner permission required','error');
-  state.page=page; state.search=''; state.modal=null; persist(); render(); window.scrollTo({top:0,behavior:'smooth'});
+  state.page=page; state.search=''; state.modal=null; persist(); render();if(page==='admin')refreshCloudMembers();window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function action(name,el) {
@@ -2372,15 +2419,22 @@ function action(name,el) {
   if (name==='fleet-import') { state.modal='fleet-import'; state.importPurpose='fleet'; state.fleetImportSourceHint=''; return render(); }
   if (name==='fleet-import-amazon') { state.importPurpose='fleet';state.fleetImportSourceHint='amazon';return fileInput.click(); }
   if (name==='fleet-import-fleetos') { state.importPurpose='fleet';state.fleetImportSourceHint='fleetos';return fileInput.click(); }
-  if (name==='driver-import') { state.importPurpose='drivers'; return fileInput.click(); }
+  if (name==='driver-import') { state.importPurpose='drivers';fileInput.accept='.csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';return fileInput.click(); }
   if (name==='add-delivery-associate') { state.modal='add-driver';return render(); }
   if (name==='save-manual-driver') return saveManualDriver();
+  if (name==='request-driver-removal') return requestDriverRemoval(el.dataset.driverKey||'');
+  if (name==='confirm-driver-removal') return confirmDriverRemoval();
   if (name==='parking-choose-file') { state.importPurpose='parking'; return fileInput.click(); }
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal') { state.modal=null;state.screenshotPreview=null;state.fleetRefreshPreview=null;return render(); }
-  if (name==='choose-file') return fileInput.click();
+  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.screenshotPreview=null;state.fleetRefreshPreview=null;return render(); }
+  if (name==='choose-file') { fileInput.accept='';return fileInput.click(); }
   if (name==='share-dispatcher-link') return shareDispatcherLink();
+  if (name==='cloud-account') { state.modal='cloud-account';return render(); }
+  if (name==='cloud-sign-in') return cloudSignIn();
+  if (name==='cloud-sign-out') return cloudSignOut();
+  if (name==='invite') { if(!window.RelayOpsCloud?.session)return toast('Sign in as the owner before inviting users','error');state.modal='invite-user';return render(); }
+  if (name==='send-user-invite') return sendUserInvite();
   if (name==='apply-import') return applyImport();
   if (name==='export-menu') { state.modal='export'; return render(); }
   if (name==='export-csv') return exportCSV();
@@ -2778,7 +2832,7 @@ async function readFiles(files) {
     state.importedFile={name:parsed.map(f=>f.name).join(' + '),headers:rows[0],rows:rows.slice(1),kind:state.importPurpose==='rts'?'rts':(plan?'plan':'details'),routeDetails:details,routeDetailsCount:Object.keys(details).length};
     render();toast(`${parsed.length} file${parsed.length===1?'':'s'} ready · CX routes will be matched automatically`);
   } catch(error) {
-    console.error(error);toast(state.importPurpose==='fleet'?'Could not find VIN rows. Use a CSV/XLSX export with a VIN column.':state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV with Name and Phone columns.':'These files could not be read. Choose DAYOFOPSPLAN and ROUTE_DJT6 as CSV or XLSX.','error');
+    console.error(error);toast(state.importPurpose==='fleet'?'Could not find VIN rows. Use a CSV/XLSX export with a VIN column.':state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV or XLSX file with Name and Personal Phone columns.':'These files could not be read. Choose DAYOFOPSPLAN and ROUTE_DJT6 as CSV or XLSX.','error');
   }
 }
 async function readFile(file) { return readFiles([file]); }
@@ -3136,11 +3190,17 @@ async function parseXlsxArrayBuffer(buffer) {
   const paths=[]; const sheetRe=/<(?:\w+:)?sheet\b([^>]*?)(?:\/>|>[\s\S]*?<\/(?:\w+:)?sheet>)/gi; let sheet;
   while((sheet=sheetRe.exec(workbook))) { const id=(sheet[1].match(/\br:id="([^"]+)"/i)||[])[1], target=relationMap[id]; if(target){const clean=target.replace(/^\//,'').replace(/^\.\.\//,'');paths.push(clean.startsWith('xl/')?clean:`xl/${clean}`);} }
   if(!paths.length) paths.push(...Object.keys(zip.files).filter(p=>/^xl\/worksheets\/sheet\d+\.xml$/i.test(p)).sort());
-  let fallback=[], bestVinSheet=null;
+  let fallback=[], bestVinSheet=null, bestDriverSheet=null;
   for(const path of paths) {
     const rows=parseWorksheetXml(await read(path),shared); if(!rows.length)continue; if(!fallback.length)fallback=rows;
+    const driverHeader=findImportHeader(rows,[['name','nameandid','preferredname','fullname','driver','drivername','employeename','associate','associatename','deliveryassociate'],['phone','phonenumber','personalphone','personalphonenumber','primaryphone','mobile','mobilephone','cell','cellphone','telephone']]);
+    if(driverHeader>=0) {
+      const keys=rows[driverHeader].map(headerKey), driverFields=['name','nameandid','deliveryassociate','personalphone','personalphonenumber','position','status','transporterid'];
+      const score=(rows.length-driverHeader)*10+keys.filter(h=>driverFields.includes(h)).length;
+      if(!bestDriverSheet||score>bestDriverSheet.score) bestDriverSheet={score,rows:rows.slice(driverHeader)};
+    }
     const header=rows.findIndex(row=>{const cells=row.map(v=>String(v).toLowerCase().replace(/[^a-z0-9]/g,''));return cells.includes('dsp')&&cells.includes('routecode')&&cells.includes('wave')&&cells.includes('staginglocation');});
-    if(header>=0) return rows.slice(header);
+    if(header>=0&&state.importPurpose!=='drivers') return rows.slice(header);
     const vinHeader=rows.findIndex(row=>row.map(headerKey).some(h=>['vin','vinnumber','vehiclevin','vehicleidentificationnumber'].includes(h)));
     if(vinHeader>=0) {
       const keys=rows[vinHeader].map(headerKey);
@@ -3149,7 +3209,8 @@ async function parseXlsxArrayBuffer(buffer) {
       if(!bestVinSheet||score>bestVinSheet.score) bestVinSheet={score,rows:rows.slice(vinHeader)};
     }
   }
-  return bestVinSheet?.rows||fallback;
+  if(state.importPurpose==='drivers'&&bestDriverSheet) return bestDriverSheet.rows;
+  return bestVinSheet?.rows||bestDriverSheet?.rows||fallback;
 }
 
 function applyImport() {
@@ -4399,10 +4460,40 @@ function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function persist(){
 localStorage.setItem('relayops_equipment_import',JSON.stringify(state.equipmentImport||null));
 localStorage.setItem('relayops_device_custom_rows',JSON.stringify(state.deviceCustomRows||{ev:[],gas:[],helper:[]}));
-localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_morning_sheets_last_dry_run',state.morningSheetsLastDryRun||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');localStorage.setItem('relayops_driver_contacts',JSON.stringify(state.driverContacts||[]));localStorage.setItem('relayops_driver_contacts_last_import',state.driverContactsLastImport||'');
+localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_morning_sheets_last_dry_run',state.morningSheetsLastDryRun||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');localStorage.setItem('relayops_driver_contacts',JSON.stringify(state.driverContacts||[]));localStorage.setItem('relayops_driver_contacts_last_import',state.driverContactsLastImport||'');localStorage.setItem('relayops_removed_driver_keys',JSON.stringify(state.removedDriverKeys||[]));
 localStorage.setItem('relayops_morning_operation_date',state.morningOperationDate||defaultOperationDate());
 localStorage.setItem('relayops_fleet_name_overrides',JSON.stringify(state.fleetNameOverrides||{}));
+window.RelayOpsCloud?.schedule?.('workspace.autosave');
 }
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
+function sharedWorkspaceState() {
+  return {
+    schemaVersion:1,dspCode:state.dspCode,routes:state.routes,morningRoutes:state.morningRoutes,
+    lastImportExcluded:state.lastImportExcluded,rosterPublished:state.rosterPublished,
+    fleetImport:state.fleetImport,fleetSourceUploads:state.fleetSourceUploads,fleetExpectedCount:state.fleetExpectedCount,
+    fleetNameOverrides:state.fleetNameOverrides,vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,
+    vanParkingBatteries:state.vanParkingBatteries,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
+    driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,
+    morningSheetsEndpoint:state.morningSheetsEndpoint
+  };
+}
+function applySharedWorkspaceState(payload={}) {
+  const allowed=['dspCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','vanParking','vanParkingUpdated','vanParkingBatteries','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','morningSheetsEndpoint'];
+  allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
+  if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
+  persist();render();
+}
+window.RelayOpsApp={sharedState:sharedWorkspaceState,applySharedState:applySharedWorkspaceState,operationDate:()=>state.morningOperationDate};
+window.RelayOpsCloud?.on?.(event=>{
+  if(event.type==='offline'){state.cloudStatus='setup-required';render();}
+  if(event.type==='auth'){state.cloudStatus=event.session?'connecting':'signed-out';state.cloudUser=event.session?.user?.email||'';render();}
+  if(event.type==='presence'){state.cloudPresence=event.users||[];render();}
+  if(event.type==='loaded'||event.type==='saved'){state.cloudStatus='synced';render();}
+  if(event.type==='remote-update'){state.cloudStatus='synced';render();toast('Another dispatcher updated today’s workspace');}
+  if(event.type==='conflict')toast('A newer dispatcher update was loaded before saving','error');
+  if(event.type==='error'){state.cloudStatus='error';render();toast(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
+  if(event.type==='magic-link-sent')toast(`Sign-in link sent to ${event.email}`);
+});
 render();
+window.RelayOpsCloud?.init?.().catch(error=>console.error('RelayOps cloud initialization failed',error));
