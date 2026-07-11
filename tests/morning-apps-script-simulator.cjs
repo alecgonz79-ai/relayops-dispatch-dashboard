@@ -212,6 +212,18 @@ if (sheet1Context.__result.sheetName !== 'Sheet1' || sheet1Template.getCell(3, 2
   throw new Error('Connector should target Sheet1 when the Google template tab has not been renamed');
 }
 
+const datedPayload = { ...payload, operationDate: '2026-07-11', sheetName: '7/11/26', sheetNameCandidates: ['7/11/26', '7.11.26'] };
+const dottedDateSheet = new FakeSheet('7.11.26', 130, 16);
+const datedContext = runConnectorWithSheet(dottedDateSheet, datedPayload);
+if (datedContext.__result.sheetName !== '7.11.26' || dottedDateSheet.getCell(3, 2) !== 'Driver One') throw new Error('Connector should match the selected operation date using dot-formatted tabs');
+let missingDateRejected = false;
+try {
+  runConnectorWithSheet(new FakeSheet('7.10.26', 130, 16), datedPayload);
+} catch (error) {
+  missingDateRejected = String(error.message).includes('No operations tab found for 2026-07-11') && String(error.message).includes('Nothing was written');
+}
+if (!missingDateRejected) throw new Error('Connector must stop instead of writing a dated payload into the wrong tab');
+
 const badPayload = { ...payload, writeRange: 'A3:N' };
 let rejected = false;
 try {
