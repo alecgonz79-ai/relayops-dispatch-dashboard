@@ -468,6 +468,14 @@ const checks = `
   state.modal = 'equipment';
   handleEquipmentPaste({ preventDefault(){}, clipboardData:{ files:[], getData:()=> '1 40 31 37 31 -' } });
   if (!state.equipmentImport || state.equipmentImport.details['37'].device !== '31') throw new Error('Equipment paste shortcut failed');
+  const deviceSheetHtml=livePage();
+  const deviceSheetRequirements=['Device and Portable','Input to Morning Sheet','data-device-sheet-id="1"','data-device-sheet-id="58"','Gas vehicles','data-device-sheet-id="F33"','Helper bags','data-device-sheet-id="H4"'];
+  const missingDeviceSheet=deviceSheetRequirements.filter(value=>!deviceSheetHtml.includes(value));
+  if(missingDeviceSheet.length) throw new Error('Device and Portable Sheet missing: '+missingDeviceSheet.join(', '));
+  state.morningRoutes[0].ev='1';
+  updateDeviceSheetCell('EV1','device','21');updateDeviceSheetCell('EV1','portable','22');
+  inputDeviceSheetToMorning();
+  if(state.page!=='morning'||state.morningRoutes[0].deviceName!=='21'||state.morningRoutes[0].portable!=='22') throw new Error('Device Sheet should match EV1 into the Morning Sheet');
   state.editMode = true;
   state.copyMode = false;
   const editableHtml = morningSheetPage();
