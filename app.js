@@ -272,6 +272,7 @@ let state = {
   deviceCustomRows: loadDeviceCustomRows(),
   driverContacts: JSON.parse(localStorage.getItem('relayops_driver_contacts') || 'null') || [],
   driverContactsLastImport: localStorage.getItem('relayops_driver_contacts_last_import') || '',
+  pendingDriverText: null,
   removedDriverKeys: JSON.parse(localStorage.getItem('relayops_removed_driver_keys') || 'null') || [],
   pendingDriverRemoval: null,
   cloudStatus: window.RelayOpsCloud?.configured?'connecting':'setup-required',
@@ -1761,6 +1762,10 @@ function modal() {
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal cloud-account-modal" role="dialog" aria-modal="true" aria-labelledby="cloud-account-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">SHARED RELAYOPS</span><h2 id="cloud-account-title">${!configured?'Connect the shared workspace':signedIn?'Dispatcher account':'Sign in to RelayOps'}</h2><p>${!configured?'Owner setup is required once. After setup, every authorized dispatcher uses the same live operational data.':signedIn?`Signed in as ${esc(state.cloudUser||'authorized dispatcher')}. Changes synchronize with your station in real time.`:'Enter your authorized dispatcher email. RelayOps will send a secure sign-in link.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${!configured?`<div class="cloud-setup-steps"><span><b>1</b>Create the RelayOps Supabase project</span><span><b>2</b>Run <code>supabase/schema.sql</code></span><span><b>3</b>Add project URL, anon key, organization ID, and station ID to <code>supabase/config.js</code></span></div><div class="private-contact-note"><b>Security requirement</b><span>Use only the public anon key here. Never add the Supabase service-role key, Amazon password, FleetOS password, or portal cookies.</span></div>`:signedIn?`<div class="cloud-account-summary"><span><b>✓</b>Authenticated</span><span><b>✓</b>Station access checked by database policies</span><span><b>✓</b>Realtime workspace updates enabled</span></div>`:`<label class="cloud-email-field"><span>Dispatcher email</span><input id="cloud-signin-email" type="email" autocomplete="email" placeholder="dispatcher@company.com"></label><div class="private-contact-note"><b>Passwordless sign-in</b><span>The secure email link identifies the dispatcher. Database roles decide what they can view or edit.</span></div>`}<div class="modal-actions"><button class="btn" data-action="close-modal">Close</button>${configured?(signedIn?'<button class="btn danger" data-action="cloud-sign-out">Sign out</button>':'<button class="btn primary" data-action="cloud-sign-in">Send sign-in link</button>'):''}</div></div></div></div>`;
   }
   if (state.modal === 'invite-user') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal invite-user-modal" role="dialog" aria-modal="true" aria-labelledby="invite-user-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">OWNER ACCESS</span><h2 id="invite-user-title">Invite a dispatcher</h2><p>The user receives a secure email link and is limited to the role selected below.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="add-driver-fields"><label><span>Full name</span><input id="invite-user-name" autocomplete="name" placeholder="Dispatcher name"></label><label><span>Company email *</span><input id="invite-user-email" type="email" autocomplete="email" placeholder="dispatcher@company.com"></label><label><span>Role</span><select id="invite-user-role"><option value="dispatcher">Dispatcher</option><option value="fleet_lead">Fleet lead</option><option value="ops_manager">Operations manager</option><option value="viewer">Viewer</option></select></label></div><div class="private-contact-note"><b>Database-enforced access</b><span>Dispatchers can edit daily operations. Fleet leads can update shared fleet data. Viewers cannot modify the workspace.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="send-user-invite">Send secure invitation</button></div></div></div></div>`;
+  if (state.modal === 'text-driver' && state.pendingDriverText) {
+    const driver=state.pendingDriverText;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal add-driver-modal" role="dialog" aria-modal="true" aria-labelledby="text-driver-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">DRIVER MESSAGE</span><h2 id="text-driver-title">Text ${esc(driver.name)}</h2><p>${esc(driver.phone)} · message sends only after a dispatcher reviews it.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="driver-text-field"><span>Message</span><textarea id="driver-text-message" rows="6">${esc(driver.message)}</textarea></label><div class="private-contact-note"><b>Google Messages connection</b><span>Pair the dispatch Android phone once. RelayOps copies the phone number and message, then opens Google Messages for the dispatcher to paste, review, and send.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn" data-action="open-google-messages">Copy & open Google Messages</button><button class="btn primary" data-action="open-sms-app">Open SMS app</button></div></div></div></div>`;
+  }
   if (state.modal === 'import') {
     const proof=importPreflight(), isRts=state.importPurpose==='rts';
     const source=state.importSource==='slack'&&!isRts?`<div class="slack-panel"><div class="slack-brand"><div class="slack-logo">S</div><div><strong>Slack Import</strong><span>#morning-operations · demo connection</span></div><span class="demo-tag">DEMO</span></div><button class="slack-file" data-action="load-slack-demo"><span class="file-type">CSV</span><span><strong>Today’s operations file</strong><small>Shared by Operations Bot · ready to use</small></span><span class="btn small">Choose this file</span></button><div class="import-note">For this demo, RelayOps will keep only ${state.dspCode} routes from the Slack file.</div></div>`:`<div class="drop-zone ${state.importedFile?'has-file':''}" id="drop-zone"><div><div class="drop-icon">${state.importedFile?ICONS.check:ICONS.upload}</div><strong>${state.importedFile?`Great! ${esc(state.importedFile.name)} is ready.`:isRts?'Choose the Routes_DJT6 file':'Choose DAYOFOPSPLAN and ROUTE_DJT6'}</strong><span>${state.importedFile?`${state.importedFile.rows.length} rows found${state.importedFile.routeDetailsCount?` · ${state.importedFile.routeDetailsCount} CX rows matched`:''}.`:isRts?'Excel (.xlsx) or CSV is supported. RelayOps pulls only Planned Departure Time into Planned RTS.':'Select both files at the same time. Excel (.xlsx) and CSV are supported.'}</span><button class="btn primary upload-choice" data-action="choose-file">${state.importedFile?'Choose different files':isRts?'Choose Planned RTS file':'Choose Amazon files'}</button></div></div>`;
@@ -1814,8 +1819,50 @@ function pageContent() {
   return ({dashboard,morning:morningSheetPage,roster:rosterPage,live:livePage,team:teamPage,fleet:fleetPage,parking:vanParkingPage,performance:performancePage,coaching:coachingPage,checklists:checklistsPage,inbox:inboxPage,inventory:inventoryPage,reports:reportsPage,admin:adminPage}[state.page] || dashboard)();
 }
 
+function driverTextDraft(driver) {
+  const first=String(driver.name||'').trim().split(/\s+/)[0]||'there';
+  return `Hi ${first}, this is ${state.organizationName} Dispatch. Please reply when you receive this message.`;
+}
+function openDriverText(key='') {
+  const driver=teamDriverRows().find(row=>nameKey(row.name)===key);
+  if(!driver?.phone)return toast('Import a phone number for this driver first','error');
+  state.pendingDriverText={name:driver.name,phone:driver.phone,message:driverTextDraft(driver)};
+  state.modal='text-driver';
+  render();
+}
+function currentDriverTextMessage() {
+  return document.getElementById('driver-text-message')?.value.trim()||state.pendingDriverText?.message||'';
+}
+async function copyAndOpenGoogleMessages() {
+  const driver=state.pendingDriverText;if(!driver)return;
+  const message=currentDriverTextMessage();
+  await navigator.clipboard.writeText(`${driver.phone}\n${message}`);
+  window.open('https://messages.google.com/web/','_blank','noopener');
+  toast('Phone and message copied — paste into Google Messages, review, then send');
+}
+function openDriverSmsApp() {
+  const driver=state.pendingDriverText;if(!driver)return;
+  const digits=driver.phone.replace(/\D/g,'');
+  location.href=`sms:${digits}?&body=${encodeURIComponent(currentDriverTextMessage())}`;
+}
+function enhanceDriverTextButtons() {
+  if(state.page!=='team')return;
+  document.querySelectorAll('.driver-card').forEach(card=>{
+    const name=card.querySelector('h3')?.textContent?.trim()||'';
+    const driver=teamDriverRows().find(row=>nameKey(row.name)===nameKey(name));
+    const button=document.createElement('button');
+    button.className='btn small driver-text-button';
+    button.dataset.action='text-driver';
+    button.dataset.driverKey=nameKey(name);
+    button.disabled=!driver?.phone;
+    button.innerHTML=`${ICONS.phone}<span>${driver?.phone?'Text driver':'Add phone to text'}</span>`;
+    card.querySelector('.driver-phone-line')?.after(button);
+  });
+}
+
 function render() {
   app.innerHTML = `<div class="app-shell">${sidebar()}<main class="main">${topbar()}<div class="content">${pageContent()}</div></main></div>${modal()}<div class="toast-stack" id="toast-stack"></div>`;
+  enhanceDriverTextButtons();
   bind();
 }
 
@@ -2448,7 +2495,7 @@ function action(name,el) {
   if (name==='parking-choose-file') { state.importPurpose='parking'; return fileInput.click(); }
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.screenshotPreview=null;state.fleetRefreshPreview=null;return render(); }
+  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.screenshotPreview=null;state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept='';return fileInput.click(); }
   if (name==='share-dispatcher-link') return shareDispatcherLink();
   if (name==='cloud-account') { state.modal='cloud-account';return render(); }
@@ -2456,6 +2503,9 @@ function action(name,el) {
   if (name==='cloud-sign-out') return cloudSignOut();
   if (name==='invite') { if(!window.RelayOpsCloud?.session)return toast('Sign in as the owner before inviting users','error');state.modal='invite-user';return render(); }
   if (name==='send-user-invite') return sendUserInvite();
+  if (name==='text-driver') return openDriverText(el.dataset.driverKey||'');
+  if (name==='open-google-messages') return copyAndOpenGoogleMessages();
+  if (name==='open-sms-app') return openDriverSmsApp();
   if (name==='apply-import') return applyImport();
   if (name==='export-menu') { state.modal='export'; return render(); }
   if (name==='export-csv') return exportCSV();
