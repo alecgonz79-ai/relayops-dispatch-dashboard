@@ -216,6 +216,8 @@ let state = {
   routes: JSON.parse(localStorage.getItem('relayops_routes') || 'null') || routesSeed,
   morningRoutes: JSON.parse(localStorage.getItem('relayops_morning') || 'null') || morningSeed,
   dspCode: localStorage.getItem('relayops_dsp') || 'LLOL',
+  organizationName: localStorage.getItem('relayops_organization_name') || 'Legacy Logistics',
+  stationCode: localStorage.getItem('relayops_station_code') || 'DJT6',
   lastImportExcluded: Number(localStorage.getItem('relayops_excluded') || 0),
   morningFilters: {wave:'all',staging:'all',pad:'all'},
   fleetSort: localStorage.getItem('relayops_fleet_sort') || 'normal',
@@ -380,7 +382,7 @@ function routeFiltered() {
 function sidebar() {
   return `<aside class="sidebar" id="sidebar">
     <div class="brand"><div class="brand-mark"></div><div class="brand-copy"><div class="brand-name">RelayOps</div><div class="brand-sub">Dispatch command</div></div></div>
-    <div class="station-pill"><div class="station-icon">DAX</div><div class="station-copy"><strong>Northstar Delivery</strong><span>DAX5 · Los Angeles</span></div>${ICONS.chevron}</div>
+    <div class="station-pill"><div class="station-icon">${esc(state.stationCode.slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(state.stationCode.toUpperCase())} · Los Angeles</span></div>${ICONS.chevron}</div>
     <nav>${NAV.filter(g => !g.admin || state.role === 'admin').map(group => `<div class="side-section"><div class="side-label">${group.section}</div>${group.items.map(([id,label,icon,count]) => `<button class="nav-item ${state.page===id?'active':''}" data-page="${id}" aria-label="${label}">${ICONS[icon]}<span>${label}</span>${count?`<b class="nav-count">${count}</b>`:''}</button>`).join('')}</div>`).join('')}</nav>
     <div class="side-bottom"><div class="user-card"><div class="avatar">AG</div><div class="user-copy"><strong>Alex Gonzalez</strong><span>${state.role==='admin'?'Owner · Full access':'Opening dispatcher'}</span></div><div class="role-tag">${state.role==='admin'?'ADMIN':'OPS'}</div></div></div>
   </aside>`;
@@ -1646,9 +1648,16 @@ function reportsPage() {
   return `${contextBar()}<section class="grid report-grid">${reports.map((r,i)=>`<article class="card entity-card"><div class="entity-top"><div class="entity-icon">${ICONS[r[3]]}</div><button class="mini-icon-btn" data-action="export-report" data-report="${r[0]}">${ICONS.download}</button></div><h3>${r[0]}</h3><p>${r[1]}</p><div class="entity-meta"><div class="entity-stat" style="grid-column:1 / -1"><span>Current dataset</span><strong>${r[2]}</strong></div></div></article>`).join('')}</section><section class="grid settings-grid" style="margin-top:16px"><article class="card settings-section"><h2>Google Sheets handoff</h2><p>Export clean tabular data in the order your template expects.</p><div class="field-grid"><div class="field"><label>Template profile</label><select><option>Daily Wave Sheet</option><option>Payroll & Attendance</option><option>Weekly Scorecard</option></select></div><div class="field"><label>Date format</label><select><option>MM/DD/YYYY</option><option>YYYY-MM-DD</option></select></div></div><div class="mapping"><div class="mapping-row"><div class="mapping-col">Amazon: route_code</div><div class="mapping-arrow">→</div><div class="mapping-col">Sheet: Route</div></div><div class="mapping-row"><div class="mapping-col">Amazon: transporter_name</div><div class="mapping-arrow">→</div><div class="mapping-col">Sheet: Driver</div></div><div class="mapping-row"><div class="mapping-col">RelayOps: vehicle_id</div><div class="mapping-arrow">→</div><div class="mapping-col">Sheet: Van</div></div></div><div class="modal-actions"><button class="btn" data-action="copy">${ICONS.copy} Copy tab-separated</button><button class="btn lime" data-action="export-menu">${ICONS.download} Download</button></div></article><article class="card settings-section"><h2>Export center</h2><p>These downloads use only the data visible to your role.</p><div class="connection"><div class="connection-logo">CSV</div><div class="connection-copy"><strong>Universal CSV</strong><span>Best for Google Sheets and imports</span></div><button class="btn small" data-action="export-csv">Download</button></div><div class="connection"><div class="connection-logo" style="background:#1c6e44">XLS</div><div class="connection-copy"><strong>Excel workbook</strong><span>Formatted spreadsheet with filters</span></div><button class="btn small" data-action="export-excel">Download</button></div><div class="connection"><div class="connection-logo" style="background:#2b5bb8">TPL</div><div class="connection-copy"><strong>Import template</strong><span>Blank CSV with accepted columns</span></div><button class="btn small" data-action="template-csv">Download</button></div></article></section>`;
 }
 
-function adminPage() {
+function adminPageLegacy() {
   if (state.role !== 'admin') return `<article class="card empty-state"><div class="empty-icon">${ICONS.alert}</div><h3>Owner access required</h3><p>This area is protected by role-based access and is not visible to dispatcher accounts.</p></article>`;
   return `${contextBar('<span class="status">Owner access</span>')}<section class="grid settings-grid"><div class="grid"><article class="card settings-section"><h2>Organization</h2><p>These details identify your workspace and default station.</p><div class="field-grid"><div class="field"><label>DSP name</label><input value="Northstar Delivery LLC" /></div><div class="field"><label>Station code</label><input value="DAX5" /></div><div class="field"><label>Timezone</label><select><option>America/Los_Angeles</option></select></div><div class="field"><label>Operating day starts</label><input type="time" value="06:00" /></div></div><div class="modal-actions"><button class="btn primary" data-action="save">Save changes</button></div></article><article class="card table-card"><div class="card-head"><div class="card-title"><h2>Role permissions</h2><p>Owner retains full access; dispatcher permissions are explicit</p></div><button class="btn small" data-action="invite">${ICONS.plus} Invite user</button></div><div class="table-wrap"><table class="permissions-table"><thead><tr><th>Capability</th><th>Owner</th><th>Ops manager</th><th>Dispatcher</th></tr></thead><tbody>${['View all stations','Import Amazon files','Publish daily roster','Edit driver records','Send coaching','Export reports','Manage users & billing'].map((p,i)=>`<tr><td><strong>${p}</strong></td><td><button class="switch on"></button></td><td><button class="switch ${i===0||i===6?'':'on'}"></button></td><td><button class="switch ${i===1||i===2||i===5?'on':''}"></button></td></tr>`).join('')}</tbody></table></div></article></div><div class="grid"><article class="card settings-section"><h2>Connections</h2><p>Credentials belong in encrypted server-side secrets, never the browser.</p><div class="connection"><div class="connection-logo">amz</div><div class="connection-copy"><strong>Amazon Logistics</strong><span>CSV/XLSX import active · official API pending</span></div><span class="status warn">Setup</span></div><div class="connection"><div class="connection-logo" style="background:#287247">GS</div><div class="connection-copy"><strong>Google Sheets</strong><span>Export and copy ready</span></div><span class="status">Ready</span></div><div class="connection"><div class="connection-logo" style="background:#2463a8">ADP</div><div class="connection-copy"><strong>ADP Workforce</strong><span>Not connected</span></div><button class="btn small">Connect</button></div><button class="btn" style="width:100%;margin-top:5px" data-action="import">Configure Amazon import</button></article><article class="card settings-section"><h2>Dispatcher access link</h2><p>Send this full https:// link to your dispatchers. It stays clickable when pasted into GroupMe, Slack, text, or email.</p><div class="callout"><strong>Live shared dashboard</strong><p><a href="${DISPATCHER_SHARE_URL}" target="_blank" rel="noopener">${DISPATCHER_SHARE_URL}</a></p><p class="share-note">${DISPATCHER_SHARE_NOTE}</p><button class="btn small lime" data-action="share-dispatcher-link">${ICONS.copy} Copy clickable link</button></div><div class="callout"><strong>Current view: Owner / admin</strong><p>Admin settings, user management, connection secrets, and the audit log are available.</p><button class="btn small" data-action="role-preview">Preview dispatcher access</button></div></article><article class="card settings-section"><h2>Recent audit activity</h2><p>Immutable account actions for owner review.</p>${[['8:17 AM','Alex G.','Published roster'],['8:04 AM','Alex G.','Imported roster CSV/XLSX'],['Yesterday','Sam R.','Updated van DVIC'],['Jun 30','Alex G.','Changed dispatcher permission']].map(x=>`<div class="summary-line"><span>${x[0]} · ${x[1]}</span><strong>${x[2]}</strong></div>`).join('')}</article></div></section>`;
+}
+
+function adminPage() {
+  return adminPageLegacy()
+    .replace('<label>DSP name</label><input value="Northstar Delivery LLC" />',`<label for="admin-dsp-name">DSP name</label><input id="admin-dsp-name" value="${esc(state.organizationName)}" />`)
+    .replace('<label>Station code</label><input value="DAX5" />',`<label for="admin-station-code">Station code</label><input id="admin-station-code" value="${esc(state.stationCode)}" maxlength="12" />`)
+    .replace('data-action="save">Save changes','data-action="save-organization">Save changes');
 }
 
 function importPreviewStats() {
@@ -2409,6 +2418,18 @@ function go(page) {
   state.page=page; state.search=''; state.modal=null; persist(); render();if(page==='admin')refreshCloudMembers();window.scrollTo({top:0,behavior:'smooth'});
 }
 
+function saveOrganizationSettings() {
+  const organizationName=document.getElementById('admin-dsp-name')?.value.trim();
+  const stationCode=document.getElementById('admin-station-code')?.value.trim().toUpperCase();
+  if(!organizationName)return toast('Enter a DSP name','error');
+  if(!stationCode)return toast('Enter a station code','error');
+  state.organizationName=organizationName;
+  state.stationCode=stationCode;
+  persist();
+  render();
+  toast(`${organizationName} · ${stationCode} saved everywhere`);
+}
+
 function action(name,el) {
   if (name==='menu') return document.getElementById('sidebar').classList.toggle('open');
   if (name==='import') { state.modal='import'; state.importSource='computer'; state.importPurpose='morning'; state.importedFile=null; return render(); }
@@ -2512,7 +2533,7 @@ function action(name,el) {
   if (name==='publish') { state.rosterPublished=true;persist();render();return toast('Roster published to the team'); }
   if (name==='phase-next') { state.phase=Math.min(3,state.phase+1);persist();render();return toast(`Shift advanced to ${['Roster','Load-out','On road','Closeout'][state.phase]}`); }
   if (name==='role-preview') { state.role='dispatcher';state.page='dashboard';persist();render();return toast('Dispatcher access preview is on'); }
-  if (name==='save') return toast('Organization settings saved');
+  if (name==='save-organization') return saveOrganizationSettings();
   if (name==='auto-assign') return toast('Equipment auto-fill complete — no conflicts found');
   if (name==='export-report') { state.modal='export';render();return; }
   if (name==='route') return toast(`${el.dataset.route} details opened in the production build`);
@@ -4460,6 +4481,8 @@ function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function persist(){
 localStorage.setItem('relayops_equipment_import',JSON.stringify(state.equipmentImport||null));
 localStorage.setItem('relayops_device_custom_rows',JSON.stringify(state.deviceCustomRows||{ev:[],gas:[],helper:[]}));
+localStorage.setItem('relayops_organization_name',state.organizationName);
+localStorage.setItem('relayops_station_code',state.stationCode);
 localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_morning_sheets_last_dry_run',state.morningSheetsLastDryRun||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');localStorage.setItem('relayops_driver_contacts',JSON.stringify(state.driverContacts||[]));localStorage.setItem('relayops_driver_contacts_last_import',state.driverContactsLastImport||'');localStorage.setItem('relayops_removed_driver_keys',JSON.stringify(state.removedDriverKeys||[]));
 localStorage.setItem('relayops_morning_operation_date',state.morningOperationDate||defaultOperationDate());
 localStorage.setItem('relayops_fleet_name_overrides',JSON.stringify(state.fleetNameOverrides||{}));
@@ -4469,7 +4492,7 @@ function toast(message,type='success') { let stack=document.getElementById('toas
 
 function sharedWorkspaceState() {
   return {
-    schemaVersion:1,dspCode:state.dspCode,routes:state.routes,morningRoutes:state.morningRoutes,
+    schemaVersion:1,dspCode:state.dspCode,organizationName:state.organizationName,stationCode:state.stationCode,routes:state.routes,morningRoutes:state.morningRoutes,
     lastImportExcluded:state.lastImportExcluded,rosterPublished:state.rosterPublished,
     fleetImport:state.fleetImport,fleetSourceUploads:state.fleetSourceUploads,fleetExpectedCount:state.fleetExpectedCount,
     fleetNameOverrides:state.fleetNameOverrides,vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,
@@ -4479,7 +4502,7 @@ function sharedWorkspaceState() {
   };
 }
 function applySharedWorkspaceState(payload={}) {
-  const allowed=['dspCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','vanParking','vanParkingUpdated','vanParkingBatteries','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','morningSheetsEndpoint'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','vanParking','vanParkingUpdated','vanParkingBatteries','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','morningSheetsEndpoint'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   persist();render();

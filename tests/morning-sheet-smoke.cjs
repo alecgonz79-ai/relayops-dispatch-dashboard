@@ -105,6 +105,11 @@ const checks = `
   confirmDriverRemoval();
   if(teamPage().includes('Vanessa Balderama')||!(state.removedDriverKeys||[]).includes('vanessa balderama')) throw new Error('Confirmed driver removal should delete the DA card and persist its key');
   state.removedDriverKeys=[];mergeDriverContacts(driverContacts);
+  state.organizationName='Legacy Logistics';state.stationCode='DJT6';state.role='admin';
+  const adminHtml=adminPage();
+  if(!adminHtml.includes('id="admin-dsp-name" value="Legacy Logistics"')||!adminHtml.includes('id="admin-station-code" value="DJT6"')||!adminHtml.includes('data-action="save-organization"')) throw new Error('Admin organization settings are not connected to saved workspace state');
+  const sharedOrganization=sharedWorkspaceState();
+  if(sharedOrganization.organizationName!=='Legacy Logistics'||sharedOrganization.stationCode!=='DJT6') throw new Error('DSP and station names missing from shared cloud snapshot');
   action('driver-import',{});
   if (state.importPurpose !== 'drivers') throw new Error('Driver import button should route file uploads to the driver CSV parser');
   state.importPurpose = 'morning';
