@@ -50,6 +50,17 @@ const MORNING_TEMPLATE_SHEET_NAME = 'Morning Operations';
 const MORNING_TEMPLATE_SHEET_CANDIDATES = [MORNING_TEMPLATE_SHEET_NAME,'Opening Operations','Morning Sheet','Sheet1'];
 const MORNING_APPS_SCRIPT_URL = 'google-sheets/relayops-morning-connector.gs';
 
+function defaultOperationDate() {
+  const date=new Date();date.setDate(date.getDate()+1);
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+function operationDateTabNames(value='') {
+  const parts=String(value||'').split('-').map(Number);
+  if(parts.length!==3||parts.some(n=>!n))return [];
+  const [year,month,day]=parts,shortYear=String(year).slice(-2);
+  return [`${month}/${day}/${shortYear}`,`${month}.${day}.${shortYear}`];
+}
+
 const routesSeed = [
   { route:'CX12', driver:'Maya Collins', id:'DA-1042', wave:'Wave 1 · 9:20', staging:'A-14', van:'EDV 224', device:'CAT-17', stops:186, packages:312, progress:74, delta:18, status:'Ahead', rescue:'—' },
   { route:'CX18', driver:'Jordan Lee', id:'DA-1028', wave:'Wave 1 · 9:20', staging:'A-08', van:'CDV 118', device:'CAT-08', stops:174, packages:296, progress:61, delta:-7, status:'Watch', rescue:'Review 2:30' },
@@ -221,6 +232,9 @@ let state = {
   morningSheetsLastError: localStorage.getItem('relayops_morning_sheets_last_error') || '',
   morningSheetsLastReceipt: JSON.parse(localStorage.getItem('relayops_morning_sheets_last_receipt') || 'null'),
   morningSheetsLastDryRun: localStorage.getItem('relayops_morning_sheets_last_dry_run') || '',
+  morningOperationDate: localStorage.getItem('relayops_morning_operation_date') || defaultOperationDate(),
+  fleetNameOverrides: JSON.parse(localStorage.getItem('relayops_fleet_name_overrides') || 'null') || {},
+  editingFleetVin: '',
   fleetAmazonUrl: localStorage.getItem('relayops_fleet_amazon_url') || AMAZON_FLEET_PORTAL_URL,
   fleetFleetosUrl: localStorage.getItem('relayops_fleet_fleetos_url') || FLEETOS_PORTAL_URL,
   fleetLiveLastPull: localStorage.getItem('relayops_fleet_live_last_pull') || '',
@@ -356,7 +370,7 @@ function topbar() {
   const fleetClean=state.page==='fleet';
   return `<header class="topbar">
     <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu">${ICONS.menu}</button><div class="page-heading"><h1>${title}</h1><p>${sub}</p></div></div>
-    <div class="top-actions">${fleetClean?'':`<label class="search">${ICONS.search}<input id="global-search" placeholder="Search driver, route, van…" value="${esc(state.search)}" /></label>`}<button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button><button class="icon-button" aria-label="Notifications">${ICONS.bell}<i class="notification-dot"></i></button>${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
+    <div class="top-actions">${fleetClean?'':`<label class="search">${ICONS.search}<input id="global-search" placeholder="Search driver, route, van…" value="${esc(state.search)}" /></label>`}${state.page==='morning'?'<button class="btn info-top-button" data-action="open-morning-diagnostics" title="Setup & diagnostics"><span>ℹ</span><span class="hide-mobile">Setup & diagnostics</span></button>':''}<button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button><button class="icon-button" aria-label="Notifications">${ICONS.bell}<i class="notification-dot"></i></button>${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
   </header>`;
 }
 
@@ -453,13 +467,13 @@ function morningSheetPage() {
   const sheetsConnected=Boolean(state.morningSheetsEndpoint);
   const sheetMode=state.copyMode?'copy':'edit';
   return `${contextBar(`<span class="status blue">Earliest waves first</span>`)}
-  <div class="morning-command card"><div><span class="eyebrow">LLOL OPENING OPERATIONS</span><h2>Build today’s morning sheet</h2><p>Start with the day files. Routes are matched by CX number and arranged earliest wave first.</p></div><div class="morning-actions"><button class="btn primary easy-upload-button" data-action="import">${ICONS.upload} Upload day files</button><button class="btn" data-action="slack-import">${ICONS.inbox} Slack Import <span class="demo-tag">DEMO</span></button><button class="btn" data-action="planned-rts-import">${ICONS.calendar} Add planned RTS</button><button class="btn" data-action="equipment-import" title="VAN/DEV/PORT Import">${ICONS.van} Add van devices</button></div></div>
+  <div class="morning-command card"><div><span class="eyebrow">LLOL OPENING OPERATIONS</span><h2>Build today’s morning sheet</h2><p>Start with the day files. Routes are matched by CX number and arranged earliest wave first.</p></div><label class="operation-date-picker"><span>Day of operation</span><input type="date" data-operation-date value="${esc(state.morningOperationDate)}"><small>Google tab: ${esc(operationDateTabNames(state.morningOperationDate).join(' or '))}</small></label><div class="morning-actions"><button class="btn primary easy-upload-button" data-action="import">${ICONS.upload} Upload day files</button><button class="btn locked" disabled title="Slack Import is locked until the secure Slack connector is ready">${ICONS.inbox} Slack Import <span class="demo-tag">LOCKED</span></button><button class="btn" data-action="planned-rts-import">${ICONS.calendar} Add planned RTS</button><button class="btn" data-action="equipment-import" title="VAN/DEV/PORT Import">${ICONS.van} Add van devices</button></div></div>
   <div class="quick-start" aria-label="Three easy steps"><div class="quick-step done"><b>1</b><span><strong>Pick import</strong><small>Slack or Cortex</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>2</b><span><strong>We match CX</strong><small>Wave + staging + pad</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>3</b><span><strong>Send to Sheet</strong><small>Exact merged template</small></span></div></div>
   <div class="sheet-toolbar morning-daily-toolbar"><div class="sheet-filter"><label>Wave</label><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Staging</label><select data-morning-filter="staging"><option value="all">All locations</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Pad</label><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></div><button class="btn small" data-action="clear-morning-filters">Clear</button><span class="filter-note">${ICONS.chevron} Earliest first</span><div class="morning-toolbar-spacer"></div><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Finish editing':'✎ Edit sheet'}</button><button class="btn small ${state.copyMode?'lime':''}" data-action="toggle-morning-copy">${state.copyMode?'✓ Exit copy mode':'Copy cells'}</button></div>
   <div class="sheet-kpis"><span><strong>${rows.length}</strong> routes</span><span><strong>${rows.reduce((n,r)=>n+r.packages,0).toLocaleString()}</strong> packages</span><span><strong>${rows.reduce((n,r)=>n+r.stops,0).toLocaleString()}</strong> stops</span><span><strong>${irregular}</strong> RTS flags</span></div>
   ${morningSheetsBridgeHtml()}
   <details class="morning-more-tools card"><summary><span><strong>More morning tools</strong><small>Van assignment, row sizing, screenshots, downloads and backup copy</small></span><b>Open</b></summary><div class="morning-more-actions"><button class="btn small ${state.fitMorningRows?'lime':''}" data-action="toggle-fit-rows">${state.fitMorningRows?'✓ Fit to drivers':'Remove blank rows'}</button><button class="btn small" data-action="assign-ev-low">EV 1-57 Low → High</button><button class="btn small" data-action="assign-ev-random">Randomize EVs</button><button class="btn small" data-action="assign-gas-vans">Assign Gas Vehicles</button><button class="btn small" data-action="preview-wave-screenshot">${ICONS.download} Preview JPEG</button><button class="btn small" data-action="export-morning">${ICONS.download} Export CSV</button><button class="btn small" data-action="export-morning-template">${ICONS.download} Formatted XLS</button><button class="btn small" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn small" data-action="open-sheets-helper">Open paste box</button></div></details>
-  <details class="morning-advanced-checks card"><summary><span><strong>Setup & diagnostics</strong><small>Only needed if imports or Google Sheets are not working</small></span><b>Open</b></summary><div class="morning-advanced-content">${morningConnectorGuide()}${morningHandoffReadinessHtml()}${morningImportTemplateProofHtml()}<div class="sheets-helper card ops-log-helper"><div class="sheets-helper-copy"><span class="eyebrow">BACKUP TRANSFER</span><h3>Copy or download if the connector is unavailable</h3><p>The bridge above is the preferred path. These backups use the same ${handoffRowsCount} numbered A–M rows.</p></div><div class="sheets-helper-actions"><button class="btn" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn" data-action="open-sheets-helper">Open paste box</button><button class="btn" data-action="export-morning-template">${ICONS.download} Formatted XLS</button></div></div>${morningSheetsHandoffProofHtml()}${morningSheetStructureProofHtml()}${morningCopyFallbackProofHtml()}</div></details>
+  <details id="morning-diagnostics" class="morning-advanced-checks card"><summary><span><strong>ℹ Setup & diagnostics</strong><small>Only needed if imports or Google Sheets are not working</small></span><b>Open</b></summary><div class="morning-advanced-content">${morningConnectorGuide()}${morningHandoffReadinessHtml()}${morningImportTemplateProofHtml()}<div class="sheets-helper card ops-log-helper"><div class="sheets-helper-copy"><span class="eyebrow">BACKUP TRANSFER</span><h3>Copy or download if the connector is unavailable</h3><p>The bridge above is the preferred path. These backups use the same ${handoffRowsCount} numbered A–M rows.</p></div><div class="sheets-helper-actions"><button class="btn" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn" data-action="open-sheets-helper">Open paste box</button><button class="btn" data-action="export-morning-template">${ICONS.download} Formatted XLS</button></div></div>${morningSheetsHandoffProofHtml()}${morningSheetStructureProofHtml()}${morningCopyFallbackProofHtml()}</div></details>
   ${state.copyMode?copyModeToolbar(groups):''}
   ${state.copyMode?`<div class="edit-help copy-help">Copy mode is on. Drag across cells exactly like Google Sheets, watch the blue highlight, then press ⌘C on Mac or Ctrl+C on Windows. Click a wave button to pulse/highlight that whole wave before copying it. Divider columns I and L split manual copy into A–H, J–K, and M blocks.</div>`:state.editMode?`<div class="edit-help">Editing is on. Columns and rows are labeled like Google Sheets. Click and drag white cells to select a rectangle, press ⌘C to copy, or paste tabbed rows from Sheets to fill across/down.</div>`:''}
   <article class="card morning-board ${state.copyMode?'copy-board':state.editMode?'edit-board':'view-board'}"><div class="sheet-scroll"><table class="ops-sheet morning-template-sheet ${state.copyMode?'copy-ops-sheet':''}"><thead>${sheetModeHeader(morningTemplateHeaders,sheetMode)}</thead><tbody>${groups.length?groups.map((section,sectionIndex)=>morningWaveGroup(section,sectionIndex)).join(''):`<tr><td colspan="14"><div class="empty-state"><h3>No routes match these filters</h3><p>Clear a filter or upload a new day-of-operations file.</p></div></td></tr>`}</tbody></table></div></article>
@@ -467,8 +481,8 @@ function morningSheetPage() {
 }
 
 function morningConnectorGuide() {
-  const connected=Boolean(state.morningSheetsEndpoint);
-  return `<details class="morning-connectors card"><summary><div><strong>Ops Log connector setup</strong><span>Google Sheets is ready through Apps Script. Slack/Cortex live pulls need a secure backend later.</span></div><b>Open</b></summary><div class="morning-connector-grid"><div><strong>1 · Slack / day file</strong><span>Use demo/upload mode today. A production Slack connector should be a Slack app or secure backend file picker that passes the DAYOFOPSPLAN file to RelayOps, then RelayOps filters to ${esc(state.dspCode)} only.</span><button class="btn small" data-action="slack-import">Use demo Slack import</button></div><div><strong>2 · Cortex / Amazon Logistics</strong><span>Use XLSX/CSV upload today. A live Amazon Logistics connector must be a secure backend endpoint; never paste Amazon passwords, cookies, or session tokens into this dashboard.</span><button class="btn small primary" data-action="import">Upload Cortex files</button></div><div><strong>3 · Google Sheets Ops Log</strong><span>${connected?'Ops Log connected. Send writes only A3:M directly into the template; columns N+ stay untouched.':'One-time setup: install the provided Apps Script in your Google ops log, paste the Web app /exec URL here, then dispatchers can press Send Morning Sheet to Ops Log.'}</span><button class="btn small lime" data-action="morning-sheets-connector">${connected?'Open Ops Log connector':'Connect Ops Log'}</button><a class="btn small" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open ops log</a></div></div><p>Copy/paste cannot reliably transfer merged-cell formatting from a website into Google Sheets. The reliable connector workflow is: Google Sheets keeps the formatting/merged cells, RelayOps sends exact A–M values and section instructions into that template.</p></details>`;
+  const connected=Boolean(state.morningSheetsEndpoint),tabs=operationDateTabNames(state.morningOperationDate);
+  return `<details class="morning-connectors card"><summary><div><strong>Ops Log connector setup</strong><span>Google Sheets is ready through Apps Script. Slack stays locked until its secure connector is built.</span></div><b>Open</b></summary><div class="morning-connector-grid"><div><strong>1 · Slack / day file</strong><span>Locked for now. Use Amazon XLSX/CSV upload so no dispatcher expects an unfinished connection to work.</span><button class="btn small locked" disabled>Slack Import · locked</button></div><div><strong>2 · Cortex / Amazon Logistics</strong><span>Upload XLSX/CSV files. RelayOps reads them locally and filters ${esc(state.dspCode)} routes.</span><button class="btn small primary" data-action="import">Upload Amazon files</button></div><div><strong>3 · Google Sheets Ops Log</strong><span>${connected?`Connected. Sends only to the ${esc(tabs.join(' or '))} tab and writes A3:M.`:'Install the Apps Script once, save the /exec URL, then send to the selected operation-date tab.'}</span><button class="btn small lime" data-action="morning-sheets-connector">${connected?'Open Ops Log connector':'Connect Ops Log'}</button><a class="btn small" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open ops log</a></div></div><p>The date tab must already exist. If it is missing, RelayOps stops instead of writing into a different tab.</p></details>`;
 }
 
 function morningSections(rows) {
@@ -582,7 +596,7 @@ function deviceSheetAllIds(section='') {
   return [...deviceSheetBaseIds(section),...deviceSheetCustomRows(section).map(row=>row.label).filter(Boolean)];
 }
 function fleetEquipmentIdentity(vehicle={}) {
-  const name=String(vehicle.name||'').trim(),upper=name.toUpperCase(),vin=String(vehicle.vin||'').toUpperCase();
+  const vin=String(vehicle.vin||'').toUpperCase(),name=String(state.fleetNameOverrides?.[cleanVin(vin)]||vehicle.name||'').trim(),upper=name.toUpperCase();
   const gasVinType=vin.startsWith('1FTYR3')?'F':vin.startsWith('3C6LRV')?'R':'';
   if(gasVinType){
     const explicit=upper.match(/\b([FR]\d+)\b/),number=upper.match(/\b(\d{1,4})\b/);
@@ -609,7 +623,7 @@ function fleetVehicleForEquipmentId(value='') {
 }
 function vehicleIssueForEquipmentId(value='') {
   const vehicle=fleetVehicleForEquipmentId(value);if(!vehicle)return null;
-  if(normalizeOperational(vehicle.operational||vehicle.status)==='Grounded')return {type:'grounded',label:'Grounded',title:'Grounded vehicle — do not assign'};
+  if(normalizeOperational(vehicle.operational||vehicle.status)==='Grounded')return {type:'grounded',label:'⛔ Grounded',title:'Grounded vehicle — do not assign'};
   if(normalizeActive(vehicle.active||vehicle.status)==='Inactive')return {type:'grounded',label:'Inactive',title:'Inactive vehicle — verify before assigning'};
   if(isElectricFleetVehicle(vehicle)&&Number(vehicle.battery)<40)return {type:'battery',label:`Low ${Number(vehicle.battery)}%`,title:`Low battery ${Number(vehicle.battery)}% — charge or swap before dispatch`};
   return null;
@@ -1470,10 +1484,18 @@ function fleetNameSource(vehicle={}) {
   return {className:'demo',label:'Demo name',shortLabel:'Demo name',detail:'Demo/sample name until portal uploads are added'};
 }
 function fleetDisplayName(vehicle={}) {
+  const override=String(state.fleetNameOverrides?.[cleanVin(vehicle.vin)]||'').trim();
+  if(override)return override;
   const source=String(vehicle.source||'').toLowerCase();
   if(source.includes('amazon fleet list')&&String(vehicle.name||'').trim())return vehicle.name;
   if(source.includes('fleetos tracker')||source.includes('rivian'))return vehicle.name||vehicle.vin||'Unknown EV';
   return vehicle.vin||vehicle.name||'Unknown EV';
+}
+function fleetNameEditorHtml(vehicle={}) {
+  const vin=cleanVin(vehicle.vin),editing=state.editingFleetVin===vin,open=state.expandedFleetVin===vin;
+  if(!open)return '';
+  if(editing)return `<div class="fleet-name-editor"><label><span>Vehicle name</span><input data-fleet-name-input value="${esc(fleetDisplayName(vehicle))}" maxlength="40" aria-label="Vehicle name for ${esc(vin)}"></label><button class="btn small primary" data-action="save-fleet-name" data-vin="${esc(vin)}">Save</button><button class="btn small" data-action="cancel-fleet-name">Cancel</button></div>`;
+  return `<button class="fleet-name-pencil" data-action="edit-fleet-name" data-vin="${esc(vin)}" title="Edit vehicle name" aria-label="Edit vehicle name">✎ <span>Edit name</span></button>`;
 }
 function fleetCardStatusPills(vehicle={}) {
   const active=normalizeActive(vehicle.active||'');
@@ -1529,8 +1551,8 @@ function rivianCardIdSummary(v={},confidence={},batteryFreshness={}) {
   return `<div class="rivian-id-summary" aria-label="EV quick details"><span><b>Plate</b>${esc(v.plate||'—')}</span><span><b>Active</b>${esc(v.active||'—')}</span><span><b>Status</b>${esc(v.operational||'—')}</span><span><b>Battery source</b>${esc(batteryFreshness.label||confidence.label||'—')}</span></div>`;
 }
 function gasFleetCard(v={}) {
-  const grounded=normalizeOperational(v.operational||v.status)==='Grounded',inactive=normalizeActive(v.active||v.status)==='Inactive';
-  return `<article class="rivian-card gas-fleet-card ${grounded?'hard-status grounded':''} ${inactive?'inactive':''}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(fleetDisplayName(v))}</h3>${grounded?'<span class="hard-status-pill grounded">Grounded</span>':''}</div><span class="gas-card-label">Gas vehicle</span><span class="rivian-vin"><b>VIN</b> ${esc(v.vin||'—')}</span>${fleetCardStatusPills(v)}</div>${gasCanIcon()}</div></article>`;
+  const grounded=normalizeOperational(v.operational||v.status)==='Grounded',inactive=normalizeActive(v.active||v.status)==='Inactive',open=state.expandedFleetVin===v.vin;
+  return `<article class="fleet-card-shell ${open?'expanded':''}"><button class="rivian-card gas-fleet-card ${grounded?'hard-status grounded':''} ${inactive?'inactive':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(fleetDisplayName(v))}</h3>${grounded?'<span class="hard-status-pill grounded">Grounded</span>':''}</div><span class="gas-card-label">Gas vehicle</span><span class="rivian-vin"><b>VIN</b> ${esc(v.vin||'—')}</span>${fleetCardStatusPills(v)}</div>${gasCanIcon()}</div></button>${fleetNameEditorHtml(v)}</article>`;
 }
 function rivianCard(v) {
   if(isGasFleetVehicle(v))return gasFleetCard(v);
@@ -1548,7 +1570,7 @@ function rivianCard(v) {
   const changedAt=v.updatedAt?new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date(v.updatedAt)):'—';
   const compactDetails=`<div class="rivian-details simple-details"><span><b>VIN</b>${esc(v.vin||'—')}</span><span><b>Battery %</b>${v.battery??'—'}%</span><span><b>License plate #</b>${esc(v.plate||'—')}</span><span><b>Miles till empty</b>${esc(v.miles??'—')}</span><span class="${v.active==='Active'?'detail-ok':'detail-warn'}"><b>Active</b>${esc(v.active||'—')}</span><span class="${v.operational==='Operational'?'detail-ok':'detail-danger'}"><b>Status</b>${esc(v.operational||'—')}</span></div>`;
   const auditText=`Dispatch check ${dispatchReady.label}; Name source ${nameSource.detail}; Needs attention; Needs: ${missing.join(', ')||'real upload'}; Tap to collapse; Last change ${changedAt}; Amazon uploaded ${fleetSourceUploadedAt('amazon')}; FleetOS uploaded ${fleetSourceUploadedAt('fleetos')}; VIN source audit ${audit.summary}; Amazon row ${audit.amazon}; FleetOS row ${audit.fleetos}; Battery check ${batteryFreshness.label}; Confidence ${confidence.label}; Needs ${missing.join(', ')||'Nothing'}; <b>Changed</b> ${fleetChangeSourceLabels(changes).join(' | ')||'No changes'}; Source ${v.source||'Demo data'}; ${fleetChangeSourceLabels(changes).join(' | ')}; ${fleetChangeSourcePills(changes)}`;
-  return `<button class="rivian-card ${tone} ${open?'expanded':''} ${changes.length?'updated':''} ${missing.length?'needs-data':''} ${hardStatus.length?'hard-status':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(displayName)}</h3>${v.name&&v.name!==displayName?`<span class="assistive-text">${esc(v.name)}</span>`:''}${hardStatusHtml}<span class="confidence-pill ${confidence.className}">${esc(confidence.label)}</span>${changes.length?'<span class="update-pill">Updated</span>':''}</div><span class="rivian-vin">${esc(v.vin)}</span>${fleetSourceBadges(v)}<span class="fleet-ready-pill ${dispatchReady.className}" title="${esc(dispatchReady.detail)}"><b>${esc(dispatchReady.label)}</b><em>${esc(dispatchReady.detail)}</em></span><span class="name-source-pill ${nameSource.className}" title="${esc(nameSource.detail)}"><b>${esc(nameSource.shortLabel)}</b><em>${esc(nameSource.label)}</em></span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles===undefined||v.battery===undefined?'— / —':`${v.miles} mi / ${v.battery}%`}</strong></div>${fleetCardStatusPills(v)}<span class="fleet-card-cue ${confidence.className}">${esc(fleetCardCue(v))}</span><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span><span class="battery-freshness ${batteryFreshness.className}">${esc(batteryFreshness.label)}</span><span class="tap-cue">${open?'Tap to collapse':'Tap for plate/status'}</span>${missing.length?`<span class="missing-line">Needs: ${esc(missing.join(', '))}</span>`:''}${changes.length?`<span class="change-line">Changed by source ${fleetChangeSourcePills(changes)}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`${rivianCardIdSummary(v,confidence,batteryFreshness)}${compactDetails}<span class="assistive-text">${auditText}</span>`:''}</button>`;
+  return `<article class="fleet-card-shell ${open?'expanded':''}"><button class="rivian-card ${tone} ${open?'expanded':''} ${changes.length?'updated':''} ${missing.length?'needs-data':''} ${hardStatus.length?'hard-status':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(displayName)}</h3>${v.name&&v.name!==displayName?`<span class="assistive-text">${esc(v.name)}</span>`:''}${hardStatusHtml}<span class="confidence-pill ${confidence.className}">${esc(confidence.label)}</span>${changes.length?'<span class="update-pill">Updated</span>':''}</div><span class="rivian-vin">${esc(v.vin)}</span>${fleetSourceBadges(v)}<span class="fleet-ready-pill ${dispatchReady.className}" title="${esc(dispatchReady.detail)}"><b>${esc(dispatchReady.label)}</b><em>${esc(dispatchReady.detail)}</em></span><span class="name-source-pill ${nameSource.className}" title="${esc(nameSource.detail)}"><b>${esc(nameSource.shortLabel)}</b><em>${esc(nameSource.label)}</em></span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles===undefined||v.battery===undefined?'— / —':`${v.miles} mi / ${v.battery}%`}</strong></div>${fleetCardStatusPills(v)}<span class="fleet-card-cue ${confidence.className}">${esc(fleetCardCue(v))}</span><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span><span class="battery-freshness ${batteryFreshness.className}">${esc(batteryFreshness.label)}</span><span class="tap-cue">${open?'Tap to collapse':'Tap for plate/status'}</span>${missing.length?`<span class="missing-line">Needs: ${esc(missing.join(', '))}</span>`:''}${changes.length?`<span class="change-line">Changed by source ${fleetChangeSourcePills(changes)}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`${rivianCardIdSummary(v,confidence,batteryFreshness)}${compactDetails}<span class="assistive-text">${auditText}</span>`:''}</button>${fleetNameEditorHtml(v)}</article>`;
 }
 
 function performancePage() {
@@ -1761,6 +1783,7 @@ function bind() {
   document.querySelectorAll('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
   document.querySelectorAll('[data-phase]').forEach(el=>el.addEventListener('click',()=>{state.phase=Number(el.dataset.phase);persist();render();}));
   document.querySelectorAll('[data-morning-filter]').forEach(el=>el.addEventListener('change',()=>{const key=el.dataset.morningFilter;if(key!=='dsp')state.morningFilters[key]=el.value;render();}));
+  document.querySelectorAll('[data-operation-date]').forEach(el=>el.addEventListener('change',()=>{state.morningOperationDate=el.value||defaultOperationDate();state.morningSheetsLastReceipt=null;persist();render();toast(`Google target set to ${operationDateTabNames(state.morningOperationDate).join(' or ')}`);}));
   document.querySelectorAll('[data-rivian-sort]').forEach(el=>el.addEventListener('change',()=>{state.fleetSort=el.value;persist();render();}));
   document.querySelectorAll('[data-fleet-filter]').forEach(el=>el.addEventListener('change',()=>{state.fleetFilter=el.value;persist();render();}));
   document.querySelectorAll('[data-fleet-view]').forEach(el=>el.addEventListener('change',()=>{state.fleetView=el.value;persist();render();}));
@@ -2330,7 +2353,8 @@ function go(page) {
 function action(name,el) {
   if (name==='menu') return document.getElementById('sidebar').classList.toggle('open');
   if (name==='import') { state.modal='import'; state.importSource='computer'; state.importPurpose='morning'; state.importedFile=null; return render(); }
-  if (name==='slack-import') { state.modal='import'; state.importSource='slack'; state.importPurpose='morning'; state.importedFile=null; return render(); }
+  if (name==='slack-import') return toast('Slack Import is locked until the secure connector is ready','error');
+  if (name==='open-morning-diagnostics') { const details=document.getElementById('morning-diagnostics');if(details){details.open=true;details.scrollIntoView({behavior:'smooth',block:'start'});}return; }
   if (name==='planned-rts-import') { state.modal='import'; state.importSource='computer'; state.importPurpose='rts'; state.importedFile=null; return render(); }
   if (name==='equipment-import') { state.modal='equipment'; state.importPurpose='equipment'; state.equipmentImport=null; return render(); }
   if (name==='fleet-import') { state.modal='fleet-import'; state.importPurpose='fleet'; state.fleetImportSourceHint=''; return render(); }
@@ -2383,6 +2407,9 @@ function action(name,el) {
   if (name==='toggle-gas-van') return toggleGasVan(el.dataset.van||'');
   if (name==='apply-gas-assignment') return applyGasVehicleAssignment();
   if (name==='toggle-fleet-card') return toggleFleetCard(el.dataset.vin);
+  if (name==='edit-fleet-name') { state.editingFleetVin=el.dataset.vin||'';state.expandedFleetVin=state.editingFleetVin;render();setTimeout(()=>document.querySelector('[data-fleet-name-input]')?.focus(),0);return; }
+  if (name==='save-fleet-name') return saveFleetName(el.dataset.vin||'');
+  if (name==='cancel-fleet-name') { state.editingFleetVin='';render();return; }
   if (name==='refresh-fleet') return refreshFleetStatus();
   if (name==='fleet-live-setup') return setupFleetLiveConnector();
   if (name==='save-fleet-live-setup') return saveFleetLiveSetup();
@@ -3308,8 +3335,17 @@ function applyGasVehicleAssignment() {
 }
 
 function toggleFleetCard(vin='') {
+  state.editingFleetVin='';
   state.expandedFleetVin=state.expandedFleetVin===vin?'':vin;
   persist();render();
+}
+function saveFleetName(vin='') {
+  const key=cleanVin(vin),input=document.querySelector('[data-fleet-name-input]'),name=String(input?.value||'').trim();
+  if(!key||!name)return toast('Enter a vehicle name before saving','error');
+  state.fleetNameOverrides={...(state.fleetNameOverrides||{}),[key]:name};
+  state.editingFleetVin='';
+  syncFleetVehiclesToDeviceSheet(rivianFleet.filter(vehicle=>cleanVin(vehicle.vin)===key));
+  persist();render();toast(`Vehicle renamed to ${name}`);return true;
 }
 
 function setupFleetLiveConnector() {
@@ -3621,7 +3657,8 @@ function morningSheetsConnectorPayload() {
     index+=1;
     sectionMeta.push({label:waveLabel,wave:section.wave||'',waveTime:morningWaveTimeText(section),pad,startRow,rowCount:display.length,timeRow,separatorRow,dsp:Boolean(section.dsp)});
   });
-  return {version:'relayops-morning-v1',templateUrl:MORNING_TEMPLATE_URL,sheetName:MORNING_TEMPLATE_SHEET_NAME,sheetNameCandidates:MORNING_TEMPLATE_SHEET_CANDIDATES,dsp:state.dspCode,generatedAt:new Date().toISOString(),startCell:'A3',writeRange:'A3:M',headers:morningTemplateHeaders,rows,rowTypes,sections:sectionMeta};
+  const dateTabs=operationDateTabNames(state.morningOperationDate),sheetName=dateTabs[0]||MORNING_TEMPLATE_SHEET_NAME;
+  return {version:'relayops-morning-v1',templateUrl:MORNING_TEMPLATE_URL,operationDate:state.morningOperationDate,sheetName,sheetNameCandidates:dateTabs.length?dateTabs:MORNING_TEMPLATE_SHEET_CANDIDATES,dsp:state.dspCode,generatedAt:new Date().toISOString(),startCell:'A3',writeRange:'A3:M',headers:morningTemplateHeaders,rows,rowTypes,sections:sectionMeta};
 }
 function morningSheetsPreflight(payload=morningSheetsConnectorPayload()) {
   const rows=payload.rows||[], rowTypes=payload.rowTypes||[], sections=payload.sections||[], headers=payload.headers||[];
@@ -3723,7 +3760,7 @@ const RELAYOPS_START_ROW = 3;
 const RELAYOPS_START_COL = 1;
 const RELAYOPS_COLS = 13;
 const RELAYOPS_WRITE_RANGE = 'A3:M';
-const RELAYOPS_BUILD = '2026-07-10-format-reset';
+const RELAYOPS_BUILD = '2026-07-10-dated-tab';
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -3978,6 +4015,7 @@ function findRelayOpsMorningSheet(payload) {
   const sheetNames = [payload.sheetName].concat(payload.sheetNameCandidates || []).filter(Boolean);
   let sheet = null;
   for (var s = 0; s < sheetNames.length && !sheet; s++) sheet = ss.getSheetByName(sheetNames[s]);
+  if (!sheet && payload.operationDate) throw new Error('No operations tab found for ' + payload.operationDate + '. Create or rename a tab to ' + sheetNames.join(' or ') + ', then send again. Nothing was written.');
   sheet = sheet || ss.getActiveSheet() || ss.getSheets()[0];
   if (!sheet) throw new Error('No target sheet tab found');
   return sheet;
@@ -4047,6 +4085,16 @@ async function syncFilteredMorningToSheets() {
     toast(`Google confirmed ${filteredMorningRows().length} filtered routes · ${result.writtenRange||payload.writeRange}`);
     return true;
   } catch(error) {
+    if(!error?.relayOpsConfirmed) {
+      try {
+        await fetch(endpoint,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)});
+        const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
+        state.morningSheetsLastPush=`${sentAt} · verify`;
+        state.morningSheetsLastReceipt={sheet:payload.sheetName,startCell:payload.startCell,writeRange:payload.writeRange,rows:payload.rows.length,sections:payload.sections.length,status:'needs-verification',updatedAt:sentAt,sentAt,filterScope:morningFilterScopeText()};
+        state.morningSheetsLastError=`Google received the send through browser-safe mode. Verify the ${payload.sheetName} tab before launch.`;
+        persist();render();toast(`Sent to ${payload.sheetName} · open Google Sheet to verify`);return true;
+      } catch(fallbackError) {}
+    }
     state.morningSheetsLastError=error?.message||'Google Sheets bridge failed';
     persist(); render();
     toast(`Google Sheets bridge stopped safely: ${state.morningSheetsLastError}`,'error');
@@ -4151,7 +4199,7 @@ async function testMorningSheetsConnector() {
     const response=await fetch(connectorUrlWithPing(endpoint),{method:'GET'});
     const text=await response.text();
     if(!response.ok||!/relayops-morning-v1/.test(text)||!/A3:M/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
-    if(!/2026-07-10-format-reset/.test(text))throw new Error('Connector deployment is outdated. In Apps Script choose Deploy → Manage deployments → Edit → New version → Deploy.');
+    if(!/2026-07-10-dated-tab/.test(text))throw new Error('Connector deployment is outdated. In Apps Script choose Deploy → Manage deployments → Edit → New version → Deploy.');
     state.morningSheetsLastError='';
     persist(); render();
     toast('Google Sheets connector confirmed');
@@ -4338,6 +4386,8 @@ function persist(){
 localStorage.setItem('relayops_equipment_import',JSON.stringify(state.equipmentImport||null));
 localStorage.setItem('relayops_device_custom_rows',JSON.stringify(state.deviceCustomRows||{ev:[],gas:[],helper:[]}));
 localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_morning_sheets_last_dry_run',state.morningSheetsLastDryRun||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');localStorage.setItem('relayops_driver_contacts',JSON.stringify(state.driverContacts||[]));localStorage.setItem('relayops_driver_contacts_last_import',state.driverContactsLastImport||'');
+localStorage.setItem('relayops_morning_operation_date',state.morningOperationDate||defaultOperationDate());
+localStorage.setItem('relayops_fleet_name_overrides',JSON.stringify(state.fleetNameOverrides||{}));
 }
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
