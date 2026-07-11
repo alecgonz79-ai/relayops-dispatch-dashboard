@@ -236,6 +236,7 @@ let state = {
   equipmentImport: JSON.parse(localStorage.getItem('relayops_equipment_import') || 'null'),
   gasAssignmentRoutes: [],
   gasAssignmentVans: [],
+  deviceClearConfirm: null,
   driverContacts: JSON.parse(localStorage.getItem('relayops_driver_contacts') || 'null') || [],
   driverContactsLastImport: localStorage.getItem('relayops_driver_contacts_last_import') || '',
   rating: Number(localStorage.getItem('relayops_rating') || 0)
@@ -560,7 +561,8 @@ function deviceSheetRows(ids=[]) {
   }).join('');
 }
 function deviceSheetTable(title,subtitle,ids=[],kind='') {
-  return `<article class="card device-sheet-card ${kind}"><div class="device-sheet-card-head"><div><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><span>${ids.length} rows</span></div><div class="device-sheet-table-wrap"><table class="device-sheet-table"><thead><tr><th>VAN</th><th>DEVICE</th><th>PORTABLE</th></tr></thead><tbody>${deviceSheetRows(ids)}</tbody></table></div></article>`;
+  const section=kind.replace('-list',''),confirming=state.deviceClearConfirm===section;
+  return `<article class="card device-sheet-card ${kind}"><div class="device-sheet-card-head"><div><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><div class="device-sheet-card-actions"><span>${ids.length} rows</span><button class="btn small ${confirming?'danger':''}" data-action="clear-device-sheet-section" data-device-section="${esc(section)}">${confirming?'Click again to clear':'Clear sheet'}</button></div></div><div class="device-sheet-table-wrap"><table class="device-sheet-table"><thead><tr><th>VAN</th><th>DEVICE</th><th>PORTABLE</th></tr></thead><tbody>${deviceSheetRows(ids)}</tbody></table></div></article>`;
 }
 function livePage() {
   const evIds=Array.from({length:58},(_,i)=>`EV${i+1}`),helperIds=['H1','H2','H3','H4'];
@@ -2303,6 +2305,7 @@ function action(name,el) {
   if (name==='parse-equipment-text') return parseEquipmentTextAction();
   if (name==='apply-equipment-import') return applyEquipmentImport();
   if (name==='device-sheet-to-morning') return inputDeviceSheetToMorning();
+  if (name==='clear-device-sheet-section') return clearDeviceSheetSection(el.dataset.deviceSection||'');
   if (name==='parse-fleet-paste') return parseFleetPasteAction();
   if (name==='rate-service') { state.rating=Number(el.dataset.rating)||0;persist();render();return toast(`Thanks — ${state.rating} stars saved`); }
   if (name==='publish') { state.rosterPublished=true;persist();render();return toast('Roster published to the team'); }
@@ -3077,6 +3080,21 @@ function updateDeviceSheetCell(id,field,value) {
   current[field]=clean;details[key]=current;
   state.equipmentImport={name:'Device and Portable Sheet',details};
   persist();
+}
+function deviceSheetSectionIds(section='') {
+  if(section==='ev')return Array.from({length:58},(_,i)=>String(i+1));
+  if(section==='gas')return gasVehicleIds.map(normalizeEquipmentId);
+  if(section==='helper')return ['H1','H2','H3','H4'];
+  return [];
+}
+function clearDeviceSheetSection(section='') {
+  const ids=deviceSheetSectionIds(section);
+  if(!ids.length)return;
+  if(state.deviceClearConfirm!==section){state.deviceClearConfirm=section;render();return toast('Click Clear sheet again to confirm','error');}
+  const details={...deviceSheetDetails()};ids.forEach(id=>delete details[normalizeEquipmentId(id)]);
+  state.equipmentImport={name:'Device and Portable Sheet',details};
+  state.deviceClearConfirm=null;persist();render();
+  toast(`${section==='ev'?'Electric Vehicles':section==='gas'?'Gas Vehicles':'Helper Bags'} boxes cleared`);
 }
 function inputDeviceSheetToMorning() {
   const details=deviceSheetDetails();
