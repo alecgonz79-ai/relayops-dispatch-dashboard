@@ -88,10 +88,18 @@ const checks = `
     ['Jordan Lee','15554443333','Delivery Associate']
   ]);
   if (amazonWorkforceContacts.length !== 1 || amazonWorkforceContacts[0].phone !== '(555) 444-3333' || amazonWorkforceContacts[0].role !== 'Delivery Associate') throw new Error('Amazon Workforce associate columns should map to driver contacts');
+  const associateDataContacts = driverContactsFromRows([
+    ['Name and ID','TransporterID','Position','Qualifications','ID expiration','Personal Phone Number','Work Phone Number','Email','Status'],
+    ['Adrian Anthony Elizondo','A32HN7H6JNEAH4','Helper, Driver','AMZL_HELPER, EDV','2030-05-13','9514729383','+19516248778','a@example.com','ACTIVE']
+  ]);
+  if(associateDataContacts.length!==1||associateDataContacts[0].name!=='Adrian Anthony Elizondo'||associateDataContacts[0].phone!=='(951) 472-9383'||associateDataContacts[0].transporterId!=='A32HN7H6JNEAH4'||associateDataContacts[0].status!=='ACTIVE') throw new Error('AssociateData exact headers should map name, personal phone, Transporter ID, and Active status');
   mergeDriverContacts(driverContacts);
   state.page = 'team';
   const teamHtml = teamPage();
-  if (!teamHtml.includes('Amazon Workforce contact import') || !teamHtml.includes('Open Amazon Workforce') || !teamHtml.includes('logistics.amazon.com/workforce?pageId=da_console_associates') || !teamHtml.includes('Import associates CSV') || !teamHtml.includes('(555) 123-4567') || !teamHtml.includes('Vanessa Balderama') || !teamHtml.includes('Future text reminder prep') || !teamHtml.includes('secure SMS connector') || !teamHtml.includes('No phone imported yet') || !teamHtml.includes('will not store Amazon passwords')) throw new Error('Drivers & Team Workforce import UI missing names, phone numbers, Amazon link, or SMS prep guidance');
+  if (!teamHtml.includes('Amazon Workforce contact import') || !teamHtml.includes('Open Amazon Workforce') || !teamHtml.includes('logistics.amazon.com/workforce?pageId=da_console_associates') || !teamHtml.includes('Import AssociateData CSV') || !teamHtml.includes('Add Delivery Associate') || !teamHtml.includes('(555) 123-4567') || !teamHtml.includes('Vanessa Balderama') || !teamHtml.includes('Future text reminder prep') || !teamHtml.includes('secure SMS connector') || !teamHtml.includes('No phone imported yet') || !teamHtml.includes('not embedded in or published')) throw new Error('Drivers & Team Workforce import UI missing private import, manual add, names, phones, Amazon link, or SMS guidance');
+  action('add-delivery-associate',{});
+  if(state.modal!=='add-driver'||!modal().includes('manual-driver-name')||!modal().includes('manual-driver-phone')||!modal().includes('manual-driver-id')||!modal().includes('Private on this device')) throw new Error('Manual Add Delivery Associate form missing');
+  state.modal=null;
   action('driver-import',{});
   if (state.importPurpose !== 'drivers') throw new Error('Driver import button should route file uploads to the driver CSV parser');
   state.importPurpose = 'morning';
