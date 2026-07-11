@@ -469,9 +469,16 @@ const checks = `
   handleEquipmentPaste({ preventDefault(){}, clipboardData:{ files:[], getData:()=> '1 40 31 37 31 -' } });
   if (!state.equipmentImport || state.equipmentImport.details['37'].device !== '31') throw new Error('Equipment paste shortcut failed');
   const deviceSheetHtml=livePage();
-  const deviceSheetRequirements=['Device and Portable','Input to Morning Sheet','data-device-sheet-id="1"','data-device-sheet-id="58"','Gas vehicles','data-device-sheet-id="F33"','Helper bags','data-device-sheet-id="H4"'];
+  const deviceSheetRequirements=['Device and Portable','Input to Morning Sheet','data-device-sheet-id="1"','data-device-sheet-id="58"','Gas vehicles','data-device-sheet-id="F33"','Helper bags','data-device-sheet-id="H4"','data-device-section="ev"','data-device-section="gas"','data-device-section="helper"'];
   const missingDeviceSheet=deviceSheetRequirements.filter(value=>!deviceSheetHtml.includes(value));
   if(missingDeviceSheet.length) throw new Error('Device and Portable Sheet missing: '+missingDeviceSheet.join(', '));
+  const beforeSectionClear=JSON.parse(JSON.stringify(state.equipmentImport));
+  state.equipmentImport={name:'clear test',details:{'1':{device:'1',portable:'2'},F33:{device:'7',portable:'8'},H1:{device:'9',portable:'10'}}};
+  clearDeviceSheetSection('ev');
+  if(state.deviceClearConfirm!=='ev'||!state.equipmentImport.details['1']) throw new Error('First Clear sheet click should only request confirmation');
+  clearDeviceSheetSection('ev');
+  if(state.equipmentImport.details['1']||!state.equipmentImport.details.F33||!state.equipmentImport.details.H1) throw new Error('Electric clear should preserve Gas and Helper sheets');
+  state.equipmentImport=beforeSectionClear;state.deviceClearConfirm=null;
   state.morningRoutes[0].ev='1';
   updateDeviceSheetCell('EV1','device','21');updateDeviceSheetCell('EV1','portable','22');
   inputDeviceSheetToMorning();
