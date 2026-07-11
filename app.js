@@ -247,6 +247,7 @@ let state = {
   sheetCopyText: '',
   equipmentText: '',
   fleetPasteText: '',
+  fleetImportSourceHint: '',
   equipmentImport: JSON.parse(localStorage.getItem('relayops_equipment_import') || 'null'),
   gasAssignmentRoutes: [],
   gasAssignmentVans: [],
@@ -344,7 +345,7 @@ function sidebar() {
 const pageInfo = {
   dashboard:['Today’s command','A clear view from load-out through RTS'], morning:['Morning operations sheet','DSP-only routes, grouped by earliest wave, staging, and pad'], roster:['Opening roster','Resolve exceptions, assign equipment, then publish'],
   live:['Device and Portable Sheet','Type today’s assignments, then match them to every EV on the Morning Sheet'], team:['Drivers & team','Availability, compliance, recognition, and history'],
-  fleet:['Fleet Health','Simple Rivian battery, status, and source health'], parking:['Van Parking','Interactive parking map for closing and morning dispatch'], performance:['Performance','Scorecard trends and driver-level focus areas'],
+  fleet:['Fleet Health','Electric and gas vehicle status, battery, and operational health'], parking:['Van Parking','Interactive parking map for closing and morning dispatch'], performance:['Performance','Scorecard trends and driver-level focus areas'],
   coaching:['Coaching','Turn scorecard signals into consistent follow-through'], checklists:['Checklists','Repeatable opening, load-out, and closeout routines'],
   inbox:['Team inbox','Calls, messages, and announcements in one place'], inventory:['Inventory','Devices, uniforms, supplies, and assignments'],
   reports:['Reports & export','Google Sheets-ready operational data'], admin:['Admin control','People, permissions, connections, and audit history']
@@ -352,9 +353,10 @@ const pageInfo = {
 
 function topbar() {
   const [title,sub] = pageInfo[state.page] || pageInfo.dashboard;
+  const fleetClean=state.page==='fleet';
   return `<header class="topbar">
     <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu">${ICONS.menu}</button><div class="page-heading"><h1>${title}</h1><p>${sub}</p></div></div>
-    <div class="top-actions"><label class="search">${ICONS.search}<input id="global-search" placeholder="Search driver, route, van…" value="${esc(state.search)}" /></label><button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button><button class="icon-button" aria-label="Notifications">${ICONS.bell}<i class="notification-dot"></i></button><button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button></div>
+    <div class="top-actions">${fleetClean?'':`<label class="search">${ICONS.search}<input id="global-search" placeholder="Search driver, route, van…" value="${esc(state.search)}" /></label>`}<button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button><button class="icon-button" aria-label="Notifications">${ICONS.bell}<i class="notification-dot"></i></button>${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
   </header>`;
 }
 
@@ -553,7 +555,7 @@ function morningWaveGroup(section,sectionIndex=0) {
   const waveTitle=section.dsp?'DSP':section.label;
   const waveTime=morningWaveTimeText(section);
   const attrs=(r,field,rowIndex,colIndex,extra='')=>interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}" ${edit?`contenteditable="true" data-edit-route="${esc(r?.route||'')}" data-edit-field="${field}" data-edit-wave="${esc(r?.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''} ${extra}`:'';
-  const cell=(r,field,value,colIndex,cls='')=>{const grounded=field==='ev'&&isGroundedEquipmentId(value);return `<td class="sheet-edit-cell copy-sheet-cell ${cls} ${grounded?'grounded-van-cell':''} ${r?.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" data-view-route="${esc(r?.route||'')}" data-view-field="${field}" data-view-wave="${esc(r?.wave||section.wave||'')}" title="${grounded?'Grounded vehicle — reassign before dispatch':edit?'Press Enter to save':'Double-click to edit'}" ${attrs(r,field,rows.indexOf(r),colIndex)}>${esc(value??'')}</td>`;};
+  const cell=(r,field,value,colIndex,cls='')=>{const issue=field==='ev'?vehicleIssueForEquipmentId(value):null,issueClass=issue?.type==='grounded'?'grounded-van-cell':issue?.type==='battery'?'low-battery-van-cell':'';return `<td class="sheet-edit-cell copy-sheet-cell ${cls} ${issueClass} ${r?.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" data-view-route="${esc(r?.route||'')}" data-view-field="${field}" data-view-wave="${esc(r?.wave||section.wave||'')}" title="${issue?esc(issue.title):edit?'Press Enter to save':'Double-click to edit'}" ${attrs(r,field,rows.indexOf(r),colIndex)}>${esc(value??'')}</td>`;};
   const waveCell=`<td class="wave-label ${section.dsp?'dsp-label':''} copy-sheet-cell" rowspan="${rows.length}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="0"`:''}><span>${esc(waveTitle)}</span></td>`;
   const padCell=`<td class="pad-label sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" rowspan="${rows.length+1}" data-view-field="padOverride" data-view-wave="${esc(section.wave)}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="4" ${edit?`contenteditable="true" data-edit-wave="${esc(section.wave)}" data-edit-field="padOverride"`:''}`:''}><span>${esc(pad)}</span></td>`;
   const body=rows.map((r,i)=>`<tr class="ops-row ${r._blank?'blank-row':''} wave-section-${sectionIndex}" data-wave-section="${sectionIndex}">${showGridLabels?`<th class="sheet-row-num">${rowBase+i}</th>`:''}${i===0?waveCell:''}${cell(r,'driver',r.driver,1,'driver-name')}${cell(r,'route',r._blank?'':r.route,2,'route-id')}${cell(r,'staging',r.staging,3,'staging-code')}${i===0?padCell:''}${cell(r,'ev',r.ev||'',5)}${cell(r,'deviceName',r.deviceName||'',6)}${cell(r,'portable',r.portable||'',7)}<td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+i-3}" data-sheet-col="8"`:''}></td>${cell(r,'stops',r.stops,9,'count-cell')}${cell(r,'packages',r.packages,10,'count-cell')}<td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+i-3}" data-sheet-col="11"`:''}></td>${cell(r,'plannedRts',r.plannedRts||'',12,'planned-rts-cell')}</tr>`).join('');
@@ -596,6 +598,17 @@ function groundedEquipmentIds() {
 function isGroundedEquipmentId(value='') {
   const key=normalizeEquipmentId(value);return Boolean(key&&groundedEquipmentIds().has(key));
 }
+function fleetVehicleForEquipmentId(value='') {
+  const key=normalizeEquipmentId(value);if(!key)return null;
+  return rivianFleet.find(vehicle=>normalizeEquipmentId(fleetEquipmentIdentity(vehicle)?.label||'')===key)||null;
+}
+function vehicleIssueForEquipmentId(value='') {
+  const vehicle=fleetVehicleForEquipmentId(value);if(!vehicle)return null;
+  if(normalizeOperational(vehicle.operational||vehicle.status)==='Grounded')return {type:'grounded',label:'Grounded',title:'Grounded vehicle — do not assign'};
+  if(normalizeActive(vehicle.active||vehicle.status)==='Inactive')return {type:'grounded',label:'Inactive',title:'Inactive vehicle — verify before assigning'};
+  if(isElectricFleetVehicle(vehicle)&&Number(vehicle.battery)<40)return {type:'battery',label:`Low ${Number(vehicle.battery)}%`,title:`Low battery ${Number(vehicle.battery)}% — charge or swap before dispatch`};
+  return null;
+}
 function syncFleetVehiclesToDeviceSheet(vehicles=[]) {
   state.deviceCustomRows=state.deviceCustomRows||{ev:[],gas:[],helper:[]};
   let added=0;
@@ -610,12 +623,12 @@ function syncFleetVehiclesToDeviceSheet(vehicles=[]) {
   return added;
 }
 function deviceSheetRows(section='') {
-  const details=deviceSheetDetails(),grounded=groundedEquipmentIds();
+  const details=deviceSheetDetails();
   const base=deviceSheetBaseIds(section).map(label=>({label,fixed:true})),custom=deviceSheetCustomRows(section);
   return [...base,...custom].map(row=>{
     const label=String(row.label||''),key=normalizeEquipmentId(label),item=row.fixed?(details[key]||{}):{...row,device:row.device||details[key]?.device||'',portable:row.portable||details[key]?.portable||''};
-    const isGrounded=Boolean(key&&grounded.has(key)),rowClass=isGrounded?'grounded-vehicle-row':'';
-    const vanCell=row.fixed?`<th>${esc(label)}${isGrounded?'<span>Grounded</span>':''}</th>`:`<th class="custom-van-cell"><input class="device-sheet-van-input" aria-label="${esc(section)} custom van" data-device-custom-uid="${esc(row.uid)}" data-device-custom-field="label" value="${esc(label)}" placeholder="Van name"><button data-action="remove-device-custom-row" data-device-custom-uid="${esc(row.uid)}" aria-label="Remove ${esc(label||'custom van')} row">×</button>${isGrounded?'<span>Grounded</span>':''}</th>`;
+    const issue=vehicleIssueForEquipmentId(label),rowClass=issue?.type==='grounded'?'grounded-vehicle-row':issue?.type==='battery'?'low-battery-vehicle-row':'';
+    const vanCell=row.fixed?`<th>${esc(label)}${issue?`<span>${esc(issue.label)}</span>`:''}</th>`:`<th class="custom-van-cell"><input class="device-sheet-van-input" aria-label="${esc(section)} custom van" data-device-custom-uid="${esc(row.uid)}" data-device-custom-field="label" value="${esc(label)}" placeholder="Van name"><button data-action="remove-device-custom-row" data-device-custom-uid="${esc(row.uid)}" aria-label="Remove ${esc(label||'custom van')} row">×</button>${issue?`<span>${esc(issue.label)}</span>`:''}</th>`;
     const field=(name,max)=>`<td><input aria-label="${esc(label||'New van')} ${name}" ${row.fixed?`data-device-sheet-id="${esc(key)}" data-device-sheet-field="${name}"`:`data-device-custom-uid="${esc(row.uid)}" data-device-custom-field="${name}"`} inputmode="numeric" maxlength="${max}" value="${esc(item[name]||'')}" placeholder="—"></td>`;
     return `<tr class="${rowClass}">${vanCell}${field('device',3)}${field('portable',4)}</tr>`;
   }).join('');
@@ -644,20 +657,17 @@ function teamPage() {
 }
 
 function fleetPage() {
-  const rivians=sortedRivianFleet(), low=rivianFleet.filter(v=>v.battery<40).length, avg=Math.round(rivianFleet.reduce((n,v)=>n+v.battery,0)/rivianFleet.length);
-  const grounded=rivianFleet.filter(v=>v.operational==='Grounded').length;
-  const coverage=fleetCoverageStats();
-  const readyCopy=coverage.verified===coverage.total?'Every EV verified':'Upload both exports to verify every EV';
+  const vehicles=sortedRivianFleet(),electric=electricFleetVehicles(),gas=rivianFleet.filter(isGasFleetVehicle),low=electric.filter(v=>v.battery<40).length,charge=fleetChargeRows().length;
+  const grounded=rivianFleet.filter(v=>v.operational==='Grounded').length,coverage=fleetCoverageStats();
   const filters=['all','changed','verified','needs-data','missing-fleetos','missing-amazon','amazon-only','fleetos-only','demo-only','low','grounded','inactive'];
-  const labels={'all':'Show all EVs','changed':'Changed only','verified':'Verified only','needs-data':'Needs data','missing-fleetos':'Missing FleetOS','missing-amazon':'Missing Amazon','amazon-only':'Amazon only','fleetos-only':'FleetOS only','demo-only':'Demo only','low':'Needs charge','grounded':'Grounded only','inactive':'Inactive only'};
-  return `${contextBar(`<a class="btn small ghost" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">${ICONS.link} Rivian tracker</a><a class="btn small ghost" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">${ICONS.link} Amazon fleet list</a>`)}
-  <section class="grid kpi-grid">${kpiCard('Rivian battery avg',`${avg}%`,`${low} below 40%`,'van',low?'#fff2cf':'#e9f7df')}${kpiCard('EVs tracked',rivianFleet.length,readyCopy,'van',coverage.needsData?'#fff2cf':'#e9f7df')}${kpiCard('Verified EVs',`${coverage.verified}/${coverage.total}`,`${coverage.needsData} need data`,'check',coverage.needsData?'#fff2cf':'#e9f7df')}${kpiCard('Grounded EVs',grounded,'Tap a van for details','alert',grounded?'#ffe7e2':'#e9f7df')}</section>
-  <article class="card rivian-panel"><div class="card-head fleet-clean-head"><div class="card-title"><h2>Fleet Health</h2><span class="assistive-text">FleetOS + Amazon EV live board · Refresh battery %</span><p>Simple Rivian health board. Amazon fleet names are used first after import; VIN stays below each card for matching. Last refresh: ${esc(state.fleetLastRefresh)}.</p>${fleetHeaderAccuracyBadge()}</div><div class="head-actions fleet-primary-actions"><input class="fleet-search-input" data-fleet-search placeholder="Find EV, VIN, or plate" value="${esc(state.fleetSearch)}"><select class="filter-select" data-fleet-filter>${filters.map(value=>`<option value="${value}" ${state.fleetFilter===value?'selected':''}>${labels[value]}</option>`).join('')}</select><button class="btn small ghost" data-action="clear-fleet-search">Clear</button><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><button class="btn small lime" data-action="refresh-fleet">${ICONS.download} Refresh battery %</button><button class="btn small primary" data-action="fleet-import">${ICONS.upload} Upload / paste fleet list</button></div></div>
+  const labels={'all':'All vehicles','changed':'Changed only','verified':'Verified only','needs-data':'Needs data','missing-fleetos':'Missing FleetOS','missing-amazon':'Missing Amazon','amazon-only':'Amazon only','fleetos-only':'FleetOS only','demo-only':'Demo only','low':'Low-battery EVs','grounded':'Grounded only','inactive':'Inactive only'};
+  return `${contextBar('<span class="status">Amazon names/status · FleetOS EV battery</span>')}
+  <section class="fleet-simple-import card"><div><span class="eyebrow">START HERE</span><h2>Update Fleet Health</h2><p>Amazon adds every vehicle name, VIN and status. FleetOS adds battery and range for electric vans.</p></div><button class="fleet-import-button amazon" data-action="fleet-import-amazon">${ICONS.upload}<span><b>Amazon Fleet Import</b><small>All electric + gas vehicles</small></span></button><button class="fleet-import-button fleetos" data-action="fleet-import-fleetos">${ICONS.upload}<span><b>FleetOS Import</b><small>EV battery + range</small></span></button></section>
   ${fleetHealthSummary()}
-  ${fleetChargeRecommendations()}
-  <div class="fleet-clean-toolbar"><div class="fleet-view-controls"><label class="fleet-count-label">Expected EVs<input class="fleet-count-input" data-fleet-expected type="number" min="0" inputmode="numeric" value="${state.fleetExpectedCount||''}" placeholder="all"></label>${fleetViewSwitcher()}</div><div class="fleet-secondary-actions"><button class="btn small" data-action="fleet-live-setup">${ICONS.link} Live setup</button><button class="btn small" data-action="export-fleet-csv">${ICONS.download} EV CSV</button><button class="btn small" data-action="export-fleet-gaps">${ICONS.download} Gap CSV</button><button class="btn small ghost" data-action="reset-fleet-demo">Clear upload</button><a class="btn small" href="https://business.rivian.com/vehicles/tracker" target="_blank" rel="noopener">FleetOS</a><a class="btn small" href="https://logistics.amazon.com/fleet-management/#vehicles" target="_blank" rel="noopener">Amazon</a></div></div>
-  ${fleetDataDrawer()}
-  ${fleetQuickFilterChips()}${fleetResultBar(rivians.length,labels[state.fleetFilter]||'Show all EVs')}<section class="grid rivian-grid ${fleetViewClass()}">${rivians.length?rivians.map(v=>rivianCard(v)).join(''):`<div class="empty-state">No EVs match this search/filter. Press Clear to show every EV again.</div>`}</section></article>`;
+  <section class="fleet-alert-squares"><button class="danger" data-action="fleet-filter-quick" data-filter="grounded"><span>Grounded vehicles</span><strong>${grounded}</strong><small>Red · do not assign</small></button><button class="battery" data-action="fleet-filter-quick" data-filter="low"><span>Low-battery EVs</span><strong>${low}</strong><small>Below 40%</small></button><button class="charge" data-action="fleet-filter-quick" data-filter="low"><span>Recommended to charge</span><strong>${charge}</strong><small>EVs below 50%</small></button><button class="review" data-action="fleet-filter-quick" data-filter="needs-data"><span>Needs information</span><strong>${coverage.needsData}</strong><small>Missing source fields</small></button></section>
+  <article class="card rivian-panel simplified"><div class="card-head fleet-clean-head"><div class="card-title"><h2>All vehicles</h2><p>${electric.length} electric · ${gas.length} gas · names remain the same everywhere in RelayOps</p></div><div class="head-actions fleet-primary-actions"><input class="fleet-search-input" data-fleet-search placeholder="Find vehicle, VIN, or plate" value="${esc(state.fleetSearch)}"><select class="filter-select" data-fleet-filter>${filters.map(value=>`<option value="${value}" ${state.fleetFilter===value?'selected':''}>${labels[value]}</option>`).join('')}</select><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><button class="btn small" data-action="clear-fleet-search">Clear</button><button class="btn small primary" data-action="refresh-fleet">Refresh</button></div></div>
+  <details class="fleet-small-tools"><summary>More fleet tools</summary><div><label class="fleet-count-label">Expected vehicles<input class="fleet-count-input" data-fleet-expected type="number" min="0" inputmode="numeric" value="${state.fleetExpectedCount||''}" placeholder="all"></label>${fleetViewSwitcher()}<button class="btn small" data-action="fleet-live-setup">Live setup</button><button class="btn small" data-action="export-fleet-csv">Vehicle CSV</button><button class="btn small" data-action="export-fleet-gaps">Gap CSV</button><a class="btn small" href="${AMAZON_FLEET_PORTAL_URL}" target="_blank" rel="noopener">Amazon</a><a class="btn small" href="${FLEETOS_PORTAL_URL}" target="_blank" rel="noopener">FleetOS</a></div>${fleetDataDrawer()}</details>
+  ${fleetResultBar(vehicles.length,labels[state.fleetFilter]||'All vehicles')}<section class="grid rivian-grid ${fleetViewClass()}">${vehicles.length?vehicles.map(v=>rivianCard(v)).join(''):`<div class="empty-state">No vehicles match this search/filter. Press Clear to show every vehicle again.</div>`}</section></article>`;
 }
 
 function fleetViewMode() {
@@ -681,15 +691,15 @@ function fleetViewSwitcher() {
 }
 
 function fleetHealthSummary() {
-  const coverage=fleetCoverageStats(), low=rivianFleet.filter(v=>v.battery<40).length, grounded=rivianFleet.filter(v=>v.operational==='Grounded').length;
-  const avg=Math.round(rivianFleet.reduce((n,v)=>n+Number(v.battery||0),0)/Math.max(1,rivianFleet.length));
+  const coverage=fleetCoverageStats(),electric=electricFleetVehicles(),gas=rivianFleet.filter(isGasFleetVehicle),low=electric.filter(v=>v.battery<40).length,grounded=rivianFleet.filter(v=>v.operational==='Grounded').length;
+  const avg=Math.round(electric.reduce((n,v)=>n+Number(v.battery||0),0)/Math.max(1,electric.length));
   const sourceStatus=fleetSourceStatus();
   const liveReady=!!fleetLiveEndpoint();
-  return `<div class="fleet-health-summary"><div class="fleet-health-card primary"><strong>${rivianFleet.length}</strong><span>Rivians displayed</span><small>Default board shows the full 58-card Rivian fleet.</small></div><div class="fleet-health-card ${low?'warn':'ok'}"><strong>${avg}%</strong><span>Average battery</span><small>${low} van${low===1?'':'s'} below 40%.</small></div><div class="fleet-health-card ${grounded?'danger':'ok'}"><strong>${grounded}</strong><span>Grounded</span><small>Sort low to high before launch.</small></div><div class="fleet-health-card ${coverage.needsData?'warn':'ok'}"><strong>${coverage.verified}/${coverage.total}</strong><span>Verified sources</span><small>${sourceStatus.hasAmazon?'Amazon loaded':'Needs Amazon'} · ${sourceStatus.hasFleetos?'FleetOS loaded':'Needs FleetOS'} · ${liveReady?'Live ready':'Manual import'}</small></div></div>`;
+  return `<div class="fleet-health-summary compact"><div class="fleet-health-card primary"><strong>${rivianFleet.length}</strong><span>All vehicles</span><small>${electric.length} electric · ${gas.length} gas</small></div><div class="fleet-health-card ${low?'warn':'ok'}"><strong>${avg}%</strong><span>EV battery average</span><small>${low} below 40%</small></div><div class="fleet-health-card ${grounded?'danger':'ok'}"><strong>${grounded}</strong><span>Grounded</span><small>Do not assign</small></div><div class="fleet-health-card ${coverage.needsData?'warn':'ok'}"><strong>${coverage.verified}/${coverage.total}</strong><span>Verified sources</span><small>${sourceStatus.hasAmazon?'Amazon loaded':'Needs Amazon'} · ${sourceStatus.hasFleetos?'FleetOS loaded':'Needs FleetOS'} · ${liveReady?'Live ready':'Manual import'}</small></div></div>`;
 }
 
 function fleetChargeRows() {
-  return [...rivianFleet].filter(v=>Number(v.battery)<50).sort((a,b)=>Number(a.battery)-Number(b.battery)||String(a.name||'').localeCompare(String(b.name||'')));
+  return electricFleetVehicles().filter(v=>Number(v.battery)<50).sort((a,b)=>Number(a.battery)-Number(b.battery)||String(a.name||'').localeCompare(String(b.name||'')));
 }
 function fleetChargeRecommendations() {
   const rows=fleetChargeRows();
@@ -905,7 +915,7 @@ function fleetUpdateSummary() {
 
 function fleetResultBar(visible=0,filterLabel='Show all EVs') {
   const total=rivianFleet.length, searching=String(state.fleetSearch||'').trim();
-  return `<div class="fleet-result-bar"><div><strong>${visible} of ${total} EVs showing</strong><span>${esc(filterLabel)}${searching?` · search: “${esc(searching)}”`:''}</span></div><div><span>${esc(fleetViewLabel())}</span><button class="btn small" data-action="copy-visible-fleet-vins">Copy visible VINs</button><button class="btn small ghost" data-action="clear-fleet-search">Show all EVs</button></div></div>`;
+  return `<div class="fleet-result-bar"><div><strong>${visible} of ${total} vehicles showing</strong><span>${esc(filterLabel)}${searching?` · search: “${esc(searching)}”`:''}</span></div><div><span>${esc(fleetViewLabel())}</span><button class="btn small" data-action="copy-visible-fleet-vins">Copy visible VINs</button><button class="btn small ghost" data-action="clear-fleet-search">Show all vehicles</button></div></div>`;
 }
 
 function fleetHeaderRefreshGuide() {
@@ -1389,11 +1399,20 @@ function batteryLabel(percent=0) {
   if(percent>=30)return 'Charge soon';
   return 'Charge now';
 }
+function isGasFleetVehicle(vehicle={}) {
+  return /\b(?:FORD|RAM|RENTAL)\b/i.test(String(vehicle.name||''));
+}
+function isElectricFleetVehicle(vehicle={}) {
+  return !isGasFleetVehicle(vehicle)&&(/\b(?:EV\s*\d+|EDV|RIVIAN)\b/i.test(String(vehicle.name||''))||/fleetos|rivian/i.test(String(vehicle.source||''))||Boolean(vehicle.hasBattery));
+}
+function electricFleetVehicles() {
+  return rivianFleet.filter(isElectricFleetVehicle);
+}
 function sortedRivianFleet() {
   const rows=[...rivianFleet];
   const q=String(state.fleetSearch||'').trim().toLowerCase();
   const filtered=rows.filter(v=>{
-    if(state.fleetFilter==='low')return v.battery<40;
+    if(state.fleetFilter==='low')return isElectricFleetVehicle(v)&&v.battery<40;
     if(state.fleetFilter==='grounded')return v.operational==='Grounded';
     if(state.fleetFilter==='inactive')return v.active==='Inactive';
     if(state.fleetFilter==='changed')return (state.fleetChangedVins?.[v.vin]||v.changedFields||[]).length>0;
@@ -1409,16 +1428,20 @@ function sortedRivianFleet() {
     if(!q)return true;
     return [v.name,v.vin,v.plate,v.active,v.operational].some(value=>String(value||'').toLowerCase().includes(q));
   });
-  if(state.fleetSort==='battery-low') filtered.sort((a,b)=>a.battery-b.battery||a.vin.localeCompare(b.vin));
+  if(state.fleetSort==='battery-low') filtered.sort((a,b)=>(isGasFleetVehicle(a)?1:0)-(isGasFleetVehicle(b)?1:0)||a.battery-b.battery||a.vin.localeCompare(b.vin));
   return filtered;
 }
 function amazonRivianIcon(tone='high') {
   return `<span class="rivian-van-art ${tone}" aria-hidden="true"><img src="assets/rivian-prime-van.png" alt=""></span>`;
 }
+function gasCanIcon() {
+  return `<span class="gas-can-art" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M18 8h25v11l8 8v29H14V12a4 4 0 0 1 4-4Z"/><path d="M23 15h14v11H23zM43 21l7-7 6 6-6 7M24 37h17"/></svg><b>GAS</b></span>`;
+}
 function fleetConfidence(vehicle={}) {
   const source=String(vehicle.source||'').toLowerCase();
   const hasAmazon=source.includes('amazon fleet list');
   const hasFleetos=source.includes('fleetos tracker')||source.includes('rivian');
+  if(isGasFleetVehicle(vehicle)&&hasAmazon)return {label:'Verified',className:'verified'};
   if(hasAmazon&&hasFleetos)return {label:'Verified',className:'verified'};
   if(hasAmazon)return {label:'Amazon only',className:'partial'};
   if(hasFleetos)return {label:'FleetOS only',className:'partial'};
@@ -1466,9 +1489,10 @@ function fleetMissingFields(vehicle={}) {
   const confidence=fleetConfidence(vehicle);
   if(confidence.label==='Demo')return ['real upload'];
   const missing=[];
-  if(!String(vehicle.plate||'').trim())missing.push('plate');
   if(!String(vehicle.active||'').trim())missing.push('active status');
   if(!String(vehicle.operational||'').trim())missing.push('operational state');
+  if(isGasFleetVehicle(vehicle))return missing;
+  if(!String(vehicle.plate||'').trim())missing.push('plate');
   if(!vehicle.hasBattery&&confidence.label!=='Amazon only')missing.push('battery');
   if(confidence.label==='Amazon only')missing.push('FleetOS battery');
   if(confidence.label==='FleetOS only')missing.push('Amazon name/plate/status');
@@ -1498,7 +1522,12 @@ function fleetDispatchReadiness(vehicle={},missing=[]) {
 function rivianCardIdSummary(v={},confidence={},batteryFreshness={}) {
   return `<div class="rivian-id-summary" aria-label="EV quick details"><span><b>Plate</b>${esc(v.plate||'—')}</span><span><b>Active</b>${esc(v.active||'—')}</span><span><b>Status</b>${esc(v.operational||'—')}</span><span><b>Battery source</b>${esc(batteryFreshness.label||confidence.label||'—')}</span></div>`;
 }
+function gasFleetCard(v={}) {
+  const grounded=normalizeOperational(v.operational||v.status)==='Grounded',inactive=normalizeActive(v.active||v.status)==='Inactive';
+  return `<article class="rivian-card gas-fleet-card ${grounded?'hard-status grounded':''} ${inactive?'inactive':''}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(fleetDisplayName(v))}</h3>${grounded?'<span class="hard-status-pill grounded">Grounded</span>':''}</div><span class="gas-card-label">Gas vehicle</span><span class="rivian-vin"><b>VIN</b> ${esc(v.vin||'—')}</span>${fleetCardStatusPills(v)}</div>${gasCanIcon()}</div></article>`;
+}
 function rivianCard(v) {
+  if(isGasFleetVehicle(v))return gasFleetCard(v);
   const tone=batteryTone(v.battery), open=state.expandedFleetVin===v.vin;
   const changes=state.fleetChangedVins?.[v.vin]||v.changedFields||[];
   const confidence=fleetConfidence(v);
@@ -1744,7 +1773,7 @@ function bind() {
       if(el.value!==clean)el.value=clean;
       updateDeviceSheetCell(el.dataset.deviceSheetId,el.dataset.deviceSheetField,clean);
     });
-    el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur();}});
+    el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();moveDeviceEntryDown(el);}});
   });
   document.querySelectorAll('[data-device-custom-field]').forEach(el=>{
     el.addEventListener('input',()=>{
@@ -1752,7 +1781,7 @@ function bind() {
       if(el.value!==clean)el.value=clean;
       updateCustomDeviceRow(el.dataset.deviceCustomUid,field,clean);
     });
-    el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur();}});
+    el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();moveDeviceEntryDown(el);}});
   });
   document.querySelectorAll('[data-edit-field]').forEach(el=>{
     el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);});
@@ -2298,7 +2327,9 @@ function action(name,el) {
   if (name==='slack-import') { state.modal='import'; state.importSource='slack'; state.importPurpose='morning'; state.importedFile=null; return render(); }
   if (name==='planned-rts-import') { state.modal='import'; state.importSource='computer'; state.importPurpose='rts'; state.importedFile=null; return render(); }
   if (name==='equipment-import') { state.modal='equipment'; state.importPurpose='equipment'; state.equipmentImport=null; return render(); }
-  if (name==='fleet-import') { state.modal='fleet-import'; state.importPurpose='fleet'; return render(); }
+  if (name==='fleet-import') { state.modal='fleet-import'; state.importPurpose='fleet'; state.fleetImportSourceHint=''; return render(); }
+  if (name==='fleet-import-amazon') { state.importPurpose='fleet';state.fleetImportSourceHint='amazon';return fileInput.click(); }
+  if (name==='fleet-import-fleetos') { state.importPurpose='fleet';state.fleetImportSourceHint='fleetos';return fileInput.click(); }
   if (name==='driver-import') { state.importPurpose='drivers'; return fileInput.click(); }
   if (name==='parking-choose-file') { state.importPurpose='parking'; return fileInput.click(); }
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
@@ -2671,13 +2702,14 @@ async function readFiles(files) {
       return toast(count?`${count} EV/VAN assignments ready to match`:'Screenshot OCR could not find VAN / DEVICE / PORTABLE rows — use the full-size image or upload the Sheet as XLSX/CSV','error');
     }
     if(state.importPurpose==='fleet') {
-      const vehicles=parsed.flatMap(f=>fleetDetailsFromRows(f.rows||[],f.name));
+      const forcedSource=state.fleetImportSourceHint==='amazon'?'Amazon fleet list':state.fleetImportSourceHint==='fleetos'?'FleetOS tracker':'';
+      const vehicles=parsed.flatMap(f=>fleetDetailsFromRows(f.rows||[],forcedSource||f.name));
       if(!vehicles.length) throw new Error('no fleet rows');
-      const combinedVehicles=rememberFleetSourceUpload(vehicles,parsed.map(f=>f.name).join(' + '),new Date().toISOString());
+      const combinedVehicles=rememberFleetSourceUpload(vehicles,forcedSource||parsed.map(f=>f.name).join(' + '),new Date().toISOString());
       const total=applyFleetVehicles(combinedVehicles);
-      state.modal=null; state.page='fleet';
+      state.modal=null; state.page='fleet';state.fleetImportSourceHint='';
       persist(); render();
-      return toast(`${vehicles.length} fleet rows read · ${state.fleetUpdateSummary.updated} changed · ${total} EV cards tracked`);
+      return toast(`${vehicles.length} fleet rows read · ${state.fleetUpdateSummary.updated} changed · ${total} vehicle cards tracked`);
     }
     if(state.importPurpose==='drivers') {
       const contacts=parsed.flatMap(f=>driverContactsFromRows(f.rows||[]));
@@ -3171,6 +3203,12 @@ function updateCustomDeviceRow(uid,field,value) {
   if(newKey)details[newKey]={device:row.device||'',portable:row.portable||''};
   state.equipmentImport={name:'Device and Portable Sheet',details};
   persist();
+}
+function moveDeviceEntryDown(el) {
+  const row=el?.closest?.('tr'),table=el?.closest?.('table');if(!row||!table)return el?.blur?.();
+  const rows=[...(table.tBodies?.[0]?.rows||[])],rowIndex=rows.indexOf(row),column=el.closest('td,th')?.cellIndex??-1;
+  const next=rows[rowIndex+1]?.cells?.[column]?.querySelector?.('input');
+  if(next){next.focus();next.select?.();}else el.blur();
 }
 function removeCustomDeviceRow(uid='') {
   for(const section of ['ev','gas','helper']){
