@@ -582,7 +582,12 @@ function deviceSheetAllIds(section='') {
   return [...deviceSheetBaseIds(section),...deviceSheetCustomRows(section).map(row=>row.label).filter(Boolean)];
 }
 function fleetEquipmentIdentity(vehicle={}) {
-  const name=String(vehicle.name||'').trim(),upper=name.toUpperCase();
+  const name=String(vehicle.name||'').trim(),upper=name.toUpperCase(),vin=String(vehicle.vin||'').toUpperCase();
+  const gasVinType=vin.startsWith('1FTYR3')?'F':vin.startsWith('3C6LRV')?'R':'';
+  if(gasVinType){
+    const explicit=upper.match(/\b([FR]\d+)\b/),number=upper.match(/\b(\d{1,4})\b/);
+    return {section:'gas',label:explicit?explicit[1]:number?`${gasVinType}${Number(number[1])}`:name};
+  }
   const ev=upper.match(/(?:^|\b)EV\s*[-#:]?\s*(\d+)\b/);
   if(ev)return {section:'ev',label:`EV${Number(ev[1])}`};
   const gasType=/\bFORD\b/.test(upper)?'F':/\b(?:RAM|RENTAL)\b/.test(upper)?'R':'';
@@ -1400,7 +1405,8 @@ function batteryLabel(percent=0) {
   return 'Charge now';
 }
 function isGasFleetVehicle(vehicle={}) {
-  return /\b(?:FORD|RAM|RENTAL)\b/i.test(String(vehicle.name||''));
+  const vin=String(vehicle.vin||'').toUpperCase();
+  return /\b(?:FORD|RAM|RENTAL)\b/i.test(String(vehicle.name||''))||vin.startsWith('1FTYR3')||vin.startsWith('3C6LRV');
 }
 function isElectricFleetVehicle(vehicle={}) {
   return !isGasFleetVehicle(vehicle)&&(/\b(?:EV\s*\d+|EDV|RIVIAN)\b/i.test(String(vehicle.name||''))||/fleetos|rivian/i.test(String(vehicle.source||''))||Boolean(vehicle.hasBattery));
