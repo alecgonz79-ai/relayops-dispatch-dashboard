@@ -494,6 +494,7 @@ const checks = `
   rivianFleet.push(...importedFleetRows);syncFleetVehiclesToDeviceSheet(importedFleetRows);
   if(!deviceSheetCustomRows('ev').some(row=>row.label==='EV59')||!deviceSheetCustomRows('gas').some(row=>row.label==='F99')||!deviceSheetCustomRows('gas').some(row=>row.label==='R120')) throw new Error('Fleet import should classify EV, Ford, and rental device rows');
   if(!livePage().includes('grounded-vehicle-row')||!livePage().includes('low-battery-vehicle-row')) throw new Error('Grounded and low-battery fleet vans should be flagged on Device Sheet');
+  if(!livePage().includes('⛔ Grounded')) throw new Error('Grounded EV and gas rows should show the stop symbol beside the van name');
   if(!gasFleetCard(importedFleetRows[2]).includes('gas-can-art')||gasFleetCard(importedFleetRows[2]).includes('Battery %')) throw new Error('Gas fleet card should use gas icon and omit EV battery details');
   const exactAmazonStatusRows=fleetDetailsFromRows([
     ['vehicleName','vin','active','operationalStatus'],
@@ -507,6 +508,13 @@ const checks = `
   if(!gasPrefixCard.includes('gas-can-art')||!gasPrefixCard.includes('EV 31')||!gasPrefixCard.includes('1FTYR3XM0KKA12345')||!gasPrefixCard.includes('Active')||!gasPrefixCard.includes('Grounded')||gasPrefixCard.includes('Battery')||gasPrefixCard.includes('mi /')||gasPrefixCard.includes('Miles till empty')) throw new Error('Gas VIN card must show only identity/status fields and gas icon');
   const simpleFleetHtml=fleetPage();
   if(!simpleFleetHtml.includes('Amazon Fleet Import')||!simpleFleetHtml.includes('FleetOS Import')||!simpleFleetHtml.includes('fleet-alert-squares')) throw new Error('Simplified Fleet Health import and alert squares missing');
+  state.expandedFleetVin=importedFleetRows[2].vin;
+  if(!gasFleetCard(importedFleetRows[2]).includes('fleet-name-pencil')||!gasFleetCard(importedFleetRows[2]).includes('Edit name')) throw new Error('Expanded fleet cards should expose a pencil name editor');
+  state.editingFleetVin=importedFleetRows[2].vin;
+  if(!gasFleetCard(importedFleetRows[2]).includes('data-fleet-name-input')||!gasFleetCard(importedFleetRows[2]).includes('save-fleet-name')) throw new Error('Fleet name editor controls missing');
+  state.fleetNameOverrides[cleanVin(importedFleetRows[2].vin)]='Gas Van 99';
+  if(fleetDisplayName(importedFleetRows[2])!=='Gas Van 99') throw new Error('Fleet name overrides should display throughout the dashboard');
+  delete state.fleetNameOverrides[cleanVin(importedFleetRows[2].vin)];state.editingFleetVin='';state.expandedFleetVin='';
   state.morningRoutes[0].ev='59';
   if(!morningSheetPage().includes('grounded-van-cell')||morningSheetPage().includes('59GROUNDED')) throw new Error('Morning Sheet should visually flag grounded van without changing copied value');
   state.morningRoutes[0].ev='60';
