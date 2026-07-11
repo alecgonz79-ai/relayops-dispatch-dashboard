@@ -1967,6 +1967,8 @@ body .rivian-card:hover,body .rivian-card.expanded { border-color:#78acd1; box-s
 .opening-schedule-head p { margin:0; color:#70818e; }
 .opening-schedule-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .scheduled-section { padding:15px; box-shadow:0 7px 22px rgba(30,57,80,.055); }
+.scheduled-section.route { border-color:#c6dfef; background:linear-gradient(145deg,#f9fdff,#eaf7ff); }
+.scheduled-section.backup { border-color:#c8e3d0; background:linear-gradient(145deg,#fbfffc,#edf9f0); }
 .scheduled-section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:9px; }
 .scheduled-section-head h3 { margin:0; font-size:14px; }
 .scheduled-section-head b { display:grid; place-items:center; min-width:28px; height:28px; border-radius:9px; background:#e8f4fb; color:#285a7c; }
@@ -1976,6 +1978,13 @@ body .rivian-card:hover,body .rivian-card.expanded { border-color:#78acd1; box-s
 .scheduled-shift-row > b { color:#314a5e; font-size:11px; white-space:nowrap; }
 .scheduled-shift-row > em { padding:4px 7px; border-radius:999px; background:#edf5fa; color:#486477; font-size:9px; font-style:normal; }
 .scheduled-section.backup .scheduled-shift-row > em { background:#fff1c7; color:#725a0c; }
+.paycom-head { align-items:flex-end; }
+.paycom-head > div { display:grid; gap:3px; }
+.paycom-head > div span { color:#668072; font-size:10px; }
+.paycom-head select { height:34px; max-width:190px; border:1px solid #bcd8c5; border-radius:9px; padding:0 9px; background:#fff; color:#294b35; font-weight:700; }
+.route-driver-row { grid-template-columns:minmax(160px,1fr) auto minmax(230px,auto); }
+.route-swap-actions { display:flex; justify-content:flex-end; gap:6px; }
+.danger-soft { border-color:#e9b8b4!important; color:#8a3832!important; background:#fff5f4!important; }
 .scheduled-section.dispatch { border-color:#bdd9ea; background:linear-gradient(145deg,#fff,#f2faff); }
 .scheduled-section.other { border-style:dashed; }
 .scheduled-shift-empty { padding:17px 8px; color:#7c8b97; font-size:11px; text-align:center; }

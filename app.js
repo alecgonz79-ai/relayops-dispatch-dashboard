@@ -277,6 +277,9 @@ let state = {
   messageQueueStatus: JSON.parse(localStorage.getItem('relayops_message_queue_status') || 'null') || {},
   scheduleEntries: JSON.parse(localStorage.getItem('relayops_schedule_entries') || 'null') || [],
   scheduleImportName: localStorage.getItem('relayops_schedule_import_name') || '',
+  scheduleFilter: localStorage.getItem('relayops_schedule_filter') || 'all',
+  callOffDriverKeys: JSON.parse(localStorage.getItem('relayops_call_off_driver_keys') || 'null') || {},
+  pendingRosterSwap: null,
   removedDriverKeys: JSON.parse(localStorage.getItem('relayops_removed_driver_keys') || 'null') || [],
   pendingDriverRemoval: null,
   cloudStatus: window.RelayOpsCloud?.configured?'connecting':'setup-required',
@@ -1770,6 +1773,10 @@ function modal() {
     const driver=state.pendingDriverText;
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal add-driver-modal" role="dialog" aria-modal="true" aria-labelledby="text-driver-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">DRIVER MESSAGE</span><h2 id="text-driver-title">Text ${esc(driver.name)}</h2><p>${esc(driver.phone)} · message sends only after a dispatcher reviews it.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="driver-text-field"><span>Message</span><textarea id="driver-text-message" rows="6">${esc(driver.message)}</textarea></label><div class="private-contact-note"><b>Google Messages connection</b><span>Pair the dispatch Android phone once. RelayOps copies the phone number and message, then opens Google Messages for the dispatcher to paste, review, and send.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn" data-action="open-google-messages">Copy & open Google Messages</button><button class="btn primary" data-action="open-sms-app">Open SMS app</button></div></div></div></div>`;
   }
+  if (state.modal === 'roster-swap' && state.pendingRosterSwap) {
+    const swap=state.pendingRosterSwap,candidates=rosterSwapCandidates(swap.driverName);
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal add-driver-modal" role="dialog" aria-modal="true" aria-labelledby="roster-swap-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">OPENING ROSTER</span><h2 id="roster-swap-title">${swap.mode==='calloff'?'Call off & replace':'Swap off route'}</h2><p>${esc(swap.driverName)} · ${esc(swap.route)} · updates the Morning Sheet immediately.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="cloud-email-field"><span>Replacement driver</span><select id="roster-swap-replacement"><option value="">Choose an exact driver name…</option>${candidates.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('')}</select></label><div class="private-contact-note"><b>${swap.mode==='calloff'?'Call-off protection':'Schedule swap'}</b><span>${swap.mode==='calloff'?'The called-off driver is removed from today’s text queue. The replacement takes their Morning Sheet position.':'The original driver remains eligible as scheduled backup/support; only the route assignment changes.'}</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-roster-swap">Confirm swap</button></div></div></div></div>`;
+  }
   if (state.modal === 'import') {
     const proof=importPreflight(), isRts=state.importPurpose==='rts';
     const source=state.importSource==='slack'&&!isRts?`<div class="slack-panel"><div class="slack-brand"><div class="slack-logo">S</div><div><strong>Slack Import</strong><span>#morning-operations · demo connection</span></div><span class="demo-tag">DEMO</span></div><button class="slack-file" data-action="load-slack-demo"><span class="file-type">CSV</span><span><strong>Today’s operations file</strong><small>Shared by Operations Bot · ready to use</small></span><span class="btn small">Choose this file</span></button><div class="import-note">For this demo, RelayOps will keep only ${state.dspCode} routes from the Slack file.</div></div>`:`<div class="drop-zone ${state.importedFile?'has-file':''}" id="drop-zone"><div><div class="drop-icon">${state.importedFile?ICONS.check:ICONS.upload}</div><strong>${state.importedFile?`Great! ${esc(state.importedFile.name)} is ready.`:isRts?'Choose the Routes_DJT6 file':'Choose DAYOFOPSPLAN and ROUTE_DJT6'}</strong><span>${state.importedFile?`${state.importedFile.rows.length} rows found${state.importedFile.routeDetailsCount?` · ${state.importedFile.routeDetailsCount} CX rows matched`:''}.`:isRts?'Excel (.xlsx) or CSV is supported. RelayOps pulls only Planned Departure Time into Planned RTS.':'Select both files at the same time. Excel (.xlsx) and CSV are supported.'}</span><button class="btn primary upload-choice" data-action="choose-file">${state.importedFile?'Choose different files':isRts?'Choose Planned RTS file':'Choose Amazon files'}</button></div></div>`;
@@ -1824,6 +1831,7 @@ function pageContent() {
 }
 
 function messageQueueStatusKey(route='') { return `${state.morningOperationDate}|${route}`; }
+function callOffStatusKey(name='') { return `${state.morningOperationDate}|${nameKey(name)}`; }
 function contactForMorningDriver(name='') {
   const key=nameKey(firstDriverName(name));
   const contacts=teamDriverRows();
@@ -1839,7 +1847,7 @@ function morningMessageQueueRows() {
     return {name:driver?.name||name,driverKey:nameKey(driver?.name||name),phone:driver?.phone||'',route:row.route,wave:row.wave,staging:row.staging,queueKey,status:state.messageQueueStatus[queueKey]||'',source:index?'Helper / Ad hoc':'On route'};
   }));
   const existing=new Set(routeRows.map(row=>nameKey(row.name))),backups=currentScheduleEntries().filter(entry=>scheduleRoleGroup(entry.role)==='driver'&&!existing.has(nameKey(entry.name))).map(entry=>{const driver=contactForMorningDriver(entry.name),queueKey=messageQueueStatusKey(`scheduled:${nameKey(entry.name)}`);return {name:driver?.name||entry.name,driverKey:nameKey(driver?.name||entry.name),phone:driver?.phone||'',route:entry.role,wave:entry.start,staging:'Scheduled backup/support',queueKey,status:state.messageQueueStatus[queueKey]||'',source:'Scheduled backup/support'};});
-  return [...routeRows,...backups];
+  return [...routeRows,...backups].filter(row=>!state.callOffDriverKeys[callOffStatusKey(row.name)]);
 }
 function driverTextDraft(driver) {
   const first=String(driver.name||'').trim().split(/\s+/)[0]||'there';
@@ -1905,17 +1913,40 @@ function enhanceDriverTextButtons() {
   });
 }
 function scheduledShiftRowsHtml(rows=[],empty='No scheduled shifts found') {
-  return rows.length?rows.map(row=>`<div class="scheduled-shift-row"><div><strong>${esc(row.name)}</strong><span>${esc(row.role)}</span></div><b>${esc(row.start)} - ${esc(row.end)}</b>${row.route?`<em>${esc(row.route)}</em>`:''}</div>`).join(''):`<div class="scheduled-shift-empty">${empty}</div>`;
+  return rows.length?rows.map(row=>`<div class="scheduled-shift-row"><div><strong>${esc(row.name)}</strong><span>${esc(row.role)}</span></div><b>${esc(row.start)}${row.end?` - ${esc(row.end)}`:''}</b>${row.route?`<em>${esc(row.route)}</em>`:''}</div>`).join(''):`<div class="scheduled-shift-empty">${empty}</div>`;
+}
+function waveNameForTime(time='') { const waves=morningWaveList();const index=waves.indexOf(time);return index>=0?`WAVE ${index+1}`:'WAVE'; }
+function routeDriverRowsHtml(rows=[]) {
+  return rows.length?rows.map(row=>`<div class="scheduled-shift-row route-driver-row"><div><strong>${esc(row.name)}</strong><span>${esc(row.route)}</span></div><b>${esc(waveNameForTime(row.start))} · ${esc(row.start)}</b><div class="route-swap-actions"><button class="btn small danger-soft" data-action="open-route-swap" data-swap-mode="calloff" data-route="${esc(row.route)}" data-driver-name="${esc(row.name)}">Call off & swap</button><button class="btn small" data-action="open-route-swap" data-swap-mode="swap" data-route="${esc(row.route)}" data-driver-name="${esc(row.name)}">Swap off route</button></div></div>`).join(''):'<div class="scheduled-shift-empty">Fill the Morning Sheet to see route drivers.</div>';
+}
+function filteredScheduledDrivers(rows=[]) {
+  const filter=state.scheduleFilter;if(filter==='all')return rows;
+  if(filter==='on-route')return rows.filter(row=>row.route==='On morning sheet');
+  if(filter==='not-rostered')return rows.filter(row=>row.route==='Not rostered for route');
+  return rows.filter(row=>headerKey(row.role).includes(filter));
 }
 function openingRosterScheduleHtml() {
   const morning=filteredMorningRows().filter(row=>row.route&&!String(row.route).startsWith('__blank_')&&row.driver),onRoute=morning.flatMap(row=>morningDriverNames(row.driver).map(name=>({name:contactForMorningDriver(name)?.name||name,role:'Delivery Associate',start:row.wave||'',end:'',route:row.route})));
-  const routeNames=new Set(onRoute.map(row=>nameKey(row.name))),schedule=currentScheduleEntries(),driverShifts=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='driver'),scheduledDrivers=driverShifts.map(entry=>({...entry,route:routeNames.has(nameKey(entry.name))?'On Morning Sheet':'Backup / support'})),dispatch=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='dispatch'),other=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='other');
-  return `<section class="opening-schedule-board"><div class="opening-schedule-head"><div><span class="eyebrow">TODAY'S OPENING TEAM</span><h2>Routes and scheduled shifts</h2><p>${state.scheduleImportName?`Paycom file: ${esc(state.scheduleImportName)}`:'Upload Paycom to catch scheduled backups, support drivers, and dispatchers.'}</p></div><button class="btn primary" data-action="schedule-import">${ICONS.upload} Upload Paycom schedule</button></div><div class="opening-schedule-grid"><article class="card scheduled-section route"><div class="scheduled-section-head"><h3>Drivers on route</h3><b>${onRoute.length}</b></div>${scheduledShiftRowsHtml(onRoute,'Fill the Morning Sheet to see route drivers.')}</article><article class="card scheduled-section backup"><div class="scheduled-section-head"><h3>All scheduled driver shifts</h3><b>${scheduledDrivers.length}</b></div>${scheduledShiftRowsHtml(scheduledDrivers,'Upload Paycom to see Delivery Associate, Rescue, Midshift, and Modified Duty shifts.')}</article><article class="card scheduled-section dispatch"><div class="scheduled-section-head"><h3>Dispatcher shifts</h3><b>${dispatch.length}</b></div>${scheduledShiftRowsHtml(dispatch,'No opening, fleet, or closing dispatcher shifts found.')}</article><article class="card scheduled-section other"><div class="scheduled-section-head"><h3>Other scheduled shifts</h3><b>${other.length}</b></div>${scheduledShiftRowsHtml(other,'No uncategorized shifts found.')}</article></div></section>`;
+  const routeNames=new Set(onRoute.map(row=>nameKey(row.name))),schedule=currentScheduleEntries(),driverShifts=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='driver'),allScheduledDrivers=driverShifts.map(entry=>({...entry,route:routeNames.has(nameKey(entry.name))?'On morning sheet':'Not rostered for route'})),scheduledDrivers=filteredScheduledDrivers(allScheduledDrivers),dispatch=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='dispatch'),other=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='other'),filters=[['all','All shifts'],['deliveryassociate','Delivery Associate'],['rescue','Rescue'],['midshift','Midshift'],['modifiedduty','Modified duty'],['on-route','On morning sheet'],['not-rostered','Not rostered for route']];
+  return `<section class="opening-schedule-board"><div class="opening-schedule-head"><div><span class="eyebrow">TODAY'S OPENING TEAM</span><h2>Routes and scheduled shifts</h2><p>${state.scheduleImportName?`Paycom file: ${esc(state.scheduleImportName)}`:'Upload Paycom to catch scheduled backups, support drivers, and dispatchers.'}</p></div><button class="btn primary" data-action="schedule-import">${ICONS.upload} Upload Paycom schedule</button></div><div class="opening-schedule-grid"><article class="card scheduled-section route"><div class="scheduled-section-head"><h3>Drivers on route</h3><b>${onRoute.length}</b></div>${routeDriverRowsHtml(onRoute)}</article><article class="card scheduled-section backup"><div class="scheduled-section-head paycom-head"><div><h3>All Scheduled driver shifts (PAYCOM)</h3><span>${scheduledDrivers.length} shown · ${allScheduledDrivers.length} total</span></div><select data-schedule-filter>${filters.map(([value,label])=>`<option value="${value}" ${state.scheduleFilter===value?'selected':''}>${label}</option>`).join('')}</select></div>${scheduledShiftRowsHtml(scheduledDrivers,'No Paycom shifts match this filter.')}</article><article class="card scheduled-section dispatch"><div class="scheduled-section-head"><h3>Dispatcher shifts</h3><b>${dispatch.length}</b></div>${scheduledShiftRowsHtml(dispatch,'No opening, fleet, or closing dispatcher shifts found.')}</article><article class="card scheduled-section other"><div class="scheduled-section-head"><h3>Other scheduled shifts</h3><b>${other.length}</b></div>${scheduledShiftRowsHtml(other,'No uncategorized shifts found.')}</article></div></section>`;
 }
 function enhanceOpeningRoster() {
   if(state.page!=='roster')return;
   const table=document.querySelector?.('.content .table-card');
   table?.insertAdjacentHTML('beforebegin',openingRosterScheduleHtml());
+}
+function rosterSwapCandidates(currentName='') {
+  const onRoute=new Set(filteredMorningRows().flatMap(row=>morningDriverNames(row.driver)).map(nameKey));
+  return [...new Set([...currentScheduleEntries().filter(entry=>scheduleRoleGroup(entry.role)==='driver').map(entry=>entry.name),...teamDriverRows().map(row=>row.name)])].filter(name=>nameKey(name)!==nameKey(currentName)&&!onRoute.has(nameKey(name))).sort((a,b)=>a.localeCompare(b));
+}
+function openRosterSwap(route='',driverName='',mode='swap') { state.pendingRosterSwap={route,driverName,mode};state.modal='roster-swap';render(); }
+function applyRosterSwap() {
+  const swap=state.pendingRosterSwap,replacement=document.getElementById('roster-swap-replacement')?.value;if(!swap||!replacement)return toast('Choose the replacement driver','error');
+  const route=state.morningRoutes.find(row=>row.route===swap.route);if(!route)return toast('Morning Sheet route was not found','error');
+  const people=morningDriverNames(route.driver),index=people.findIndex(name=>nameKey(name)===nameKey(swap.driverName));if(index<0)return toast('Driver is no longer assigned to that route','error');
+  people[index]=replacement;route.driver=people.join(' + ');
+  if(swap.mode==='calloff')state.callOffDriverKeys[callOffStatusKey(swap.driverName)]={name:swap.driverName,route:swap.route,at:new Date().toISOString()};
+  state.pendingRosterSwap=null;state.modal=null;persist();render();toast(`${swap.driverName} replaced by ${replacement} on ${swap.route}`);
 }
 
 function render() {
@@ -1935,6 +1966,7 @@ function bind() {
   document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>go(el.dataset.page)));
   document.querySelectorAll('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
   document.querySelectorAll('[data-message-template]').forEach(el=>el.addEventListener('change',()=>{state.messageQueueTemplate=el.value;persist();render();toast('Message template updated');}));
+  document.querySelectorAll('[data-schedule-filter]').forEach(el=>el.addEventListener('change',()=>{state.scheduleFilter=el.value;persist();render();}));
   document.querySelectorAll('[data-phase]').forEach(el=>el.addEventListener('click',()=>{state.phase=Number(el.dataset.phase);persist();render();}));
   document.querySelectorAll('[data-morning-filter]').forEach(el=>el.addEventListener('change',()=>{const key=el.dataset.morningFilter;if(key!=='dsp')state.morningFilters[key]=el.value;render();}));
   document.querySelectorAll('[data-operation-date]').forEach(el=>el.addEventListener('change',()=>{state.morningOperationDate=el.value||defaultOperationDate();state.morningSheetsLastReceipt=null;persist();render();toast(`Google target set to ${operationDateTabNames(state.morningOperationDate).join(' or ')}`);}));
@@ -2565,9 +2597,11 @@ function action(name,el) {
   if (name==='parking-choose-file') { state.importPurpose='parking'; return fileInput.click(); }
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.screenshotPreview=null;state.fleetRefreshPreview=null;return render(); }
+  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.screenshotPreview=null;state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept='';return fileInput.click(); }
   if (name==='schedule-import') { state.importPurpose='schedule';fileInput.accept='';return fileInput.click(); }
+  if (name==='open-route-swap') return openRosterSwap(el.dataset.route||'',el.dataset.driverName||'',el.dataset.swapMode||'swap');
+  if (name==='apply-roster-swap') return applyRosterSwap();
   if (name==='share-dispatcher-link') return shareDispatcherLink();
   if (name==='cloud-account') { state.modal='cloud-account';return render(); }
   if (name==='cloud-sign-in') return cloudSignIn();
@@ -4656,6 +4690,8 @@ localStorage.setItem('relayops_message_queue_template',state.messageQueueTemplat
 localStorage.setItem('relayops_message_queue_status',JSON.stringify(state.messageQueueStatus||{}));
 localStorage.setItem('relayops_schedule_entries',JSON.stringify(state.scheduleEntries||[]));
 localStorage.setItem('relayops_schedule_import_name',state.scheduleImportName||'');
+localStorage.setItem('relayops_schedule_filter',state.scheduleFilter||'all');
+localStorage.setItem('relayops_call_off_driver_keys',JSON.stringify(state.callOffDriverKeys||{}));
 localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_morning_sheets_last_dry_run',state.morningSheetsLastDryRun||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');localStorage.setItem('relayops_driver_contacts',JSON.stringify(state.driverContacts||[]));localStorage.setItem('relayops_driver_contacts_last_import',state.driverContactsLastImport||'');localStorage.setItem('relayops_removed_driver_keys',JSON.stringify(state.removedDriverKeys||[]));
 localStorage.setItem('relayops_morning_operation_date',state.morningOperationDate||defaultOperationDate());
 localStorage.setItem('relayops_fleet_name_overrides',JSON.stringify(state.fleetNameOverrides||{}));
@@ -4672,12 +4708,12 @@ function sharedWorkspaceState() {
     vanParkingBatteries:state.vanParkingBatteries,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,
     messageQueueTemplate:state.messageQueueTemplate,messageQueueStatus:state.messageQueueStatus,
-    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,
+    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,callOffDriverKeys:state.callOffDriverKeys,
     morningSheetsEndpoint:state.morningSheetsEndpoint
   };
 }
 function applySharedWorkspaceState(payload={}) {
-  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','vanParking','vanParkingUpdated','vanParkingBatteries','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','messageQueueTemplate','messageQueueStatus','scheduleEntries','scheduleImportName','morningSheetsEndpoint'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','vanParking','vanParkingUpdated','vanParkingBatteries','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','messageQueueTemplate','messageQueueStatus','scheduleEntries','scheduleImportName','callOffDriverKeys','morningSheetsEndpoint'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   persist();render();
