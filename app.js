@@ -28,7 +28,7 @@ const ICONS = {
 
 const NAV = [
   { section: 'Command', items: [
-    ['dashboard','Today','dashboard'], ['morning','Morning sheet','calendar'], ['roster','Opening roster','roster'], ['live','Live routes','live','3']
+    ['dashboard','Today','dashboard'], ['morning','Morning sheet','calendar'], ['roster','Opening roster','roster'], ['live','Device and Portable Sheet','phone']
   ]},
   { section: 'Operations', items: [
     ['team','Drivers & team','users'], ['fleet','Fleet Health','van'], ['parking','Van Parking','check'], ['inbox','Team inbox','inbox','4'], ['inventory','Inventory','box']
@@ -328,7 +328,7 @@ function sidebar() {
 
 const pageInfo = {
   dashboard:['Today’s command','A clear view from load-out through RTS'], morning:['Morning operations sheet','DSP-only routes, grouped by earliest wave, staging, and pad'], roster:['Opening roster','Resolve exceptions, assign equipment, then publish'],
-  live:['Live routes','Spot pressure early and document every rescue'], team:['Drivers & team','Availability, compliance, recognition, and history'],
+  live:['Device and Portable Sheet','Type today’s assignments, then match them to every EV on the Morning Sheet'], team:['Drivers & team','Availability, compliance, recognition, and history'],
   fleet:['Fleet Health','Simple Rivian battery, status, and source health'], parking:['Van Parking','Interactive parking map for closing and morning dispatch'], performance:['Performance','Scorecard trends and driver-level focus areas'],
   coaching:['Coaching','Turn scorecard signals into consistent follow-through'], checklists:['Checklists','Repeatable opening, load-out, and closeout routines'],
   inbox:['Team inbox','Calls, messages, and announcements in one place'], inventory:['Inventory','Devices, uniforms, supplies, and assignments'],
@@ -549,11 +549,28 @@ function morningWaveGroup(section,sectionIndex=0) {
   return `${body}${timeRow}${separatorRow}`;
 }
 
+function deviceSheetDetails() {
+  return state.equipmentImport?.details||{};
+}
+function deviceSheetRows(ids=[]) {
+  const details=deviceSheetDetails();
+  return ids.map(id=>{
+    const key=normalizeEquipmentId(id),item=details[key]||{};
+    return `<tr><th>${esc(id)}</th><td><input aria-label="${esc(id)} device" data-device-sheet-id="${esc(key)}" data-device-sheet-field="device" inputmode="numeric" maxlength="3" value="${esc(item.device||'')}" placeholder="—"></td><td><input aria-label="${esc(id)} portable" data-device-sheet-id="${esc(key)}" data-device-sheet-field="portable" inputmode="numeric" maxlength="4" value="${esc(item.portable||'')}" placeholder="—"></td></tr>`;
+  }).join('');
+}
+function deviceSheetTable(title,subtitle,ids=[],kind='') {
+  return `<article class="card device-sheet-card ${kind}"><div class="device-sheet-card-head"><div><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><span>${ids.length} rows</span></div><div class="device-sheet-table-wrap"><table class="device-sheet-table"><thead><tr><th>VAN</th><th>DEVICE</th><th>PORTABLE</th></tr></thead><tbody>${deviceSheetRows(ids)}</tbody></table></div></article>`;
+}
 function livePage() {
-  return `${contextBar(`<span class="status">Live · ${state.routes.length} routes</span>`)}
-  <section class="grid kpi-grid">${kpiCard('On pace / ahead','6','75% of routes','live','#e9f7df')}${kpiCard('At risk','2','Both have rescue coverage','alert','#ffe7e2')}${kpiCard('Rescue capacity','0','2 rescuers already committed','users','#fff2cf')}${kpiCard('Projected last RTS','7:38','Nina Patel · CX36','calendar','#e5efff')}</section>
-  ${routesTable(routeFiltered(),'Live route health','Progress, capacity, and rescue decisions')}
-  <article class="card" style="margin-top:16px"><div class="card-head"><div class="card-title"><h2>Rescue decision log</h2><p>Auditable reason, transfer, and owner</p></div><button class="btn small" data-action="new-rescue">${ICONS.plus} Plan rescue</button></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>From</th><th>To</th><th>Transfer</th><th>Reason</th><th>Approved by</th><th>Status</th></tr></thead><tbody><tr><td>2:12 PM</td><td>Taylor Price · CX44</td><td>Andre Wilson · CX21</td><td>18 stops</td><td>Late load-out + apartments</td><td>Alex G.</td><td><span class="status blue">En route</span></td></tr><tr><td>2:19 PM</td><td>Marcus Chen · CX42</td><td>Nina Patel · CX36</td><td>15 stops</td><td>Route density / access</td><td>Alex G.</td><td><span class="status warn">Planned</span></td></tr></tbody></table></div></article>`;
+  const evIds=Array.from({length:58},(_,i)=>`EV${i+1}`),helperIds=['H1','H2','H3','H4'];
+  const details=deviceSheetDetails(),filled=Object.values(details).filter(item=>String(item?.device||'').trim()||String(item?.portable||'').trim()).length;
+  const assigned=state.morningRoutes.filter(route=>route.ev&&details[normalizeEquipmentId(route.ev)]).length;
+  return `${contextBar(`<span class="status">${filled} assignments saved</span>`)}
+  <section class="device-sheet-intro card"><div><span class="eyebrow">TODAY’S EQUIPMENT</span><h2>Type the Device and Portable beside each van</h2><p>EV labels stay fixed. Click any white box and type today’s number. Your work saves automatically on this device.</p></div><div class="device-sheet-steps"><span><b>1</b>Type numbers</span><span><b>2</b>Check the EV</span><span><b>3</b>Send to Morning Sheet</span></div><button class="btn primary device-sheet-send" data-action="device-sheet-to-morning">Input to Morning Sheet ${ICONS.chevron}</button></section>
+  <section class="device-sheet-summary"><span><b>${filled}</b>van rows filled</span><span><b>${assigned}</b>Morning Sheet drivers currently matched</span><span><b>${state.morningRoutes.filter(route=>route.ev).length}</b>drivers have a van assigned</span></section>
+  <section class="device-sheet-layout"><div>${deviceSheetTable('Electric vehicles','EV1 through EV58 — same order as the daily list',evIds,'ev-list')}</div><aside>${deviceSheetTable('Gas vehicles','Enter the device and portable assigned to each gas van',gasVehicleIds,'gas-list')}${deviceSheetTable('Helper bags','Use H1–H4 for helper equipment',helperIds,'helper-list')}</aside></section>
+  <div class="device-sheet-sticky-action"><div><strong>Ready to match equipment?</strong><span>The EV/VAN number is the match key. Driver names and routes stay unchanged.</span></div><button class="btn primary" data-action="device-sheet-to-morning">Input to Morning Sheet</button></div>`;
 }
 
 function teamPage() {
@@ -1660,6 +1677,14 @@ function bind() {
   });
   document.querySelectorAll('[data-parking-battery]').forEach(el=>el.addEventListener('input',()=>{updateParkingBattery(el.dataset.parkingBattery,el.value);applyParkingBatteryTone(el,el.value);}));
   document.querySelectorAll('[data-parking-kind]').forEach(el=>el.addEventListener('change',()=>updateParkingKind(el.dataset.parkingKind,el.value)));
+  document.querySelectorAll('[data-device-sheet-field]').forEach(el=>{
+    el.addEventListener('input',()=>{
+      const clean=String(el.value||'').toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,el.dataset.deviceSheetField==='device'?3:4);
+      if(el.value!==clean)el.value=clean;
+      updateDeviceSheetCell(el.dataset.deviceSheetId,el.dataset.deviceSheetField,clean);
+    });
+    el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur();}});
+  });
   document.querySelectorAll('[data-edit-field]').forEach(el=>{
     el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);});
     el.addEventListener('mousedown',e=>handleSheetMouseDown(e,el));
@@ -2277,6 +2302,7 @@ function action(name,el) {
   if (name==='select-sheets-text') return selectSheetsText();
   if (name==='parse-equipment-text') return parseEquipmentTextAction();
   if (name==='apply-equipment-import') return applyEquipmentImport();
+  if (name==='device-sheet-to-morning') return inputDeviceSheetToMorning();
   if (name==='parse-fleet-paste') return parseFleetPasteAction();
   if (name==='rate-service') { state.rating=Number(el.dataset.rating)||0;persist();render();return toast(`Thanks — ${state.rating} stars saved`); }
   if (name==='publish') { state.rosterPublished=true;persist();render();return toast('Roster published to the team'); }
@@ -3041,6 +3067,31 @@ function applyEquipmentImport() {
   });
   state.modal=null;state.page='morning';persist();render();
   toast(`${matched} EV/VAN rows updated${missing.length?` · ${missing.length} EVs not found in import`:''}`);
+}
+
+function updateDeviceSheetCell(id,field,value) {
+  const key=normalizeEquipmentId(id);
+  if(!key||!['device','portable'].includes(field))return;
+  const clean=String(value??'').toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,field==='device'?3:4);
+  const details={...deviceSheetDetails()},current={...(details[key]||{device:'',portable:''})};
+  current[field]=clean;details[key]=current;
+  state.equipmentImport={name:'Device and Portable Sheet',details};
+  persist();
+}
+function inputDeviceSheetToMorning() {
+  const details=deviceSheetDetails();
+  const filled=Object.values(details).filter(item=>String(item?.device||'').trim()||String(item?.portable||'').trim()).length;
+  if(!filled)return toast('Type at least one Device or Portable number first','error');
+  let matched=0,missing=0;
+  state.morningRoutes.forEach(route=>{
+    const key=normalizeEquipmentId(route.ev);
+    if(!key)return;
+    const item=details[key];
+    if(!item){missing++;return;}
+    route.deviceName=item.device||'';route.portable=item.portable||'';matched++;
+  });
+  state.page='morning';persist();render();
+  toast(`${matched} Morning Sheet driver${matched===1?'':'s'} matched by EV/VAN${missing?` · ${missing} assigned vans still blank`:''}`);
 }
 
 function morningAssignmentTargets() {
