@@ -263,6 +263,16 @@ body { letter-spacing:-.005em; }
   .page-heading h1 { font-size:18px; }
   .card { border-radius:15px; }
 }
+.add-driver-modal { max-width:620px; }
+.add-driver-fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.add-driver-fields label { display:grid; gap:5px; }
+.add-driver-fields label span { color:#536779; font-size:8px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+.add-driver-fields input,.add-driver-fields select { width:100%; height:42px; padding:0 11px; border:1px solid #d3e0e9; border-radius:11px; background:#fff; color:#1b2d3d; outline:0; font-size:11px; font-weight:700; }
+.add-driver-fields input:focus,.add-driver-fields select:focus { border-color:#6fa8d0; box-shadow:0 0 0 3px rgba(77,145,194,.13); }
+.private-contact-note { display:flex; gap:10px; align-items:center; margin-top:13px; padding:11px 12px; border:1px solid #cfe4d5; border-radius:12px; background:#f3fbf5; }
+.private-contact-note b { color:#24613a; font-size:9px; white-space:nowrap; }
+.private-contact-note span { color:#587063; font-size:8px; font-weight:750; }
+@media (max-width:640px) { .add-driver-fields { grid-template-columns:1fr; } }
 
 /* Overhead Van Parking map */
 body .van-parking-card { padding:18px; border-color:#d7e3ec; background:linear-gradient(180deg,#fff,#f7fafc); box-shadow:0 16px 42px rgba(25,52,75,.09); }
