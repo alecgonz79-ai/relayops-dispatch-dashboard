@@ -149,6 +149,8 @@ const checks = `
   });
   if (payload.sections[0].startRow !== 3 || payload.sections[0].separatorRow <= payload.sections[0].timeRow) throw new Error('Connector section row numbering is wrong');
   const script = ${JSON.stringify(connectorFile)};
+  if (morningSheetsAppsScript().trim() !== script.trim()) throw new Error('Embedded copyable Apps Script must exactly match the downloadable connector');
+  if (copyMorningAppsScript.toString().includes('fetch(') || !copyMorningAppsScript.toString().includes('morningSheetsAppsScript()')) throw new Error('Copy Apps Script must use the embedded connector without a network fetch');
   if (!script.includes('function onOpen') || !script.includes("createMenu('RelayOps')") || !script.includes('relayOpsConnectorStatus') || !script.includes('Validate template layout') || !script.includes('Run demo write')) throw new Error('Apps Script should add a RelayOps menu for install verification');
   if (!script.includes('function doGet') || !script.includes('relayops-morning-v1') || !script.includes('function doPost') || !script.includes('writeRelayOpsMorningSheet') || !script.includes('RELAYOPS_TEMPLATE_SHEET') || !script.includes('RELAYOPS_LAYOUT') || !script.includes('resolveRelayOpsTarget') || !script.includes('validateRelayOpsTemplateSignature')) throw new Error('Morning Sheets Apps Script connector missing fixed OPS LOG 2026 writer code');
   if (!script.includes('function relayOpsValidateTemplate') || !script.includes('RelayOps template layout is ready') || !script.includes('writeRange: RELAYOPS_WRITE_RANGE') || !script.includes('function relayOpsDefaultPayload')) throw new Error('Apps Script should expose safe template layout validation');
