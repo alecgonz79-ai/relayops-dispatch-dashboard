@@ -4052,10 +4052,11 @@ function morningSheetsConnectorPayload() {
     });
     let timeRow=null;
     if(section.hasTime){rows.push([morningWaveTimeText(section),'','','','','','','','','','','','']);rowTypes.push('time');timeRow=index+3;index+=1;}
+    else timeRow=startRow+display.length-1;
     const separatorRows=[];
     for(let i=0;i<(section.separatorRows||0);i++){rows.push(['','','','','','','','','','','','','']);rowTypes.push('separator');separatorRows.push(index+3);index+=1;}
     const separatorRow=separatorRows[0]||null;
-    sectionMeta.push({label:waveLabel,wave:section.wave||'',waveTime:morningWaveTimeText(section),pad,startRow,rowCount:display.length,timeRow,separatorRow,separatorRows,dsp:Boolean(section.dsp)});
+    sectionMeta.push({label:waveLabel,wave:section.wave||'',waveTime:morningWaveTimeText(section),pad,startRow,rowCount:display.length,timeRow,hasTimeRow:Boolean(section.hasTime),separatorRow,separatorRows,dsp:Boolean(section.dsp)});
   });
   const dateTabs=operationDateTabNames(state.morningOperationDate),sheetName=dateTabs[0]||MORNING_TEMPLATE_SHEET_NAME;
   return {version:'relayops-morning-v1',templateUrl:MORNING_TEMPLATE_URL,templateSheet:MORNING_TEMPLATE_SHEET_NAME,templateLayout:'fixed-ops-log-2026',operationDate:state.morningOperationDate,sheetName,sheetNameCandidates:dateTabs.length?dateTabs:MORNING_TEMPLATE_SHEET_CANDIDATES,dsp:state.dspCode,generatedAt:new Date().toISOString(),startCell:'A3',writeRange:'A3:M',headers:morningConnectorHeaders,rows,rowTypes,sections:sectionMeta};
@@ -4069,7 +4070,7 @@ function morningSheetsPreflight(payload=morningSheetsConnectorPayload()) {
     {label:'Row 1 headers ready',ok:headers.length===13&&headers[0]==='WAVE'&&headers[12]==='PLANNED RTS',detail:'A–M headers match the opening template.'},
     {label:'Every row has 13 columns',ok:rows.length>0&&rows.every(row=>Array.isArray(row)&&row.length===13),detail:`${rows.length} row${rows.length===1?'':'s'} will write across A–M.`},
     {label:'Black dividers are real rows',ok:separatorIndexes.length>0&&separatorIndexes.every(i=>rows[i]?.length===13&&rows[i].every(cell=>String(cell||'')==='')),detail:`${separatorIndexes.length} divider row${separatorIndexes.length===1?'':'s'} included as numbered sheet rows.`},
-    {label:'Wave/Pad merge map ready',ok:sections.length>0&&sections.every(section=>Number(section.startRow)>=3&&Number(section.rowCount)>0&&(!section.timeRow||Number(section.timeRow)>=Number(section.startRow)+Number(section.rowCount))&&(!section.separatorRow||Number(section.separatorRow)>Number(section.startRow))),detail:`${sections.length} section${sections.length===1?'':'s'} tell Google which Wave and Pad cells to merge.`},
+    {label:'Wave/Pad merge map ready',ok:sections.length>0&&sections.every(section=>Number(section.startRow)>=3&&Number(section.rowCount)>0&&((section.hasTimeRow===false&&Number(section.timeRow)===Number(section.startRow)+Number(section.rowCount)-1)||(!section.timeRow||Number(section.timeRow)>=Number(section.startRow)+Number(section.rowCount)))&&(!section.separatorRow||Number(section.separatorRow)>Number(section.startRow))),detail:`${sections.length} section${sections.length===1?'':'s'} tell Google which Wave and Pad cells to merge.`},
     {label:'Row types match payload',ok:rowTypes.length===rows.length&&rowTypes.includes('route')&&rowTypes.includes('time')&&rowTypes.includes('separator'),detail:'Google can tell route rows, wave-time rows, blank rows, and dividers apart.'}
   ];
   return {ready:checks.every(check=>check.ok),checks};
