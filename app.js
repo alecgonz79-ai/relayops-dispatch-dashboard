@@ -815,7 +815,14 @@ function parkingChargerButton(key,label='Charger') {
 function parkingChargerColumn() {
   const leftSlots=parkingSlots('west'),rightSlots=parkingSlots('east'),leftCount=leftSlots.length,rightCount=rightSlots.length,rows=Math.max(leftCount,rightCount,4);
   const tent=`<div class="parking-tent-square" title="Operations tent"><svg viewBox="0 0 64 52" aria-hidden="true"><path d="M32 5 57 45H7L32 5Z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="M32 5v40M20 45l12-18 12 18" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg><span>TENT</span></div>`;
-  return `<div class="parking-crosswalk charger-column"><div class="parking-charger-pairs">${Array.from({length:rows},(_,index)=>{const isTent=index===3,isBottomCrosswalk=index>=19,left=index<leftCount&&!isTent&&!isBottomCrosswalk&&leftSlots[index]?.kind!=='crosswalk'?parkingChargerButton(`middle-${index+1}-left`,`Left charger ${index+1}`):'<span></span>',right=index<rightCount&&!isTent&&!isBottomCrosswalk&&rightSlots[index]?.kind!=='crosswalk'?parkingChargerButton(`middle-${index+1}-right`,`Right charger ${index+1}`):'<span></span>';return isTent?`<div class="charger-pair tent-row"><span></span>${tent}<span></span></div>`:`<div class="charger-pair">${left}${right}</div>`;}).join('')}</div></div>`;
+  return `<div class="parking-crosswalk charger-column"><div class="parking-charger-pairs">${Array.from({length:rows},(_,index)=>{const isTent=index===3,left=index<leftCount&&!isTent&&leftSlots[index]?.kind!=='crosswalk'?parkingChargerButton(`middle-${index+1}-left`,`Left charger ${index+1}`):'<span></span>',right=index<rightCount&&!isTent&&rightSlots[index]?.kind!=='crosswalk'?parkingChargerButton(`middle-${index+1}-right`,`Right charger ${index+1}`):'<span></span>';return isTent?`<div class="charger-pair tent-row"><span></span>${tent}<span></span></div>`:`<div class="charger-pair">${left}${right}</div>`;}).join('')}</div></div>`;
+}
+function syncParkingSlotVisual(input) {
+  const slot=input?.closest?.('.parking-slot');
+  if(!slot)return;
+  const value=String(input.value||'').trim(),blocked=/^x$/i.test(value);
+  slot.classList.toggle('blocked',blocked);
+  slot.classList.toggle('has-vehicle',Boolean(value)&&!blocked);
 }
 function parkingSlotInput(slot) {
   const tone=slot.kind==='crosswalk'?' crosswalk-slot':slot.kind==='overflow'?' overflow-slot':slot.kind==='street'?' street-slot':'';
@@ -2033,7 +2040,7 @@ function bind() {
   document.querySelectorAll('[data-parking-select]').forEach(el=>el.addEventListener('click',e=>{if(e.target?.matches?.('[data-parking-id]'))return;selectParkingSlot(el.dataset.parkingSelect);}));
   document.querySelectorAll('[data-parking-id]').forEach(el=>{
     el.addEventListener('focus',()=>selectParkingSlot(el.dataset.parkingId,false));
-    el.addEventListener('input',()=>updateParkingSlot(el.dataset.parkingId,el.value,false));
+    el.addEventListener('input',()=>{updateParkingSlot(el.dataset.parkingId,el.value,false);syncParkingSlotVisual(el);});
   });
   document.querySelectorAll('[data-parking-battery]').forEach(el=>el.addEventListener('input',()=>{updateParkingBattery(el.dataset.parkingBattery,el.value);applyParkingBatteryTone(el,el.value);}));
   document.querySelectorAll('[data-parking-charger]').forEach(el=>el.addEventListener('click',()=>toggleParkingCharger(el.dataset.parkingCharger)));
