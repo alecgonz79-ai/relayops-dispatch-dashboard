@@ -70,6 +70,10 @@ class FakeRange {
     this.eachCell((row, col) => this.sheet.setFormat(row, col, 'textRotation', value));
     return this;
   }
+  getDisplayValue() {
+    const value = this.sheet.getCell(this.row, this.col);
+    return value === undefined || value === null ? '' : String(value);
+  }
 }
 
 class FakeSheet {
@@ -99,6 +103,14 @@ class FakeSheet {
     this.maxColumns += count;
   }
   getRange(row, col, numRows = 1, numCols = 1) {
+    if (typeof row === 'string') {
+      const match = row.match(/^([A-Z]+)(\d+)$/i);
+      if (!match) throw new Error(`Unsupported A1 range ${row}`);
+      col = match[1].toUpperCase().split('').reduce((total, char) => total * 26 + char.charCodeAt(0) - 64, 0);
+      row = Number(match[2]);
+      numRows = 1;
+      numCols = 1;
+    }
     if (row + numRows - 1 > this.maxRows) throw new Error(`Range exceeds rows: ${row}:${numRows} > ${this.maxRows}`);
     if (col + numCols - 1 > this.maxColumns) throw new Error(`Range exceeds columns: ${col}:${numCols} > ${this.maxColumns}`);
     return new FakeRange(this, row, col, numRows, numCols);
@@ -120,19 +132,44 @@ class FakeSheet {
   getFormat(row, col, field) {
     return (this.formats.get(this.key(row, col)) || {})[field];
   }
+  setName(value) { this.name = value; return this; }
+  copyTo(spreadsheet) { return spreadsheet.copySheet(this); }
 }
 
 class FakeSpreadsheet {
-  constructor(sheet) { this.sheet = sheet; }
+  constructor(sheets) { this.sheets = Array.isArray(sheets) ? sheets : [sheets]; this.sheets.forEach(sheet => { sheet.spreadsheet = this; }); }
   getName() { return 'Fake RelayOps Template'; }
-  getSheetByName(name) { return name === this.sheet.getName() ? this.sheet : null; }
-  getActiveSheet() { return this.sheet; }
-  getSheets() { return [this.sheet]; }
+  getSheetByName(name) { return this.sheets.find(sheet => sheet.getName() === name) || null; }
+  getActiveSheet() { return this.sheets[0]; }
+  getSheets() { return this.sheets; }
+  copySheet(source) {
+    const copy = new FakeSheet(`Copy of ${source.getName()}`, source.maxRows, source.maxColumns);
+    copy.values = new Map(source.values);
+    copy.formats = new Map([...source.formats].map(([key, value]) => [key, { ...value }]));
+    copy.rowHeights = new Map(source.rowHeights);
+    copy.columnWidths = new Map(source.columnWidths);
+    copy.merges = source.merges.map(merge => ({ ...merge }));
+    copy.frozenRows = source.frozenRows;
+    copy.spreadsheet = this;
+    this.sheets.push(copy);
+    return copy;
+  }
+}
+
+function createLegacyTemplate(name = 'OPS LOG 2026') {
+  const sheet = new FakeSheet(name, 116, 22);
+  const headers = ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','PRE DVIC','PRE-WHIP','POST DVIC','POST-WHIP','','RESCUED','STOP COUNT','PACKAGE COUNT','PACKAGE RETURNS','END TIME','RTS TIME','PLANNED RTS','CLOCK OUT TIME'];
+  headers.forEach((value, index) => sheet.setCell(1, index + 1, value));
+  [[3,'WAVE 1'],[18,'WAVE 2'],[33,'WAVE 3'],[48,'WAVE 4'],[63,'WAVE 5'],[78,"ADHOC's"],[94,'HELPERS'],[110,'DSP']].forEach(([row, value]) => sheet.setCell(row, 1, value));
+  for (let row = 3; row <= 116; row += 1) for (let col = 10; col <= 13; col += 1) sheet.setCell(row, col, false);
+  sheet.frozenRows = 2;
+  return sheet;
 }
 
 function runConnectorWithSheet(sheet, payload) {
   const connector = fs.readFileSync(require.resolve('../google-sheets/relayops-morning-connector.gs'), 'utf8');
-  const spreadsheet = new FakeSpreadsheet(sheet);
+  const template = sheet.getName() === 'OPS LOG 2026' ? sheet : createLegacyTemplate();
+  const spreadsheet = new FakeSpreadsheet(template === sheet ? [sheet] : [template, sheet]);
   const ui = {
     ButtonSet: { OK: 'OK' },
     alerts: [],
@@ -152,7 +189,7 @@ function runConnectorWithSheet(sheet, payload) {
       createTextOutput: text => ({ text, setMimeType() { return this; } })
     }
   };
-  const context = { ...sandbox, __payload: payload, __ui: ui };
+  const context = { ...sandbox, __payload: payload, __ui: ui, __spreadsheet: spreadsheet };
   vm.runInNewContext(`${connector}
     globalThis.__validation = validateRelayOpsMorningPayload(globalThis.__payload);
     globalThis.__ping = JSON.parse(doGet({}).text);
@@ -169,8 +206,9 @@ const payload = {
   startCell: 'A3',
   writeRange: 'A3:M',
   headers: ['WAVE', 'DRIVER', 'ROUTE', 'STAGING', 'PAD', 'EV', 'DEVICE', 'PORTABLE', '', 'STOP COUNT', 'PACKAGE COUNT', '', 'PLANNED RTS'],
-  sheetName: 'Morning Operations',
-  sheetNameCandidates: ['Opening Operations', 'Sheet1'],
+  operationDate: '2026-07-12',
+  sheetName: '7/12/26',
+  sheetNameCandidates: ['7/12/26', '7.12.26'],
   rows: [
     ['WAVE 1', 'Driver One', 'CX201', 'STG.V.1', 'A', '21', '3', '-', '', '188', '331', '', '5:35 PM'],
     ['', 'Driver Two', 'CX202', 'STG.V.2', '', '22', '4', '8', '', '190', '340', '', '6:05 PM'],
@@ -181,9 +219,7 @@ const payload = {
   sections: [{ label: 'WAVE 1', waveTime: '11:15 (2)', pad: 'A', startRow: 3, rowCount: 2, timeRow: 5, separatorRow: 6 }]
 };
 
-const sheet = new FakeSheet('Morning Operations', 5, 8);
-const legacyHeaders = ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','PRE DVIC','PRE-WHIP','POST DVIC','POST-WHIP','','RESCUED','STOP COUNT','PACKAGE COUNT','PACKAGE RETURNS','END TIME','RTS TIME','PLANNED RTS','CLOCK OUT TIME'];
-legacyHeaders.forEach((value, index) => sheet.setCell(1, index + 1, value));
+const sheet = createLegacyTemplate('7/12/26');
 sheet.setCell(3, 10, false);
 sheet.setCell(3, 13, false);
 sheet.setCell(3, 15, 'KEEP RESCUED');
@@ -195,55 +231,53 @@ sheet.setFormat(6, 1, 'background', '#050505');
 sheet.setColumnWidths(1, 22, 77);
 const resultContext = runConnectorWithSheet(sheet, payload);
 
-if (resultContext.__ping.writeRange !== 'A3:M' || resultContext.__ping.sheet !== 'Morning Operations') throw new Error('Connector ping should report the target sheet and A3:M write range');
+if (resultContext.__ping.writeRange !== 'A3:M' || resultContext.__ping.sheet !== 'OPS LOG 2026' || resultContext.__ping.templateRange !== 'A3:V') throw new Error('Connector ping should report OPS LOG 2026 and its A:V template range');
 if (!resultContext.__templateLayout || resultContext.__templateLayout.neededColumns !== 22) throw new Error('Template validation should require the original A-V Ops Log layout');
 if (!resultContext.__ui.alerts.some(alert => alert.title.includes('RelayOps template'))) throw new Error('Template validation should alert the installer inside Google Sheets');
-if (sheet.getMaxRows() < 122) throw new Error(`Connector should expand rows to at least 122, got ${sheet.getMaxRows()}`);
+if (sheet.getMaxRows() !== 116) throw new Error(`Connector should retain the exact 116-row template, got ${sheet.getMaxRows()}`);
 if (sheet.getMaxColumns() !== 22) throw new Error(`Connector should expand to the original A-V layout, got ${sheet.getMaxColumns()} columns`);
-if (sheet.frozenRows !== 0) throw new Error('Connector should preserve the sheet freeze setting instead of changing merged-row boundaries');
+if (sheet.frozenRows !== 2) throw new Error('Connector should preserve the template two-row freeze setting');
 if (sheet.getCell(1, 10) !== 'PRE DVIC' || sheet.getCell(1, 21) !== 'PLANNED RTS' || sheet.getCell(1, 22) !== 'CLOCK OUT TIME') throw new Error('Connector should preserve the original A-V headers');
 if (sheet.getCell(3, 2) !== 'Driver One' || sheet.getCell(4, 3) !== 'CX202') throw new Error('Connector should write route rows starting at A3');
 if (sheet.getCell(3, 16) !== '188' || sheet.getCell(3, 17) !== '331' || sheet.getCell(3, 21) !== '5:35 PM') throw new Error('Connector should map stop/package/Planned RTS into P/Q/U');
 if (sheet.getCell(3, 10) !== false || sheet.getCell(3, 13) !== false || sheet.getCell(3, 15) !== 'KEEP RESCUED' || sheet.getCell(3, 18) !== 'KEEP RETURNS' || sheet.getCell(3, 19) !== 'KEEP END' || sheet.getCell(3, 20) !== 'KEEP RTS' || sheet.getCell(3, 22) !== 'KEEP CLOCK OUT') throw new Error('Connector overwrote original checkbox or closing-operations columns');
-if (sheet.getCell(5, 1) !== '11:15 (2)') throw new Error('Connector should write wave time under the wave label');
-if (sheet.getFormat(6, 1, 'background') !== '#050505') throw new Error('Connector should preserve the original black divider formatting');
-if (!sheet.merges.some(merge => merge.row === 3 && merge.col === 1 && merge.numRows === 2 && merge.numCols === 1)) throw new Error('Connector should merge Wave cells for route rows');
-if (!sheet.merges.some(merge => merge.row === 3 && merge.col === 5 && merge.numRows === 3 && merge.numCols === 1)) throw new Error('Connector should merge Pad cells through the time row');
+if (sheet.getCell(16, 1) !== '11:15 (2)') throw new Error('Connector should write Wave 1 time into fixed row 16');
+if (sheet.getCell(18, 1) !== 'WAVE 2' || sheet.getCell(33, 1) !== 'WAVE 3' || sheet.getCell(78, 1) !== "ADHOC's" || sheet.getCell(110, 1) !== 'DSP') throw new Error('Connector should preserve fixed OPS LOG 2026 section anchors');
 if (sheet.columnWidths.get(9) !== 77 || sheet.columnWidths.get(14) !== 77) throw new Error('Connector should preserve every original column width');
-if (resultContext.__result.writeRange !== 'A3:V' || resultContext.__result.writtenRange !== 'A3:V6' || resultContext.__result.lastCell !== 'V6') throw new Error('Connector should return the original A-V template range proof');
+if (resultContext.__result.writeRange !== 'A3:V' || resultContext.__result.writtenRange !== 'A3:V116' || resultContext.__result.lastCell !== 'V116') throw new Error('Connector should return the full fixed A3:V116 template proof');
 
-const sentinelSheet = new FakeSheet('Morning Operations', 130, 22);
+const sentinelSheet = createLegacyTemplate('7.12.26');
 sentinelSheet.setCell(3, 14, 'DO NOT TOUCH N3');
 runConnectorWithSheet(sentinelSheet, payload);
 if (sentinelSheet.getMaxColumns() !== 22) throw new Error('Connector should retain all A-V template columns');
 if (sentinelSheet.getCell(3, 14) !== 'DO NOT TOUCH N3') throw new Error('Connector should not touch columns N and beyond');
-if (sentinelSheet.breakApartCalls.some(call => ![1,5].includes(call.col) || call.numCols !== 1)) throw new Error('Connector should break apart only Wave A and Pad E merges');
+if (sentinelSheet.breakApartCalls.length) throw new Error('Connector should preserve every original merged range');
 
-const sheet1Template = new FakeSheet('Sheet1', 130, 22);
-const sheet1Context = runConnectorWithSheet(sheet1Template, payload);
-if (sheet1Context.__result.sheetName !== 'Sheet1' || sheet1Template.getCell(3, 2) !== 'Driver One') {
-  throw new Error('Connector should target Sheet1 when the Google template tab has not been renamed');
-}
+const creationContext = runConnectorWithSheet(createLegacyTemplate(), payload);
+const createdDateSheet = creationContext.__spreadsheet.getSheetByName('7/12/26');
+if (creationContext.__result.sheetName !== '7/12/26' || !creationContext.__result.createdSheet || !createdDateSheet || createdDateSheet.getCell(3, 2) !== 'Driver One' || createdDateSheet.getCell(16, 1) !== '11:15 (2)') throw new Error('Connector should create the exact operation-date tab from OPS LOG 2026 and populate fixed anchors');
 
 const datedPayload = { ...payload, operationDate: '2026-07-11', sheetName: '7/11/26', sheetNameCandidates: ['7/11/26', '7.11.26'] };
-const dottedDateSheet = new FakeSheet('7.11.26', 130, 22);
+const dottedDateSheet = createLegacyTemplate('7.11.26');
 const datedContext = runConnectorWithSheet(dottedDateSheet, datedPayload);
 if (datedContext.__result.sheetName !== '7.11.26' || dottedDateSheet.getCell(3, 2) !== 'Driver One') throw new Error('Connector should match the selected operation date using dot-formatted tabs');
-let missingDateRejected = false;
-try {
-  runConnectorWithSheet(new FakeSheet('7.10.26', 130, 22), datedPayload);
-} catch (error) {
-  missingDateRejected = String(error.message).includes('No operations tab found for 2026-07-11') && String(error.message).includes('Nothing was written');
-}
-if (!missingDateRejected) throw new Error('Connector must stop instead of writing a dated payload into the wrong tab');
+const wrongDateSheet = createLegacyTemplate('7.10.26');
+wrongDateSheet.setCell(3, 2, 'DO NOT TOUCH WRONG DATE');
+const exactDateContext = runConnectorWithSheet(wrongDateSheet, datedPayload);
+if (wrongDateSheet.getCell(3, 2) !== 'DO NOT TOUCH WRONG DATE' || exactDateContext.__result.sheetName !== '7/11/26' || !exactDateContext.__result.createdSheet) throw new Error('Connector must create the exact operation-date tab and never write into another date');
 
 const badPayload = { ...payload, writeRange: 'A3:N' };
 let rejected = false;
 try {
-  runConnectorWithSheet(new FakeSheet('Morning Operations', 130, 22), badPayload);
+  runConnectorWithSheet(createLegacyTemplate('7/12/26'), badPayload);
 } catch (error) {
   rejected = String(error.message).includes('Write range must be A3:M');
 }
 if (!rejected) throw new Error('Connector should reject writes outside A3:M');
+
+const wrongTargetPayload = { ...payload, sheetName: 'Morning Operations' };
+let wrongTargetRejected = false;
+try { runConnectorWithSheet(createLegacyTemplate('Morning Operations'), wrongTargetPayload); } catch (error) { wrongTargetRejected = /Target tab must match operation date|Refusing non-date target/.test(String(error.message)); }
+if (!wrongTargetRejected) throw new Error('Connector should reject any non-date target sheet name');
 
 console.log('Morning Apps Script connector simulator test passed');
