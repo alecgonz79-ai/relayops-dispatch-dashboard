@@ -180,10 +180,15 @@ function validateRelayOpsMorningPayload(payload) {
     const count = Number(section.rowCount);
     const time = Number(section.timeRow);
     const separator = Number(section.separatorRow);
-    if (!start || start < RELAYOPS_START_ROW || !count || time <= start || separator <= time) errors.push('Section ' + (i + 1) + ' has invalid merge rows');
     const fixedLayout = relayOpsLayoutForSection(section);
     if (!fixedLayout) errors.push('Section ' + (i + 1) + ' is not supported by OPS LOG 2026: ' + String(section.label || section.wave || 'unnamed'));
-    else if (relayOpsSectionRows(payload, section).length > fixedLayout.routeCapacity) errors.push(fixedLayout.label + ' exceeds ' + fixedLayout.routeCapacity + ' available route rows');
+    else {
+      const invalidBase = !start || start < RELAYOPS_START_ROW || !count;
+      const invalidTime = Boolean(fixedLayout.timeRow) && (!time || time <= start);
+      const invalidSeparator = Boolean(fixedLayout.separatorRow) && (!separator || separator <= start || (fixedLayout.timeRow && separator <= time));
+      if (invalidBase || invalidTime || invalidSeparator) errors.push('Section ' + (i + 1) + ' has invalid merge rows');
+      if (relayOpsSectionRows(payload, section).length > fixedLayout.routeCapacity) errors.push(fixedLayout.label + ' exceeds ' + fixedLayout.routeCapacity + ' available route rows');
+    }
   });
   return {ready: errors.length === 0, errors: errors};
 }
