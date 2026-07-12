@@ -1995,6 +1995,8 @@ body .morning-template-sheet .wave-time-row .wave-time-cell { padding:0!importan
 body .morning-board .exact-ops-sheet { min-width:1340px; width:1340px; table-layout:fixed; background:#050505; }
 body .morning-board .exact-ops-sheet th { height:28px; padding:4px 5px; font:700 12px Arial,sans-serif; white-space:nowrap; }
 body .morning-board .exact-ops-sheet td { height:23px; padding:2px 4px; background:#fff; border:1px solid #111; font:700 13px Arial,sans-serif; }
+body .morning-board .exact-ops-sheet td:not(.wave-label):not(.pad-label):not(.wave-time-cell):not(.sheet-spacer-col) { overflow:hidden; white-space:nowrap; text-overflow:clip; }
+body .morning-board .exact-ops-sheet .driver-name { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 body .morning-board .exact-ops-sheet th:nth-child(2) { width:56px; background:#b4a7d6; }
 body .morning-board .exact-ops-sheet th:nth-child(3) { width:149px; background:#92f4fa; }
 body .morning-board .exact-ops-sheet th:nth-child(4) { width:52px; background:#92f4fa; }
@@ -2151,6 +2153,14 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
   body .app-shell { display:block; }
   body .topbar { height:68px; padding:0 14px; }
   body .content { padding:16px 14px 36px; }
+  body .morning-board { overflow:hidden; }
+  body .morning-board .sheet-scroll { width:100%; max-width:100%; overflow-x:auto; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; touch-action:pan-x pan-y; }
+  body .morning-board .exact-ops-sheet { min-width:1340px!important; width:1340px!important; max-width:none!important; }
+  body .morning-board .exact-ops-sheet td { font-size:11px; }
+  body .morning-board .exact-ops-sheet .driver-name { font-size:10px; }
+  body .morning-board .exact-ops-sheet th { font-size:10px; overflow:hidden; white-space:nowrap; }
+  body .morning-board .exact-ops-sheet th:nth-child(5),
+  body .morning-board .exact-ops-sheet th:nth-child(7) { font-size:9px; }
   .message-queue-head,.message-template-row { align-items:stretch; flex-direction:column; }
   .message-template-row select { min-width:0; width:100%; }
   .message-queue-row { grid-template-columns:1fr; }
