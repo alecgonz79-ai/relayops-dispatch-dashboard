@@ -182,7 +182,7 @@ function runConnectorWithSheet(sheet, payload) {
     SpreadsheetApp: {
       getActiveSpreadsheet: () => spreadsheet,
       openById: id => {
-        if (id !== '1Kq8w0luVSz8Zo32WPw77LwdzcO9vNdC8YtJci34tDYI') throw new Error('Connector opened the wrong spreadsheet ID');
+        if (id !== '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ') throw new Error('Connector opened the wrong spreadsheet ID');
         return spreadsheet;
       },
       getUi: () => ui,
