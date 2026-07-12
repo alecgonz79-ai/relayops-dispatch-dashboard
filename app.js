@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 117805)
-Total output lines: 4820
+Warning: truncated output (original token count: 118018)
+Total output lines: 4822
 
 const ICONS = {
   dashboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
@@ -176,7 +176,7 @@ function defaultVanParkingSlots() {
   const slots=[];
   topLeft.forEach((value,i)=>slots.push({id:`north-left-${i+1}`,zone:'northLeft',label:`North overflow ${i+1}`,value,kind:'overflow'}));
   topRight.forEach((value,i)=>slots.push({id:`north-right-${i+1}`,zone:'northRight',label:`North row ${i+1}`,value,kind:'spot'}));
-  ['10(93%)','','','','39'].forEach((value,i)=>slots.push({id:`street-${i+1}`,zone:'street',label:i===0?'Street charge':'Street curb',value,kind:'street'}));
+  ['10(93%)','','','','39','','',''].forEach((value,i)=>slots.push({id:`street-${i+1}`,zone:'street',label:i===0?'Street charge':`Street upper spot ${i+1}`,value,kind:'street'}));
   Array.from({length:8}).forEach((_,i)=>slots.push({id:`street-lower-${i+1}`,zone:'streetLower',label:`Street lower spot ${i+1}`,value:'',kind:'street'}));
   west.forEach((value,i)=>slots.push({id:`west-${String(i+1).padStart(2,'0')}`,zone:'west',label:`Left row ${i+1}`,value,kind:['4','50'].includes(value)?'crosswalk':'spot'}));
   crosswalk.forEach((value,i)=>slots.push({id:`crosswalk-${String(i+1).padStart(2,'0')}`,zone:'crosswalk',label:`Crosswalk ${i+1}`,value,kind:'crosswalk'}));
@@ -248,6 +248,7 @@ let state = {
   fleetLiveLastError: localStorage.getItem('relayops_fleet_live_last_error') || '',
   vanParking: loadVanParkingSlots(),
   vanParkingUpdated: localStorage.getItem('relayops_van_parking_updated') || '7/6',
+  chargingStationChecked: localStorage.getItem('relayops_charging_station_checked') || '',
   vanParkingPasteText: '',
   vanParkingBatteries: JSON.parse(localStorage.getItem('relayops_van_parking_batteries') || 'null') || {},
   parkingChargerStatus: JSON.parse(localStorage.getItem('relayops_parking_charger_status') || 'null') || {},
@@ -814,9 +815,9 @@ function parkingChargerButton(key,label='Charger') {
   return `<button type="button" class="parking-charger-toggle charger-${status}" data-parking-charger="${esc(key)}" title="${esc(label)}: click for green, red, or clear"><i></i><span>${text}</span></button>`;
 }
 function parkingChargerColumn() {
-  const leftCount=parkingSlots('west').length,rightCount=parkingSlots('east').length,rows=Math.max(leftCount,rightCount,4);
+  const leftSlots=parkingSlots('west'),rightSlots=parkingSlots('east'),leftCount=leftSlots.length,rightCount=rightSlots.length,rows=Math.max(leftCount,rightCount,4);
   const tent=`<div class="parking-tent-square" title="Operations tent"><svg viewBox="0 0 64 52" aria-hidden="true"><path d="M32 5 57 45H7L32 5Z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="M32 5v40M20 45l12-18 12 18" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg><span>TENT</span></div>`;
-  return `<div class="parking-crosswalk charger-column"><div class="parking-charger-pairs">${Array.from({length:rows},(_,index)=>{const left=index<leftCount?parkingChargerButton(`middle-${index+1}-left`,`Left charger ${index+1}`):'<span></span>',right=index<rightCount?parkingChargerButton(`middle-${index+1}-right`,`Right charger ${index+1}`):'<span></span>';return index===3?`<div class="charger-pair tent-row">${left}${tent}${right}</div>`:`<div class="charger-pair">${left}${right}</div>`;}).join('')}</div></div>`;
+  return `<div class="parking-crosswalk charger-column"><div class="parking-charger-pairs">${Array.from({length:rows},(_,index)=>{const isTent=index===3,isBottomCrosswalk=index>=19,left=index<leftCount&&!isTent&&!isBottomCrosswalk&&leftSlots[index]?.kind!=='crosswalk'?parkingChargerButton(`middle-${index+1}-left`,`Left charger ${index+1}`):'<span></span>',right=index<rightCount&&!isTent&&!isBottomCrosswalk&&rightSlots[index]?.kind!=='crosswalk'?parkingChargerButton(`middle-${index+1}-right`,`Right charger ${index+1}`):'<span></span>';return isTent?`<div class="charger-pair tent-row"><span></span>${tent}<span></span></div>`:`<div class="charger-pair">${left}${right}</div>`;}).join('')}</div></div>`;
 }
 function parkingSlotInput(slot) {
   const tone=slot.kind==='crosswalk'?' crosswalk-slot':slot.kind==='overflow'?' overflow-slot':slot.kind==='street'?' street-slot':'';
@@ -824,21 +825,19 @@ function parkingSlotInput(slot) {
   const battery=parkingBatteryForSlot(slot);
   const batteryTone=parkingBatteryTone(battery);
   const blocked=/^x$/i.test(String(slot.value||''))||slot.kind==='blocked';
+  const hasVehicle=Boolean(String(slot.value||'').trim())&&!blocked;
   const charging=slot.kind==='charging'||/\(\d{1,3}%\)/.test(String(slot.value||''));
   const showBatteryBox=['west','east','northLeft','northRight'].includes(slot.zone);
   const status=battery!==''?`${esc(battery)}%`:blocked?'BLOCK':charging?'CHG':'';
   const upperCharger=['northLeft','northRight'].includes(slot.zone)?parkingChargerButton(`upper-${slot.id}`,`${slot.label} charger`):'';
-  return `<div class="parking-slot parking-slot-row${tone}${selected}${blocked?' blocked':''}${charging?' charging':''}" title="${esc(slot.label)}"><label class="parking-van-cell" data-parking-select="${esc(slot.id)}"><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}" data-parking-id="${esc(slot.id)}" value="${esc(slot.value||'')}" placeholder="">${!showBatteryBox&&status?`<em>${status}</em>`:''}</label>${showBatteryBox?`<label class="parking-battery-mini battery-${batteryTone}" title="Battery % for ${esc(slot.value||slot.label)}"><input aria-label="Battery percent for ${esc(slot.value||slot.label)}" data-parking-battery="${esc(slot.id)}" type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="--"></label>`:''}${upperCharger}</div>`;
+  return `<div class="parking-slot parking-slot-row zone-${esc(slot.zone)}${tone}${selected}${blocked?' blocked':''}${charging?' charging':''}${hasVehicle?' has-vehicle':''}${slot.zone==='gas'?' gas-vehicle':' ev-vehicle'}" title="${esc(slot.label)}"><label class="parking-van-cell" data-parking-select="${esc(slot.id)}"><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}" data-parking-id="${esc(slot.id)}" value="${esc(slot.value||'')}" placeholder="${slot.kind==='street'?'STREET':''}">${!showBatteryBox&&status?`<em>${status}</em>`:''}</label>${showBatteryBox?`<label class="parking-battery-mini battery-${batteryTone}" title="Battery % for ${esc(slot.value||slot.label)}"><input aria-label="Battery percent for ${esc(slot.value||slot.label)}" data-parking-battery="${esc(slot.id)}" type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="--"></label>`:''}${upperCharger}</div>`;
 }
 function parkingStack(zone,title,subtitle='') {
   return `<section class="parking-stack ${zone}"><div class="parking-stack-title"><strong>${esc(title)}</strong>${subtitle?`<small>${esc(subtitle)}</small>`:''}</div>${parkingSlots(zone).map(parkingSlotInput).join('')}</section>`;
 }
 function parkingStreetCells(zone='street') {
   const slots=parkingSlots(zone);
-  if(zone==='streetLower') {
-    return Array.from({length:8}).map((_,i)=>`<div class="street-cell editable-street street-spot-cell">${slots[i]?parkingSlotInput(slots[i]):''}</div>`).join('');
-  }
-  return `<div class="street-cell">STREET</div><div class="street-cell editable-street">${slots[0]?parkingSlotInput(slots[0]):''}</div><div class="street-cell">STREET</div><div class="street-cell">STREET</div><div class="street-cell wide">STREET</div><div class="street-cell">STREET</div><div class="street-cell editable-street">${slots[4]?parkingSlotInput(slots[4]):''}</div><div class="street-cell">STREET</div>`;
+  return Array.from({length:8}).map((_,i)=>`<div class="street-cell editable-street street-spot-cell">${slots[i]?parkingSlotInput(slots[i]):''}</div>`).join('');
 }
 function parkingStreetRows() {
   return `<div class="parking-street-row street-primary">${parkingStreetCells('street')}</div><div class="parking-street-row street-secondary">${parkingStreetCells('streetLower')}</div>`;
@@ -860,8 +859,7 @@ function parkingBatteryEditor() {
 }
 function parkingModeControls() {
   const modes=[['auto','Auto','Reset to base layout'],['assisted','Assisted','Edit vans + battery'],['manual','Manual','Add/remove custom spots']];
-  return `<div class="parking-mode-controls">${modes.map(([mode,label,detail])=>`<button class="${state.parkingMode===mode?'active':''}" data-action="set-parking-mode" data-mode="${mode}"><b>${esc(label)}</b><span>${esc(detail)}</span></button>`).join('')}<button class="add-temp-spot" data-a…67805 tokens truncated…localeCompare(b.staging,undefined,{numeric:true}));
-    state.routes=state.morningRoutes.map((r,i)=>({route:r.route,driver:r.driver,id:`DA-${1100+i}`,wave:r.wave,staging:r.staging,van:'Unassigned',device:'Unassigned',stops:r.stops,packages:r.packages,progress:0,delta:0,status:r.driver==='Unassigned driver'?'Needs review':'Assigned',rescue:'—'}));
+  return `<div class="parking-mode-controls">${modes.map(([mode,label,detail])=>`<button class="${state.parkingMode===mode?'active':''}" data-action="set-parking-mode" data-mode="${mode}"><b>${…68018 tokens truncated…:r.staging,van:'Unassigned',device:'Unassigned',stops:r.stops,packages:r.packages,progress:0,delta:0,status:r.driver==='Unassigned driver'?'Needs review':'Assigned',rescue:'—'}));
     state.lastImportExcluded=excluded;state.modal=null;state.page='morning';state.morningFilters={wave:'all',staging:'all',pad:'all'};state.rosterPublished=false;persist();render();return toast(`${state.morningRoutes.length} ${state.dspCode} routes loaded · ${excluded} other-DSP routes excluded`);
   }
   state.routes=f.rows.map((r,i)=>({route:r[ix.route]||`IMP-${i+1}`,driver:firstDriverName(r[ix.driver]||'Unassigned driver'),id:`DA-${1100+i}`,wave:r[ix.wave]||'Wave pending',staging:r[ix.staging]||'—',van:r[ix.van]||'Unassigned',device:r[ix.device]||'Unassigned',stops:Number(r[ix.stops])||0,packages:Number(r[ix.packages])||0,progress:0,delta:0,status:(r[ix.driver]&&r[ix.van])?'Assigned':'Needs review',rescue:'—'}));
@@ -2110,6 +2108,7 @@ localStorage.setItem('relayops_call_off_driver_keys',JSON.stringify(state.callOf
 localStorage.setItem('relayops_schedule_driver_marks',JSON.stringify(state.scheduleDriverMarks||{}));
 localStorage.setItem('relayops_parking_charger_status',JSON.stringify(state.parkingChargerStatus||{}));
 localStorage.setItem('relayops_parking_notes',state.parkingNotes||'');
+localStorage.setItem('relayops_charging_station_checked',state.chargingStationChecked||'');
 localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_morning_sheets_last_dry_run',state.morningSheetsLastDryRun||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');localStorage.setItem('relayops_driver_contacts',JSON.stringify(state.driverContacts||[]));localStorage.setItem('relayops_driver_contacts_last_import',state.driverContactsLastImport||'');localStorage.setItem('relayops_removed_driver_keys',JSON.stringify(state.removedDriverKeys||[]));
 localStorage.setItem('relayops_morning_operation_date',state.morningOperationDate||defaultOperationDate());
 localStorage.setItem('relayops_fleet_name_overrides',JSON.stringify(state.fleetNameOverrides||{}));
@@ -2122,7 +2121,7 @@ function sharedWorkspaceState() {
     schemaVersion:1,dspCode:state.dspCode,organizationName:state.organizationName,stationCode:state.stationCode,routes:state.routes,morningRoutes:state.morningRoutes,
     lastImportExcluded:state.lastImportExcluded,rosterPublished:state.rosterPublished,
     fleetImport:state.fleetImport,fleetSourceUploads:state.fleetSourceUploads,fleetExpectedCount:state.fleetExpectedCount,
-    fleetNameOverrides:state.fleetNameOverrides,vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,
+    fleetNameOverrides:state.fleetNameOverrides,vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,chargingStationChecked:state.chargingStationChecked,
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,
     messageQueueTemplate:state.messageQueueTemplate,messageQueueStatus:state.messageQueueStatus,
@@ -2131,7 +2130,7 @@ function sharedWorkspaceState() {
   };
 }
 function applySharedWorkspaceState(payload={}) {
-  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','vanParking','vanParkingUpdated','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','messageQueueTemplate','messageQueueStatus','scheduleEntries','scheduleImportName','callOffDriverKeys','scheduleDriverMarks','morningSheetsEndpoint'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','messageQueueTemplate','messageQueueStatus','scheduleEntries','scheduleImportName','callOffDriverKeys','scheduleDriverMarks','morningSheetsEndpoint'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   persist();render();

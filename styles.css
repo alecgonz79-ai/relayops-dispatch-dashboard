@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 54052)
-Total output lines: 2094
+Warning: truncated output (original token count: 55119)
+Total output lines: 2129
 
 :root {
   --ink: #231f20;
@@ -1024,44 +1024,7 @@ tbody tr:last-child td { border-bottom:0; }
 .fleetos-roster-coverage { display:grid; grid-template-columns:1.2fr 1.2fr 1fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
 .fleetos-roster-coverage.ok { border-color:#cfe8c7; background:#eef7ea; }
 .fleetos-roster-coverage strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
-.fleetos-roster-coverage span, .fleetos-roster-cove…4052 tokens truncated…n:middle; }
-.change-source-pills i { display:inline-flex; padding:2px 4px; border-radius:999px; background:#eef6ff; color:#0b4f8f; font-style:normal; font-size:6px; font-weight:1000; letter-spacing:.04em; }
-.fleet-legend { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin:0 0 12px; }
-.fleet-legend span { padding:8px 9px; border-radius:10px; border:1px solid #e1e7e3; background:#fff; color:#516158; font-size:7px; font-weight:900; line-height:1.35; }
-.fleet-legend b { display:block; color:#172019; font-size:8px; text-transform:uppercase; letter-spacing:.06em; }
-.fleet-legend .verified { background:#eef7ea; border-color:#cfe8c7; }
-.fleet-legend .partial, .fleet-legend .charge { background:#fff8e6; border-color:#ebcf83; }
-.fleet-legend .demo { background:#f3f5f2; border-color:#dfe5df; }
-.fleet-filter-chips { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0 0 10px; }
-.fleet-filter-chips button { border:1px solid #dfe7dd; border-radius:999px; background:#fff; color:#516158; padding:6px 8px; font-size:7px; font-weight:1000; text-transform:uppercase; letter-spacing:.05em; cursor:pointer; }
-.fleet-filter-chips button.active { background:#172019; border-color:#172019; color:#fff; }
-.fleet-filter-chips button.empty { opacity:.55; }
-.fleet-filter-chips b { display:inline-block; margin-right:5px; color:inherit; font-size:9px; }
-.fleet-accuracy-gate { display:grid; grid-template-columns:1.2fr 1fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
-.fleet-accuracy-gate.ok { border-color:#cfe8c7; background:#f3fbef; }
-.fleet-accuracy-gate strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
-.fleet-accuracy-gate span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
-.accuracy-source-mini { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
-.accuracy-source-mini span { padding:7px 8px; border-radius:9px; background:#fff; border:1px solid #e2e8e3; color:#536159; font-size:7px; font-weight:1000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.accuracy-source-mini b { display:block; color:#172019; font-size:8px; text-transform:uppercase; letter-spacing:.06em; }
-.accuracy-source-mini .ok { background:#eef7ea; border-color:#cfe8c7; color:#275c1f; }
-.accuracy-source-mini .warn { background:#fff2cf; border-color:#ebcf83; color:#8a5d08; }
-.fleet-source-map { display:grid; grid-template-columns:.75fr 2fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
-.fleet-source-map.ok { border-color:#cfe8c7; background:#f3fbef; }
-.fleet-source-map strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
-.fleet-source-map span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
-.fleet-source-map-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; }
-.fleet-source-map-grid button { min-width:0; border:1px solid #e2e8e3; border-radius:10px; background:#fff; padding:8px; text-align:left; cursor:pointer; }
-.fleet-source-map-grid button.ok { background:#eef7ea; border-color:#cfe8c7; }
-.fleet-source-map-grid button.warn { background:#fff2cf; border-color:#ebcf83; }
-.fleet-source-map-grid b, .fleet-source-map-grid span, .fleet-source-map-grid em, .fleet-source-map-grid small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.fleet-source-map-grid b { color:#172019; font:1000 13px "Manrope"; }
-.fleet-source-map-grid span { color:#172019; font-size:8px; font-weight:1000; }
-.fleet-source-map-grid em { color:#59665e; font-size:7px; font-style:normal; font-weight:850; }
-.fleet-source-map-grid small { margin-top:4px; color:#0b4f8f; font-size:6px; font-weight:1000; text-transform:uppercase; letter-spacing:.07em; }
-.fleet-row-count-check { display:grid; grid-template-columns:.9fr 1.7fr auto; gap:10px; align-items:center; margin:0 0 12px; padding:11px; border-radius:13px; border:1px solid #ebcf83; background:#fff8e6; }
-.fleet-row-count-check.ok { border-color:#cfe8c7; background:#f3fbef; }
-.fleet-row-count-check strong { display:block; color:#172019; font:1000 11px "Manrope"; margin-bottom:3px; }
+.fleetos-roster-coverage span, .fleetos-roster-cove…5119 tokens truncated…; font:1000 11px "Manrope"; margin-bottom:3px; }
 .fleet-row-count-check span { color:#516158; font-size:8px; font-weight:850; line-height:1.35; }
 .fleet-row-count-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; }
 .fleet-row-count-grid span { min-width:0; padding:8px; border-radius:10px; border:1px solid #e2e8e3; background:#fff; color:#59665e; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -1936,6 +1899,41 @@ body .parking-gas-area { grid-column:1/3; width:100%; max-width:none; box-sizing
 body .parking-gas-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 10px; }
 body .parking-gas-grid .parking-slot-row { min-width:0; }
 body .parking-gas-grid .parking-van-cell { width:100%; box-sizing:border-box; }
+
+/* Vehicle-map polish: road markings, overhead vans, visible batteries, and date checks. */
+body .parking-map-grid { grid-template-rows:300px 154px auto; }
+body .parking-street-zone { position:relative; grid-template-rows:60px 60px; gap:22px; padding:6px 0; box-sizing:border-box; background:#27323a; border-top:3px solid #9da8ad; border-bottom:3px solid #9da8ad; overflow:hidden; }
+body .parking-street-zone::after { content:""; position:absolute; z-index:0; left:20px; right:20px; top:50%; border-top:2px dashed rgba(255,255,255,.65); transform:translateY(-1px); pointer-events:none; }
+body .parking-street-row { position:relative; z-index:1; grid-template-columns:repeat(8,minmax(0,1fr)); gap:8px; padding:0 8px; border:0; background:transparent; overflow:visible; }
+body .parking-street-row.street-secondary { background:transparent; }
+body .street-cell { min-width:0; min-height:60px; border:0; border-left:2px solid rgba(255,255,255,.48); border-right:2px solid rgba(255,255,255,.48); background:rgba(255,255,255,.025); color:#dce7ec; }
+body .parking-street-row .parking-slot,
+body .parking-street-row .parking-van-cell,
+body .parking-street-row.street-secondary .parking-slot,
+body .parking-street-row.street-secondary .parking-van-cell { min-height:56px; background:transparent; }
+body .parking-street-row .parking-slot input,
+body .parking-street-row.street-secondary .parking-slot input { height:54px; color:#75c5ff; font-size:15px; }
+body .parking-street-row .parking-slot:not(.has-vehicle) input::placeholder { color:rgba(232,239,242,.72); opacity:1; font-size:9px; letter-spacing:.14em; }
+body .parking-street-row.street-primary .parking-van-cell::before { transform:rotate(90deg); }
+body .parking-street-row.street-secondary .parking-van-cell::before { transform:rotate(-90deg); }
+body .parking-battery-mini input { font-size:14px; font-weight:1000; }
+body .parking-battery-mini::after { right:6px; font-size:11px; }
+body .parking-van-cell input { position:relative; z-index:2; text-shadow:0 1px 2px rgba(0,0,0,.72); }
+body .parking-slot.has-vehicle .parking-van-cell::before { content:""; position:absolute; z-index:1; left:10%; top:50%; width:80%; height:30px; transform:translateY(-50%); border:1px solid #091722; border-radius:9px 13px 13px 9px; background:linear-gradient(to left,#69b8ea 0 12%,#173d57 12% 18%,#102c41 18% 82%,#0b2132 82% 100%); box-shadow:inset 0 0 0 2px rgba(255,255,255,.08),0 3px 7px rgba(0,0,0,.28); pointer-events:none; }
+body .parking-slot.has-vehicle .parking-van-cell::after { content:""; position:absolute; z-index:1; left:17%; right:17%; top:50%; height:36px; transform:translateY(-50%); border-left:5px solid #0b0f12; border-right:5px solid #0b0f12; border-radius:8px; pointer-events:none; }
+body .parking-stack.east .parking-slot.has-vehicle .parking-van-cell::before,
+body .parking-top-block .northRight .parking-slot.has-vehicle .parking-van-cell::before { border-radius:13px 9px 9px 13px; background:linear-gradient(to right,#69b8ea 0 12%,#173d57 12% 18%,#102c41 18% 82%,#0b2132 82% 100%); }
+body .parking-gas-grid .parking-slot.has-vehicle .parking-van-cell::before { height:28px; background:linear-gradient(to left,#d9dde0 0 14%,#7c858c 14% 20%,#4b555d 20% 82%,#353d43 82%); }
+body .parking-gas-grid .parking-slot.has-vehicle:nth-child(even) .parking-van-cell::before { background:linear-gradient(to right,#d9dde0 0 14%,#7c858c 14% 20%,#4b555d 20% 82%,#353d43 82%); }
+body .parking-gas-grid .parking-van-cell input { color:#e9f3f8; }
+body .charger-pair.tent-row { grid-template-columns:1fr 52px 1fr; }
+body .charger-pair.tent-row .parking-tent-square { width:52px; height:42px; grid-template-columns:30px 1fr; padding:3px 4px; background:#f7fafc; border-color:#fff; color:#162733; }
+body .charger-pair.tent-row .parking-tent-square svg { width:29px; height:27px; color:#162733; }
+body .charger-pair.tent-row .parking-tent-square span { color:#162733; font-size:6px; }
+body .parking-date-cluster { grid-column:1/3; justify-self:end; display:flex; align-items:stretch; gap:10px; pointer-events:auto; }
+body .parking-date-cluster .parking-date-box { width:190px; min-height:64px; }
+body .parking-date-cluster .charging-check-date { width:220px; }
+body .parking-date-cluster .parking-date-box strong { font-size:8px; }
 .scheduled-section.dispatch { border-color:#bdd9ea; background:linear-gradient(145deg,#fff,#f2faff); }
 .scheduled-section.other { border-style:dashed; }
 .scheduled-shift-empty { padding:17px 8px; color:#7c8b97; font-size:11px; text-align:center; }
