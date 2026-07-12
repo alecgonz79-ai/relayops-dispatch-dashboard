@@ -123,7 +123,7 @@ const checks = `
   if (!payload.rows.length || !payload.sections.length) throw new Error('Morning Sheets connector payload missing rows or sections');
   if (payload.sections.some(section=>section.dsp || section.label==='DSP')) throw new Error('Blank manual DSP rows must not be sent to the fixed Apps Script importer');
   const adhocSection=payload.sections.find(section=>section.label==="ADHOC's"), helperSection=payload.sections.find(section=>section.label==='HELPERS');
-  if (!adhocSection || adhocSection.timeRow !== null || adhocSection.separatorRow !== 94 || !helperSection || helperSection.timeRow !== null || helperSection.separatorRow !== 110) throw new Error('ADHOC and HELPERS must use their real no-time-row fixed anchors');
+  if (!adhocSection || adhocSection.hasTimeRow !== false || adhocSection.timeRow !== 93 || adhocSection.separatorRow !== 94 || !helperSection || helperSection.hasTimeRow !== false || helperSection.timeRow !== 109 || helperSection.separatorRow !== 110) throw new Error('ADHOC and HELPERS must retain real no-time-row layout while sending legacy-compatible validator anchors');
   const preflight = morningSheetsPreflight(payload);
   if (!preflight.ready || preflight.checks.length !== 7 || !preflight.checks.every(check => check.ok)) throw new Error('Morning Sheets preflight should pass for the current A-M payload');
   const preflightHtml = morningSheetsPreflightHtml(payload);
