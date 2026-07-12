@@ -8,7 +8,8 @@ const RELAYOPS_WRITE_RANGE = 'A3:M';
 const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
-const RELAYOPS_BUILD = '2026-07-11-main-ops-log-live-anchors';
+const RELAYOPS_SPREADSHEET_ID = '1Kq8w0luVSz8Zo32WPw77LwdzcO9vNdC8YtJci34tDYI';
+const RELAYOPS_BUILD = '2026-07-11-main-ops-log-id-locked';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -30,7 +31,7 @@ function onOpen() {
 }
 
 function relayOpsConnectorStatus() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = relayOpsSpreadsheet();
   SpreadsheetApp.getUi().alert(
     'RelayOps connector is installed',
     'Spreadsheet: ' + ss.getName() + '\nDeploy this Apps Script as a Web app, then paste the /exec URL into the RelayOps dashboard.',
@@ -39,14 +40,15 @@ function relayOpsConnectorStatus() {
 }
 
 function doGet(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RELAYOPS_TEMPLATE_SHEET);
+  const ss = relayOpsSpreadsheet();
+  const sheet = ss.getSheetByName(RELAYOPS_TEMPLATE_SHEET);
   if (!sheet) throw new Error('Blank template tab "' + RELAYOPS_TEMPLATE_SHEET + '" was not found');
   const layout = relayOpsTemplateLayout(sheet, 0);
   return relayOpsJson({
     ok: true,
     connector: 'relayops-morning-v1',
     build: RELAYOPS_BUILD,
-    spreadsheet: SpreadsheetApp.getActiveSpreadsheet().getName(),
+    spreadsheet: ss.getName(),
     sheet: sheet.getName(),
     startCell: 'A3',
     writeRange: RELAYOPS_WRITE_RANGE,
@@ -187,7 +189,7 @@ function validateRelayOpsMorningPayload(payload) {
 }
 
 function relayOpsValidateTemplate() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RELAYOPS_TEMPLATE_SHEET);
+  const sheet = relayOpsSpreadsheet().getSheetByName(RELAYOPS_TEMPLATE_SHEET);
   if (!sheet) throw new Error('Blank template tab "' + RELAYOPS_TEMPLATE_SHEET + '" was not found');
   validateRelayOpsTemplateSignature(sheet);
   const layout = relayOpsTemplateLayout(sheet, 0);
@@ -286,7 +288,7 @@ function validateRelayOpsTemplateSignature(sheet) {
 }
 
 function resolveRelayOpsTarget(payload, createIfMissing) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = relayOpsSpreadsheet();
   const allowedNames = relayOpsAllowedDateNames(payload.operationDate);
   if (!allowedNames.length) throw new Error('A valid operationDate is required before choosing a dated Ops Log tab');
   if (allowedNames.indexOf(payload.sheetName) < 0) throw new Error('Refusing non-date target. Expected ' + allowedNames.join(' or '));
@@ -301,6 +303,10 @@ function resolveRelayOpsTarget(payload, createIfMissing) {
   const created = template.copyTo(ss).setName(payload.sheetName);
   validateRelayOpsTemplateSignature(created);
   return {sheet:created,targetName:created.getName(),wouldCreate:false,created:true};
+}
+
+function relayOpsSpreadsheet() {
+  return SpreadsheetApp.openById(RELAYOPS_SPREADSHEET_ID);
 }
 
 function findRelayOpsMorningSheet(payload) {
