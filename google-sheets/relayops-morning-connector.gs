@@ -8,16 +8,16 @@ const RELAYOPS_WRITE_RANGE = 'A3:M';
 const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
-const RELAYOPS_BUILD = '2026-07-11-main-ops-log-fixed-layout';
+const RELAYOPS_BUILD = '2026-07-11-main-ops-log-live-anchors';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
   {key:'WAVE3', label:'WAVE 3', startRow:33, routeCapacity:13, timeRow:46, separatorRow:47},
   {key:'WAVE4', label:'WAVE 4', startRow:48, routeCapacity:13, timeRow:61, separatorRow:62},
   {key:'WAVE5', label:'WAVE 5', startRow:63, routeCapacity:13, timeRow:76, separatorRow:77},
-  {key:'ADHOCS', label:"ADHOC's", startRow:78, routeCapacity:15, separatorRow:93},
-  {key:'HELPERS', label:'HELPERS', startRow:94, routeCapacity:15, separatorRow:109},
-  {key:'DSP', label:'DSP', startRow:110, routeCapacity:7}
+  {key:'ADHOCS', label:"ADHOC's", startRow:79, routeCapacity:15, separatorRow:94},
+  {key:'HELPERS', label:'HELPERS', startRow:95, routeCapacity:15, separatorRow:110},
+  {key:'DSP', label:'DSP', startRow:111, routeCapacity:6}
 ];
 
 function onOpen() {
@@ -276,7 +276,7 @@ function writeRelayOpsMorningSheet(payload) {
 function validateRelayOpsTemplateSignature(sheet) {
   if (!sheet) throw new Error('OPS LOG sheet was not found');
   if (sheet.getMaxRows() < 116 || sheet.getMaxColumns() < 22) throw new Error('Target tab is not the 116-row, 22-column OPS LOG 2026 layout');
-  const expected = [['A1','WAVE'],['J1','PRE DVIC'],['P1','STOP COUNT'],['U1','PLANNED RTS'],['V1','CLOCK OUT TIME'],['A3','WAVE 1'],['A18','WAVE 2'],['A33','WAVE 3'],['A48','WAVE 4'],['A63','WAVE 5'],['A78',"ADHOC's"],['A94','HELPERS'],['A110','DSP']];
+  const expected = [['A1','WAVE'],['J1','PRE DVIC'],['P1','STOP COUNT'],['U1','PLANNED RTS'],['V1','CLOCK OUT TIME'],['A3','WAVE 1'],['A18','WAVE 2'],['A33','WAVE 3'],['A48','WAVE 4'],['A63','WAVE 5'],['A79',"ADHOC's"],['A95','HELPERS'],['A111','DSP']];
   expected.forEach(function(item) {
     const actual = String(sheet.getRange(item[0]).getDisplayValue() || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     const wanted = String(item[1]).toUpperCase().replace(/[^A-Z0-9]/g, '');
