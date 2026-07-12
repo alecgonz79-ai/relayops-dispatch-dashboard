@@ -199,6 +199,7 @@ const checks = `
   const receiptConnectorHtml = (state.modal = 'morning-sheets-connector', modal());
   if (!receiptConnectorHtml.includes('Sent — verify in Google Sheet') || !receiptConnectorHtml.includes('Needs check')) throw new Error('Morning Sheets connector modal should show fallback verification receipt');
   if (!persist.toString().includes('relayops_morning_sheets_last_receipt') || !persist.toString().includes('relayops_morning_sheets_last_dry_run')) throw new Error('Morning Sheets receipt and dry run should persist locally');
+  if (typeof window.RelayOpsApp?.morningSheetsPayload !== 'function' || window.RelayOpsApp.morningSheetsPayload().rows.length !== payload.rows.length) throw new Error('Public diagnostics API must expose the exact generated morning payload for full dry-run verification');
   state.modal = null;
 `;
 
