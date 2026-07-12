@@ -4882,7 +4882,7 @@ function applySharedWorkspaceState(payload={}) {
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   persist();render();
 }
-window.RelayOpsApp={sharedState:sharedWorkspaceState,applySharedState:applySharedWorkspaceState,operationDate:()=>state.morningOperationDate};
+window.RelayOpsApp={sharedState:sharedWorkspaceState,applySharedState:applySharedWorkspaceState,operationDate:()=>state.morningOperationDate,morningSheetsPayload:()=>morningSheetsConnectorPayload()};
 window.RelayOpsCloud?.on?.(event=>{
   if(event.type==='offline'){state.cloudStatus='setup-required';render();}
   if(event.type==='auth'){state.cloudStatus=event.session?'connecting':'signed-out';state.cloudUser=event.session?.user?.email||'';render();}
