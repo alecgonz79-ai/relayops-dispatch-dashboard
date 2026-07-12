@@ -414,7 +414,7 @@ const checks = `
   const morningHtml = morningSheetPage();
   if (!morningHtml.includes('Three easy steps') || !morningHtml.includes('Send to Sheet') || !morningHtml.includes('Exact merged template')) throw new Error('Quick start guide missing');
   if (!morningHtml.includes('Google Sheets structure proof') || !morningHtml.includes('Every row numbered') || !morningHtml.includes('Black divider columns') || !morningHtml.includes('Exact formatting path')) throw new Error('Morning page should show Google Sheets structure proof');
-  if (!topbar().includes('data-action="share-dispatcher-link"') || DISPATCHER_SHARE_URL !== 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/' || !DISPATCHER_SHARE_TEXT.includes('https://')) throw new Error('Clickable dispatcher share link missing');
+  if (!topbar().includes('data-action="share-dispatcher-link"') || topbar().includes('Upload Excel / CSV') || topbar().includes('data-action="import"') || DISPATCHER_SHARE_URL !== 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/' || !DISPATCHER_SHARE_TEXT.includes('https://')) throw new Error('Top bar should keep the share link and remove the confusing global upload button');
   const details = routeDetailsFromRows([
     ['Route Code','Driver Name','Stop Count','Planned Departure Time'],
     ['CX901','Taylor Driver|Helper Name','177','12:05pm']
