@@ -26,7 +26,7 @@ Serve this folder with any static web server, then open `index.html` through tha
 - Working CSV and `.xlsx` roster import with flexible Amazon-style column mapping
 - Working CSV and Excel-compatible `.xls` export
 - Tab-separated copy for Google Sheets
-- Google Sheets Apps Script connector for exact Morning Sheet handoff into `A3:M`
+- Google Sheets Apps Script connector that maps the dashboard into the original A:V Ops Log without replacing its formatting
 - Responsive desktop, tablet, and mobile layouts
 - Local demo persistence through browser storage
 
@@ -44,7 +44,8 @@ There are three connector types in the Morning Sheet workflow:
    - Deploy it as a Web app with Execute as: Me and access: Anyone with the link.
    - Paste the generated `/exec` URL into Morning Sheet → Google Sheets Connector.
    - Run Test connector, then Dry run, then Send to Google Sheet.
-   - It writes only `A3:M`, freezes row 1, restores A–M headers, formats divider rows, and merges Wave/Pad cells. Columns `N+` are left alone for normal operations data entry.
+   - The dashboard still sends a compact 13-column payload, but the Apps Script maps setup data to `A:H`, stop/package counts to `P:Q`, and Planned RTS to `U`.
+   - It preserves the original A:V headers, widths, colors, checkbox columns J:M, black divider N, and operations-entry columns O/R/S/T/V. Only Wave and Pad merges are rebuilt.
 
 2. Slack / day-of-operations connector — demo/import mode today.
    - Use the dashboard upload/demo flow for now.

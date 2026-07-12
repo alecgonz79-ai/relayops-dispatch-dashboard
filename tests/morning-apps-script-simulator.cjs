@@ -182,43 +182,56 @@ const payload = {
 };
 
 const sheet = new FakeSheet('Morning Operations', 5, 8);
+const legacyHeaders = ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','PRE DVIC','PRE-WHIP','POST DVIC','POST-WHIP','','RESCUED','STOP COUNT','PACKAGE COUNT','PACKAGE RETURNS','END TIME','RTS TIME','PLANNED RTS','CLOCK OUT TIME'];
+legacyHeaders.forEach((value, index) => sheet.setCell(1, index + 1, value));
+sheet.setCell(3, 10, false);
+sheet.setCell(3, 13, false);
+sheet.setCell(3, 15, 'KEEP RESCUED');
+sheet.setCell(3, 18, 'KEEP RETURNS');
+sheet.setCell(3, 19, 'KEEP END');
+sheet.setCell(3, 20, 'KEEP RTS');
+sheet.setCell(3, 22, 'KEEP CLOCK OUT');
+sheet.setFormat(6, 1, 'background', '#050505');
+sheet.setColumnWidths(1, 22, 77);
 const resultContext = runConnectorWithSheet(sheet, payload);
 
 if (resultContext.__ping.writeRange !== 'A3:M' || resultContext.__ping.sheet !== 'Morning Operations') throw new Error('Connector ping should report the target sheet and A3:M write range');
-if (!resultContext.__templateLayout || resultContext.__templateLayout.neededColumns !== 13) throw new Error('Template validation should return A-M layout details');
+if (!resultContext.__templateLayout || resultContext.__templateLayout.neededColumns !== 22) throw new Error('Template validation should require the original A-V Ops Log layout');
 if (!resultContext.__ui.alerts.some(alert => alert.title.includes('RelayOps template'))) throw new Error('Template validation should alert the installer inside Google Sheets');
 if (sheet.getMaxRows() < 122) throw new Error(`Connector should expand rows to at least 122, got ${sheet.getMaxRows()}`);
-if (sheet.getMaxColumns() !== 13) throw new Error(`Connector should expand only to A-M, got ${sheet.getMaxColumns()} columns`);
+if (sheet.getMaxColumns() !== 22) throw new Error(`Connector should expand to the original A-V layout, got ${sheet.getMaxColumns()} columns`);
 if (sheet.frozenRows !== 0) throw new Error('Connector should preserve the sheet freeze setting instead of changing merged-row boundaries');
-if (sheet.getCell(1, 1) !== 'WAVE' || sheet.getCell(1, 13) !== 'PLANNED RTS') throw new Error('Connector should restore A-M headers');
+if (sheet.getCell(1, 10) !== 'PRE DVIC' || sheet.getCell(1, 21) !== 'PLANNED RTS' || sheet.getCell(1, 22) !== 'CLOCK OUT TIME') throw new Error('Connector should preserve the original A-V headers');
 if (sheet.getCell(3, 2) !== 'Driver One' || sheet.getCell(4, 3) !== 'CX202') throw new Error('Connector should write route rows starting at A3');
+if (sheet.getCell(3, 16) !== '188' || sheet.getCell(3, 17) !== '331' || sheet.getCell(3, 21) !== '5:35 PM') throw new Error('Connector should map stop/package/Planned RTS into P/Q/U');
+if (sheet.getCell(3, 10) !== false || sheet.getCell(3, 13) !== false || sheet.getCell(3, 15) !== 'KEEP RESCUED' || sheet.getCell(3, 18) !== 'KEEP RETURNS' || sheet.getCell(3, 19) !== 'KEEP END' || sheet.getCell(3, 20) !== 'KEEP RTS' || sheet.getCell(3, 22) !== 'KEEP CLOCK OUT') throw new Error('Connector overwrote original checkbox or closing-operations columns');
 if (sheet.getCell(5, 1) !== '11:15 (2)') throw new Error('Connector should write wave time under the wave label');
-if (sheet.getFormat(6, 1, 'background') !== '#050505' || sheet.rowHeights.get(6) !== 14) throw new Error('Connector should format separator rows as black numbered dividers');
+if (sheet.getFormat(6, 1, 'background') !== '#050505') throw new Error('Connector should preserve the original black divider formatting');
 if (!sheet.merges.some(merge => merge.row === 3 && merge.col === 1 && merge.numRows === 2 && merge.numCols === 1)) throw new Error('Connector should merge Wave cells for route rows');
 if (!sheet.merges.some(merge => merge.row === 3 && merge.col === 5 && merge.numRows === 3 && merge.numCols === 1)) throw new Error('Connector should merge Pad cells through the time row');
-if (sheet.columnWidths.get(9) !== 18 || sheet.columnWidths.get(12) !== 18) throw new Error('Connector should keep black spacer columns I and L slim');
-if (resultContext.__result.writeRange !== 'A3:M' || resultContext.__result.writtenRange !== 'A3:M6' || resultContext.__result.lastCell !== 'M6') throw new Error('Connector should return exact written range proof without changing A-M write scope');
+if (sheet.columnWidths.get(9) !== 77 || sheet.columnWidths.get(14) !== 77) throw new Error('Connector should preserve every original column width');
+if (resultContext.__result.writeRange !== 'A3:V' || resultContext.__result.writtenRange !== 'A3:V6' || resultContext.__result.lastCell !== 'V6') throw new Error('Connector should return the original A-V template range proof');
 
-const sentinelSheet = new FakeSheet('Morning Operations', 130, 16);
+const sentinelSheet = new FakeSheet('Morning Operations', 130, 22);
 sentinelSheet.setCell(3, 14, 'DO NOT TOUCH N3');
 runConnectorWithSheet(sentinelSheet, payload);
-if (sentinelSheet.getMaxColumns() !== 16) throw new Error('Connector should not shrink a wider Google template');
+if (sentinelSheet.getMaxColumns() !== 22) throw new Error('Connector should retain all A-V template columns');
 if (sentinelSheet.getCell(3, 14) !== 'DO NOT TOUCH N3') throw new Error('Connector should not touch columns N and beyond');
-if (sentinelSheet.breakApartCalls.some(call => call.col + call.numCols - 1 > 13)) throw new Error('Connector should not break apart columns beyond M');
+if (sentinelSheet.breakApartCalls.some(call => ![1,5].includes(call.col) || call.numCols !== 1)) throw new Error('Connector should break apart only Wave A and Pad E merges');
 
-const sheet1Template = new FakeSheet('Sheet1', 130, 16);
+const sheet1Template = new FakeSheet('Sheet1', 130, 22);
 const sheet1Context = runConnectorWithSheet(sheet1Template, payload);
 if (sheet1Context.__result.sheetName !== 'Sheet1' || sheet1Template.getCell(3, 2) !== 'Driver One') {
   throw new Error('Connector should target Sheet1 when the Google template tab has not been renamed');
 }
 
 const datedPayload = { ...payload, operationDate: '2026-07-11', sheetName: '7/11/26', sheetNameCandidates: ['7/11/26', '7.11.26'] };
-const dottedDateSheet = new FakeSheet('7.11.26', 130, 16);
+const dottedDateSheet = new FakeSheet('7.11.26', 130, 22);
 const datedContext = runConnectorWithSheet(dottedDateSheet, datedPayload);
 if (datedContext.__result.sheetName !== '7.11.26' || dottedDateSheet.getCell(3, 2) !== 'Driver One') throw new Error('Connector should match the selected operation date using dot-formatted tabs');
 let missingDateRejected = false;
 try {
-  runConnectorWithSheet(new FakeSheet('7.10.26', 130, 16), datedPayload);
+  runConnectorWithSheet(new FakeSheet('7.10.26', 130, 22), datedPayload);
 } catch (error) {
   missingDateRejected = String(error.message).includes('No operations tab found for 2026-07-11') && String(error.message).includes('Nothing was written');
 }
@@ -227,7 +240,7 @@ if (!missingDateRejected) throw new Error('Connector must stop instead of writin
 const badPayload = { ...payload, writeRange: 'A3:N' };
 let rejected = false;
 try {
-  runConnectorWithSheet(new FakeSheet('Morning Operations', 130, 16), badPayload);
+  runConnectorWithSheet(new FakeSheet('Morning Operations', 130, 22), badPayload);
 } catch (error) {
   rejected = String(error.message).includes('Write range must be A3:M');
 }

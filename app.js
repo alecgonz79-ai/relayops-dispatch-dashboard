@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 118018)
-Total output lines: 4822
+Warning: truncated output (original token count: 118127)
+Total output lines: 4825
 
 const ICONS = {
   dashboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
@@ -508,7 +508,7 @@ function morningSheetsBridgeHtml(payload=morningSheetsConnectorPayload()) {
   const waveCount=new Set(rows.map(row=>row.wave).filter(Boolean)).size;
   const receipt=state.morningSheetsLastReceipt;
   const receiptText=receipt?`${receipt.status==='confirmed'?'Google confirmed':'Sent — verify'} ${receipt.writeRange||payload.writeRange}`:'Not sent yet';
-  return `<section class="morning-sheet-bridge card ${connected?'connected':'setup'}" aria-label="Google Sheets bridge"><div class="bridge-route"><span class="bridge-node source"><b>1</b><strong>Filtered waves</strong><small>${esc(morningFilterScopeText())}<br>${routeCount} routes · ${waveCount} wave${waveCount===1?'':'s'}</small></span><i>→</i><span class="bridge-node check"><b>2</b><strong>Automatic check</strong><small>${esc(proof.range)} · ${payload.sections.length} merge sections<br>Dry run happens before every send</small></span><i>→</i><span class="bridge-node destination"><b>3</b><strong>Google Ops Log</strong><small>${esc(payload.sheetName)} / Sheet1<br>${esc(receiptText)}</small></span></div><div class="bridge-actions"><button class="btn primary bridge-send" data-action="sync-filtered-morning-to-sheets">${ICONS.link} ${connected?'Send filtered waves':'Connect Google Sheet'}</button><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open Google Sheet</a><button class="btn" data-action="morning-sheets-connector">${connected?'Connector settings':'One-time setup'}</button></div><p>${connected?'One click checks the exact visible rows, runs a Google dry run, then writes only A3:M. Columns N+ remain untouched.':'Connect the Apps Script /exec URL once. After that, every dispatcher can send the currently filtered waves with one button.'}</p></section>`;
+  return `<section class="morning-sheet-bridge card ${connected?'connected':'setup'}" aria-label="Google Sheets bridge"><div class="bridge-route"><span class="bridge-node source"><b>1</b><strong>Filtered waves</strong><small>${esc(morningFilterScopeText())}<br>${routeCount} routes · ${waveCount} wave${waveCount===1?'':'s'}</small></span><i>→</i><span class="bridge-node check"><b>2</b><strong>Automatic check</strong><small>${esc(proof.range)} · ${payload.sections.length} merge sections<br>Dry run happens before every send</small></span><i>→</i><span class="bridge-node destination"><b>3</b><strong>Google Ops Log</strong><small>${esc(payload.sheetName)} / Sheet1<br>${esc(receiptText)}</small></span></div><div class="bridge-actions"><button class="btn primary bridge-send" data-action="sync-filtered-morning-to-sheets">${ICONS.link} ${connected?'Send filtered waves':'Connect Google Sheet'}</button><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open Google Sheet</a><button class="btn" data-action="morning-sheets-connector">${connected?'Connector settings':'One-time setup'}</button></div><p>${connected?'One click maps setup data into A:H, counts into P:Q, and Planned RTS into U while preserving the original A:V template formatting and operations columns.':'Connect the Apps Script /exec URL once. After that, every dispatcher can send the currently filtered waves with one button.'}</p></section>`;
 }
 
 function morningSheetPage() {
@@ -859,8 +859,7 @@ function parkingBatteryEditor() {
 }
 function parkingModeControls() {
   const modes=[['auto','Auto','Reset to base layout'],['assisted','Assisted','Edit vans + battery'],['manual','Manual','Add/remove custom spots']];
-  return `<div class="parking-mode-controls">${modes.map(([mode,label,detail])=>`<button class="${state.parkingMode===mode?'active':''}" data-action="set-parking-mode" data-mode="${mode}"><b>${…68018 tokens truncated…:r.staging,van:'Unassigned',device:'Unassigned',stops:r.stops,packages:r.packages,progress:0,delta:0,status:r.driver==='Unassigned driver'?'Needs review':'Assigned',rescue:'—'}));
-    state.lastImportExcluded=excluded;state.modal=null;state.page='morning';state.morningFilters={wave:'all',staging:'all',pad:'all'};state.rosterPublished=false;persist();render();return toast(`${state.morningRoutes.length} ${state.dspCode} routes loaded · ${excluded} other-DSP routes excluded`);
+  return `<div class="parking-mode-controls">${modes.map(([mode,label,detail])=>`<button class="${state.parkingMode===mode?'active':''}" data-action="set-p…68127 tokens truncated…${state.morningRoutes.length} ${state.dspCode} routes loaded · ${excluded} other-DSP routes excluded`);
   }
   state.routes=f.rows.map((r,i)=>({route:r[ix.route]||`IMP-${i+1}`,driver:firstDriverName(r[ix.driver]||'Unassigned driver'),id:`DA-${1100+i}`,wave:r[ix.wave]||'Wave pending',staging:r[ix.staging]||'—',van:r[ix.van]||'Unassigned',device:r[ix.device]||'Unassigned',stops:Number(r[ix.stops])||0,packages:Number(r[ix.packages])||0,progress:0,delta:0,status:(r[ix.driver]&&r[ix.van])?'Assigned':'Needs review',rescue:'—'}));
   state.modal=null;state.page='roster';state.rosterPublished=false;persist();render();toast(`${state.routes.length} routes imported — review before publishing`);
@@ -1816,8 +1815,11 @@ async function syncFilteredMorningToSheets() {
   }
 }
 async function copyMorningAppsScript() {
-  const ok=await writeClipboardText(morningSheetsAppsScript());
-  toast(ok?'Apps Script CODE copied — delete myFunction, then paste into the empty Apps Script editor':'Clipboard blocked — download the .gs script file instead',ok?'':'error');
+  let code='';
+  try { const response=await fetch(`${MORNING_APPS_SCRIPT_URL}?v=20260711-legacy-ops-log`,{cache:'no-store'});if(response.ok)code=await response.text(); } catch(error) {}
+  if(!code){toast('Could not load the revised script — use Download .gs file instead','error');return false;}
+  const ok=await writeClipboardText(code);
+  toast(ok?'Revised original-template Apps Script copied — replace the old code, save, and deploy a new version':'Clipboard blocked — download the .gs script file instead',ok?'':'error');
   return ok;
 }
 async function copyMorningSheetsPayload() {
@@ -1835,7 +1837,7 @@ function morningSheetsSetupChecklist() {
     '3. Paste the RelayOps Apps Script from the dashboard, or upload/download relayops-morning-connector.gs.',
     '4. Save the Apps Script project.',
     '5. Reload the Google Sheet and confirm a RelayOps menu appears.',
-    '5a. In the RelayOps menu, click Validate template layout. Confirm it says the template is ready for A3:M.',
+    '5a. In the RelayOps menu, click Validate template layout. Confirm it recognizes the original A:V Ops Log.',
     '6. In Apps Script, click Deploy > New deployment > Web app.',
     '7. Set Execute as: Me.',
     '8. Set Who has access: Anyone with the link.',
@@ -1847,7 +1849,7 @@ function morningSheetsSetupChecklist() {
     '14. If dry run confirms, click Send now.',
     '15. Check the Last confirmed Google write receipt: sheet tab, exact written range, last cell, row count, and sections.',
     '',
-    'Expected target: Morning Operations tab, protected write scope A3:M only, exact written range like A3:M99, 13 A-M columns. Columns N+ stay untouched.'
+    'Expected target: original A:V Ops Log. RelayOps writes A:H, P:Q, and U only. J:M checkboxes and O/R/S/T/V operations cells stay untouched.'
   ].join('\n');
 }
 async function copyMorningSheetsSetup() {
@@ -1858,15 +1860,15 @@ async function copyMorningSheetsSetup() {
 function morningSheetsVerificationChecklist(payload=morningSheetsConnectorPayload()) {
   const proof=morningSheetsHandoffProof(payload);
   const firstSection=payload.sections?.[0]||{};
-  const lastCell=proof.range.split(':')[1] || 'M';
+  const lastCell=`V${payload.rows.length+2}`;
   return [
     'RelayOps Google Sheet Send Verification',
     '',
     `Template: ${MORNING_TEMPLATE_URL}`,
     `Target tab: ${payload.sheetName}`,
-    `Expected write range: ${proof.range}`,
+    `Expected template range: A3:${lastCell}`,
     `Expected last cell: ${lastCell}`,
-    'Protected write scope: A3:M only',
+    'Protected mapping: A:H setup · P:Q counts · U Planned RTS',
     `Rows sent: ${payload.rows.length}`,
     `Wave/Pad merge sections: ${payload.sections.length}`,
     `Black divider rows: ${proof.dividerRows || 'none'}`,
@@ -1874,14 +1876,14 @@ function morningSheetsVerificationChecklist(payload=morningSheetsConnectorPayloa
     'After Send Now:',
     `1. Open the Google Sheet template and confirm the ${payload.sheetName} tab is selected.`,
     '2. Row 1 should stay frozen while scrolling.',
-    '3. Headers A1:M1 should read: WAVE, DRIVER, ROUTE, STAGING, PAD, EV, DEVICE, PORTABLE, blank I, STOP COUNT, PACKAGE COUNT, blank L, PLANNED RTS.',
+    '3. Confirm the original A:V headers, widths, colors, and checkbox columns did not change.',
     `4. Confirm the first route starts at A${firstSection.startRow||3} and data ends at ${lastCell}.`,
     '5. Confirm Wave cells in column A and Pad cells in column E are merged like the template.',
     '6. Confirm black divider rows are still black and row-numbered.',
-    '7. Confirm columns I and L are slim black spacer columns.',
-    '8. Confirm Planned RTS column M is purple.',
-    '9. Confirm columns N and beyond were not changed.',
-    `10. Confirm the RelayOps receipt shows Range ${proof.range} and Last cell ${lastCell}.`,
+    '7. Confirm J:M checkboxes are still present and N remains the black divider.',
+    '8. Confirm Stop Count is in P, Package Count is in Q, and Planned RTS is in purple column U.',
+    '9. Confirm O, R, S, T, and V were not changed.',
+    `10. Confirm the RelayOps receipt shows the A:V template range and Last cell ${lastCell}.`,
     '',
     'If RelayOps showed “Sent — verify in Google Sheet,” complete this checklist before launch.'
   ].join('\n');
@@ -1910,8 +1912,8 @@ async function testMorningSheetsConnector() {
   try {
     const response=await fetch(connectorUrlWithPing(endpoint),{method:'GET'});
     const text=await response.text();
-    if(!response.ok||!/relayops-morning-v1/.test(text)||!/A3:M/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
-    if(!/2026-07-10-dated-tab/.test(text))throw new Error('Connector deployment is outdated. In Apps Script choose Deploy → Manage deployments → Edit → New version → Deploy.');
+    if(!response.ok||!/relayops-morning-v1/.test(text)||!/A3:V/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
+    if(!/2026-07-11-legacy-ops-log/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the revised original-template version, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
     state.morningSheetsLastError='';
     persist(); render();
     toast('Google Sheets connector confirmed');

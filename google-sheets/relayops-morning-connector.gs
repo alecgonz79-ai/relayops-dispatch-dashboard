@@ -5,7 +5,9 @@ const RELAYOPS_START_ROW = 3;
 const RELAYOPS_START_COL = 1;
 const RELAYOPS_COLS = 13;
 const RELAYOPS_WRITE_RANGE = 'A3:M';
-const RELAYOPS_BUILD = '2026-07-10-dated-tab';
+const RELAYOPS_TEMPLATE_COLS = 22;
+const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
+const RELAYOPS_BUILD = '2026-07-11-legacy-ops-log';
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -36,6 +38,7 @@ function doGet(e) {
     sheet: sheet.getName(),
     startCell: 'A3',
     writeRange: RELAYOPS_WRITE_RANGE,
+    templateRange: RELAYOPS_TEMPLATE_RANGE,
     layout: layout,
     checkedAt: new Date().toISOString()
   });
@@ -57,8 +60,8 @@ function doPost(e) {
         sheet: sheet.getName(),
         startCell: payload.startCell,
         writeRange: payload.writeRange,
-        writtenRange: 'A3:M' + ((payload.rows || []).length + 2),
-        lastCell: 'M' + ((payload.rows || []).length + 2),
+        writtenRange: 'A3:V' + ((payload.rows || []).length + 2),
+        lastCell: 'V' + ((payload.rows || []).length + 2),
         rows: (payload.rows || []).length,
         sections: (payload.sections || []).length,
         layout: layout,
@@ -141,11 +144,12 @@ function relayOpsValidateTemplate() {
   SpreadsheetApp.getUi().alert(
     ready ? 'RelayOps template layout is ready' : 'RelayOps template needs review',
     'Sheet tab: ' + sheet.getName() +
-      '\nWrite range: ' + RELAYOPS_WRITE_RANGE +
+      '\nDashboard payload: ' + RELAYOPS_WRITE_RANGE +
+      '\nOriginal template: ' + RELAYOPS_TEMPLATE_RANGE +
       '\nRows available: ' + layout.maxRows + ' / needs ' + layout.neededRows +
       '\nColumns available: ' + layout.maxColumns + ' / needs ' + layout.neededColumns +
       '\nFrozen rows: ' + layout.frozenRows +
-      '\nStatus: ' + (ready ? 'Ready for Dry run / Send' : 'Dry run can auto-expand rows/columns, then Send can format A:M'),
+      '\nStatus: ' + (ready ? 'Ready for Dry run / Send' : 'The original Ops Log needs columns A through V'),
     SpreadsheetApp.getUi().ButtonSet.OK
   );
   return layout;
@@ -157,9 +161,9 @@ function relayOpsTemplateLayout(sheet, sentRows) {
     maxRows: sheet.getMaxRows(),
     maxColumns: sheet.getMaxColumns(),
     neededRows: neededRows,
-    neededColumns: RELAYOPS_COLS,
+    neededColumns: RELAYOPS_TEMPLATE_COLS,
     hasEnoughRows: sheet.getMaxRows() >= neededRows,
-    hasEnoughColumns: sheet.getMaxColumns() >= RELAYOPS_COLS,
+    hasEnoughColumns: sheet.getMaxColumns() >= RELAYOPS_TEMPLATE_COLS,
     frozenRows: sheet.getFrozenRows()
   };
 }
@@ -167,7 +171,7 @@ function relayOpsTemplateLayout(sheet, sentRows) {
 function ensureRelayOpsTemplateCapacity(sheet, rowCount) {
   const layout = relayOpsTemplateLayout(sheet, rowCount);
   if (!layout.hasEnoughRows) sheet.insertRowsAfter(sheet.getMaxRows(), layout.neededRows - sheet.getMaxRows());
-  if (!layout.hasEnoughColumns) sheet.insertColumnsAfter(sheet.getMaxColumns(), RELAYOPS_COLS - sheet.getMaxColumns());
+  if (!layout.hasEnoughColumns) sheet.insertColumnsAfter(sheet.getMaxColumns(), RELAYOPS_TEMPLATE_COLS - sheet.getMaxColumns());
 }
 
 function freezeRelayOpsHeader(sheet) {
@@ -182,77 +186,34 @@ function freezeRelayOpsHeader(sheet) {
 function writeRelayOpsMorningSheet(payload) {
   const validation = validateRelayOpsMorningPayload(payload);
   if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = findRelayOpsMorningSheet(payload);
   const rows = payload.rows || [];
-  const rowTypes = payload.rowTypes || [];
-  const headers = (payload.headers || []).slice(0, RELAYOPS_COLS);
   if (!rows.length) throw new Error('No morning rows sent');
-  while (headers.length < RELAYOPS_COLS) headers.push('');
   const rowCount = Math.max(rows.length, 120);
   ensureRelayOpsTemplateCapacity(sheet, rows.length);
-  const target = sheet.getRange(RELAYOPS_START_ROW, RELAYOPS_START_COL, rowCount, RELAYOPS_COLS);
-  target.breakApart();
-  target.clearContent();
-  target.clearFormat();
-  target.setBackground('#ffffff').setFontColor('#111111').setFontWeight('normal')
-    .setFontSize(10).setTextRotation(0)
-    .setHorizontalAlignment('center').setVerticalAlignment('middle')
-    .setBorder(true, true, true, true, true, true, '#111111', SpreadsheetApp.BorderStyle.SOLID);
-  sheet.getRange(RELAYOPS_START_ROW, RELAYOPS_START_COL, rows.length, RELAYOPS_COLS).setValues(rows);
-
-  freezeRelayOpsHeader(sheet);
-  sheet.getRange(1, 1, 1, RELAYOPS_COLS).setValues([headers])
-    .setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle')
-    .setBorder(true, true, true, true, true, true, '#111111', SpreadsheetApp.BorderStyle.SOLID);
-  sheet.getRange(1, 1).setBackground('#b4a7d6');
-  sheet.getRange(1, 2, 1, 7).setBackground('#86e8ed').setFontColor('#000000');
-  sheet.getRange(1, 9).setBackground('#050505').setFontColor('#050505');
-  sheet.getRange(1, 10, 1, 2).setBackground('#86e8ed').setFontColor('#000000');
-  sheet.getRange(1, 12).setBackground('#050505').setFontColor('#050505');
-  sheet.getRange(1, 13).setBackground('#b4a7d6').setFontColor('#000000');
-  sheet.setRowHeight(1, 28);
-  sheet.setColumnWidths(1, 1, 75);
-  sheet.setColumnWidths(2, 1, 132);
-  sheet.setColumnWidths(3, 2, 74);
-  sheet.setColumnWidths(5, 1, 76);
-  sheet.setColumnWidths(6, 3, 76);
-  sheet.setColumnWidths(9, 1, 18);
-  sheet.setColumnWidths(10, 2, 94);
-  sheet.setColumnWidths(12, 1, 18);
-  sheet.setColumnWidths(13, 1, 92);
-
-  rows.forEach(function(row, i) {
-    const sheetRow = RELAYOPS_START_ROW + i;
-    const rowType = rowTypes[i] || '';
-    if (rowType === 'separator') {
-      sheet.getRange(sheetRow, RELAYOPS_START_COL, 1, RELAYOPS_COLS)
-        .setBackground('#050505').setFontColor('#050505').setBorder(true, true, true, true, true, true, '#050505', SpreadsheetApp.BorderStyle.SOLID);
-      sheet.setRowHeight(sheetRow, 14);
-    } else {
-      sheet.getRange(sheetRow, 1, 1, 8).setBackground('#eef3ff');
-      sheet.getRange(sheetRow, 9, 1, 1).setBackground('#050505').setFontColor('#050505');
-      sheet.getRange(sheetRow, 10, 1, 2).setBackground('#eef3ff');
-      sheet.getRange(sheetRow, 12, 1, 1).setBackground('#050505').setFontColor('#050505');
-      sheet.getRange(sheetRow, 13, 1, 1).setBackground('#b4a7d6');
-      if (rowType === 'time') sheet.getRange(sheetRow, 1, 1, RELAYOPS_COLS)
-        .setFontSize(10).setTextRotation(0).setFontWeight('bold').setHorizontalAlignment('center');
-      sheet.setRowHeight(sheetRow, rowType === 'blank' ? 18 : 21);
-    }
-  });
+  // Preserve the original A:V Ops Log formatting. Only clear and write the
+  // dashboard-owned cells: A:H, P:Q, and U. J:M checkboxes, N/O dividers,
+  // returns, end/RTS/clock-out columns, widths, colors, and validations remain untouched.
+  sheet.getRange(RELAYOPS_START_ROW, 1, rowCount, 1).breakApart();
+  sheet.getRange(RELAYOPS_START_ROW, 5, rowCount, 1).breakApart();
+  sheet.getRange(RELAYOPS_START_ROW, 1, rowCount, 8).clearContent();
+  sheet.getRange(RELAYOPS_START_ROW, 16, rowCount, 2).clearContent();
+  sheet.getRange(RELAYOPS_START_ROW, 21, rowCount, 1).clearContent();
+  sheet.getRange(RELAYOPS_START_ROW, 1, rows.length, 8).setValues(rows.map(function(row) { return row.slice(0, 8); }));
+  sheet.getRange(RELAYOPS_START_ROW, 16, rows.length, 1).setValues(rows.map(function(row) { return [row[9]]; }));
+  sheet.getRange(RELAYOPS_START_ROW, 17, rows.length, 1).setValues(rows.map(function(row) { return [row[10]]; }));
+  sheet.getRange(RELAYOPS_START_ROW, 21, rows.length, 1).setValues(rows.map(function(row) { return [row[12]]; }));
 
   (payload.sections || []).forEach(function(section) {
     const start = Number(section.startRow);
     const count = Number(section.rowCount);
     if (!start || !count) return;
-    sheet.getRange(start, 1, count, 1).merge().setValue(section.label || '')
-      .setFontSize(26).setFontWeight('bold').setTextRotation(90).setBackground('#eef3ff');
-    sheet.getRange(start + count, 1).setValue(section.waveTime || '').setFontWeight('bold').setBackground('#eef3ff');
-    sheet.getRange(start, 5, count + 1, 1).merge().setValue(section.pad || '')
-      .setFontSize(22).setFontWeight('bold').setBackground('#eef3ff');
+    sheet.getRange(start, 1, count, 1).merge().setValue(section.label || '');
+    sheet.getRange(start + count, 1).setValue(section.waveTime || '');
+    sheet.getRange(start, 5, count + 1, 1).merge().setValue(section.pad || '');
   });
   const lastRow = rows.length + RELAYOPS_START_ROW - 1;
-  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_WRITE_RANGE, writtenRange: 'A3:M' + lastRow, lastCell: 'M' + lastRow};
+  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V' + lastRow, lastCell: 'V' + lastRow};
 }
 
 function findRelayOpsMorningSheet(payload) {
