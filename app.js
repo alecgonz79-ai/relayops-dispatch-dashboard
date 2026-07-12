@@ -53,8 +53,8 @@ const MORNING_TEMPLATE_SHEET_CANDIDATES = [MORNING_TEMPLATE_SHEET_NAME];
 const MORNING_APPS_SCRIPT_URL = 'google-sheets/relayops-morning-connector.gs';
 
 function defaultOperationDate() {
-  const date=new Date();date.setDate(date.getDate()+1);
-  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 function operationDateTabNames(value='') {
   const parts=String(value||'').split('-').map(Number);
@@ -237,7 +237,7 @@ let state = {
   morningSheetsLastError: localStorage.getItem('relayops_morning_sheets_last_error') || '',
   morningSheetsLastReceipt: JSON.parse(localStorage.getItem('relayops_morning_sheets_last_receipt') || 'null'),
   morningSheetsLastDryRun: localStorage.getItem('relayops_morning_sheets_last_dry_run') || '',
-  morningOperationDate: localStorage.getItem('relayops_morning_operation_date') || defaultOperationDate(),
+  morningOperationDate: defaultOperationDate(),
   fleetNameOverrides: JSON.parse(localStorage.getItem('relayops_fleet_name_overrides') || 'null') || {},
   editingFleetVin: '',
   fleetAmazonUrl: localStorage.getItem('relayops_fleet_amazon_url') || AMAZON_FLEET_PORTAL_URL,
@@ -4162,7 +4162,7 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-12-values-only-transfer';
+const RELAYOPS_BUILD = '2026-07-12-current-date-number-fix';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -4411,6 +4411,7 @@ function writeRelayOpsMorningSheet(payload) {
     sheet.getRange(layout.startRow, 2, layout.routeCapacity, 3).clearContent();
     sheet.getRange(layout.startRow, 6, layout.routeCapacity, 3).clearContent();
     sheet.getRange(layout.startRow, 16, layout.routeCapacity, 2).clearContent();
+    sheet.getRange(layout.startRow, 16, layout.routeCapacity, 2).setNumberFormat('0');
     sheet.getRange(layout.startRow, 21, layout.routeCapacity, 1).clearContent();
     sheet.getRange(layout.startRow, 1).setValue(layout.label);
     if (layout.timeRow) sheet.getRange(layout.timeRow, 1).clearContent();
@@ -4556,7 +4557,7 @@ async function syncFilteredMorningToSheets() {
 }
 async function copyMorningAppsScript() {
   const code=morningSheetsAppsScript();
-  if(!code.includes('2026-07-12-values-only-transfer')){toast('The revised Apps Script is still loading — refresh the dashboard and try again','error');return false;}
+  if(!code.includes('2026-07-12-current-date-number-fix')){toast('The revised Apps Script is still loading — refresh the dashboard and try again','error');return false;}
   const ok=await writeClipboardText(code);
   toast(ok?'Revised original-template Apps Script copied — replace the old code, save, and deploy a new version':'Clipboard blocked — download the .gs script file instead',ok?'':'error');
   return ok;
@@ -4652,7 +4653,7 @@ async function testMorningSheetsConnector() {
     const response=await fetch(connectorUrlWithPing(endpoint),{method:'GET'});
     const text=await response.text();
     if(!response.ok||!/relayops-morning-v1/.test(text)||!/A3:V/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
-    if(!/2026-07-12-values-only-transfer/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the values-only OPS LOG connector, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
+    if(!/2026-07-12-current-date-number-fix/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the current-date OPS LOG connector, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
     state.morningSheetsLastError='';
     persist(); render();
     toast('Google Sheets connector confirmed');
