@@ -4489,7 +4489,7 @@ async function syncFilteredMorningToSheets() {
 }
 async function copyMorningAppsScript() {
   let code='';
-  try { const response=await fetch(`${MORNING_APPS_SCRIPT_URL}?v=20260711-main-ops-log-live-anchors`,{cache:'no-store'});if(response.ok)code=await response.text(); } catch(error) {}
+  try { const response=await fetch(`${MORNING_APPS_SCRIPT_URL}?v=20260711-main-ops-log-id-locked`,{cache:'no-store'});if(response.ok)code=await response.text(); } catch(error) {}
   if(!code){toast('Could not load the revised script — use Download .gs file instead','error');return false;}
   const ok=await writeClipboardText(code);
   toast(ok?'Revised original-template Apps Script copied — replace the old code, save, and deploy a new version':'Clipboard blocked — download the .gs script file instead',ok?'':'error');
@@ -4586,7 +4586,7 @@ async function testMorningSheetsConnector() {
     const response=await fetch(connectorUrlWithPing(endpoint),{method:'GET'});
     const text=await response.text();
     if(!response.ok||!/relayops-morning-v1/.test(text)||!/A3:V/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
-    if(!/2026-07-11-main-ops-log-live-anchors/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the revised OPS LOG 2026 fixed-layout version, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
+    if(!/2026-07-11-main-ops-log-id-locked/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the revised OPS LOG 2026 fixed-layout version, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
     state.morningSheetsLastError='';
     persist(); render();
     toast('Google Sheets connector confirmed');
