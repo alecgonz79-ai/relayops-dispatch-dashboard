@@ -26,6 +26,10 @@ class FakeRange {
     this.eachCell((row, col) => this.sheet.setCell(row, col, ''));
     return this;
   }
+  setNumberFormat(value) {
+    this.eachCell((row, col) => this.sheet.setFormat(row, col, 'numberFormat', value));
+    return this;
+  }
   clearFormat() {
     this.eachCell((row, col) => this.sheet.formats.delete(`${row}:${col}`));
     return this;
@@ -244,6 +248,7 @@ if (sheet.frozenRows !== 2) throw new Error('Connector should preserve the templ
 if (sheet.getCell(1, 10) !== 'PRE DVIC' || sheet.getCell(1, 21) !== 'PLANNED RTS' || sheet.getCell(1, 22) !== 'CLOCK OUT TIME') throw new Error('Connector should preserve the original A-V headers');
 if (sheet.getCell(3, 2) !== 'Driver One' || sheet.getCell(4, 3) !== 'CX202') throw new Error('Connector should write route rows starting at A3');
 if (sheet.getCell(3, 16) !== '188' || sheet.getCell(3, 17) !== '331' || sheet.getCell(3, 21) !== '5:35 PM') throw new Error('Connector should map stop/package/Planned RTS into P/Q/U');
+if (sheet.formats.get('3:16')?.numberFormat !== '0' || sheet.formats.get('3:17')?.numberFormat !== '0') throw new Error('Stop and Package Count must remain numeric instead of displaying as times');
 if (sheet.getCell(3, 10) !== false || sheet.getCell(3, 13) !== false || sheet.getCell(3, 15) !== 'KEEP RESCUED' || sheet.getCell(3, 18) !== 'KEEP RETURNS' || sheet.getCell(3, 19) !== 'KEEP END' || sheet.getCell(3, 20) !== 'KEEP RTS' || sheet.getCell(3, 22) !== 'KEEP CLOCK OUT') throw new Error('Connector overwrote original checkbox or closing-operations columns');
 if (sheet.getCell(16, 1) !== '11:15 (2)') throw new Error('Connector should write Wave 1 time into fixed row 16');
 if (sheet.getCell(18, 1) !== 'WAVE 2' || sheet.getCell(33, 1) !== 'WAVE 3' || sheet.getCell(79, 1) !== "ADHOC's" || sheet.getCell(111, 1) !== 'DSP') throw new Error('Connector should preserve fixed OPS LOG 2026 section anchors');
