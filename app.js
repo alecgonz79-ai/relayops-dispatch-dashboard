@@ -3911,7 +3911,7 @@ async function writeClipboardTable(text,html) {
 function clipboardHtmlShell(tableHtml) {
   return `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableHtml}</body></html>`;
 }
-const morningClipboardColumnWidths=[76,210,70,82,78,70,70,70,18,76,76,76,76,18,72,86,86,106,96,96,96,96];
+const morningClipboardColumnWidths=[56,149,52,43,64,34,51,54,15,55,59,59,58,15,53,65,69,87,74,43,67,75];
 function morningClipboardColgroup(left=0,right=morningClipboardColumnWidths.length-1) {
   const widths=morningClipboardColumnWidths.slice(Math.max(0,left),Math.min(morningClipboardColumnWidths.length-1,right)+1);
   return `<colgroup>${widths.map(width=>`<col style="width:${width}px;min-width:${width}px">`).join('')}</colgroup>`;
