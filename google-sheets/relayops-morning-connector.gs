@@ -9,7 +9,7 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-12-copy-mode-test-workbook';
+const RELAYOPS_BUILD = '2026-07-12-cell-merge-repair';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -255,6 +255,7 @@ function writeRelayOpsMorningSheet(payload) {
   // Existing merges, headers, widths, colors, checkboxes J:M, divider N,
   // and operations columns O/R/S/T/V remain untouched.
   RELAYOPS_LAYOUT.forEach(function(layout) {
+    relayOpsPrepareImportedCells(sheet, layout);
     sheet.getRange(layout.startRow, 2, layout.routeCapacity, 3).clearContent();
     sheet.getRange(layout.startRow, 6, layout.routeCapacity, 3).clearContent();
     sheet.getRange(layout.startRow, 16, layout.routeCapacity, 2).clearContent();
@@ -278,6 +279,22 @@ function writeRelayOpsMorningSheet(payload) {
     if (layout.timeRow) sheet.getRange(layout.timeRow, 1).setValue(section.waveTime || '');
   });
   return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V116', lastCell: 'V116', createdSheet: target.created};
+}
+
+function relayOpsPrepareImportedCells(sheet, layout) {
+  // Wave (A) and Pad (E) are intentionally merged in the original template.
+  // Imported data columns must always remain individual cells so long names
+  // cannot merge into Route/Staging or Device/Portable values.
+  [[2, 3], [6, 3], [16, 2], [21, 1]].forEach(function(block) {
+    const range = sheet.getRange(layout.startRow, block[0], layout.routeCapacity, block[1]);
+    try { range.getMergedRanges().forEach(function(merged) { merged.breakApart(); }); } catch (error) {}
+    try { range.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP); } catch (error) {}
+    try { range.setVerticalAlignment('middle'); } catch (error) {}
+  });
+  try { sheet.getRange(layout.startRow, 2, layout.routeCapacity, 1).setFontSize(9).setHorizontalAlignment('center'); } catch (error) {}
+  try { sheet.getRange(layout.startRow, 3, layout.routeCapacity, 1).setFontSize(9).setHorizontalAlignment('center'); } catch (error) {}
+  try { sheet.getRange(layout.startRow, 4, layout.routeCapacity, 1).setFontSize(8).setHorizontalAlignment('center'); } catch (error) {}
+  try { sheet.getRange(layout.startRow, 6, layout.routeCapacity, 3).setFontSize(9).setHorizontalAlignment('center'); } catch (error) {}
 }
 
 function validateRelayOpsTemplateSignature(sheet) {
