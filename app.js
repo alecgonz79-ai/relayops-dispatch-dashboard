@@ -805,7 +805,8 @@ function parkingChargerButton(key,label='Charger') {
 }
 function parkingChargerColumn() {
   const rows=Math.max(22,parkingSlots('crosswalk').length);
-  return `<div class="parking-crosswalk charger-column"><div class="tent-icon">⛺</div><strong>TENT</strong><div class="parking-charger-pairs">${Array.from({length:rows},(_,index)=>`<div class="charger-pair">${parkingChargerButton(`middle-${index+1}-left`,`Left charger ${index+1}`)}${parkingChargerButton(`middle-${index+1}-right`,`Right charger ${index+1}`)}</div>`).join('')}</div></div>`;
+  const tent=`<div class="parking-tent-square" title="Operations tent"><svg viewBox="0 0 64 52" aria-hidden="true"><path d="M32 5 57 45H7L32 5Z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="M32 5v40M20 45l12-18 12 18" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg><span>TENT</span></div>`;
+  return `<div class="parking-crosswalk charger-column"><div class="parking-charger-pairs">${Array.from({length:rows},(_,index)=>index===3?tent:`<div class="charger-pair">${parkingChargerButton(`middle-${index+1}-left`,`Left charger ${index+1}`)}${parkingChargerButton(`middle-${index+1}-right`,`Right charger ${index+1}`)}</div>`).join('')}</div></div>`;
 }
 function parkingSlotInput(slot) {
   const tone=slot.kind==='crosswalk'?' crosswalk-slot':slot.kind==='overflow'?' overflow-slot':slot.kind==='street'?' street-slot':'';
