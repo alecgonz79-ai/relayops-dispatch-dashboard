@@ -160,7 +160,7 @@ function createLegacyTemplate(name = 'OPS LOG 2026') {
   const sheet = new FakeSheet(name, 116, 22);
   const headers = ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','PRE DVIC','PRE-WHIP','POST DVIC','POST-WHIP','','RESCUED','STOP COUNT','PACKAGE COUNT','PACKAGE RETURNS','END TIME','RTS TIME','PLANNED RTS','CLOCK OUT TIME'];
   headers.forEach((value, index) => sheet.setCell(1, index + 1, value));
-  [[3,'WAVE 1'],[18,'WAVE 2'],[33,'WAVE 3'],[48,'WAVE 4'],[63,'WAVE 5'],[78,"ADHOC's"],[94,'HELPERS'],[110,'DSP']].forEach(([row, value]) => sheet.setCell(row, 1, value));
+  [[3,'WAVE 1'],[18,'WAVE 2'],[33,'WAVE 3'],[48,'WAVE 4'],[63,'WAVE 5'],[79,"ADHOC's"],[95,'HELPERS'],[111,'DSP']].forEach(([row, value]) => sheet.setCell(row, 1, value));
   for (let row = 3; row <= 116; row += 1) for (let col = 10; col <= 13; col += 1) sheet.setCell(row, col, false);
   sheet.frozenRows = 2;
   return sheet;
@@ -242,7 +242,7 @@ if (sheet.getCell(3, 2) !== 'Driver One' || sheet.getCell(4, 3) !== 'CX202') thr
 if (sheet.getCell(3, 16) !== '188' || sheet.getCell(3, 17) !== '331' || sheet.getCell(3, 21) !== '5:35 PM') throw new Error('Connector should map stop/package/Planned RTS into P/Q/U');
 if (sheet.getCell(3, 10) !== false || sheet.getCell(3, 13) !== false || sheet.getCell(3, 15) !== 'KEEP RESCUED' || sheet.getCell(3, 18) !== 'KEEP RETURNS' || sheet.getCell(3, 19) !== 'KEEP END' || sheet.getCell(3, 20) !== 'KEEP RTS' || sheet.getCell(3, 22) !== 'KEEP CLOCK OUT') throw new Error('Connector overwrote original checkbox or closing-operations columns');
 if (sheet.getCell(16, 1) !== '11:15 (2)') throw new Error('Connector should write Wave 1 time into fixed row 16');
-if (sheet.getCell(18, 1) !== 'WAVE 2' || sheet.getCell(33, 1) !== 'WAVE 3' || sheet.getCell(78, 1) !== "ADHOC's" || sheet.getCell(110, 1) !== 'DSP') throw new Error('Connector should preserve fixed OPS LOG 2026 section anchors');
+if (sheet.getCell(18, 1) !== 'WAVE 2' || sheet.getCell(33, 1) !== 'WAVE 3' || sheet.getCell(79, 1) !== "ADHOC's" || sheet.getCell(111, 1) !== 'DSP') throw new Error('Connector should preserve fixed OPS LOG 2026 section anchors');
 if (sheet.columnWidths.get(9) !== 77 || sheet.columnWidths.get(14) !== 77) throw new Error('Connector should preserve every original column width');
 if (resultContext.__result.writeRange !== 'A3:V' || resultContext.__result.writtenRange !== 'A3:V116' || resultContext.__result.lastCell !== 'V116') throw new Error('Connector should return the full fixed A3:V116 template proof');
 
