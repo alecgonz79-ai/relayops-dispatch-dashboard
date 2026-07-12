@@ -2071,8 +2071,9 @@ body .morning-board .exact-ops-sheet .sheet-letters-row th { background:#dbe7f7;
 .scheduled-section.paycom-backups { border-color:#54e37f; background:linear-gradient(145deg,#fbfffc,#e2ffe9); }
 .scheduled-section.route,.scheduled-section.backup { max-height:520px; overflow:auto; }
 .scheduled-section.route .scheduled-section-head,.scheduled-section.backup .scheduled-section-head { position:sticky; top:-15px; z-index:4; margin:-15px -15px 9px; padding:15px; background:inherit; border-bottom:1px solid rgba(80,110,125,.12); }
-.route-driver-row { grid-template-columns:minmax(160px,1fr) auto minmax(230px,auto); }
-.route-swap-actions { display:flex; justify-content:flex-end; gap:6px; }
+.route-driver-row { grid-template-columns:minmax(150px,1fr) minmax(110px,auto) minmax(150px,190px); overflow:hidden; }
+.route-swap-actions { min-width:0; width:100%; display:grid; grid-template-columns:1fr; justify-content:stretch; gap:6px; }
+.route-swap-actions .btn { width:100%; min-width:0; height:auto; min-height:34px; padding:6px 9px; white-space:normal; line-height:1.15; text-align:center; }
 .danger-soft { border-color:#e9b8b4!important; color:#8a3832!important; background:#fff5f4!important; }
 
 /* Parking map alignment pass: every stall and charger shares one row rhythm. */
@@ -2168,6 +2169,8 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
   .opening-schedule-head { align-items:stretch; flex-direction:column; }
   .opening-schedule-grid { grid-template-columns:1fr; }
   .scheduled-shift-row { grid-template-columns:1fr; }
+  .route-driver-row { grid-template-columns:1fr; overflow:visible; }
+  .route-swap-actions { grid-template-columns:1fr 1fr; }
   .paycom-head,.paycom-head-tools { align-items:stretch; flex-direction:column; }
   .paycom-head select { max-width:none; width:100%; }
   .paycom-driver-actions { justify-content:flex-start; flex-wrap:wrap; }
