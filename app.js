@@ -47,6 +47,7 @@ const AMAZON_FLEET_PORTAL_URL = 'https://logistics.amazon.com/fleet-management/#
 const AMAZON_WORKFORCE_ASSOCIATES_URL = 'https://logistics.amazon.com/workforce?pageId=da_console_associates&station=DJT6&companyId=ab7228f0-51de-4c53-98f3-7d3c3da46724&tabId=da-console-associates-tab';
 const FLEETOS_PORTAL_URL = 'https://business.rivian.com/vehicles/tracker';
 const MORNING_TEMPLATE_URL = 'https://docs.google.com/spreadsheets/d/1Kq8w0luVSz8Zo32WPw77LwdzcO9vNdC8YtJci34tDYI/edit?gid=600381572#gid=600381572';
+const MORNING_SHEETS_DEFAULT_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxF3gNHaOqu6TxHbwTlzHeUQKF-LTJWga66qIEEuGJtL9kemroOwIl_vTy93QfGZPZWNA/exec';
 const MORNING_TEMPLATE_SHEET_NAME = 'OPS LOG 2026';
 const MORNING_TEMPLATE_SHEET_CANDIDATES = [MORNING_TEMPLATE_SHEET_NAME];
 const MORNING_APPS_SCRIPT_URL = 'google-sheets/relayops-morning-connector.gs';
@@ -231,7 +232,7 @@ let state = {
   fleetSourceUploads: JSON.parse(localStorage.getItem('relayops_fleet_source_uploads') || 'null') || {},
   fleetExpectedCount: Number(localStorage.getItem('relayops_fleet_expected_count') || 0),
   fleetLiveEndpoint: localStorage.getItem('relayops_fleet_live_endpoint') || '',
-  morningSheetsEndpoint: localStorage.getItem('relayops_morning_sheets_endpoint') || '',
+  morningSheetsEndpoint: localStorage.getItem('relayops_morning_sheets_endpoint') || MORNING_SHEETS_DEFAULT_ENDPOINT,
   morningSheetsLastPush: localStorage.getItem('relayops_morning_sheets_last_push') || '',
   morningSheetsLastError: localStorage.getItem('relayops_morning_sheets_last_error') || '',
   morningSheetsLastReceipt: JSON.parse(localStorage.getItem('relayops_morning_sheets_last_receipt') || 'null'),
