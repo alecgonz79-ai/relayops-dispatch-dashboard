@@ -46,7 +46,7 @@ const DISPATCHER_SHARE_NOTE = 'Use this exact full link. GitHub Pages will show 
 const AMAZON_FLEET_PORTAL_URL = 'https://logistics.amazon.com/fleet-management/#vehicles';
 const AMAZON_WORKFORCE_ASSOCIATES_URL = 'https://logistics.amazon.com/workforce?pageId=da_console_associates&station=DJT6&companyId=ab7228f0-51de-4c53-98f3-7d3c3da46724&tabId=da-console-associates-tab';
 const FLEETOS_PORTAL_URL = 'https://business.rivian.com/vehicles/tracker';
-const MORNING_TEMPLATE_URL = 'https://docs.google.com/spreadsheets/d/1Kq8w0luVSz8Zo32WPw77LwdzcO9vNdC8YtJci34tDYI/edit?gid=600381572#gid=600381572';
+const MORNING_TEMPLATE_URL = 'https://docs.google.com/spreadsheets/d/1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ/edit?gid=0#gid=0';
 const MORNING_SHEETS_DEFAULT_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxF3gNHaOqu6TxHbwTlzHeUQKF-LTJWga66qIEEuGJtL9kemroOwIl_vTy93QfGZPZWNA/exec';
 const MORNING_TEMPLATE_SHEET_NAME = 'OPS LOG 2026';
 const MORNING_TEMPLATE_SHEET_CANDIDATES = [MORNING_TEMPLATE_SHEET_NAME];
@@ -4164,8 +4164,8 @@ const RELAYOPS_WRITE_RANGE = 'A3:M';
 const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
-const RELAYOPS_SPREADSHEET_ID = '1Kq8w0luVSz8Zo32WPw77LwdzcO9vNdC8YtJci34tDYI';
-const RELAYOPS_BUILD = '2026-07-11-main-ops-log-id-locked';
+const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
+const RELAYOPS_BUILD = '2026-07-12-copy-mode-test-workbook';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
