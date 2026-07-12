@@ -593,7 +593,7 @@ const checks = `
   state.editMode = true;
   state.copyMode = false;
   const editableHtml = morningSheetPage();
-  const editableRequirements=['contenteditable="true"','data-view-field="ev"','Press Enter to save','data-sheet-cell="true"','sheet-letters-row','sheet-row-num','PORTABLE','sheet-spacer-col','PLANNED RTS','VAN/DEV/PORT Import','EV 1-57 Low → High','Randomize EVs','Assign Gas Vehicles','Copy cells','Filtered waves','Automatic check','Google Ops Log','Connect Google Sheet','Copy fallback','Copy fallback readiness','Wave/Pad rowspans','Formatted XLS','Open paste box','Remove blank rows','Preview JPEG','Click and drag white cells'];
+  const editableRequirements=['contenteditable="true"','data-view-field="ev"','Press Enter to save','data-sheet-cell="true"','sheet-letters-row','sheet-row-num','PORTABLE','sheet-spacer-col','PLANNED RTS','VAN/DEV/PORT Import','EV 1-57 Low → High','Randomize EVs','Assign Gas Vehicles','Copy cells','Filtered waves','Fixed Ops Log check','Dated Ops Log','Connect Google Sheet','Copy fallback','Copy fallback readiness','Wave/Pad rowspans','Formatted XLS','Open paste box','Remove blank rows','Preview JPEG','Click and drag white cells'];
   const missingEditableRequirements=editableRequirements.filter(value=>!editableHtml.includes(value));
   if(missingEditableRequirements.length) throw new Error('Editable sheet or JPEG control missing: '+missingEditableRequirements.join(', '));
   assignElectricVehicles('low');
