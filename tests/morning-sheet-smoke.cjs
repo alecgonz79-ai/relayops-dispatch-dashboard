@@ -60,6 +60,9 @@ const checks = `
   if (!uploadHtml.includes('Make my morning sheet')) throw new Error('Simple upload heading missing');
   if (!uploadHtml.includes('Create my operations sheet')) throw new Error('Simple upload action missing');
   if (!uploadHtml.includes('CX route matching')) throw new Error('CX matching explanation missing');
+  action('open-morning-diagnostics',{});
+  if(state.modal!=='morning-diagnostics'||!modal().includes('Setup & diagnostics')||!modal().includes('Use only when imports or Google Sheets are not working')) throw new Error('Top diagnostics button should open the modal after removing the duplicate inline panel');
+  state.modal='import';
   if (!uploadHtml.includes('import-proof ready') || !uploadHtml.includes('Required columns') || !uploadHtml.includes('Earliest waves first') || !uploadHtml.includes('Template output') || !uploadHtml.includes('2 LLOL routes ready')) throw new Error('Import proof checklist missing for good DAYOFOPSPLAN file');
   state.importedFile = { name: 'bad-dayofops.csv', kind: 'plan', headers: ['DSP','Route Code','Staging Location'], rows: [['LLOL','CX902','STG.V.2']] };
   const badImportProof = importPreflight();
@@ -75,6 +78,14 @@ const checks = `
   if (!fleetHtml.includes('Portal row-count check') || !fleetHtml.includes('Upload both portal exports to compare row counts') || !fleetHtml.includes('Amazon rows') || !fleetHtml.includes('FleetOS rows') || !fleetHtml.includes('matched rows')) throw new Error('Fleet row-count check missing');
   if (!fleetHtml.includes('Dispatcher proof: WAIT before trusting board') || !fleetHtml.includes('Amazon official names') || !fleetHtml.includes('FleetOS battery rows') || !fleetHtml.includes('VIN match proof') || !fleetHtml.includes('Full roster count') || !fleetHtml.includes('Clean data check')) throw new Error('Fleet dispatcher proof strip missing');
   if (!fleetHtml.includes('Live connector not connected yet') || !fleetHtml.includes('Set endpoint') || !fleetHtml.includes('Refresh will call the secure backend first') && fleetHtml.includes('Live connector ready')) throw new Error('Fleet live connector setup strip missing');
+  const savedParking=state.vanParking,savedParkingStatus=state.parkingChargerStatus,savedParkingNotes=state.parkingNotes,savedParkingDate=state.vanParkingUpdated,savedParkingRoutes=state.morningRoutes;
+  state.vanParking=[{id:'w1',zone:'west',label:'Left 1',value:'91',kind:'spot'},{id:'w2',zone:'west',label:'Left 2',value:'92',kind:'spot'},{id:'e1',zone:'east',label:'Right 1',value:'93',kind:'spot'},{id:'e2',zone:'east',label:'Right 2',value:'94',kind:'spot'},{id:'n1',zone:'northRight',label:'Upper 1',value:'95',kind:'spot'}];state.parkingChargerStatus={};state.parkingNotes='Close lane after charging';state.vanParkingUpdated='2026-07-11';
+  const parkingHtml=vanParkingSection();
+  if(!parkingHtml.includes('data-parking-notes')||!parkingHtml.includes('Close lane after charging')||!parkingHtml.includes('data-parking-date')||!parkingHtml.includes('charger-pair')||!parkingHtml.includes('middle-1-left')||!parkingHtml.includes('upper-n1')||parkingHtml.includes('DRIVE LANE')) throw new Error('Editable parking notes, date, and split charger controls missing');
+  toggleParkingCharger('middle-1-left');if(state.parkingChargerStatus['middle-1-left']!=='green'||!parkingChargerButton('middle-1-left').includes('CHARGING')) throw new Error('Parking charger green state failed');toggleParkingCharger('middle-1-left');if(state.parkingChargerStatus['middle-1-left']!=='red'||!parkingChargerButton('middle-1-left').includes('ISSUE')) throw new Error('Parking charger red state failed');
+  state.morningRoutes=[['R1','11:15 AM'],['R2','11:20 AM'],['R3','11:25 AM'],['R4','11:40 AM'],['R5','11:45 AM']].map(([route,wave])=>({dsp:'LLOL',driver:route,route,wave,staging:'',ev:'',deviceName:'',portable:''}));assignVansByParking();
+  if(state.morningRoutes.map(row=>row.ev).join(',')!=='91,92,94,93,95') throw new Error('Parking-order Morning Sheet assignment did not use left top-down, right bottom-up, then remaining vans');
+  state.vanParking=savedParking;state.parkingChargerStatus=savedParkingStatus;state.parkingNotes=savedParkingNotes;state.vanParkingUpdated=savedParkingDate;state.morningRoutes=savedParkingRoutes;
   state.fleetLiveEndpoint = 'https://relayops.example.com/api/fleet/live';
   if (!fleetLiveConnectorStrip().includes('Live connector ready') || !fleetLiveConnectorStrip().includes('Live refresh') || fleetLiveEndpoint() !== 'https://relayops.example.com/api/fleet/live') throw new Error('Fleet live connector endpoint state failed');
   const driverContacts = driverContactsFromRows([

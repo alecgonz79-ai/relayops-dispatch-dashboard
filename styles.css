@@ -1987,6 +1987,28 @@ body .rivian-card:hover,body .rivian-card.expanded { border-color:#78acd1; box-s
 .scheduled-shift-row.backup-marked { border:1px solid #40ef79; border-radius:10px; padding:9px 8px; background:#baffc8; box-shadow:0 0 0 2px rgba(38,238,104,.12),0 5px 15px rgba(18,142,60,.12); }
 .scheduled-shift-row.adhoc-marked { border:1px solid #77bcea; border-radius:10px; padding:9px 8px; background:#ebf8ff; }
 .vto-button { border-color:#21d85e!important; background:#43f179!important; color:#073d1a!important; font-weight:950!important; }
+.vto-button.vto-4 { border-color:#ff7a00!important; background:#ff9f1a!important; color:#3f1d00!important; box-shadow:0 0 0 2px rgba(255,126,0,.14),0 5px 15px rgba(217,91,0,.18)!important; }
+.morning-advanced-checks { display:none!important; }
+body .morning-template-sheet .wave-time-row .wave-time-cell { padding:0!important; text-align:center!important; vertical-align:middle!important; }
+.parking-charger-toggle { min-width:45px; height:27px; display:flex; align-items:center; justify-content:center; gap:4px; border:1px solid #64707a; border-radius:7px; background:#303943; color:#bac4cb; font-size:7px; font-weight:950; cursor:pointer; }
+.parking-charger-toggle i { width:7px; height:7px; border-radius:50%; background:#8b969e; }
+.parking-charger-toggle.charger-green { border-color:#24d965; background:#b8ffca; color:#06451b; }
+.parking-charger-toggle.charger-green i { background:#00bf45; box-shadow:0 0 8px #23ee6b; }
+.parking-charger-toggle.charger-red { border-color:#ff5b55; background:#ffd3d0; color:#661713; }
+.parking-charger-toggle.charger-red i { background:#ef3129; box-shadow:0 0 8px #ff4d45; }
+.parking-crosswalk.charger-column { display:block; padding:7px 5px; background:#ffe69a; overflow:visible; }
+.parking-charger-pairs { display:grid; gap:6px; }
+.charger-pair { min-height:36px; display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+.charger-pair .parking-charger-toggle { width:100%; height:100%; min-width:0; }
+.northLeft .parking-slot-row,.northRight .parking-slot-row { grid-template-columns:minmax(70px,1fr) 52px 60px; }
+.parking-notes-area { display:grid!important; place-items:stretch!important; padding:22px!important; background:#26313a!important; }
+.parking-notes-area::before,.parking-notes-area::after { display:none!important; }
+.parking-notes-area label { display:grid; grid-template-rows:auto 1fr; gap:8px; min-height:245px; }
+.parking-notes-area span { color:#dce6ec; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.parking-notes-area textarea { width:100%; height:100%; min-height:210px; resize:none; border:1px solid #52616d; border-radius:22px; padding:18px; background:#202a32; color:#f5f8fa; font:600 13px/1.5 Inter,system-ui,sans-serif; box-shadow:inset 0 0 0 1px rgba(255,255,255,.025); }
+.parking-date-edit { display:flex!important; align-items:center; gap:7px; }
+.parking-date-edit input,.parking-date-box input { height:30px; border:1px solid #c7d5df; border-radius:8px; padding:0 7px; background:#fff; color:#263a4a; font-weight:800; }
+.parking-assign-button { border-color:#81b9db!important; background:#eaf7ff!important; color:#174d70!important; }
 .scheduled-section.called-off { border-color:#efc4bf; background:linear-gradient(145deg,#fffafa,#fff0ef); }
 .scheduled-section.called-off .scheduled-section-head b { background:#ffe0dd; color:#8c3730; }
 .route-driver-row { grid-template-columns:minmax(160px,1fr) auto minmax(230px,auto); }
