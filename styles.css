@@ -1992,33 +1992,34 @@ body .rivian-card:hover,body .rivian-card.expanded { border-color:#78acd1; box-s
 body .morning-template-sheet .wave-time-row .wave-time-cell { padding:0!important; text-align:center!important; vertical-align:middle!important; }
 
 /* Original Ops Log A–V morning template */
-body .morning-board .exact-ops-sheet { min-width:1367px; width:1367px; table-layout:fixed; background:#050505; }
+body .morning-board .exact-ops-sheet { min-width:1875px; width:1875px; table-layout:fixed; background:#050505; }
 body .morning-board .exact-ops-sheet th { height:28px; padding:4px 5px; font:700 12px Arial,sans-serif; white-space:nowrap; }
 body .morning-board .exact-ops-sheet td { height:23px; padding:2px 4px; background:#fff; border:1px solid #111; font:700 13px Arial,sans-serif; }
 body .morning-board .exact-ops-sheet td:not(.wave-label):not(.pad-label):not(.wave-time-cell):not(.sheet-spacer-col) { overflow:hidden; white-space:nowrap; text-overflow:clip; }
 body .morning-board .exact-ops-sheet .driver-name { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-body .morning-board .exact-ops-sheet th:nth-child(2) { width:56px; background:#b4a7d6; }
-body .morning-board .exact-ops-sheet th:nth-child(3) { width:149px; background:#92f4fa; }
-body .morning-board .exact-ops-sheet th:nth-child(4) { width:52px; background:#92f4fa; }
-body .morning-board .exact-ops-sheet th:nth-child(5) { width:70px; background:#92f4fa; }
-body .morning-board .exact-ops-sheet th:nth-child(6) { width:64px; background:#92f4fa; }
-body .morning-board .exact-ops-sheet th:nth-child(7) { width:34px; background:#92f4fa; }
-body .morning-board .exact-ops-sheet th:nth-child(8) { width:51px; background:#92f4fa; }
-body .morning-board .exact-ops-sheet th:nth-child(9) { width:54px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(2) { width:62px; background:#b4a7d6; }
+body .morning-board .exact-ops-sheet th:nth-child(3) { width:220px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(4) { width:70px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(5) { width:82px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(6) { width:70px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(7) { width:48px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(8) { width:70px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(9) { width:80px; background:#92f4fa; }
 body .morning-board .exact-ops-sheet th:nth-child(10) { width:15px; min-width:15px; background:#050505; color:#050505; border-color:#050505; }
-body .morning-board .exact-ops-sheet th:nth-child(11) { width:55px; background:#fce5cd; }
-body .morning-board .exact-ops-sheet th:nth-child(12) { width:59px; background:#fce5cd; }
-body .morning-board .exact-ops-sheet th:nth-child(13) { width:59px; background:#fff2cc; }
-body .morning-board .exact-ops-sheet th:nth-child(14) { width:58px; background:#fff2cc; }
+body .morning-board .exact-ops-sheet th:nth-child(11) { width:72px; background:#fce5cd; }
+body .morning-board .exact-ops-sheet th:nth-child(12) { width:78px; background:#fce5cd; }
+body .morning-board .exact-ops-sheet th:nth-child(13) { width:82px; background:#fff2cc; }
+body .morning-board .exact-ops-sheet th:nth-child(14) { width:78px; background:#fff2cc; }
 body .morning-board .exact-ops-sheet th:nth-child(15) { width:15px; min-width:15px; background:#050505; color:#050505; border-color:#050505; }
-body .morning-board .exact-ops-sheet th:nth-child(16) { width:53px; background:#93c47d; }
-body .morning-board .exact-ops-sheet th:nth-child(17) { width:65px; background:#92f4fa; }
-body .morning-board .exact-ops-sheet th:nth-child(18) { width:69px; background:#92f4fa; }
-body .morning-board .exact-ops-sheet th:nth-child(19) { width:87px; background:#ea9999; }
-body .morning-board .exact-ops-sheet th:nth-child(20) { width:74px; background:#92f4fa; }
-body .morning-board .exact-ops-sheet th:nth-child(21) { width:43px; background:#92f4fa; }
-body .morning-board .exact-ops-sheet th:nth-child(22) { width:67px; background:#92f4fa; }
-body .morning-board .exact-ops-sheet th:nth-child(23) { width:75px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(16) { width:70px; background:#93c47d; }
+body .morning-board .exact-ops-sheet th:nth-child(17) { width:90px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(18) { width:122px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(19) { width:136px; background:#ea9999; }
+body .morning-board .exact-ops-sheet th:nth-child(20) { width:80px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(21) { width:70px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(22) { width:106px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet th:nth-child(23) { width:122px; background:#92f4fa; }
+body .morning-board .exact-ops-sheet .driver-name { font-size:11px; }
 body .morning-board .exact-ops-sheet .wave-label,body .morning-board .exact-ops-sheet .wave-time-cell,body .morning-board .exact-ops-sheet .pad-label { background:#fff; }
 body .morning-board .exact-ops-sheet .wave-label { font:400 36px Arial,sans-serif; }
 body .morning-board .exact-ops-sheet .planned-rts-cell { background:#b4a7d6; }
@@ -2156,7 +2157,7 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
   body .content { padding:16px 14px 36px; }
   body .morning-board { overflow:hidden; }
   body .morning-board .sheet-scroll { width:100%; max-width:100%; overflow-x:auto; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; touch-action:pan-x pan-y; }
-  body .morning-board .exact-ops-sheet { min-width:1367px!important; width:1367px!important; max-width:none!important; }
+  body .morning-board .exact-ops-sheet { min-width:1875px!important; width:1875px!important; max-width:none!important; }
   body .morning-board .exact-ops-sheet td { font-size:11px; }
   body .morning-board .exact-ops-sheet .driver-name { font-size:10px; }
   body .morning-board .exact-ops-sheet th { font-size:10px; overflow:hidden; white-space:nowrap; }
