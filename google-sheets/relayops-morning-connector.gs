@@ -8,8 +8,8 @@ const RELAYOPS_WRITE_RANGE = 'A3:M';
 const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
-const RELAYOPS_SPREADSHEET_ID = '1Kq8w0luVSz8Zo32WPw77LwdzcO9vNdC8YtJci34tDYI';
-const RELAYOPS_BUILD = '2026-07-11-main-ops-log-id-locked';
+const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
+const RELAYOPS_BUILD = '2026-07-12-copy-mode-test-workbook';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
