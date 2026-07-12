@@ -1837,7 +1837,7 @@ function modal() {
   if (state.modal === 'sheets-helper') { const pasteRange=morningSheetsHandoffProof().range; return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="sheets-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS PASTE BOX</span><h2 id="sheets-title">Paste-ready morning sheet</h2><p>If one-click copy does not work, click Select all, copy, then paste into Google Sheets cell A3. Expected filled range: ${esc(pasteRange)}.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="paste-guide"><span><b>1</b> Select all</span><span><b>2</b> Copy</span><span><b>3</b> Paste ${esc(pasteRange)}</span></div><textarea id="sheets-copy-text" class="sheets-copy-text" readonly>${esc(state.sheetCopyText||morningSheetTsv())}</textarea><div class="modal-actions"><button class="btn" data-action="select-sheets-text">Select all text</button><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy again</button></div></div></div></div>`; }
   if (state.modal === 'morning-sheets-connector') {
     const payload=morningSheetsConnectorPayload(), rows=payload.rows.length, sections=payload.sections.length;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="morning-sheets-connector-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS CONNECTOR</span><h2 id="morning-sheets-connector-title">Send into Legacy Logistics Operations</h2><p>The connector copies the blank OPS LOG 2026 layout into the exact selected date tab, then fills its fixed Wave 1–5, ADHOC, and HELPERS sections without shifting rows or columns. The DSP rows remain available for manual entries.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheets-connector-status ${state.morningSheetsEndpoint?'ready':'warn'}"><strong>${state.morningSheetsEndpoint?'Connector saved · update Apps Script once':'Connector not set yet'}</strong><span>${state.morningSheetsEndpoint?`Install the revised OPS LOG 2026 script, redeploy it, then keep using this endpoint. Target: ${esc(payload.sheetName)} or ${esc(payload.sheetNameCandidates?.[1]||payload.sheetName)}.`:'Copy the revised Apps Script, deploy it as a web app, then paste the web app URL below.'}</span></div>${morningSheetsPreflightHtml(payload)}${morningSheetsHandoffProofHtml(payload)}${morningSheetsRowAuditHtml(payload)}${morningSheetsLiveProofHtml(payload)}${morningSheetsReceiptHtml()}<div class="sheets-connector-grid"><div class="connector-step"><b>1</b><strong>Replace the old Apps Script</strong><span>Delete the previous connector code, paste the OPS LOG 2026 fixed-layout version, save, then deploy a new Web app version.</span><button class="btn small lime" data-action="copy-morning-apps-script">${ICONS.copy} COPY REVISED APPS SCRIPT</button><button class="btn small ghost" data-action="copy-morning-sheets-setup">Copy setup checklist</button><a class="btn small ghost" href="${MORNING_APPS_SCRIPT_URL}" download>Download .gs file</a></div><div class="connector-step"><b>2</b><strong>Paste web app endpoint</strong><span>Use the Apps Script deployment URL. Do not paste Google passwords or Amazon/Rivian credentials.</span><input id="morning-sheets-endpoint" value="${esc(state.morningSheetsEndpoint)}" placeholder="https://script.google.com/macros/s/.../exec"><button class="btn small" data-action="save-morning-sheets-connector">Save endpoint</button><button class="btn small ghost" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button></div><div class="connector-step"><b>3</b><strong>Send checked sheet</strong><span>${rows} logical rows · ${sections} imported sections · exact date only: ${esc(payload.sheetName)} / ${esc(payload.sheetNameCandidates?.[1]||payload.sheetName)}. Missing date tabs are created from OPS LOG 2026.</span><button class="btn small ghost" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn small primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send to Google Sheet</button><button class="btn small ghost" data-action="copy-morning-sheets-verify">${ICONS.copy} Copy verify checklist</button></div></div>${state.morningSheetsLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Connector note</strong><span>${esc(state.morningSheetsLastError)}</span></div></div>`:''}<details class="sheets-advanced-preview"><summary>Advanced transfer preview — do not paste into Apps Script</summary><div class="sheets-connector-preview"><strong>Dashboard data JSON</strong><span>This is only a preview of the filtered wave data. It is not Apps Script code.</span><textarea readonly>${esc(JSON.stringify(payload,null,2).slice(0,1800))}${JSON.stringify(payload).length>1800?'\n...':''}</textarea></div></details><div class="modal-actions"><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open template</a><a class="btn" href="${MORNING_APPS_SCRIPT_URL}" download>Download script</a><button class="btn lime" data-action="copy-morning-apps-script">${ICONS.copy} COPY REVISED APPS SCRIPT</button><button class="btn" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button><button class="btn" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send now</button></div><p class="upload-help">Fixed import anchors: Wave 1 row 3 · Wave 2 row 18 · Wave 3 row 33 · Wave 4 row 48 · Wave 5 row 63 · ADHOC row 79 · HELPERS row 95. DSP row 111 stays manual.</p></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="morning-sheets-connector-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS CONNECTOR</span><h2 id="morning-sheets-connector-title">Send values into the Ops Log</h2><p>The connector writes only the Morning Sheet values into the fixed OPS LOG 2026 cells. It does not resize columns, change fonts, recolor cells, rebuild checkboxes, or modify the operations columns.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheets-connector-status ${state.morningSheetsEndpoint?'ready':'warn'}"><strong>${state.morningSheetsEndpoint?'Connector saved · update Apps Script once':'Connector not set yet'}</strong><span>${state.morningSheetsEndpoint?`Install the values-only OPS LOG script, redeploy it, then keep using this endpoint. Target: ${esc(payload.sheetName)} or ${esc(payload.sheetNameCandidates?.[1]||payload.sheetName)}.`:'Copy the values-only Apps Script, deploy it as a web app, then paste the web app URL below.'}</span></div>${morningSheetsPreflightHtml(payload)}${morningSheetsHandoffProofHtml(payload)}${morningSheetsRowAuditHtml(payload)}${morningSheetsLiveProofHtml(payload)}${morningSheetsReceiptHtml()}<div class="sheets-connector-grid"><div class="connector-step"><b>1</b><strong>Replace the old Apps Script</strong><span>Delete the previous connector code, paste the values-only OPS LOG version, save, then deploy a new Web app version.</span><button class="btn small lime" data-action="copy-morning-apps-script">${ICONS.copy} COPY REVISED APPS SCRIPT</button><button class="btn small ghost" data-action="copy-morning-sheets-setup">Copy setup checklist</button><a class="btn small ghost" href="${MORNING_APPS_SCRIPT_URL}" download>Download .gs file</a></div><div class="connector-step"><b>2</b><strong>Paste web app endpoint</strong><span>Use the Apps Script deployment URL. Do not paste Google passwords or Amazon/Rivian credentials.</span><input id="morning-sheets-endpoint" value="${esc(state.morningSheetsEndpoint)}" placeholder="https://script.google.com/macros/s/.../exec"><button class="btn small" data-action="save-morning-sheets-connector">Save endpoint</button><button class="btn small ghost" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button></div><div class="connector-step"><b>3</b><strong>Send checked sheet</strong><span>Values only: Wave/Driver/Route/Staging/Pad/EV/Device/Portable, Stop Count, Package Count, and Planned RTS. ${rows} logical rows · ${sections} sections.</span><button class="btn small ghost" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn small primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send to Google Sheet</button><button class="btn small ghost" data-action="copy-morning-sheets-verify">${ICONS.copy} Copy verify checklist</button></div></div>${state.morningSheetsLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Connector note</strong><span>${esc(state.morningSheetsLastError)}</span></div></div>`:''}<details class="sheets-advanced-preview"><summary>Advanced transfer preview — do not paste into Apps Script</summary><div class="sheets-connector-preview"><strong>Dashboard data JSON</strong><span>This is only a preview of the filtered wave data. It is not Apps Script code.</span><textarea readonly>${esc(JSON.stringify(payload,null,2).slice(0,1800))}${JSON.stringify(payload).length>1800?'\n...':''}</textarea></div></details><div class="modal-actions"><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open template</a><a class="btn" href="${MORNING_APPS_SCRIPT_URL}" download>Download script</a><button class="btn lime" data-action="copy-morning-apps-script">${ICONS.copy} COPY REVISED APPS SCRIPT</button><button class="btn" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button><button class="btn" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send now</button></div><p class="upload-help">Values map into fixed cells only: A/B/C/D/E/F/G/H, P/Q, and U. All other Ops Log cells and formatting stay untouched.</p></div></div></div>`;
   }
   if (state.modal === 'gas-assignment') {
     const targets=morningAssignmentTargets();
@@ -2072,9 +2072,7 @@ function bind() {
   document.querySelectorAll('[data-edit-field]').forEach(el=>{
     el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);if(el.dataset.editField==='driver')showDriverNameSuggestions(el);});
     if(el.dataset.editField==='driver')el.addEventListener('input',()=>showDriverNameSuggestions(el));
-    el.addEventListener('mousedown',e=>handleSheetMouseDown(e,el));
     el.addEventListener('pointerdown',e=>handleSheetMouseDown(e,el));
-    el.addEventListener('mouseenter',()=>handleSheetMouseEnter(el));
     el.addEventListener('pointerenter',()=>handleSheetMouseEnter(el));
     el.addEventListener('blur',()=>{saveMorningEditCell(el);if(el.dataset.editField==='driver')setTimeout(closeDriverSuggestions,120);});
     el.addEventListener('keydown',e=>handleSheetKeydown(e,el));
@@ -2085,9 +2083,7 @@ function bind() {
   });
   document.querySelectorAll('[data-sheet-copy-cell]').forEach(el=>{
     el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);});
-    el.addEventListener('mousedown',e=>handleSheetMouseDown(e,el));
     el.addEventListener('pointerdown',e=>handleSheetMouseDown(e,el));
-    el.addEventListener('mouseenter',()=>handleSheetMouseEnter(el));
     el.addEventListener('pointerenter',()=>handleSheetMouseEnter(el));
     el.addEventListener('keydown',e=>handleSheetKeydown(e,el));
   });
@@ -2389,7 +2385,6 @@ function sheetCopyZone(col) {
 }
 function inSameSheetBoundary(anchor,cell) {
   if(!anchor||!cell)return false;
-  if(anchor.dataset.sheetSection!==undefined&&cell.dataset.sheetSection!==undefined&&anchor.dataset.sheetSection!==cell.dataset.sheetSection)return false;
   if(state.copyMode) {
     const anchorZone=sheetCopyZone(anchor.dataset.sheetCol), cellZone=sheetCopyZone(cell.dataset.sheetCol);
     if(!anchorZone||!cellZone)return false;
@@ -2399,7 +2394,6 @@ function inSameSheetBoundary(anchor,cell) {
 }
 function clampSheetFocus(anchor,focus) {
   if(!anchor||!focus)return focus;
-  if(anchor.dataset.sheetSection!==undefined&&focus.dataset.sheetSection!==undefined&&anchor.dataset.sheetSection!==focus.dataset.sheetSection)return sheetSelection.focus||anchor;
   if(!state.copyMode)return focus;
   const zone=sheetCopyZone(anchor.dataset.sheetCol);
   if(!zone)return anchor;
@@ -2413,7 +2407,7 @@ function sheetSelectionBounds() {
   if(a.row<0||a.col<0||f.row<0||f.col<0)return null;
   const zone=state.copyMode?sheetCopyZone(a.col):null;
   const left=Math.min(a.col,f.col), right=Math.max(a.col,f.col);
-  return {top:Math.min(a.row,f.row),bottom:Math.max(a.row,f.row),left:zone?Math.max(zone[0],left):left,right:zone?Math.min(zone[1],right):right,section:sheetSelection.anchor.dataset.sheetSection};
+  return {top:Math.min(a.row,f.row),bottom:Math.max(a.row,f.row),left:zone?Math.max(zone[0],left):left,right:zone?Math.min(zone[1],right):right,section:state.copyMode?null:sheetSelection.anchor.dataset.sheetSection};
 }
 function selectedSheetCells() {
   const bounds=sheetSelectionBounds();
@@ -2432,7 +2426,7 @@ function applySheetSelection() {
   document.querySelectorAll('.wave-pulse').forEach(el=>el.classList.remove('wave-pulse'));
   selectedSheetCells().forEach(cell=>cell.classList.add('sheet-selected-cell'));
   const section=sheetSelection.focus?.dataset?.sheetSection;
-  if(section!==undefined) document.querySelectorAll(`[data-sheet-section="${section}"], .wave-section-${section}`).forEach(el=>el.classList.add('sheet-selected-wave'));
+  if(!state.copyMode&&section!==undefined) document.querySelectorAll(`[data-sheet-section="${section}"], .wave-section-${section}`).forEach(el=>el.classList.add('sheet-selected-wave'));
   sheetSelection.focus?.classList.add('sheet-active-cell');
 }
 function selectSheetCell(el) {
@@ -2440,7 +2434,7 @@ function selectSheetCell(el) {
   document.querySelectorAll('.wave-pulse').forEach(el=>el.classList.remove('wave-pulse'));
   el.classList.add('sheet-active-cell','sheet-selected-cell');
   const section=el.dataset?.sheetSection;
-  if(section!==undefined) document.querySelectorAll(`[data-sheet-section="${section}"], .wave-section-${section}`).forEach(item=>item.classList.add('sheet-selected-wave'));
+  if(!state.copyMode&&section!==undefined) document.querySelectorAll(`[data-sheet-section="${section}"], .wave-section-${section}`).forEach(item=>item.classList.add('sheet-selected-wave'));
   sheetSelection={anchor:el,focus:el,dragging:false};
 }
 function handleSheetMouseDown(e,el) {
@@ -3959,14 +3953,17 @@ function tsvToHtmlTable(text='') {
 function selectedSheetHtml() {
   const bounds=sheetSelectionBounds();
   if(!bounds)return '';
-  const rows=[];
+  const rows=[], mergedThrough={};
   for(let row=bounds.top;row<=bounds.bottom;row++) {
     const cells=[];
     for(let col=bounds.left;col<=bounds.right;col++) {
+      if((mergedThrough[col]??-1)>=row)continue;
       const el=cellAt(row,col,bounds.section);
       const text=el?.textContent?.trim()||'';
       const type=el?.closest?.('tr')?.classList?.contains('wave-separator')?'separator':el?.classList?.contains('wave-time-cell')?'time':el?.classList?.contains('pad-label')?'pad':el?.classList?.contains('wave-label')?'wave':sheetSpacerColumns.has(col)?'spacer':'cell';
-      cells.push(clipboardTd(text,col,type));
+      const span=Math.max(1,Math.min(Number(el?.rowSpan)||1,bounds.bottom-row+1));
+      if(span>1)mergedThrough[col]=row+span-1;
+      cells.push(clipboardTd(text,col,type,span>1?`rowspan="${span}"`:''));
     }
     const rowEl=cellAt(row,bounds.left,bounds.section)?.closest?.('tr');
     const rowType=rowEl?.classList?.contains('wave-separator')?'separator':rowEl?.classList?.contains('wave-time-row')?'time':rowEl?.classList?.contains('blank-row')?'blank':'route';
@@ -4165,7 +4162,7 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-12-cell-merge-repair';
+const RELAYOPS_BUILD = '2026-07-12-values-only-transfer';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -4411,7 +4408,6 @@ function writeRelayOpsMorningSheet(payload) {
   // Existing merges, headers, widths, colors, checkboxes J:M, divider N,
   // and operations columns O/R/S/T/V remain untouched.
   RELAYOPS_LAYOUT.forEach(function(layout) {
-    relayOpsPrepareImportedCells(sheet, layout);
     sheet.getRange(layout.startRow, 2, layout.routeCapacity, 3).clearContent();
     sheet.getRange(layout.startRow, 6, layout.routeCapacity, 3).clearContent();
     sheet.getRange(layout.startRow, 16, layout.routeCapacity, 2).clearContent();
@@ -4435,22 +4431,6 @@ function writeRelayOpsMorningSheet(payload) {
     if (layout.timeRow) sheet.getRange(layout.timeRow, 1).setValue(section.waveTime || '');
   });
   return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V116', lastCell: 'V116', createdSheet: target.created};
-}
-
-function relayOpsPrepareImportedCells(sheet, layout) {
-  // Wave (A) and Pad (E) are intentionally merged in the original template.
-  // Imported data columns must always remain individual cells so long names
-  // cannot merge into Route/Staging or Device/Portable values.
-  [[2, 3], [6, 3], [16, 2], [21, 1]].forEach(function(block) {
-    const range = sheet.getRange(layout.startRow, block[0], layout.routeCapacity, block[1]);
-    try { range.getMergedRanges().forEach(function(merged) { merged.breakApart(); }); } catch (error) {}
-    try { range.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP); } catch (error) {}
-    try { range.setVerticalAlignment('middle'); } catch (error) {}
-  });
-  try { sheet.getRange(layout.startRow, 2, layout.routeCapacity, 1).setFontSize(9).setHorizontalAlignment('center'); } catch (error) {}
-  try { sheet.getRange(layout.startRow, 3, layout.routeCapacity, 1).setFontSize(9).setHorizontalAlignment('center'); } catch (error) {}
-  try { sheet.getRange(layout.startRow, 4, layout.routeCapacity, 1).setFontSize(8).setHorizontalAlignment('center'); } catch (error) {}
-  try { sheet.getRange(layout.startRow, 6, layout.routeCapacity, 3).setFontSize(9).setHorizontalAlignment('center'); } catch (error) {}
 }
 
 function validateRelayOpsTemplateSignature(sheet) {
@@ -4576,7 +4556,7 @@ async function syncFilteredMorningToSheets() {
 }
 async function copyMorningAppsScript() {
   const code=morningSheetsAppsScript();
-  if(!code.includes('2026-07-11-main-ops-log-id-locked')){toast('The embedded Apps Script needs an update — use Download .gs file instead','error');return false;}
+  if(!code.includes('2026-07-12-values-only-transfer')){toast('The revised Apps Script is still loading — refresh the dashboard and try again','error');return false;}
   const ok=await writeClipboardText(code);
   toast(ok?'Revised original-template Apps Script copied — replace the old code, save, and deploy a new version':'Clipboard blocked — download the .gs script file instead',ok?'':'error');
   return ok;
@@ -4672,7 +4652,7 @@ async function testMorningSheetsConnector() {
     const response=await fetch(connectorUrlWithPing(endpoint),{method:'GET'});
     const text=await response.text();
     if(!response.ok||!/relayops-morning-v1/.test(text)||!/A3:V/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
-    if(!/2026-07-11-main-ops-log-id-locked/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the revised OPS LOG 2026 fixed-layout version, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
+    if(!/2026-07-12-values-only-transfer/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the values-only OPS LOG connector, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
     state.morningSheetsLastError='';
     persist(); render();
     toast('Google Sheets connector confirmed');
