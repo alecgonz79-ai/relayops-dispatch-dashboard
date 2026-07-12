@@ -40,12 +40,14 @@ There are three connector types in the Morning Sheet workflow:
 
 1. Google Sheets connector — ready now.
    - Use this for the exact-format handoff.
-   - Open the Google Sheet template, go to Extensions → Apps Script, and paste the RelayOps Apps Script from the dashboard or `google-sheets/relayops-morning-connector.gs`.
+   - Open the main `Legacy Logistics Operations` workbook, go to Extensions → Apps Script, and paste the RelayOps Apps Script from the dashboard or `google-sheets/relayops-morning-connector.gs`.
    - Deploy it as a Web app with Execute as: Me and access: Anyone with the link.
    - Paste the generated `/exec` URL into Morning Sheet → Google Sheets Connector.
    - Run Test connector, then Dry run, then Send to Google Sheet.
    - The dashboard still sends a compact 13-column payload, but the Apps Script maps setup data to `A:H`, stop/package counts to `P:Q`, and Planned RTS to `U`.
-   - It preserves the original A:V headers, widths, colors, checkbox columns J:M, black divider N, and operations-entry columns O/R/S/T/V. Only Wave and Pad merges are rebuilt.
+   - It preserves the original A:V headers, widths, colors, checkbox columns J:M, black divider N, operations-entry columns O/R/S/T/V, and all template merges.
+   - It uses the fixed `OPS LOG 2026` anchors: Wave rows 3/18/33/48/63, ADHOC 78, HELPERS 94, and DSP 110.
+   - If the selected date tab is missing, it duplicates `OPS LOG 2026` and names the new tab only `M/D/YY` or `M.D.YY`; it never falls back to another date or the active tab.
 
 2. Slack / day-of-operations connector — demo/import mode today.
    - Use the dashboard upload/demo flow for now.
