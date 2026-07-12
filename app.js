@@ -300,10 +300,12 @@ if(state.fleetImport?.vehicles?.length) applyFleetVehicles(state.fleetImport.veh
 
 const app = document.getElementById('app');
 const fileInput = document.getElementById('file-input');
-const sheetEditFields = ['driver','route','staging','padOverride','ev','deviceName','portable','stops','packages','plannedRts'];
-const morningTemplateHeaders = ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','STOP COUNT','PACKAGE COUNT','','PLANNED RTS'];
-const sheetCopyFields = ['waveLabel','driver','route','staging','pad','ev','deviceName','portable','spacerA','stops','packages','spacerB','plannedRts'];
-const sheetSpacerColumns = new Set([8,11]);
+const sheetEditFields = ['driver','route','staging','padOverride','ev','deviceName','portable','stops','packages','packageReturns','endTime','rtsTime','plannedRts','clockOutTime'];
+const morningTemplateHeaders = ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','PRE DVIC','PRE-WHIP','POST DVIC','POST-WHIP','','RESCUED','STOP COUNT','PACKAGE COUNT','PACKAGE RETURNS','END TIME','RTS TIME','PLANNED RTS','CLOCK OUT TIME'];
+const sheetCopyFields = ['waveLabel','driver','route','staging','pad','ev','deviceName','portable','spacerA','preDvic','preWhip','postDvic','postWhip','spacerB','rescued','stops','packages','packageReturns','endTime','rtsTime','plannedRts','clockOutTime'];
+const morningConnectorHeaders = ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','STOP COUNT','PACKAGE COUNT','','PLANNED RTS'];
+const morningConnectorFields = ['waveLabel','driver','route','staging','pad','ev','deviceName','portable','spacerA','stops','packages','spacerB','plannedRts'];
+const sheetSpacerColumns = new Set([8,13]);
 const sheetLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 let sheetSelection = { anchor: null, focus: null };
 
@@ -526,8 +528,8 @@ function morningSheetPage() {
   <details class="morning-more-tools card"><summary><span><strong>More morning tools</strong><small>Van assignment, row sizing, screenshots, downloads and backup copy</small></span><b>Open</b></summary><div class="morning-more-actions"><button class="btn small ${state.fitMorningRows?'lime':''}" data-action="toggle-fit-rows">${state.fitMorningRows?'✓ Fit to drivers':'Remove blank rows'}</button><button class="btn small" data-action="assign-ev-low">EV 1-57 Low → High</button><button class="btn small" data-action="assign-ev-random">Randomize EVs</button><button class="btn small" data-action="assign-gas-vans">Assign Gas Vehicles</button><button class="btn small" data-action="preview-wave-screenshot">${ICONS.download} Preview JPEG</button><button class="btn small" data-action="export-morning">${ICONS.download} Export CSV</button><button class="btn small" data-action="export-morning-template">${ICONS.download} Formatted XLS</button><button class="btn small" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn small" data-action="open-sheets-helper">Open paste box</button></div></details>
   <details id="morning-diagnostics" class="morning-advanced-checks card"><summary><span><strong>ℹ Setup & diagnostics</strong><small>Only needed if imports or Google Sheets are not working</small></span><b>Open</b></summary><div class="morning-advanced-content">${morningConnectorGuide()}${morningHandoffReadinessHtml()}${morningImportTemplateProofHtml()}<div class="sheets-helper card ops-log-helper"><div class="sheets-helper-copy"><span class="eyebrow">BACKUP TRANSFER</span><h3>Copy or download if the connector is unavailable</h3><p>The bridge above is the preferred path. These backups use the same ${handoffRowsCount} numbered A–M rows.</p></div><div class="sheets-helper-actions"><button class="btn" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn" data-action="open-sheets-helper">Open paste box</button><button class="btn" data-action="export-morning-template">${ICONS.download} Formatted XLS</button></div></div>${morningSheetsHandoffProofHtml()}${morningSheetStructureProofHtml()}${morningCopyFallbackProofHtml()}</div></details>
   ${state.copyMode?copyModeToolbar(groups):''}
-  ${state.copyMode?`<div class="edit-help copy-help">Copy mode is on. Drag across cells exactly like Google Sheets, watch the blue highlight, then press ⌘C on Mac or Ctrl+C on Windows. Click a wave button to pulse/highlight that whole wave before copying it. Divider columns I and L split manual copy into A–H, J–K, and M blocks.</div>`:state.editMode?`<div class="edit-help">Editing is on. Columns and rows are labeled like Google Sheets. Click and drag white cells to select a rectangle, press ⌘C to copy, or paste tabbed rows from Sheets to fill across/down.</div>`:''}
-  <article class="card morning-board ${state.copyMode?'copy-board':state.editMode?'edit-board':'view-board'}"><div class="sheet-scroll"><table class="ops-sheet morning-template-sheet ${state.copyMode?'copy-ops-sheet':''}"><thead>${sheetModeHeader(morningTemplateHeaders,sheetMode)}</thead><tbody>${groups.length?groups.map((section,sectionIndex)=>morningWaveGroup(section,sectionIndex)).join(''):`<tr><td colspan="14"><div class="empty-state"><h3>No routes match these filters</h3><p>Clear a filter or upload a new day-of-operations file.</p></div></td></tr>`}</tbody></table></div></article>
+  ${state.copyMode?`<div class="edit-help copy-help">Copy mode is on. Drag across cells exactly like Google Sheets, watch the blue highlight, then press ⌘C on Mac or Ctrl+C on Windows. Divider columns I and N split the original A–V Ops Log into setup, inspection, and operations blocks.</div>`:state.editMode?`<div class="edit-help">Editing is on. Columns A–V and every row are labeled like Google Sheets. Click and drag white cells to select a rectangle, press ⌘C to copy, or paste tabbed rows from Sheets to fill across/down.</div>`:''}
+  <article class="card morning-board ${state.copyMode?'copy-board':state.editMode?'edit-board':'view-board'}"><div class="sheet-scroll"><table class="ops-sheet morning-template-sheet exact-ops-sheet ${state.copyMode?'copy-ops-sheet':''}"><thead>${sheetModeHeader(morningTemplateHeaders,sheetMode)}</thead><tbody>${groups.length?groups.map((section,sectionIndex)=>morningWaveGroup(section,sectionIndex)).join(''):`<tr><td colspan="23"><div class="empty-state"><h3>No routes match these filters</h3><p>Clear a filter or upload a new day-of-operations file.</p></div></td></tr>`}</tbody></table></div></article>
   <div class="dispatcher-rating card"><div><strong>How easy was this opening sheet?</strong><span>Your 5-star tap helps find what needs to be smoother next.</span></div><div class="stars">${[1,2,3,4,5].map(n=>`<button class="${state.rating>=n?'active':''}" data-action="rate-service" data-rating="${n}" aria-label="${n} stars">★</button>`).join('')}</div></div>`;
 }
 
@@ -538,13 +540,13 @@ function morningConnectorGuide() {
 
 function morningSections(rows) {
   const waveGroups=[...new Set(rows.map(r=>r.wave))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).map(w=>({label:'',wave:w,rows:rows.filter(r=>r.wave===w)}));
-  const sections=waveGroups.slice(0,5).map((g,i)=>({...g,label:`WAVE ${i+1}`,minRows:12}));
+  const sections=waveGroups.slice(0,5).map((g,i)=>({...g,label:`WAVE ${i+1}`,routeCapacity:13,hasTime:true,separatorRows:i===4?2:1}));
   const used=new Set(sections.flatMap(s=>s.rows.map(r=>r.route)));
   const adHoc=rows.filter(r=>!used.has(r.route)&&/ad\s*hoc|adhoc|nursery|extra/i.test(`${r.wave} ${r.service}`));
   const helpers=rows.filter(r=>/helper/i.test(r.service||'')&&!used.has(r.route)&&!adHoc.some(x=>x.route===r.route));
-  sections.push({label:"ADHOC's",wave:'',rows:adHoc,minRows:14});
-  sections.push({label:'HELPERS',wave:'',rows:helpers,minRows:16});
-  sections.push({label:'DSP',wave:'',rows:[],minRows:5,dsp:true});
+  sections.push({label:"ADHOC's",wave:'',rows:adHoc,routeCapacity:15,hasTime:false,separatorRows:1});
+  sections.push({label:'HELPERS',wave:'',rows:helpers,routeCapacity:15,hasTime:false,separatorRows:1});
+  sections.push({label:'DSP',wave:'',rows:[],routeCapacity:6,hasTime:false,separatorRows:0,dsp:true});
   if(state.fitMorningRows) return sections.filter(s=>s.rows.length||s.dsp);
   return sections.filter(s=>s.rows.length||s.label.startsWith('WAVE')||s.dsp||state.morningFilters.wave==='all');
 }
@@ -555,7 +557,7 @@ function blankMorningRow(section,index) {
 
 function morningDisplayRows(section) {
   const rows=[...section.rows];
-  const target=state.fitMorningRows?Math.max(rows.length,section.dsp?1:0):section.minRows;
+  const target=state.fitMorningRows?Math.max(rows.length,section.dsp?1:0):section.routeCapacity;
   while(rows.length<target) rows.push(blankMorningRow(section,rows.length));
   return rows;
 }
@@ -571,9 +573,9 @@ function sheetModeHeader(headers=[],mode='view') {
 function copyModeToolbar(groups=[]) {
   const buttons=groups.filter(g=>!g.dsp).map((g,i)=>{
     const label=g.wave?`${g.label} ${morningWaveTimeText(g)}`:g.label;
-    return `<span class="wave-copy-group"><b>${esc(label||`Wave ${i+1}`)}</b><button class="btn small" data-action="copy-wave" data-wave-index="${i}" data-copy-block="all">All</button><button class="btn small" data-action="copy-wave" data-wave-index="${i}" data-copy-block="setup">A–H</button><button class="btn small" data-action="copy-wave" data-wave-index="${i}" data-copy-block="counts">J–K</button><button class="btn small" data-action="copy-wave" data-wave-index="${i}" data-copy-block="rts">M</button></span>`;
+    return `<span class="wave-copy-group"><b>${esc(label||`Wave ${i+1}`)}</b><button class="btn small" data-action="copy-wave" data-wave-index="${i}" data-copy-block="all">All A–V</button><button class="btn small" data-action="copy-wave" data-wave-index="${i}" data-copy-block="setup">A–H</button><button class="btn small" data-action="copy-wave" data-wave-index="${i}" data-copy-block="counts">P–Q</button><button class="btn small" data-action="copy-wave" data-wave-index="${i}" data-copy-block="rts">U</button></span>`;
   }).join('');
-  return `<div class="copy-mode-toolbar card"><div><strong>Copy mode</strong><span>Drag inside one block at a time, or use a wave shortcut: All, A–H setup, J–K counts, or M planned RTS. Black divider columns I and L are real boundaries so the paste lines up in Google Sheets.</span></div><div class="copy-mode-buttons"><button class="btn small primary" data-action="copy-selected-cells">Copy selected cells</button>${buttons}</div></div>`;
+  return `<div class="copy-mode-toolbar card"><div><strong>Copy mode</strong><span>Drag inside one block at a time, or use a wave shortcut. Black divider columns I and N match the original Ops Log boundaries.</span></div><div class="copy-mode-buttons"><button class="btn small primary" data-action="copy-selected-cells">Copy selected cells</button>${buttons}</div></div>`;
 }
 function morningWaveTimeText(section) {
   return section.wave?`${String(section.wave).replace(/\s*[AP]M/i,'')} (${section.rows.length})`:'';
@@ -585,6 +587,7 @@ function copyCellValue(row,field,waveLabel,pad) {
   if(field==='route')return row._blank?'':row.route||'';
   if(field==='stops')return row.stops||'';
   if(field==='packages')return row.packages||'';
+  if(['preDvic','preWhip','postDvic','postWhip','rescued'].includes(field))return row[field]?'TRUE':'FALSE';
   return row[field]||'';
 }
 function morningCopyRowsForSections(sections=morningSections(filteredMorningRows())) {
@@ -593,8 +596,8 @@ function morningCopyRowsForSections(sections=morningSections(filteredMorningRows
     const display=morningDisplayRows(section), pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
     const waveLabel=section.dsp?'DSP':section.label;
     display.forEach((r,i)=>rows.push({section,row:r,values:sheetCopyFields.map(field=>copyCellValue(r,field,i===0?waveLabel:'',i===0?pad:''))}));
-    rows.push({section,row:null,time:true,values:sheetCopyFields.map((field,i)=>i===0?morningWaveTimeText(section):'')});
-    rows.push({section,row:null,separator:true,values:sheetCopyFields.map(()=> '')});
+    if(section.hasTime) rows.push({section,row:null,time:true,values:sheetCopyFields.map((field,i)=>i===0?morningWaveTimeText(section):'')});
+    for(let i=0;i<(section.separatorRows||0);i++)rows.push({section,row:null,separator:true,values:sheetCopyFields.map(()=> '')});
   });
   return rows;
 }
@@ -612,23 +615,25 @@ function createManualMorningRoute(seed={}) {
 function morningWaveGroup(section,sectionIndex=0) {
   const rows=morningDisplayRows(section);
   const interactive=state.editMode||state.copyMode;
-  const showGridLabels=true;
   const edit=state.editMode;
   const prior=morningSections(filteredMorningRows()).slice(0,sectionIndex);
-  const rowBase=prior.reduce((n,s)=>n+morningDisplayRows(s).length+2,3);
+  const rowBase=prior.reduce((n,s)=>n+morningDisplayRows(s).length+(s.hasTime?1:0)+(s.separatorRows||0),3);
   const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
   const waveTitle=section.dsp?'DSP':section.label;
   const waveTime=morningWaveTimeText(section);
   const attrs=(r,field,rowIndex,colIndex,extra='')=>interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}" ${edit?`contenteditable="true" data-edit-route="${esc(r?.route||'')}" data-edit-field="${field}" data-edit-wave="${esc(r?.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''} ${extra}`:'';
   const cell=(r,field,value,colIndex,cls='')=>{const issue=field==='ev'?vehicleIssueForEquipmentId(value):null,issueClass=issue?.type==='grounded'?'grounded-van-cell':issue?.type==='battery'?'low-battery-van-cell':'';return `<td class="sheet-edit-cell copy-sheet-cell ${cls} ${issueClass} ${r?.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" data-view-route="${esc(r?.route||'')}" data-view-field="${field}" data-view-wave="${esc(r?.wave||section.wave||'')}" title="${issue?esc(issue.title):edit?'Press Enter to save':'Double-click to edit'}" ${attrs(r,field,rows.indexOf(r),colIndex)}>${esc(value??'')}</td>`;};
+  const selectCell=(r,field,colIndex,cls='')=>`<td class="sheet-check-cell copy-sheet-cell ${cls}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rows.indexOf(r)-3}" data-sheet-col="${colIndex}"`:''}><input type="checkbox" data-check-field="${field}" data-check-route="${esc(r?.route||'')}" data-check-wave="${esc(r?.wave||section.wave||'')}" ${r?.[field]?'checked':''} aria-label="${field}"></td>`;
+  const divider=(rowIndex,colIndex)=>`<td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}"`:''}></td>`;
   const waveCell=`<td class="wave-label ${section.dsp?'dsp-label':''} copy-sheet-cell" rowspan="${rows.length}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="0"`:''}><span>${esc(waveTitle)}</span></td>`;
-  const padCell=`<td class="pad-label sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" rowspan="${rows.length+1}" data-view-field="padOverride" data-view-wave="${esc(section.wave)}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="4" ${edit?`contenteditable="true" data-edit-wave="${esc(section.wave)}" data-edit-field="padOverride"`:''}`:''}><span>${esc(pad)}</span></td>`;
-  const body=rows.map((r,i)=>`<tr class="ops-row ${r._blank?'blank-row':''} wave-section-${sectionIndex}" data-wave-section="${sectionIndex}">${showGridLabels?`<th class="sheet-row-num">${rowBase+i}</th>`:''}${i===0?waveCell:''}${cell(r,'driver',r.driver,1,'driver-name')}${cell(r,'route',r._blank?'':r.route,2,'route-id')}${cell(r,'staging',r.staging,3,'staging-code')}${i===0?padCell:''}${cell(r,'ev',r.ev||'',5)}${cell(r,'deviceName',r.deviceName||'',6)}${cell(r,'portable',r.portable||'',7)}<td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+i-3}" data-sheet-col="8"`:''}></td>${cell(r,'stops',r.stops,9,'count-cell')}${cell(r,'packages',r.packages,10,'count-cell')}<td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+i-3}" data-sheet-col="11"`:''}></td>${cell(r,'plannedRts',r.plannedRts||'',12,'planned-rts-cell')}</tr>`).join('');
+  const padRows=rows.length+(section.hasTime?1:0);
+  const padCell=`<td class="pad-label sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" rowspan="${padRows}" data-view-field="padOverride" data-view-wave="${esc(section.wave)}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="4" ${edit?`contenteditable="true" data-edit-wave="${esc(section.wave)}" data-edit-field="padOverride"`:''}`:''}><span>${esc(pad)}</span></td>`;
+  const body=rows.map((r,i)=>`<tr class="ops-row ${r._blank?'blank-row':''} wave-section-${sectionIndex}" data-wave-section="${sectionIndex}"><th class="sheet-row-num">${rowBase+i}</th>${i===0?waveCell:''}${cell(r,'driver',r.driver,1,'driver-name')}${cell(r,'route',r._blank?'':r.route,2,'route-id')}${cell(r,'staging',r.staging,3,'staging-code')}${i===0?padCell:''}${cell(r,'ev',r.ev||'',5)}${cell(r,'deviceName',r.deviceName||'',6)}${cell(r,'portable',r.portable||'',7)}${divider(i,8)}${selectCell(r,'preDvic',9)}${selectCell(r,'preWhip',10)}${selectCell(r,'postDvic',11)}${selectCell(r,'postWhip',12)}${divider(i,13)}${selectCell(r,'rescued',14,'rescued-cell')}${cell(r,'stops',r.stops,15,'count-cell')}${cell(r,'packages',r.packages,16,'count-cell')}${cell(r,'packageReturns',r.packageReturns||'',17)}${cell(r,'endTime',r.endTime||'',18)}${cell(r,'rtsTime',r.rtsTime||'',19)}${cell(r,'plannedRts',r.plannedRts||'',20,'planned-rts-cell')}${cell(r,'clockOutTime',r.clockOutTime||'',21)}</tr>`).join('');
   const timeRowIndex=rowBase+rows.length-3;
-  const timeRow=`<tr class="ops-row wave-time-row wave-section-${sectionIndex}" data-wave-section="${sectionIndex}">${showGridLabels?`<th class="sheet-row-num">${rowBase+rows.length}</th>`:''}<td class="wave-time-cell copy-sheet-cell" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="0"`:''}>${esc(waveTime)}</td><td class="sheet-edit-cell copy-sheet-cell" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="1"`:''}></td><td class="sheet-edit-cell copy-sheet-cell" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="2"`:''}></td><td class="sheet-edit-cell copy-sheet-cell" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="3"`:''}></td><td class="sheet-edit-cell copy-sheet-cell" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="5"`:''}></td><td class="sheet-edit-cell copy-sheet-cell" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="6"`:''}></td><td class="sheet-edit-cell copy-sheet-cell" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="7"`:''}></td><td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="8"`:''}></td><td class="sheet-edit-cell copy-sheet-cell" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="9"`:''}></td><td class="sheet-edit-cell copy-sheet-cell" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="10"`:''}></td><td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="11"`:''}></td><td class="planned-rts-cell sheet-edit-cell copy-sheet-cell" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="12"`:''}></td></tr>`;
-  const separatorRowIndex=timeRowIndex+1;
-  const separatorRow=`<tr class="wave-separator wave-section-${sectionIndex}" data-wave-section="${sectionIndex}">${showGridLabels?`<th class="sheet-row-num">${rowBase+rows.length+1}</th>`:''}${sheetCopyFields.map((field,colIndex)=>`<td class="${sheetSpacerColumns.has(colIndex)?'sheet-spacer-col':''}" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${separatorRowIndex}" data-sheet-col="${colIndex}"`:''}></td>`).join('')}</tr>`;
-  return `${body}${timeRow}${separatorRow}`;
+  const timeCells=sheetCopyFields.map((field,colIndex)=>colIndex===0?`<td class="wave-time-cell copy-sheet-cell" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="0"`:''}>${esc(waveTime)}</td>`:colIndex===4?'':`<td class="${sheetSpacerColumns.has(colIndex)?'sheet-spacer-col':field==='plannedRts'?'planned-rts-cell sheet-edit-cell copy-sheet-cell':'sheet-edit-cell copy-sheet-cell'}" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="${colIndex}"`:''}></td>`).join('');
+  const timeRow=section.hasTime?`<tr class="ops-row wave-time-row wave-section-${sectionIndex}" data-wave-section="${sectionIndex}"><th class="sheet-row-num">${rowBase+rows.length}</th>${timeCells}</tr>`:'';
+  const separators=Array.from({length:section.separatorRows||0},(_,offset)=>{const sheetRow=rowBase+rows.length+(section.hasTime?1:0)+offset,rowIndex=sheetRow-3;return `<tr class="wave-separator wave-section-${sectionIndex}" data-wave-section="${sectionIndex}"><th class="sheet-row-num">${sheetRow}</th>${sheetCopyFields.map((field,colIndex)=>`<td class="${sheetSpacerColumns.has(colIndex)?'sheet-spacer-col':''}" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowIndex}" data-sheet-col="${colIndex}"`:''}></td>`).join('')}</tr>`;}).join('');
+  return `${body}${timeRow}${separators}`;
 }
 
 function deviceSheetDetails() {
@@ -1832,7 +1837,7 @@ function modal() {
   if (state.modal === 'sheets-helper') { const pasteRange=morningSheetsHandoffProof().range; return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="sheets-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS PASTE BOX</span><h2 id="sheets-title">Paste-ready morning sheet</h2><p>If one-click copy does not work, click Select all, copy, then paste into Google Sheets cell A3. Expected filled range: ${esc(pasteRange)}.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="paste-guide"><span><b>1</b> Select all</span><span><b>2</b> Copy</span><span><b>3</b> Paste ${esc(pasteRange)}</span></div><textarea id="sheets-copy-text" class="sheets-copy-text" readonly>${esc(state.sheetCopyText||morningSheetTsv())}</textarea><div class="modal-actions"><button class="btn" data-action="select-sheets-text">Select all text</button><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy again</button></div></div></div></div>`; }
   if (state.modal === 'morning-sheets-connector') {
     const payload=morningSheetsConnectorPayload(), rows=payload.rows.length, sections=payload.sections.length;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="morning-sheets-connector-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS CONNECTOR</span><h2 id="morning-sheets-connector-title">Send into Legacy Logistics Operations</h2><p>The connector copies the blank OPS LOG 2026 layout into the exact selected date tab, then fills its fixed Wave 1–5, ADHOC, HELPERS, and DSP sections without shifting rows or columns.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheets-connector-status ${state.morningSheetsEndpoint?'ready':'warn'}"><strong>${state.morningSheetsEndpoint?'Connector saved · update Apps Script once':'Connector not set yet'}</strong><span>${state.morningSheetsEndpoint?`Install the revised OPS LOG 2026 script, redeploy it, then keep using this endpoint. Target: ${esc(payload.sheetName)} or ${esc(payload.sheetNameCandidates?.[1]||payload.sheetName)}.`:'Copy the revised Apps Script, deploy it as a web app, then paste the web app URL below.'}</span></div>${morningSheetsPreflightHtml(payload)}${morningSheetsHandoffProofHtml(payload)}${morningSheetsRowAuditHtml(payload)}${morningSheetsLiveProofHtml(payload)}${morningSheetsReceiptHtml()}<div class="sheets-connector-grid"><div class="connector-step"><b>1</b><strong>Replace the old Apps Script</strong><span>Delete the previous connector code, paste the OPS LOG 2026 fixed-layout version, save, then deploy a new Web app version.</span><button class="btn small lime" data-action="copy-morning-apps-script">${ICONS.copy} COPY REVISED APPS SCRIPT</button><button class="btn small ghost" data-action="copy-morning-sheets-setup">Copy setup checklist</button><a class="btn small ghost" href="${MORNING_APPS_SCRIPT_URL}" download>Download .gs file</a></div><div class="connector-step"><b>2</b><strong>Paste web app endpoint</strong><span>Use the Apps Script deployment URL. Do not paste Google passwords or Amazon/Rivian credentials.</span><input id="morning-sheets-endpoint" value="${esc(state.morningSheetsEndpoint)}" placeholder="https://script.google.com/macros/s/.../exec"><button class="btn small" data-action="save-morning-sheets-connector">Save endpoint</button><button class="btn small ghost" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button></div><div class="connector-step"><b>3</b><strong>Send checked sheet</strong><span>${rows} logical rows · ${sections} sections · exact date only: ${esc(payload.sheetName)} / ${esc(payload.sheetNameCandidates?.[1]||payload.sheetName)}. Missing date tabs are created from OPS LOG 2026.</span><button class="btn small ghost" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn small primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send to Google Sheet</button><button class="btn small ghost" data-action="copy-morning-sheets-verify">${ICONS.copy} Copy verify checklist</button></div></div>${state.morningSheetsLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Connector note</strong><span>${esc(state.morningSheetsLastError)}</span></div></div>`:''}<details class="sheets-advanced-preview"><summary>Advanced transfer preview — do not paste into Apps Script</summary><div class="sheets-connector-preview"><strong>Dashboard data JSON</strong><span>This is only a preview of the filtered wave data. It is not Apps Script code.</span><textarea readonly>${esc(JSON.stringify(payload,null,2).slice(0,1800))}${JSON.stringify(payload).length>1800?'\n...':''}</textarea></div></details><div class="modal-actions"><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open template</a><a class="btn" href="${MORNING_APPS_SCRIPT_URL}" download>Download script</a><button class="btn lime" data-action="copy-morning-apps-script">${ICONS.copy} COPY REVISED APPS SCRIPT</button><button class="btn" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button><button class="btn" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send now</button></div><p class="upload-help">Fixed anchors: Wave 1 row 3 · Wave 2 row 18 · Wave 3 row 33 · Wave 4 row 48 · Wave 5 row 63 · ADHOC row 79 · HELPERS row 95 · DSP row 111.</p></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="morning-sheets-connector-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS CONNECTOR</span><h2 id="morning-sheets-connector-title">Send into Legacy Logistics Operations</h2><p>The connector copies the blank OPS LOG 2026 layout into the exact selected date tab, then fills its fixed Wave 1–5, ADHOC, and HELPERS sections without shifting rows or columns. The DSP rows remain available for manual entries.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheets-connector-status ${state.morningSheetsEndpoint?'ready':'warn'}"><strong>${state.morningSheetsEndpoint?'Connector saved · update Apps Script once':'Connector not set yet'}</strong><span>${state.morningSheetsEndpoint?`Install the revised OPS LOG 2026 script, redeploy it, then keep using this endpoint. Target: ${esc(payload.sheetName)} or ${esc(payload.sheetNameCandidates?.[1]||payload.sheetName)}.`:'Copy the revised Apps Script, deploy it as a web app, then paste the web app URL below.'}</span></div>${morningSheetsPreflightHtml(payload)}${morningSheetsHandoffProofHtml(payload)}${morningSheetsRowAuditHtml(payload)}${morningSheetsLiveProofHtml(payload)}${morningSheetsReceiptHtml()}<div class="sheets-connector-grid"><div class="connector-step"><b>1</b><strong>Replace the old Apps Script</strong><span>Delete the previous connector code, paste the OPS LOG 2026 fixed-layout version, save, then deploy a new Web app version.</span><button class="btn small lime" data-action="copy-morning-apps-script">${ICONS.copy} COPY REVISED APPS SCRIPT</button><button class="btn small ghost" data-action="copy-morning-sheets-setup">Copy setup checklist</button><a class="btn small ghost" href="${MORNING_APPS_SCRIPT_URL}" download>Download .gs file</a></div><div class="connector-step"><b>2</b><strong>Paste web app endpoint</strong><span>Use the Apps Script deployment URL. Do not paste Google passwords or Amazon/Rivian credentials.</span><input id="morning-sheets-endpoint" value="${esc(state.morningSheetsEndpoint)}" placeholder="https://script.google.com/macros/s/.../exec"><button class="btn small" data-action="save-morning-sheets-connector">Save endpoint</button><button class="btn small ghost" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button></div><div class="connector-step"><b>3</b><strong>Send checked sheet</strong><span>${rows} logical rows · ${sections} imported sections · exact date only: ${esc(payload.sheetName)} / ${esc(payload.sheetNameCandidates?.[1]||payload.sheetName)}. Missing date tabs are created from OPS LOG 2026.</span><button class="btn small ghost" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn small primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send to Google Sheet</button><button class="btn small ghost" data-action="copy-morning-sheets-verify">${ICONS.copy} Copy verify checklist</button></div></div>${state.morningSheetsLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Connector note</strong><span>${esc(state.morningSheetsLastError)}</span></div></div>`:''}<details class="sheets-advanced-preview"><summary>Advanced transfer preview — do not paste into Apps Script</summary><div class="sheets-connector-preview"><strong>Dashboard data JSON</strong><span>This is only a preview of the filtered wave data. It is not Apps Script code.</span><textarea readonly>${esc(JSON.stringify(payload,null,2).slice(0,1800))}${JSON.stringify(payload).length>1800?'\n...':''}</textarea></div></details><div class="modal-actions"><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open template</a><a class="btn" href="${MORNING_APPS_SCRIPT_URL}" download>Download script</a><button class="btn lime" data-action="copy-morning-apps-script">${ICONS.copy} COPY REVISED APPS SCRIPT</button><button class="btn" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button><button class="btn" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send now</button></div><p class="upload-help">Fixed import anchors: Wave 1 row 3 · Wave 2 row 18 · Wave 3 row 33 · Wave 4 row 48 · Wave 5 row 63 · ADHOC row 79 · HELPERS row 95. DSP row 111 stays manual.</p></div></div></div>`;
   }
   if (state.modal === 'gas-assignment') {
     const targets=morningAssignmentTargets();
@@ -2377,9 +2382,9 @@ function sheetCopyZone(col) {
   const n=Number(col);
   if(n>=0&&n<=7)return [0,7];
   if(n===8)return [8,8];
-  if(n>=9&&n<=10)return [9,10];
-  if(n===11)return [11,11];
-  if(n===12)return [12,12];
+  if(n>=9&&n<=12)return [9,12];
+  if(n===13)return [13,13];
+  if(n>=14&&n<=21)return [14,21];
   return null;
 }
 function inSameSheetBoundary(anchor,cell) {
@@ -2522,9 +2527,9 @@ function copySelectedSheetCells() {
   writeClipboardTable(text,selectedSheetHtml()||tsvToHtmlTable(text)).then(ok=>toast(ok?`Copied selected ${selectedSheetCells().length} cell${selectedSheetCells().length===1?'':'s'} for Google Sheets`:'Clipboard access was blocked — use the paste box',ok?'':'error'));
   return true;
 }
-const waveCopyBlocks={all:null,setup:[0,7],counts:[9,10],rts:[12,12]};
-const waveCopyBlockLabels={all:'full A–M',setup:'A–H setup',counts:'J–K counts',rts:'M Planned RTS'};
-function copyRowsClipboardHtml(items=[],left=0,right=12) {
+const waveCopyBlocks={all:null,setup:[0,7],counts:[15,16],rts:[20,20]};
+const waveCopyBlockLabels={all:'full A–V',setup:'A–H setup',counts:'P–Q counts',rts:'U planned RTS'};
+function copyRowsClipboardHtml(items=[],left=0,right=21) {
   const routeRows=items.filter(item=>!item.time&&!item.separator).length;
   let routeIndex=0;
   const body=items.map(item=>{
@@ -2538,7 +2543,7 @@ function copyRowsClipboardHtml(items=[],left=0,right=12) {
         continue;
       }
       if(col===4&&item.row) {
-        if(routeIndex===0) cells.push(clipboardTd(value,col,'pad',`rowspan="${routeRows+1}"`));
+        if(routeIndex===0) cells.push(clipboardTd(value,col,'pad',`rowspan="${routeRows+(items.some(row=>row.time)?1:0)}"`));
         continue;
       }
       if(col===4&&item.time) continue;
@@ -2554,7 +2559,7 @@ function copyWaveByIndex(index=0,block='all') {
   const group=groups[index];
   if(!group)return toast('That wave is not available to copy','error');
   const range=waveCopyBlocks[block]||waveCopyBlocks.all, copyRows=morningCopyRowsForSections([group]);
-  const left=range?range[0]:0, right=range?range[1]:12;
+  const left=range?range[0]:0, right=range?range[1]:21;
   const rows=copyRows.map(item=>item.values.slice(left,right+1).join('\t')).join('\n');
   state.sheetCopyText=rows;
   const sectionIndex=morningSections(filteredMorningRows()).findIndex(s=>s.label===group.label&&s.wave===group.wave);
@@ -3906,7 +3911,7 @@ async function writeClipboardTable(text,html) {
 function clipboardHtmlShell(tableHtml) {
   return `<!doctype html><html><head><meta charset="utf-8"></head><body>${tableHtml}</body></html>`;
 }
-const morningClipboardColumnWidths=[76,132,76,82,76,76,76,76,18,96,96,18,96];
+const morningClipboardColumnWidths=[76,210,70,82,78,70,70,70,18,76,76,76,76,18,72,86,86,106,96,96,96,96];
 function morningClipboardColgroup(left=0,right=morningClipboardColumnWidths.length-1) {
   const widths=morningClipboardColumnWidths.slice(Math.max(0,left),Math.min(morningClipboardColumnWidths.length-1,right)+1);
   return `<colgroup>${widths.map(width=>`<col style="width:${width}px;min-width:${width}px">`).join('')}</colgroup>`;
@@ -3915,12 +3920,12 @@ function clipboardCellStyle(colIndex,type='cell') {
   const width=morningClipboardColumnWidths[colIndex]||76;
   const base=`border:1px solid #111;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;font-size:10pt;font-weight:700;height:21px;width:${width}px;min-width:${width}px;mso-number-format:"\\@";`;
   if(type==='separator')return `${base}background:#050505;color:#050505;border-color:#050505;height:14px;`;
-  if(type==='wave')return `${base}background:#eef3ff;font-size:24pt;font-weight:900;writing-mode:vertical-rl;transform:rotate(180deg);`;
-  if(type==='time')return `${base}background:#eef3ff;font-size:11pt;font-weight:900;`;
-  if(type==='pad')return `${base}background:#eef3ff;font-size:22pt;font-weight:900;`;
+  if(type==='wave')return `${base}background:#fff;font-size:36pt;font-weight:400;writing-mode:vertical-rl;transform:rotate(180deg);`;
+  if(type==='time')return `${base}background:#fff;font-size:13pt;font-weight:700;`;
+  if(type==='pad')return `${base}background:#fff;font-size:24pt;font-weight:700;`;
   if(type==='spacer'||sheetSpacerColumns.has(colIndex))return `${base}background:#050505;color:#050505;border-color:#050505;`;
-  if(colIndex===12)return `${base}background:#b4a7d6;`;
-  return `${base}background:#eef3ff;`;
+  if(colIndex===20)return `${base}background:#b4a7d6;`;
+  return `${base}background:#fff;`;
 }
 function clipboardTd(value='',colIndex=0,type='cell',attrs='') {
   return `<td ${attrs} style="${clipboardCellStyle(colIndex,type)}">${xmlEscape(value)}</td>`;
@@ -3933,10 +3938,16 @@ function morningSheetClipboardHtml(sections=morningSections(filteredMorningRows(
   const body=sections.map(section=>{
     const display=morningDisplayRows(section), waveLabel=section.dsp?'DSP':section.label;
     const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
-    const rows=display.map((r,i)=>clipboardTr(`${i===0?clipboardTd(waveLabel,0,'wave',`rowspan="${display.length}"`):''}${clipboardTd(r.driver||'',1)}${clipboardTd(r._blank?'':r.route||'',2)}${clipboardTd(r.staging||'',3)}${i===0?clipboardTd(pad,4,'pad',`rowspan="${display.length+1}"`):''}${clipboardTd(r.ev||'',5)}${clipboardTd(r.deviceName||'',6)}${clipboardTd(r.portable||'',7)}${clipboardTd('',8,'spacer')}${clipboardTd(r.stops||'',9)}${clipboardTd(r.packages||'',10)}${clipboardTd('',11,'spacer')}${clipboardTd(r.plannedRts||'',12)}`,r._blank?'blank':'route')).join('');
-    const time=clipboardTr(`${clipboardTd(morningWaveTimeText(section),0,'time')}${clipboardTd('',1)}${clipboardTd('',2)}${clipboardTd('',3)}${clipboardTd('',5)}${clipboardTd('',6)}${clipboardTd('',7)}${clipboardTd('',8,'spacer')}${clipboardTd('',9)}${clipboardTd('',10)}${clipboardTd('',11,'spacer')}${clipboardTd('',12)}`,'time');
-    const separator=clipboardTr(sheetCopyFields.map((_,i)=>clipboardTd('',i,'separator')).join(''),'separator');
-    return rows+time+separator;
+    const padSpan=display.length+(section.hasTime?1:0);
+    const rows=display.map((r,i)=>clipboardTr(sheetCopyFields.map((field,col)=>{
+      if(col===0)return i===0?clipboardTd(waveLabel,col,'wave',`rowspan="${display.length}"`):'';
+      if(col===4)return i===0?clipboardTd(pad,col,'pad',`rowspan="${padSpan}"`):'';
+      const value=copyCellValue(r,field,'',pad);
+      return clipboardTd(value,col,sheetSpacerColumns.has(col)?'spacer':'cell');
+    }).join(''),r._blank?'blank':'route')).join('');
+    const time=section.hasTime?clipboardTr(sheetCopyFields.map((field,col)=>col===4?'':clipboardTd(col===0?morningWaveTimeText(section):'',col,col===0?'time':sheetSpacerColumns.has(col)?'spacer':'cell')).join(''),'time'):'';
+    const separators=Array.from({length:section.separatorRows||0},()=>clipboardTr(sheetCopyFields.map((_,i)=>clipboardTd('',i,'separator')).join(''),'separator')).join('');
+    return rows+time+separators;
   }).join('');
   return clipboardHtmlShell(`<table style="border-collapse:collapse;table-layout:fixed">${morningClipboardColgroup()}${body}</table>`);
 }
@@ -4028,29 +4039,26 @@ function morningSheetCopyRows() {
 }
 function morningSheetTsv(){ return morningSheetCopyRows().map(row=>row.join('\t')).join('\n'); }
 function morningSheetsConnectorPayload() {
-  const sections=morningSections(filteredMorningRows()), rows=[], rowTypes=[], sectionMeta=[];
+  const sections=morningSections(filteredMorningRows()).filter(section=>!section.dsp), rows=[], rowTypes=[], sectionMeta=[];
   let index=0;
   sections.forEach(section=>{
     const display=morningDisplayRows(section), pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
     const startRow=index+3;
     const waveLabel=section.dsp?'DSP':section.label;
     display.forEach((r,i)=>{
-      rows.push(sheetCopyFields.map(field=>copyCellValue(r,field,i===0?waveLabel:'',i===0?pad:'')));
+      rows.push(morningConnectorFields.map(field=>copyCellValue(r,field,i===0?waveLabel:'',i===0?pad:'')));
       rowTypes.push(r._blank?'blank':'route');
       index+=1;
     });
-    rows.push([morningWaveTimeText(section),'','','','','','','','','','','','']);
-    rowTypes.push('time');
-    const timeRow=index+3;
-    index+=1;
-    rows.push(['','','','','','','','','','','','','']);
-    rowTypes.push('separator');
-    const separatorRow=index+3;
-    index+=1;
-    sectionMeta.push({label:waveLabel,wave:section.wave||'',waveTime:morningWaveTimeText(section),pad,startRow,rowCount:display.length,timeRow,separatorRow,dsp:Boolean(section.dsp)});
+    let timeRow=null;
+    if(section.hasTime){rows.push([morningWaveTimeText(section),'','','','','','','','','','','','']);rowTypes.push('time');timeRow=index+3;index+=1;}
+    const separatorRows=[];
+    for(let i=0;i<(section.separatorRows||0);i++){rows.push(['','','','','','','','','','','','','']);rowTypes.push('separator');separatorRows.push(index+3);index+=1;}
+    const separatorRow=separatorRows[0]||null;
+    sectionMeta.push({label:waveLabel,wave:section.wave||'',waveTime:morningWaveTimeText(section),pad,startRow,rowCount:display.length,timeRow,separatorRow,separatorRows,dsp:Boolean(section.dsp)});
   });
   const dateTabs=operationDateTabNames(state.morningOperationDate),sheetName=dateTabs[0]||MORNING_TEMPLATE_SHEET_NAME;
-  return {version:'relayops-morning-v1',templateUrl:MORNING_TEMPLATE_URL,templateSheet:MORNING_TEMPLATE_SHEET_NAME,templateLayout:'fixed-ops-log-2026',operationDate:state.morningOperationDate,sheetName,sheetNameCandidates:dateTabs.length?dateTabs:MORNING_TEMPLATE_SHEET_CANDIDATES,dsp:state.dspCode,generatedAt:new Date().toISOString(),startCell:'A3',writeRange:'A3:M',headers:morningTemplateHeaders,rows,rowTypes,sections:sectionMeta};
+  return {version:'relayops-morning-v1',templateUrl:MORNING_TEMPLATE_URL,templateSheet:MORNING_TEMPLATE_SHEET_NAME,templateLayout:'fixed-ops-log-2026',operationDate:state.morningOperationDate,sheetName,sheetNameCandidates:dateTabs.length?dateTabs:MORNING_TEMPLATE_SHEET_CANDIDATES,dsp:state.dspCode,generatedAt:new Date().toISOString(),startCell:'A3',writeRange:'A3:M',headers:morningConnectorHeaders,rows,rowTypes,sections:sectionMeta};
 }
 function morningSheetsPreflight(payload=morningSheetsConnectorPayload()) {
   const rows=payload.rows||[], rowTypes=payload.rowTypes||[], sections=payload.sections||[], headers=payload.headers||[];
@@ -4061,7 +4069,7 @@ function morningSheetsPreflight(payload=morningSheetsConnectorPayload()) {
     {label:'Row 1 headers ready',ok:headers.length===13&&headers[0]==='WAVE'&&headers[12]==='PLANNED RTS',detail:'A–M headers match the opening template.'},
     {label:'Every row has 13 columns',ok:rows.length>0&&rows.every(row=>Array.isArray(row)&&row.length===13),detail:`${rows.length} row${rows.length===1?'':'s'} will write across A–M.`},
     {label:'Black dividers are real rows',ok:separatorIndexes.length>0&&separatorIndexes.every(i=>rows[i]?.length===13&&rows[i].every(cell=>String(cell||'')==='')),detail:`${separatorIndexes.length} divider row${separatorIndexes.length===1?'':'s'} included as numbered sheet rows.`},
-    {label:'Wave/Pad merge map ready',ok:sections.length>0&&sections.every(section=>Number(section.startRow)>=3&&Number(section.rowCount)>0&&Number(section.timeRow)>Number(section.startRow)&&Number(section.separatorRow)>Number(section.timeRow)),detail:`${sections.length} section${sections.length===1?'':'s'} tell Google which Wave and Pad cells to merge.`},
+    {label:'Wave/Pad merge map ready',ok:sections.length>0&&sections.every(section=>Number(section.startRow)>=3&&Number(section.rowCount)>0&&(!section.timeRow||Number(section.timeRow)>=Number(section.startRow)+Number(section.rowCount))&&(!section.separatorRow||Number(section.separatorRow)>Number(section.startRow))),detail:`${sections.length} section${sections.length===1?'':'s'} tell Google which Wave and Pad cells to merge.`},
     {label:'Row types match payload',ok:rowTypes.length===rows.length&&rowTypes.includes('route')&&rowTypes.includes('time')&&rowTypes.includes('separator'),detail:'Google can tell route rows, wave-time rows, blank rows, and dividers apart.'}
   ];
   return {ready:checks.every(check=>check.ok),checks};
@@ -4072,12 +4080,12 @@ function morningSheetsPreflightHtml(payload=morningSheetsConnectorPayload()) {
 }
 function morningSheetsHandoffProof(payload=morningSheetsConnectorPayload()) {
   const rows=payload.rows||[], sections=payload.sections||[];
-  const visibleRows=morningSheetCopyRows();
+  const visibleRows=morningCopyRowsForSections(morningSections(filteredMorningRows()).filter(section=>!section.dsp)).map(item=>item.values).map(row=>[row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[15],row[16],row[13],row[20]]);
   const mismatchIndex=rows.findIndex((row,i)=>JSON.stringify(row.map(cell=>String(cell??'')))!==JSON.stringify((visibleRows[i]||[]).map(cell=>String(cell??''))));
   const exactRows=rows.length===visibleRows.length&&mismatchIndex<0;
   const lastRow=rows.length?rows.length+2:2;
-  const separatorRows=sections.map(section=>section.separatorRow).filter(Boolean);
-  const mergeRows=sections.map(section=>`${section.label||'Section'} ${section.startRow}:${section.timeRow}`).join(', ');
+  const separatorRows=sections.flatMap(section=>section.separatorRows?.length?section.separatorRows:[section.separatorRow]).filter(Boolean);
+  const mergeRows=sections.map(section=>`${section.label||'Section'} ${section.startRow}:${section.timeRow||section.startRow+section.rowCount-1}`).join(', ');
   return {ready:exactRows&&rows.length>0,rows:rows.length,visibleRows:visibleRows.length,mismatchIndex,firstRow:rows[0]||[],lastRowValues:rows[rows.length-1]||[],range:rows.length?`A3:M${lastRow}`:'A3:M',firstSheetRow:rows.length?3:'—',lastSheetRow:rows.length?lastRow:'—',dividers:separatorRows.length,dividerRows:separatorRows.join(', '),sections:sections.length,mergeRows};
 }
 function morningSheetsHandoffProofHtml(payload=morningSheetsConnectorPayload()) {
@@ -4088,8 +4096,8 @@ function morningSheetStructureProof(payload=morningSheetsConnectorPayload()) {
   const proof=morningSheetsHandoffProof(payload), preflight=morningSheetsPreflight(payload);
   const headers=payload.headers||[], rowTypes=payload.rowTypes||[], sections=payload.sections||[];
   const letters=sheetColumnLetters(headers.length);
-  const dividerRows=sections.map(section=>section.separatorRow).filter(Boolean);
-  const mergeCount=sections.filter(section=>Number(section.startRow)>=3&&Number(section.timeRow)>Number(section.startRow)).length;
+  const dividerRows=sections.flatMap(section=>section.separatorRows?.length?section.separatorRows:[section.separatorRow]).filter(Boolean);
+  const mergeCount=sections.filter(section=>Number(section.startRow)>=3&&Number(section.rowCount)>0).length;
   const checks=[
     {label:'Column letters',ok:letters.join('')==='ABCDEFGHIJKLM',detail:'A–M labels match Google Sheets.'},
     {label:'Every row numbered',ok:proof.firstSheetRow===3&&proof.lastSheetRow!=='—'&&proof.rows>0,detail:`Data rows run ${proof.firstSheetRow} through ${proof.lastSheetRow}.`},
@@ -4327,10 +4335,15 @@ function validateRelayOpsMorningPayload(payload) {
     const count = Number(section.rowCount);
     const time = Number(section.timeRow);
     const separator = Number(section.separatorRow);
-    if (!start || start < RELAYOPS_START_ROW || !count || time <= start || separator <= time) errors.push('Section ' + (i + 1) + ' has invalid merge rows');
     const fixedLayout = relayOpsLayoutForSection(section);
     if (!fixedLayout) errors.push('Section ' + (i + 1) + ' is not supported by OPS LOG 2026: ' + String(section.label || section.wave || 'unnamed'));
-    else if (relayOpsSectionRows(payload, section).length > fixedLayout.routeCapacity) errors.push(fixedLayout.label + ' exceeds ' + fixedLayout.routeCapacity + ' available route rows');
+    else {
+      const invalidBase = !start || start < RELAYOPS_START_ROW || !count;
+      const invalidTime = Boolean(fixedLayout.timeRow) && (!time || time <= start);
+      const invalidSeparator = Boolean(fixedLayout.separatorRow) && (!separator || separator <= start || (fixedLayout.timeRow && separator <= time));
+      if (invalidBase || invalidTime || invalidSeparator) errors.push('Section ' + (i + 1) + ' has invalid merge rows');
+      if (relayOpsSectionRows(payload, section).length > fixedLayout.routeCapacity) errors.push(fixedLayout.label + ' exceeds ' + fixedLayout.routeCapacity + ' available route rows');
+    }
   });
   return {ready: errors.length === 0, errors: errors};
 }
@@ -4774,7 +4787,7 @@ function loadSlackDemo(){
 function exportMorningSheet(){const h=['Wave','Driver','Route','Staging','Pad','EV','Device','Portable','Stop Count','Package Count','Planned RTS'];const rows=filteredMorningRows().map(r=>[r.wave,r.driver,r.route,r.staging,r.pad,r.ev||'',r.deviceName||'',r.portable||'',r.stops,r.packages,r.plannedRts||'']);downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8',`${state.dspCode}-opening-operations.csv`);toast('Morning operations sheet downloaded');}
 function exportMorningTemplateSheet(){
   const headers=morningTemplateHeaders;
-  const cls=(i)=>i===0?'waveHead':i===8||i===11?'spacer':i===12?'plannedHead':'head';
+  const cls=(i)=>i===0?'waveHead':sheetSpacerColumns.has(i)?'spacer':i===20?'plannedHead':i>=9&&i<=10?'preInspectionHead':i>=11&&i<=12?'postInspectionHead':i===14?'rescuedHead':i===17?'returnsHead':'head';
   const cell=(value='',klass='cell',attrs='')=>`<td ${attrs} class="${klass}">${xmlEscape(value)}</td>`;
   const colgroup=`<colgroup>${morningClipboardColumnWidths.map(width=>`<col style="width:${width}px">`).join('')}</colgroup>`;
   const sections=morningSections(filteredMorningRows());
@@ -4782,15 +4795,18 @@ function exportMorningTemplateSheet(){
     const rows=morningDisplayRows(section);
     const waveText=section.dsp?'DSP':section.label;
     const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
-    const data=rows.map((r,i)=>`<tr>${i===0?cell(waveText,section.dsp?'wave dsp':'wave',`rowspan="${rows.length}"`):''}${cell(r.driver||'','driver')}${cell(r._blank?'':r.route||'')}${cell(r.staging||'')}${i===0?cell(pad,'pad',`rowspan="${rows.length+1}"`):''}${cell(r.ev||'')}${cell(r.deviceName||'')}${cell(r.portable||'')}${cell('','spacer')}${cell(r.stops||'')}${cell(r.packages||'')}${cell('','spacer')}${cell(r.plannedRts||'','planned')}</tr>`).join('');
-    return `${data}<tr>${cell(morningWaveTimeText(section),'waveTime')}${cell('')}${cell('')}${cell('')}${cell('')}${cell('')}${cell('')}${cell('','spacer')}${cell('')}${cell('')}${cell('','spacer')}${cell('','planned')}</tr><tr class="separator">${headers.map(()=>cell('','separatorCell')).join('')}</tr>`;
+    const padSpan=rows.length+(section.hasTime?1:0);
+    const data=rows.map((r,i)=>`<tr>${sheetCopyFields.map((field,col)=>{if(col===0)return i===0?cell(waveText,section.dsp?'wave dsp':'wave',`rowspan="${rows.length}"`):'';if(col===4)return i===0?cell(pad,'pad',`rowspan="${padSpan}"`):'';const value=copyCellValue(r,field,'',pad);return cell(value,sheetSpacerColumns.has(col)?'spacer':col===20?'planned':col===1?'driver':'cell');}).join('')}</tr>`).join('');
+    const time=section.hasTime?`<tr>${sheetCopyFields.map((field,col)=>col===4?'':cell(col===0?morningWaveTimeText(section):'',col===0?'waveTime':sheetSpacerColumns.has(col)?'spacer':col===20?'planned':'cell')).join('')}</tr>`:'';
+    const separators=Array.from({length:section.separatorRows||0},()=>`<tr class="separator">${headers.map(()=>cell('','separatorCell')).join('')}</tr>`).join('');
+    return `${data}${time}${separators}`;
   }).join('');
   const excelOptions=`<xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Morning Operations</x:Name><x:WorksheetOptions><x:FreezePanes/><x:FrozenNoSplit/><x:SplitHorizontal>1</x:SplitHorizontal><x:TopRowBottomPane>1</x:TopRowBottomPane><x:ActivePane>2</x:ActivePane></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml>`;
   const html=`<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">${excelOptions}<style>
     table{border-collapse:collapse;font-family:Arial,sans-serif;} td{mso-number-format:"\\@";}
-    .head,.waveHead,.plannedHead{height:34px;border:2px solid #111;text-align:center;font-weight:900;font-size:12px;background:#92f4fa;}
-    .waveHead,.plannedHead{background:#b4a7d6}.spacer{width:16px;background:#000;border:1px solid #000;color:#000}
-    .cell,.driver,.planned{height:24px;min-width:82px;border:1px solid #222;text-align:center;font-weight:700;font-size:10px;background:#eef3ff}.driver{min-width:130px}.wave{min-width:90px;font-size:28px;font-weight:900;writing-mode:vertical-rl;transform:rotate(180deg);background:#eef3ff}.waveTime{font-size:13px;font-weight:900;background:#eef3ff}.dsp{vertical-align:bottom}.pad{font-size:24px;font-weight:900;background:#eef3ff}.planned{background:#b4a7d6}.separatorCell{height:14px;background:#000;border:1px solid #000;color:#000}
+    .head,.waveHead,.plannedHead{height:34px;border:1px solid #111;text-align:center;font-family:Arial,sans-serif;font-weight:700;font-size:12px;background:#92f4fa;}
+    .waveHead{background:#b4a7d6}.plannedHead{background:#92f4fa}.preInspectionHead{background:#fce5cd}.postInspectionHead{background:#fff2cc}.rescuedHead{background:#93c47d}.returnsHead{background:#ea9999}.spacer{width:18px;background:#000;border:1px solid #000;color:#000}
+    .cell,.driver,.planned{height:24px;min-width:70px;border:1px solid #222;text-align:center;font-weight:700;font-size:10px;background:#fff}.driver{min-width:210px}.wave{min-width:76px;font-size:28px;font-weight:900;writing-mode:vertical-rl;transform:rotate(180deg);background:#fff}.waveTime{font-size:13px;font-weight:900;background:#fff}.dsp{vertical-align:bottom}.pad{font-size:24px;font-weight:900;background:#fff}.planned{background:#b4a7d6}.separatorCell{height:14px;background:#000;border:1px solid #000;color:#000}
   </style></head><body><table>${colgroup}<tr>${headers.map((h,i)=>cell(h,cls(i))).join('')}</tr>${body}</table></body></html>`;
   downloadBlob('\ufeff'+html,'application/vnd.ms-excel',`${state.dspCode}-opening-operations-formatted.xls`);
   toast('Formatted opening sheet downloaded — import/open this in Google Sheets to keep layout');
