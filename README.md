@@ -46,7 +46,7 @@ There are three connector types in the Morning Sheet workflow:
    - Run Test connector, then Dry run, then Send to Google Sheet.
    - The dashboard still sends a compact 13-column payload, but the Apps Script maps setup data to `A:H`, stop/package counts to `P:Q`, and Planned RTS to `U`.
    - It preserves the original A:V headers, widths, colors, checkbox columns J:M, black divider N, operations-entry columns O/R/S/T/V, and all template merges.
-   - It uses the fixed `OPS LOG 2026` anchors: Wave rows 3/18/33/48/63, ADHOC 78, HELPERS 94, and DSP 110.
+   - It uses the fixed `OPS LOG 2026` anchors: Wave rows 3/18/33/48/63, ADHOC 79, HELPERS 95, and DSP 111.
    - If the selected date tab is missing, it duplicates `OPS LOG 2026` and names the new tab only `M/D/YY` or `M.D.YY`; it never falls back to another date or the active tab.
 
 2. Slack / day-of-operations connector — demo/import mode today.
