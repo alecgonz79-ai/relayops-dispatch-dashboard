@@ -1982,6 +1982,13 @@ body .rivian-card:hover,body .rivian-card.expanded { border-color:#78acd1; box-s
 .paycom-head > div { display:grid; gap:3px; }
 .paycom-head > div span { color:#668072; font-size:10px; }
 .paycom-head select { height:34px; max-width:190px; border:1px solid #bcd8c5; border-radius:9px; padding:0 9px; background:#fff; color:#294b35; font-weight:700; }
+.paycom-head-tools { display:flex; align-items:center; justify-content:flex-end; gap:7px; }
+.paycom-driver-actions { display:flex; justify-content:flex-end; gap:6px; }
+.scheduled-shift-row.backup-marked { border:1px solid #40ef79; border-radius:10px; padding:9px 8px; background:#baffc8; box-shadow:0 0 0 2px rgba(38,238,104,.12),0 5px 15px rgba(18,142,60,.12); }
+.scheduled-shift-row.adhoc-marked { border:1px solid #77bcea; border-radius:10px; padding:9px 8px; background:#ebf8ff; }
+.vto-button { border-color:#21d85e!important; background:#43f179!important; color:#073d1a!important; font-weight:950!important; }
+.scheduled-section.called-off { border-color:#efc4bf; background:linear-gradient(145deg,#fffafa,#fff0ef); }
+.scheduled-section.called-off .scheduled-section-head b { background:#ffe0dd; color:#8c3730; }
 .route-driver-row { grid-template-columns:minmax(160px,1fr) auto minmax(230px,auto); }
 .route-swap-actions { display:flex; justify-content:flex-end; gap:6px; }
 .danger-soft { border-color:#e9b8b4!important; color:#8a3832!important; background:#fff5f4!important; }
@@ -2006,4 +2013,7 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
   .opening-schedule-head { align-items:stretch; flex-direction:column; }
   .opening-schedule-grid { grid-template-columns:1fr; }
   .scheduled-shift-row { grid-template-columns:1fr; }
+  .paycom-head,.paycom-head-tools { align-items:stretch; flex-direction:column; }
+  .paycom-head select { max-width:none; width:100%; }
+  .paycom-driver-actions { justify-content:flex-start; flex-wrap:wrap; }
 }
