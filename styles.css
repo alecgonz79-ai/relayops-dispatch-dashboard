@@ -652,6 +652,13 @@ tbody tr:last-child td { border-bottom:0; }
 .morning-more-tools[open] > summary b::after, .morning-advanced-checks[open] > summary b::after { content:'Close'; font-size:7px; }
 .morning-more-tools[open] > summary, .morning-advanced-checks[open] > summary { border-bottom:1px solid var(--line); background:#fafcfa; }
 .morning-more-actions { display:flex; flex-wrap:wrap; gap:8px; padding:12px 14px; }
+.morning-tools-filter-wrap { padding:12px 14px 0; }
+.morning-tools-filter-wrap .morning-daily-toolbar { border-radius:12px 12px 0 0; }
+.morning-tools-filter-wrap .sheet-kpis { border-radius:0 0 12px 12px; border-bottom:1px solid var(--line); }
+.bridge-send-pair { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.bridge-send-pair .rts-send-only { border-color:#8a78bd; background:#eee9ff; color:#493878; }
+.connector-settings-icon { flex:0 0 auto; }
+.connector-settings-icon svg { width:17px; height:17px; }
 .morning-advanced-checks { margin-bottom:10px; background:#fafbfa; }
 .morning-advanced-content { padding:12px; }
 .morning-advanced-content > * { margin:0 0 10px; border-radius:12px; border:1px solid var(--line); }
