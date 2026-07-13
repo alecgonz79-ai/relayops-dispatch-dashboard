@@ -3230,9 +3230,11 @@ function rowsFromPastedTable(text='') {
 
 function normalizeHeader(value='') { return String(value).toLowerCase().replace(/[^a-z0-9]/g,''); }
 function firstExisting(row,headers,names) {
-  const wanted=names.map(normalizeHeader);
-  const ix=headers.findIndex(h=>wanted.includes(normalizeHeader(h)));
-  return ix>=0?row[ix]:'';
+  for(const name of names) {
+    const wanted=normalizeHeader(name),ix=headers.findIndex(header=>normalizeHeader(header)===wanted);
+    if(ix>=0)return row[ix];
+  }
+  return '';
 }
 function numberFrom(value, fallback=null) {
   const match=String(value??'').match(/-?\d+(?:\.\d+)?/);
