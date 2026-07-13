@@ -258,6 +258,8 @@ body { letter-spacing:-.005em; }
   .search { width:205px; }
 }
 @media (max-width:760px) {
+  .fleet-source-actions { grid-template-columns:1fr; margin-left:8px; margin-right:8px; }
+  .fleet-source-actions > div { grid-template-columns:1fr; }
   .fleet-issues-panel { grid-template-columns:1fr; }
   .fleet-issue-entry { grid-template-columns:1fr 1fr; }
   .fleet-issue-entry .issue-text { grid-column:1/-1; }
@@ -907,17 +909,21 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-import-button b { font:900 13px/1.15 Manrope,sans-serif; }
 .fleet-import-button small { margin-top:4px; opacity:.76; font-size:8px; }
 .fleet-import-button:hover { transform:translateY(-1px); filter:brightness(1.04); }
-.fleet-health-summary.compact { margin-bottom:12px; }
-.fleet-health-summary.compact .fleet-health-card { min-height:82px; padding:12px; }
+.fleet-health-summary.compact { margin-bottom:8px; gap:7px; }
+.fleet-health-summary.compact .fleet-health-card { min-height:58px; padding:9px 11px; border-radius:12px!important; }
+.fleet-health-summary.compact .fleet-health-card strong { font-size:19px; }
+.fleet-health-summary.compact .fleet-health-card span { margin-top:3px; font-size:7px; }
+.fleet-health-summary.compact .fleet-health-card small { margin-top:2px; font-size:6px; }
 .fleet-alert-squares { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:12px; }
-.fleet-alert-squares button { min-height:102px; padding:13px; border:1px solid #d8e4ec; border-radius:15px; background:#fff; text-align:left; box-shadow:0 5px 16px rgba(34,57,75,.05); }
+.fleet-alert-squares button { min-height:66px; padding:9px 11px; border:1px solid #d8e4ec; border-radius:12px; background:#fff; text-align:left; box-shadow:0 3px 10px rgba(34,57,75,.04); }
 .fleet-alert-squares span,.fleet-alert-squares strong,.fleet-alert-squares small { display:block; }
 .fleet-alert-squares span { color:#667784; font-size:9px; font-weight:800; }
-.fleet-alert-squares strong { margin:6px 0; color:#231f20; font:900 25px/1 Manrope,sans-serif; }
-.fleet-alert-squares small { color:#7b8993; font-size:8px; }
-.fleet-alert-squares button.danger { background:#fff1ef; border-color:#f1bbb5; }
-.fleet-alert-squares button.battery,.fleet-alert-squares button.charge { background:#fff8e7; border-color:#efd28b; }
-.fleet-alert-squares button.review { background:#eef6fc; border-color:#bed9ec; }
+.fleet-alert-squares strong { float:right; margin:-12px 0 0 8px; color:#231f20; font:900 19px/1 Manrope,sans-serif; }
+.fleet-alert-squares small { color:#7b8993; font-size:7px; }
+.fleet-alert-squares button.danger { background:#fff4f3; border-color:#edc8c4; }
+.fleet-alert-squares button.battery { background:#fff9e9; border-color:#ead9a8; }
+.fleet-alert-squares button.charge { background:#eef8f2; border-color:#c9e2d2; }
+.fleet-alert-squares button.review { background:#eef6fb; border-color:#c7dce9; }
 .fleet-alert-squares button:hover { transform:translateY(-1px); box-shadow:0 9px 22px rgba(34,57,75,.1); }
 .fleet-small-tools { margin:0 12px 12px; border:1px solid #dbe6ee; border-radius:12px; background:#f8fbfd; }
 .fleet-small-tools summary { padding:9px 11px; color:#486274; font-size:9px; font-weight:900; cursor:pointer; }
@@ -925,17 +931,44 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-small-tools .fleet-data-drawer { margin:0 10px 10px; }
 .fleet-import-button b small { display:inline; margin-left:4px; font-size:8px; font-weight:850; opacity:.72; }
 .fleet-import-button em { display:block; margin-top:4px; color:inherit; font-size:8px; font-style:normal; font-weight:800; opacity:.78; }
-.fleet-issues-panel { display:grid; grid-template-columns:minmax(220px,.7fr) minmax(420px,1.3fr); gap:14px; align-items:start; margin:12px 0; padding:15px; border-color:#ead9a7; background:linear-gradient(135deg,#fffaf0,#fff); }
+.fleet-issues-panel { display:grid; grid-template-columns:minmax(220px,.7fr) minmax(420px,1.3fr) auto; gap:14px; align-items:center; margin:8px 0 10px; padding:12px 14px; border-color:#d5dadd; background:#edf0f2; box-shadow:0 5px 14px rgba(39,48,55,.05); }
 .fleet-issues-copy h2 { margin:4px 0; font:1000 14px "Manrope"; }
+.fleet-issues-title { display:flex; align-items:center; gap:8px; }
+.fleet-issues-title h2 { margin:4px 0; }
+.fleet-issues-title strong { display:grid; place-items:center; min-width:24px; height:24px; padding:0 7px; border-radius:999px; background:#d8dde1; color:#313a41; font:1000 10px "Manrope"; }
 .fleet-issues-copy p { margin:0; color:#68736c; font-size:8px; font-weight:800; line-height:1.45; }
 .fleet-issue-entry { display:grid; grid-template-columns:110px 100px minmax(180px,1fr) auto; gap:8px; align-items:end; }
 .fleet-issue-entry label { color:#667268; font-size:7px; font-weight:1000; text-transform:uppercase; letter-spacing:.05em; }
 .fleet-issue-entry input,.fleet-issue-entry select { display:block; width:100%; height:34px; margin-top:4px; padding:0 9px; border:1px solid #d9dfda; border-radius:9px; background:#fff; font-size:9px; }
-.fleet-issue-list { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:7px; padding-top:10px; border-top:1px solid #ece5d3; }
-.fleet-issue-list > span { display:grid; grid-template-columns:auto 1fr auto; gap:6px; align-items:center; max-width:360px; padding:7px 9px; border-radius:9px; background:#fff4d8; color:#72520c; font-size:8px; }
-.fleet-issue-list > span.high,.fleet-issue-list > span.critical { background:#ffe7e2; color:#992c23; }
-.fleet-issue-list em { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-style:normal; }
-.fleet-issue-list button { border:0; background:transparent; color:inherit; font-size:14px; cursor:pointer; }
+.fleet-issue-total { display:grid; grid-template-columns:auto auto; align-items:center; gap:2px 7px; min-width:112px; padding:9px 11px; border:1px solid #d0d6da; border-radius:11px; background:#f7f8f9; color:#49545c; }
+.fleet-issue-total span { grid-row:1/3; font-size:16px; }
+.fleet-issue-total b { font:1000 17px/1 "Manrope"; }
+.fleet-issue-total small { font-size:7px; font-weight:900; text-transform:uppercase; letter-spacing:.05em; }
+.fleet-source-actions { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin:0 12px 10px; }
+.fleet-source-actions > div { display:grid; grid-template-columns:minmax(160px,1fr) minmax(155px,.9fr); gap:7px; padding:7px; border:1px solid #59636b; border-radius:13px; background:#3a434a; }
+.fleet-source-actions a { display:flex; align-items:center; gap:9px; min-width:0; padding:8px 10px; border-radius:10px; color:#f5f7f8; text-decoration:none; background:#30383f; }
+.fleet-source-actions a svg { width:18px; height:18px; flex:none; }
+.fleet-source-actions a span,.fleet-source-actions a b,.fleet-source-actions a small { display:block; min-width:0; }
+.fleet-source-actions a b { font:900 10px "Manrope"; }
+.fleet-source-actions a small { margin-top:2px; color:#bbc4ca; font-size:7px; }
+.fleet-source-actions .fleet-import-button { min-height:48px; padding:8px 10px; border-radius:10px!important; }
+.fleet-source-actions .fleet-import-button svg { width:17px; height:17px; }
+.fleet-source-actions .fleet-import-button b { font-size:10px; }
+.fleet-source-actions .fleet-import-button em { font-size:7px; }
+.rivian-panel.simplified { background:#353d44; border-color:#424c54; }
+.rivian-panel.simplified > .fleet-clean-head { background:#30383f; border-bottom-color:#4c565e; }
+.rivian-panel.simplified .fleet-clean-head h2 { color:#fff; }
+.rivian-panel.simplified .fleet-clean-head p { color:#c4cbd0; }
+.rivian-panel.simplified .fleet-small-tools { border-color:#556068; background:#3c454c; }
+.rivian-panel.simplified .fleet-small-tools summary { color:#d8dde1; }
+.rivian-panel.simplified .fleet-count-label { color:#d8dde1; }
+.rivian-panel.simplified .fleet-result-bar { border-color:#566168; background:#30383f; }
+.rivian-panel.simplified .fleet-result-bar strong { color:#fff; }
+.rivian-panel.simplified .fleet-result-bar span { color:#c4cbd0; }
+.rivian-panel.simplified .rivian-grid { padding:0 2px 2px; }
+.rivian-panel.simplified .rivian-card { background:#edf0f2; border-color:#cbd2d6; }
+.rivian-panel.simplified .rivian-card.vehicle-operational { border:2px solid #8bc39a; box-shadow:0 5px 14px rgba(40,105,60,.12); }
+.rivian-panel.simplified .rivian-card.vehicle-grounded { border:2px solid #e5959d; box-shadow:0 5px 14px rgba(148,38,53,.16); }
 .fleet-service-type { display:block; margin-top:3px; color:#6b7780; font-size:7px; font-weight:800; }
 .fleet-reported-issue { display:flex; align-items:center; gap:4px; max-width:230px; margin-top:7px; padding:5px 7px; border-radius:8px; background:#fff1c7; color:#77540a; font-size:7px; }
 .fleet-reported-issue b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -1852,6 +1885,11 @@ tbody tr:last-child td { border-bottom:0; }
   .readiness-steps { grid-template-columns:1fr; }
   .phase-strip { grid-template-columns:1fr 1fr; }
   .fleet-grid, .team-grid, .report-grid, .rivian-grid, .field-grid, .fleet-health-summary, .rivian-grid.tiny-view, .rivian-grid.columns-view { grid-template-columns:1fr; }
+  .fleet-source-actions { grid-template-columns:1fr; margin-left:8px; margin-right:8px; }
+  .fleet-source-actions > div { grid-template-columns:1fr; }
+  .fleet-issues-panel { grid-template-columns:1fr; }
+  .fleet-issue-entry { grid-template-columns:1fr 1fr; }
+  .fleet-issue-entry .issue-text { grid-column:1/-1; }
   .fleet-clean-toolbar { align-items:flex-start; flex-direction:column; }
   .fleet-view-switcher { width:100%; justify-content:space-between; }
   .fleet-view-switcher button { width:25%; }
