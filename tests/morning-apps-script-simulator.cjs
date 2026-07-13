@@ -22,6 +22,9 @@ class FakeRange {
     this.eachCell((row, col) => this.sheet.setCell(row, col, value));
     return this;
   }
+  getDisplayValues() {
+    return Array.from({ length: this.numRows }, (_, r) => Array.from({ length: this.numCols }, (_, c) => String(this.sheet.getCell(this.row + r, this.col + c) ?? '')));
+  }
   clearContent() {
     this.eachCell((row, col) => this.sheet.setCell(row, col, ''));
     return this;
@@ -170,7 +173,7 @@ function createLegacyTemplate(name = 'OPS LOG 2026') {
   return sheet;
 }
 
-function runConnectorWithSheet(sheet, payload) {
+function runConnectorWithSheet(sheet, payload, rtsPayload = null) {
   const connector = fs.readFileSync(require.resolve('../google-sheets/relayops-morning-connector.gs'), 'utf8');
   const template = sheet.getName() === 'OPS LOG 2026' ? sheet : createLegacyTemplate();
   const spreadsheet = new FakeSpreadsheet(template === sheet ? [sheet] : [template, sheet]);
@@ -197,13 +200,17 @@ function runConnectorWithSheet(sheet, payload) {
       createTextOutput: text => ({ text, setMimeType() { return this; } })
     }
   };
-  const context = { ...sandbox, __payload: payload, __ui: ui, __spreadsheet: spreadsheet };
+  const context = { ...sandbox, __payload: payload, __rtsPayload: rtsPayload, __ui: ui, __spreadsheet: spreadsheet };
   vm.runInNewContext(`${connector}
     globalThis.__validation = validateRelayOpsMorningPayload(globalThis.__payload);
     globalThis.__ping = JSON.parse(doGet({}).text);
     globalThis.__templateLayout = relayOpsValidateTemplate();
     globalThis.__layoutBefore = relayOpsTemplateLayout(findRelayOpsMorningSheet(globalThis.__payload), globalThis.__payload.rows.length);
     globalThis.__result = writeRelayOpsMorningSheet(globalThis.__payload);
+    if (globalThis.__rtsPayload) {
+      globalThis.__rtsValidation = validateRelayOpsRtsPayload(globalThis.__rtsPayload);
+      globalThis.__rtsResult = writeRelayOpsRtsOnly(globalThis.__rtsPayload);
+    }
     globalThis.__layoutAfter = relayOpsTemplateLayout(findRelayOpsMorningSheet(globalThis.__payload), globalThis.__payload.rows.length);
   `, context);
   return context;
@@ -254,6 +261,13 @@ if (sheet.getCell(16, 1) !== '11:15 (2)') throw new Error('Connector should writ
 if (sheet.getCell(18, 1) !== 'WAVE 2' || sheet.getCell(33, 1) !== 'WAVE 3' || sheet.getCell(79, 1) !== "ADHOC's" || sheet.getCell(111, 1) !== 'DSP') throw new Error('Connector should preserve fixed OPS LOG 2026 section anchors');
 if (sheet.columnWidths.get(9) !== 77 || sheet.columnWidths.get(14) !== 77) throw new Error('Connector should preserve every original column width');
 if (resultContext.__result.writeRange !== 'A3:V' || resultContext.__result.writtenRange !== 'A3:V116' || resultContext.__result.lastCell !== 'V116') throw new Error('Connector should return the full fixed A3:V116 template proof');
+
+const rtsOnlyPayload = {version:'relayops-morning-v1',mode:'rts-only',operationDate:'2026-07-12',sheetName:'7/12/26',sheetNameCandidates:['7/12/26','7.12.26'],updates:[{route:'CX201',plannedRts:'8:45 PM'},{route:'CX202',plannedRts:'9:06 PM'}],waves:[{label:'WAVE 1',value:'11:15 (2)'}]};
+const rtsSheet = createLegacyTemplate('7/12/26');
+const rtsContext = runConnectorWithSheet(rtsSheet, payload, rtsOnlyPayload);
+if (!rtsContext.__rtsValidation.ready || rtsContext.__rtsResult.updated !== 2 || rtsContext.__rtsResult.waveTimes !== 1) throw new Error('RTS-only connector should validate and update two route times plus one wave label');
+if (rtsSheet.getCell(3, 21) !== '8:45 PM' || rtsSheet.getCell(4, 21) !== '9:06 PM' || rtsSheet.getCell(16, 1) !== '11:15 (2)') throw new Error('RTS-only connector should write only Planned RTS and wave-time/count cells');
+if (rtsSheet.getCell(3, 2) !== 'Driver One' || rtsSheet.getCell(3, 16) !== '188') throw new Error('RTS-only connector changed non-RTS Morning Sheet data');
 
 const sentinelSheet = createLegacyTemplate('7.12.26');
 sentinelSheet.setCell(3, 14, 'DO NOT TOUCH N3');
