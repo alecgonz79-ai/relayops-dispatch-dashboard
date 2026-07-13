@@ -238,6 +238,7 @@ let state = {
   morningSheetsLastReceipt: JSON.parse(localStorage.getItem('relayops_morning_sheets_last_receipt') || 'null'),
   morningSheetsLastDryRun: localStorage.getItem('relayops_morning_sheets_last_dry_run') || '',
   morningOperationDate: defaultOperationDate(),
+  lastItineraryRts: JSON.parse(localStorage.getItem('relayops_last_itinerary_rts') || 'null') || {},
   fleetNameOverrides: JSON.parse(localStorage.getItem('relayops_fleet_name_overrides') || 'null') || {},
   editingFleetVin: '',
   fleetAmazonUrl: localStorage.getItem('relayops_fleet_amazon_url') || AMAZON_FLEET_PORTAL_URL,
@@ -3154,8 +3155,16 @@ async function readFiles(files) {
       if(invalidName)throw new Error('RTS import requires a file beginning with Itineraries_DJT6');
       const details=parsed.reduce((all,file)=>({...all,...itineraryRtsDetailsFromRows(file.rows||[])}),{}),count=Object.keys(details).length;
       if(!count)throw new Error('No Route code + Planned return to station rows found');
+      state.lastItineraryRts=details;
       state.importedFile={name:parsed.map(file=>file.name).join(' + '),headers:parsed[0]?.rows?.[0]||[],rows:parsed.flatMap(file=>(file.rows||[]).slice(1)),kind:'rts',routeDetails:details,routeDetailsCount:count};
-      render();return toast(`${count} Planned return to station times ready · no other Morning Sheet data will change`);
+      let matched=0,flagged=0;
+      state.morningRoutes.forEach(route=>{
+        const detail=details[normalizeCxRoute(route.route)];
+        if(!detail?.plannedRts)return;
+        matched++;route.plannedRts=detail.plannedRts;route.plannedRtsIssue=isIrregularPlannedRts(detail.plannedRts,route.wave);if(route.plannedRtsIssue)flagged++;
+      });
+      state.modal=null;state.page='morning';state.importPurpose='morning';persist();render();
+      return toast(`${matched} Planned return to station times filled automatically${flagged?` · ${flagged} flagged for review`:''}`);
     }
     const plan=parsed.find(f=>/day\s*of\s*ops\s*plan/i.test(f.name)||findImportHeader(f.rows,[['route','routecode','cxnumber','cxroute','blockid'],['wave','wavetime','starttime'],['staging','staginglocation']])>=0);
     const routeFile=parsed.find(f=>/route[_\s-]*djt6/i.test(f.name))||parsed.find(f=>f!==plan&&Object.keys(routeDetailsFromRows(f.rows)).length);
@@ -4097,10 +4106,15 @@ function morningSheetsConnectorPayload() {
 }
 function morningRtsOnlyPayload() {
   const dateTabs=operationDateTabNames(state.morningOperationDate),sections=morningSections(filteredMorningRows()).filter(section=>!section.dsp);
+  const visibleRoutes=new Map(filteredMorningRows().map(route=>[normalizeCxRoute(route.route),route]));
+  const latest=state.lastItineraryRts&&typeof state.lastItineraryRts==='object'?state.lastItineraryRts:{};
   return {
     version:'relayops-morning-v1',mode:'rts-only',operationDate:state.morningOperationDate,
     sheetName:dateTabs[0]||MORNING_TEMPLATE_SHEET_NAME,sheetNameCandidates:dateTabs,
-    updates:filteredMorningRows().filter(route=>route.route&&route.plannedRts).map(route=>({route:normalizeCxRoute(route.route),plannedRts:route.plannedRts})),
+    // Only send values proven to come from the latest Itineraries_DJT6 upload.
+    // Older purple-cell values may be Planned Departure Time and must never leak
+    // into an RTS-only update.
+    updates:Object.entries(latest).map(([route,detail])=>({route:normalizeCxRoute(route),plannedRts:normalizeTimeDisplay(detail?.plannedRts)})).filter(update=>visibleRoutes.has(update.route)&&update.plannedRts),
     waves:sections.filter(section=>section.hasTime&&/^WAVE\s*[1-5]$/i.test(section.label)).map(section=>({label:section.label,value:morningWaveTimeText(section)})),
     generatedAt:new Date().toISOString()
   };
@@ -4968,6 +4982,7 @@ localStorage.setItem('relayops_parking_notes',state.parkingNotes||'');
 localStorage.setItem('relayops_charging_station_checked',state.chargingStationChecked||'');
 localStorage.setItem('relayops_page',state.page);localStorage.setItem('relayops_role',state.role);localStorage.setItem('relayops_phase',state.phase);localStorage.setItem('relayops_routes',JSON.stringify(state.routes));localStorage.setItem('relayops_morning',JSON.stringify(state.morningRoutes));localStorage.setItem('relayops_dsp',state.dspCode);localStorage.setItem('relayops_excluded',state.lastImportExcluded);localStorage.setItem('relayops_published',state.rosterPublished);localStorage.setItem('relayops_rating',state.rating);localStorage.setItem('relayops_fit_rows',state.fitMorningRows);localStorage.setItem('relayops_fleet_sort',state.fleetSort);localStorage.setItem('relayops_fleet_filter',state.fleetFilter);localStorage.setItem('relayops_fleet_view',state.fleetView);localStorage.setItem('relayops_fleet_search',state.fleetSearch);localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin);localStorage.setItem('relayops_fleet_refresh',state.fleetLastRefresh);localStorage.setItem('relayops_fleet_import',JSON.stringify(state.fleetImport||null));localStorage.setItem('relayops_fleet_source_uploads',JSON.stringify(state.fleetSourceUploads||{}));localStorage.setItem('relayops_fleet_expected_count',state.fleetExpectedCount||0);localStorage.setItem('relayops_fleet_live_endpoint',state.fleetLiveEndpoint||'');localStorage.setItem('relayops_morning_sheets_endpoint',state.morningSheetsEndpoint||'');localStorage.setItem('relayops_morning_sheets_last_push',state.morningSheetsLastPush||'');localStorage.setItem('relayops_morning_sheets_last_error',state.morningSheetsLastError||'');localStorage.setItem('relayops_morning_sheets_last_receipt',JSON.stringify(state.morningSheetsLastReceipt||null));localStorage.setItem('relayops_morning_sheets_last_dry_run',state.morningSheetsLastDryRun||'');localStorage.setItem('relayops_fleet_amazon_url',state.fleetAmazonUrl||AMAZON_FLEET_PORTAL_URL);localStorage.setItem('relayops_fleet_fleetos_url',state.fleetFleetosUrl||FLEETOS_PORTAL_URL);localStorage.setItem('relayops_fleet_live_last_pull',state.fleetLiveLastPull||'');localStorage.setItem('relayops_fleet_live_last_error',state.fleetLiveLastError||'');localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking||[]));localStorage.setItem('relayops_van_parking_updated',state.vanParkingUpdated||'');localStorage.setItem('relayops_van_parking_batteries',JSON.stringify(state.vanParkingBatteries||{}));localStorage.setItem('relayops_selected_parking_id',state.selectedParkingId||'');localStorage.setItem('relayops_parking_mode',state.parkingMode||'manual');localStorage.setItem('relayops_driver_contacts',JSON.stringify(state.driverContacts||[]));localStorage.setItem('relayops_driver_contacts_last_import',state.driverContactsLastImport||'');localStorage.setItem('relayops_removed_driver_keys',JSON.stringify(state.removedDriverKeys||[]));
 localStorage.setItem('relayops_morning_operation_date',state.morningOperationDate||defaultOperationDate());
+localStorage.setItem('relayops_last_itinerary_rts',JSON.stringify(state.lastItineraryRts||{}));
 localStorage.setItem('relayops_fleet_name_overrides',JSON.stringify(state.fleetNameOverrides||{}));
 window.RelayOpsCloud?.schedule?.('workspace.autosave');
 }
