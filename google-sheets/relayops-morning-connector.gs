@@ -9,7 +9,7 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-12-current-date-number-fix';
+const RELAYOPS_BUILD = '2026-07-12-rts-only-itineraries';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -62,6 +62,17 @@ function doPost(e) {
   let lock = null;
   try {
     const payload = JSON.parse(e.postData.contents || '{}');
+    if (payload.mode === 'rts-only') {
+      const rtsValidation = validateRelayOpsRtsPayload(payload);
+      if (!rtsValidation.ready) throw new Error('RelayOps RTS-only preflight failed: ' + rtsValidation.errors.join('; '));
+      if (payload.dryRun) {
+        const target = resolveRelayOpsTarget(payload, false);
+        return relayOpsJson({ok:true,build:RELAYOPS_BUILD,mode:'rts-only',dryRun:true,sheet:target.targetName,wouldCreateSheet:target.wouldCreate,updates:payload.updates.length,waveTimes:payload.waves.length,preflight:rtsValidation,updatedAt:new Date().toISOString()});
+      }
+      lock = LockService.getDocumentLock();lock.waitLock(20000);
+      const rtsResult = writeRelayOpsRtsOnly(payload);
+      return relayOpsJson({ok:true,build:RELAYOPS_BUILD,mode:'rts-only',sheet:rtsResult.sheetName,updated:rtsResult.updated,waveTimes:rtsResult.waveTimes,missingRoutes:rtsResult.missingRoutes,preflight:rtsValidation,updatedAt:new Date().toISOString()});
+    }
     const validation = validateRelayOpsMorningPayload(payload);
     if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
     if (payload.dryRun) {
@@ -191,6 +202,33 @@ function validateRelayOpsMorningPayload(payload) {
     }
   });
   return {ready: errors.length === 0, errors: errors};
+}
+
+function validateRelayOpsRtsPayload(payload) {
+  const errors = [], allowed = relayOpsAllowedDateNames(payload && payload.operationDate), updates = payload && payload.updates || [], waves = payload && payload.waves || [];
+  if (!payload || payload.version !== 'relayops-morning-v1' || payload.mode !== 'rts-only') errors.push('Wrong RTS-only payload version');
+  if (!allowed.length || allowed.indexOf(payload.sheetName) < 0) errors.push('RTS target tab must match the operation date');
+  if (!updates.length) errors.push('No Planned RTS updates were supplied');
+  updates.forEach(function(update, index) { if (!String(update.route || '').trim() || !String(update.plannedRts || '').trim()) errors.push('RTS update ' + (index + 1) + ' needs Route and Planned RTS'); });
+  if (!waves.length) errors.push('Wave time/count labels are required');
+  return {ready:errors.length===0,errors:errors};
+}
+
+function relayOpsRouteKey(value) {
+  const text = String(value || '').toUpperCase(), match = text.match(/\bCX\d+\b/);
+  return match ? match[0] : text.replace(/\s+/g, '');
+}
+
+function writeRelayOpsRtsOnly(payload) {
+  const target = resolveRelayOpsTarget(payload, true), sheet = target.sheet;
+  validateRelayOpsTemplateSignature(sheet);
+  const routeRows = sheet.getRange(3, 3, 108, 1).getDisplayValues(), byRoute = {};
+  routeRows.forEach(function(row, index) { const key = relayOpsRouteKey(row[0]);if (key && !byRoute[key]) byRoute[key] = index + 3; });
+  let updated = 0;const missingRoutes = [];
+  (payload.updates || []).forEach(function(update) { const key = relayOpsRouteKey(update.route), row = byRoute[key];if (!row) { missingRoutes.push(key);return; }sheet.getRange(row, 21).setValue(update.plannedRts);updated++; });
+  let waveTimes = 0;
+  (payload.waves || []).forEach(function(wave) { const layout = relayOpsLayoutForSection({label:wave.label});if (!layout || !layout.timeRow) return;sheet.getRange(layout.timeRow, 1).setValue(wave.value || '');waveTimes++; });
+  return {sheetName:sheet.getName(),updated:updated,waveTimes:waveTimes,missingRoutes:missingRoutes};
 }
 
 function relayOpsValidateTemplate() {
