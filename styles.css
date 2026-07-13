@@ -1277,6 +1277,7 @@ tbody tr:last-child td { border-bottom:0; }
 .hard-status-pill.inactive { background:#edf0ec; color:#5d6861; }
 .tiny-view .rivian-card:not(.expanded) .confidence-pill, .tiny-view .rivian-card:not(.expanded) .update-pill, .list-view .rivian-card:not(.expanded) .confidence-pill, .list-view .rivian-card:not(.expanded) .update-pill, .columns-view .rivian-card:not(.expanded) .confidence-pill, .columns-view .rivian-card:not(.expanded) .update-pill { display:none; }
 .tiny-view .hard-status-pill { display:none; }
+.tiny-view .hard-status-pill.grounded { display:inline-flex; font-size:7px; }
 .rivian-vin { display:block; max-width:98px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px; color:#5c6970; font-size:6px; font-weight:800; }
 .tiny-view .rivian-card:not(.expanded) .rivian-vin, .list-view .rivian-card:not(.expanded) .rivian-vin, .columns-view .rivian-card:not(.expanded) .rivian-vin { display:none; }
 .name-source-pill { display:inline-flex; flex-direction:column; gap:1px; margin-top:3px; padding:2px 5px; border-radius:8px; background:#eef7ea; color:#275c1f; font-size:6px; font-weight:1000; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
@@ -1310,6 +1311,11 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-card-status-line .warn i { background:#d5971a; }
 .fleet-card-status-line .danger { color:#d11237; }
 .fleet-card-status-line .danger i { background:#d11237; }
+.fleet-card-status-line .vehicle-operational-pill { width:max-content; padding:3px 6px; border-radius:999px; background:#eef2ee; }
+.fleet-card-status-line .vehicle-operational-pill.ok { background:#e8f7e5; color:#28752e; }
+.fleet-card-status-line .vehicle-operational-pill.danger { background:#ffe3e7; color:#ce1234; }
+.fleet-card-status-line .vehicle-operational-pill b { display:grid; place-items:center; width:12px; height:12px; border-radius:50%; background:currentColor; color:#fff; font-size:8px; line-height:1; }
+.fleet-card-status-line .vehicle-operational-pill i { display:none; }
 .tiny-view .fleet-card-status-line span { font-size:8px; letter-spacing:0; text-transform:none; }
 .list-view .fleet-card-status-line span { font-size:11px; letter-spacing:0; text-transform:none; }
 .columns-view .fleet-card-status-line span { font-size:7px; letter-spacing:0; text-transform:none; }

@@ -1613,7 +1613,7 @@ function fleetCardStatusPills(vehicle={}) {
   const operational=normalizeOperational(vehicle.operational||'');
   const activeClass=active==='Active'?'ok':'warn';
   const operationalClass=operational==='Operational'?'ok':operational==='Grounded'?'danger':'warn';
-  return `<div class="fleet-card-status-line"><span class="${activeClass}"><i></i>${esc(active||'Unknown')}</span><span class="${operationalClass}"><i></i>${esc(operational||'Unknown')}</span></div>`;
+  return `<div class="fleet-card-status-line"><span class="${activeClass}"><i></i>${esc(active||'Unknown')}</span><span class="vehicle-operational-pill ${operationalClass}"><i></i><b>${operational==='Operational'?'✓':operational==='Grounded'?'−':'?'}</b>${esc(operational||'Unknown')}</span></div>`;
 }
 function fleetCardIssueHtml(vehicle={}) {
   const issue=fleetIssueForVehicle(vehicle);if(!issue)return '';
@@ -3174,7 +3174,8 @@ async function readFiles(files) {
       const total=applyFleetVehicles(combinedVehicles);
       state.modal=null; state.page='fleet';state.fleetImportSourceHint='';
       persist(); render();
-      return toast(`${vehicles.length} fleet rows read · ${state.fleetUpdateSummary.updated} changed · ${total} vehicle cards tracked`);
+      const groundedCount=vehicles.filter(vehicle=>normalizeOperational(vehicle.operational)==='Grounded').length,operationalCount=vehicles.filter(vehicle=>normalizeOperational(vehicle.operational)==='Operational').length;
+      return toast(`${vehicles.length} fleet rows read · ${operationalCount} operational · ${groundedCount} grounded · ${total} vehicle cards tracked`);
     }
     if(state.importPurpose==='drivers') {
       const contacts=parsed.flatMap(f=>driverContactsFromRows(f.rows||[]));
@@ -3247,7 +3248,7 @@ function normalizeActive(value='',fallback='Active') {
   if(/active|enabled|available|operational|ready/.test(s))return 'Active';
   return fallback;
 }
-function normalizeOperational(value='',fallback='Operational') {
+function normalizeOperational(value='',fallback='Unknown') {
   const s=String(value||'').toLowerCase();
   if(/grounded|outofservice|out of service|repair|maintenance|disabled|inactive/.test(s))return 'Grounded';
   if(/operational|active|ready|available|in service|inservice/.test(s))return 'Operational';
@@ -3262,7 +3263,7 @@ function normalizeFleetVehicle(vehicle={}) {
     battery,
     miles:Math.max(0,Math.round(numberFrom(vehicle.miles,Math.round(battery*1.56)))),
     active:normalizeActive(vehicle.active||vehicle.status,vehicle.active||'Active'),
-    operational:normalizeOperational(vehicle.operational||vehicle.status,vehicle.operational||'Operational'),
+    operational:normalizeOperational(vehicle.operational||vehicle.status,vehicle.operational||'Unknown'),
     serviceType:String(vehicle.serviceType||'').trim(),
     status:String(vehicle.status||batteryLabel(battery)).trim(),
     source:String(vehicle.source||'Demo data').trim(),
