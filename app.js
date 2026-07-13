@@ -5178,6 +5178,18 @@ function sharedWorkspaceState() {
     morningSheetsEndpoint:state.morningSheetsEndpoint
   };
 }
+function persistentWorkspaceState() {
+  return {
+    schemaVersion:2,organizationName:state.organizationName,stationCode:state.stationCode,dspCode:state.dspCode,
+    fleetImport:state.fleetImport,fleetSourceUploads:state.fleetSourceUploads,fleetExpectedCount:state.fleetExpectedCount,
+    fleetNameOverrides:state.fleetNameOverrides,fleetIssues:state.fleetIssues,
+    vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,chargingStationChecked:state.chargingStationChecked,
+    vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,
+    equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
+    driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,
+    morningSheetsEndpoint:state.morningSheetsEndpoint
+  };
+}
 function applySharedWorkspaceState(payload={}) {
   const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','messageQueueTemplate','messageQueueStatus','scheduleEntries','scheduleImportName','callOffDriverKeys','scheduleDriverMarks','morningSheetsEndpoint'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
@@ -5186,7 +5198,14 @@ function applySharedWorkspaceState(payload={}) {
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   persist();render();
 }
-window.RelayOpsApp={sharedState:sharedWorkspaceState,applySharedState:applySharedWorkspaceState,operationDate:()=>state.morningOperationDate,morningSheetsPayload:()=>morningSheetsConnectorPayload()};
+function applyPersistentWorkspaceState(payload={}) {
+  const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','morningSheetsEndpoint'];
+  allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
+  state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
+  if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
+  persist();render();
+}
+window.RelayOpsApp={sharedState:sharedWorkspaceState,persistentState:persistentWorkspaceState,applySharedState:applySharedWorkspaceState,applyPersistentState:applyPersistentWorkspaceState,operationDate:()=>state.morningOperationDate,morningSheetsPayload:()=>morningSheetsConnectorPayload()};
 window.RelayOpsCloud?.on?.(event=>{
   if(event.type==='offline'){state.cloudStatus='offline';render();}
   if(event.type==='reconnecting'){state.cloudStatus='connecting';render();}
