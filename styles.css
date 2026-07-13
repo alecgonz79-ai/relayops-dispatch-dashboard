@@ -258,6 +258,9 @@ body { letter-spacing:-.005em; }
   .search { width:205px; }
 }
 @media (max-width:760px) {
+  .fleet-issues-panel { grid-template-columns:1fr; }
+  .fleet-issue-entry { grid-template-columns:1fr 1fr; }
+  .fleet-issue-entry .issue-text { grid-column:1/-1; }
   .topbar { height:68px; padding:0 14px; }
   .content { padding:16px 14px 36px; }
   .page-heading h1 { font-size:18px; }
@@ -920,6 +923,27 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-small-tools summary { padding:9px 11px; color:#486274; font-size:9px; font-weight:900; cursor:pointer; }
 .fleet-small-tools > div { display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:0 10px 10px; }
 .fleet-small-tools .fleet-data-drawer { margin:0 10px 10px; }
+.fleet-import-button b small { display:inline; margin-left:4px; font-size:8px; font-weight:850; opacity:.72; }
+.fleet-import-button em { display:block; margin-top:4px; color:inherit; font-size:8px; font-style:normal; font-weight:800; opacity:.78; }
+.fleet-issues-panel { display:grid; grid-template-columns:minmax(220px,.7fr) minmax(420px,1.3fr); gap:14px; align-items:start; margin:12px 0; padding:15px; border-color:#ead9a7; background:linear-gradient(135deg,#fffaf0,#fff); }
+.fleet-issues-copy h2 { margin:4px 0; font:1000 14px "Manrope"; }
+.fleet-issues-copy p { margin:0; color:#68736c; font-size:8px; font-weight:800; line-height:1.45; }
+.fleet-issue-entry { display:grid; grid-template-columns:110px 100px minmax(180px,1fr) auto; gap:8px; align-items:end; }
+.fleet-issue-entry label { color:#667268; font-size:7px; font-weight:1000; text-transform:uppercase; letter-spacing:.05em; }
+.fleet-issue-entry input,.fleet-issue-entry select { display:block; width:100%; height:34px; margin-top:4px; padding:0 9px; border:1px solid #d9dfda; border-radius:9px; background:#fff; font-size:9px; }
+.fleet-issue-list { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:7px; padding-top:10px; border-top:1px solid #ece5d3; }
+.fleet-issue-list > span { display:grid; grid-template-columns:auto 1fr auto; gap:6px; align-items:center; max-width:360px; padding:7px 9px; border-radius:9px; background:#fff4d8; color:#72520c; font-size:8px; }
+.fleet-issue-list > span.high,.fleet-issue-list > span.critical { background:#ffe7e2; color:#992c23; }
+.fleet-issue-list em { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-style:normal; }
+.fleet-issue-list button { border:0; background:transparent; color:inherit; font-size:14px; cursor:pointer; }
+.fleet-service-type { display:block; margin-top:3px; color:#6b7780; font-size:7px; font-weight:800; }
+.fleet-reported-issue { display:flex; align-items:center; gap:4px; max-width:230px; margin-top:7px; padding:5px 7px; border-radius:8px; background:#fff1c7; color:#77540a; font-size:7px; }
+.fleet-reported-issue b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fleet-reported-issue.high,.fleet-reported-issue.critical { background:#ffe1dc; color:#a32b20; }
+.rivian-card.has-reported-issue { box-shadow:inset 0 0 0 2px #e8aa2e,0 8px 22px rgba(24,40,32,.05); }
+.reported-van-cell { background:#fff0c7!important; color:#7a5300!important; font-weight:1000; }
+.van-issue-mark { margin-right:3px; font-size:9px; }
+.reported-vehicle-row th { background:#fff0c7!important; color:#7a5300!important; }
 .gas-fleet-card { min-height:112px; padding:10px; }
 .gas-fleet-card .rivian-vin { display:block!important; margin-top:7px; color:#53636f; font-size:8px; }
 .gas-card-label { display:inline-block; margin-top:5px; padding:3px 6px; border-radius:999px; background:#eceff2; color:#596772; font-size:7px; font-weight:900; text-transform:uppercase; }
