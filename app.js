@@ -520,7 +520,7 @@ function morningSheetPage() {
   const sheetsConnected=Boolean(state.morningSheetsEndpoint);
   const sheetMode=state.copyMode?'copy':'edit';
   return `${contextBar(`<span class="status blue">Earliest waves first</span>`)}
-  <div class="morning-command card"><div><span class="eyebrow">LLOL OPENING OPERATIONS</span><h2>Build today’s morning sheet</h2><p>Start with the day files. Routes are matched by CX number and arranged earliest wave first.</p></div><label class="operation-date-picker"><span>Day of operation</span><input type="date" data-operation-date value="${esc(state.morningOperationDate)}"><small>Google tab: ${esc(operationDateTabNames(state.morningOperationDate).join(' or '))}</small></label><div class="morning-actions"><button class="btn primary easy-upload-button" data-action="import">${ICONS.upload} Upload day files</button><button class="btn locked" disabled title="Slack Import is locked until the secure Slack connector is ready">${ICONS.inbox} Slack Import <span class="demo-tag">LOCKED</span></button><button class="btn" data-action="planned-rts-import">${ICONS.calendar} Add planned RTS</button><button class="btn" data-action="equipment-import" title="VAN/DEV/PORT Import">${ICONS.van} Add van devices</button></div></div>
+  <div class="morning-command card"><div><span class="eyebrow">LLOL OPENING OPERATIONS</span><h2>Build today’s morning sheet</h2><p>Start with the day files. Routes are matched by CX number and arranged earliest wave first.</p></div><label class="operation-date-picker"><span>Day of operation</span><input type="date" data-operation-date value="${esc(state.morningOperationDate)}"><small>Google tab: ${esc(operationDateTabNames(state.morningOperationDate).join(' or '))}</small></label><div class="morning-actions"><button class="btn primary easy-upload-button" data-action="import">${ICONS.upload} Upload day files</button><button class="btn locked" disabled title="Slack Import is locked until the secure Slack connector is ready">${ICONS.inbox} Slack Import <span class="demo-tag">LOCKED</span></button><button class="btn" data-action="itineraries-rts-import">${ICONS.calendar} Import RTS TIME (DA's Tab)</button><button class="btn rts-send-only" data-action="send-rts-to-sheets">${ICONS.link} Send RTS Times to Google Sheets</button><button class="btn" data-action="equipment-import" title="VAN/DEV/PORT Import">${ICONS.van} Add van devices</button></div></div>
   <div class="quick-start" aria-label="Three easy steps"><div class="quick-step done"><b>1</b><span><strong>Pick import</strong><small>Slack or Cortex</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>2</b><span><strong>We match CX</strong><small>Wave + staging + pad</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>3</b><span><strong>Send to Sheet</strong><small>Exact merged template</small></span></div></div>
   <div class="sheet-toolbar morning-daily-toolbar"><div class="sheet-filter"><label>Wave</label><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Staging</label><select data-morning-filter="staging"><option value="all">All locations</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Pad</label><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></div><button class="btn small" data-action="clear-morning-filters">Clear</button><span class="filter-note">${ICONS.chevron} Earliest first</span><div class="morning-toolbar-spacer"></div><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Finish editing':'✎ Edit sheet'}</button><button class="btn small ${state.copyMode?'lime':''}" data-action="toggle-morning-copy">${state.copyMode?'✓ Exit copy mode':'Copy cells'}</button></div>
   <div class="sheet-kpis"><span><strong>${rows.length}</strong> routes</span><span><strong>${rows.reduce((n,r)=>n+r.packages,0).toLocaleString()}</strong> packages</span><span><strong>${rows.reduce((n,r)=>n+r.stops,0).toLocaleString()}</strong> stops</span><span><strong>${irregular}</strong> RTS flags</span></div>
@@ -1748,7 +1748,7 @@ function importPreflight(file=state.importedFile) {
       matched:count,
       missing:count?[]:['No CX routes found'],
       checks:[
-        {label:file.kind==='rts'?'Planned Departure Time found':'ROUTE_DJT6 rows found',ok:count>0,detail:count?`${count} CX route${count===1?'':'s'} ready to match`:'Upload a ROUTE_DJT6 file with Route Code and driver/stops/time columns'},
+        {label:file.kind==='rts'?'Planned return to station found':'ROUTE_DJT6 rows found',ok:count>0,detail:count?`${count} CX route${count===1?'':'s'} ready to match`:'Upload an Itineraries_DJT6 file with Route code and Planned return to station'},
         {label:'CX route matching',ok:count>0,detail:'Updates only routes that already exist on the Morning Sheet'}
       ]
     };
@@ -1827,8 +1827,8 @@ function modal() {
   }
   if (state.modal === 'morning-diagnostics') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal diagnostics-modal" role="dialog" aria-modal="true" aria-labelledby="diagnostics-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">MORNING SHEET</span><h2 id="diagnostics-title">Setup & diagnostics</h2><p>Use only when imports or Google Sheets are not working.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body morning-advanced-content">${morningConnectorGuide()}${morningHandoffReadinessHtml()}${morningImportTemplateProofHtml()}${morningSheetsHandoffProofHtml()}${morningSheetStructureProofHtml()}${morningCopyFallbackProofHtml()}</div></div></div>`;
   if (state.modal === 'import') {
-    const proof=importPreflight(), isRts=state.importPurpose==='rts';
-    const source=state.importSource==='slack'&&!isRts?`<div class="slack-panel"><div class="slack-brand"><div class="slack-logo">S</div><div><strong>Slack Import</strong><span>#morning-operations · demo connection</span></div><span class="demo-tag">DEMO</span></div><button class="slack-file" data-action="load-slack-demo"><span class="file-type">CSV</span><span><strong>Today’s operations file</strong><small>Shared by Operations Bot · ready to use</small></span><span class="btn small">Choose this file</span></button><div class="import-note">For this demo, RelayOps will keep only ${state.dspCode} routes from the Slack file.</div></div>`:`<div class="drop-zone ${state.importedFile?'has-file':''}" id="drop-zone"><div><div class="drop-icon">${state.importedFile?ICONS.check:ICONS.upload}</div><strong>${state.importedFile?`Great! ${esc(state.importedFile.name)} is ready.`:isRts?'Choose the Routes_DJT6 file':'Choose DAYOFOPSPLAN and ROUTE_DJT6'}</strong><span>${state.importedFile?`${state.importedFile.rows.length} rows found${state.importedFile.routeDetailsCount?` · ${state.importedFile.routeDetailsCount} CX rows matched`:''}.`:isRts?'Excel (.xlsx) or CSV is supported. RelayOps pulls only Planned Departure Time into Planned RTS.':'Select both files at the same time. Excel (.xlsx) and CSV are supported.'}</span><button class="btn primary upload-choice" data-action="choose-file">${state.importedFile?'Choose different files':isRts?'Choose Planned RTS file':'Choose Amazon files'}</button></div></div>`;
+    const proof=importPreflight(), isRts=['rts','itinerary-rts'].includes(state.importPurpose);
+    const source=state.importSource==='slack'&&!isRts?`<div class="slack-panel"><div class="slack-brand"><div class="slack-logo">S</div><div><strong>Slack Import</strong><span>#morning-operations · demo connection</span></div><span class="demo-tag">DEMO</span></div><button class="slack-file" data-action="load-slack-demo"><span class="file-type">CSV</span><span><strong>Today’s operations file</strong><small>Shared by Operations Bot · ready to use</small></span><span class="btn small">Choose this file</span></button><div class="import-note">For this demo, RelayOps will keep only ${state.dspCode} routes from the Slack file.</div></div>`:`<div class="drop-zone ${state.importedFile?'has-file':''}" id="drop-zone"><div><div class="drop-icon">${state.importedFile?ICONS.check:ICONS.upload}</div><strong>${state.importedFile?`Great! ${esc(state.importedFile.name)} is ready.`:isRts?'Choose Itineraries_DJT6 XLSX':'Choose DAYOFOPSPLAN and ROUTE_DJT6'}</strong><span>${state.importedFile?`${state.importedFile.rows.length} rows found${state.importedFile.routeDetailsCount?` · ${state.importedFile.routeDetailsCount} CX rows matched`:''}.`:isRts?'Only Route code and Planned return to station are read. All other Morning Sheet data stays unchanged.':'Select both files at the same time. Excel (.xlsx) and CSV are supported.'}</span><button class="btn primary upload-choice" data-action="choose-file">${state.importedFile?'Choose different file':isRts?'Choose Itineraries_DJT6 file':'Choose Amazon files'}</button></div></div>`;
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">${isRts?'PLANNED RTS':'EASY UPLOAD'}</span><h2 id="import-title">${isRts?'Upload Planned RTS times':'Make my morning sheet'}</h2><p>${isRts?'Drop the Routes_DJT6 export. Only the Planned Departure Time column is used.':'Choose the plan and route files. RelayOps joins them by CX route.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="upload-progress"><div class="upload-progress-step active"><b>1</b><span>Choose files</span></div><i></i><div class="upload-progress-step ${state.importedFile?'active':''}"><b>${state.importedFile?'✓':'2'}</b><span>${isRts?'Find planned time':'Match CX routes'}</span></div><i></i><div class="upload-progress-step"><b>3</b><span>${isRts?'Fill purple cells':'Make sheet'}</span></div></div>${!isRts?`<div class="source-tabs import-choice-grid"><button class="source-tab import-choice-card ${state.importSource==='slack'?'active':''}" data-action="set-import-source" data-source="slack"><strong>Slack Import</strong><small>Daily file from the operations channel</small></button><button class="source-tab import-choice-card ${state.importSource==='computer'?'active':''}" data-action="set-import-source" data-source="computer"><strong>Cortex Import</strong><small>Amazon DAYOFOPSPLAN + ROUTE_DJT6 exports</small></button></div>`:''}${source}${state.importedFile?`${importPreflightHtml()}<div class="auto-match"><strong>RelayOps will do these things:</strong><div><span>✓ Earliest wave first</span><span>✓ CX route matching</span><span>${isRts?'✓ Planned RTS purple cells':'✓ First driver name only'}</span></div></div>`:''}<div class="modal-actions easy-actions"><button class="btn sample-button" data-action="template-csv">Need an example file?</button><button class="btn primary create-sheet-button" data-action="apply-import" ${state.importedFile&&proof?.ready?'':'disabled'}>${state.importedFile?(isRts?'Fill Planned RTS →':'Create my operations sheet →'):'Choose files first'}</button></div><p class="upload-help">Nothing is sent to Amazon. RelayOps reads the files in this browser and keeps the originals unchanged.</p></div></div></div>`;
   }
   if (state.modal === 'add-driver') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal add-driver-modal" role="dialog" aria-modal="true" aria-labelledby="add-driver-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">DRIVERS & TEAM</span><h2 id="add-driver-title">Add Delivery Associate</h2><p>Add one associate without re-importing the full Amazon file.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="add-driver-fields"><label><span>Full name *</span><input id="manual-driver-name" autocomplete="name" placeholder="First and last name"></label><label><span>Personal phone *</span><input id="manual-driver-phone" inputmode="tel" autocomplete="tel" placeholder="(951) 555-0123"></label><label><span>Position</span><select id="manual-driver-role"><option>Delivery Associate</option><option>Helper, Driver</option><option>Lead DA</option><option>Helper</option></select></label><label><span>Transporter ID</span><input id="manual-driver-id" autocomplete="off" placeholder="Optional Amazon ID"></label></div><div class="private-contact-note"><b>Private on this device</b><span>This contact is saved only in this browser and is not published to GitHub Pages.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="save-manual-driver">Add Delivery Associate</button></div></div></div></div>`;
@@ -2020,7 +2020,21 @@ function render() {
   enhanceDriverTextButtons();
   enhanceOpeningRoster();
   enhanceMorningParkingAssignment();
+  enhanceItineraryRtsModal();
   bind();
+}
+
+function enhanceItineraryRtsModal() {
+  if(state.modal!=='import'||state.importPurpose!=='itinerary-rts')return;
+  const dialog=document.querySelector('.import-modal');if(!dialog)return;
+  const eyebrow=dialog.querySelector('.modal-head .eyebrow'),title=dialog.querySelector('#import-title'),description=dialog.querySelector('.modal-head p');
+  if(eyebrow)eyebrow.textContent='DA ITINERARIES · RTS ONLY';
+  if(title)title.textContent="Import RTS TIME (DA's Tab)";
+  if(description)description.textContent='Upload Itineraries_DJT6. RelayOps reads only Planned return to station and matches it by Route code.';
+  const progress=[...dialog.querySelectorAll('.upload-progress-step span')];
+  if(progress[1])progress[1].textContent='Find return time';if(progress[2])progress[2].textContent='Fill Planned RTS only';
+  const auto=dialog.querySelector('.auto-match');if(auto){auto.querySelector('strong').textContent='RTS-only safety check:';const spans=auto.querySelectorAll('span');['✓ Match by CX Route code','✓ Read Planned return to station','✓ Leave all other cells unchanged'].forEach((text,i)=>{if(spans[i])spans[i].textContent=text;});}
+  const apply=dialog.querySelector('[data-action="apply-import"]');if(apply&&state.importedFile)apply.textContent='Fill Planned RTS only →';
 }
 
 function bind() {
@@ -2655,7 +2669,8 @@ function action(name,el) {
   if (name==='import') { state.modal='import'; state.importSource='computer'; state.importPurpose='morning'; state.importedFile=null; return render(); }
   if (name==='slack-import') return toast('Slack Import is locked until the secure connector is ready','error');
   if (name==='open-morning-diagnostics') { state.modal='morning-diagnostics';return render(); }
-  if (name==='planned-rts-import') { state.modal='import'; state.importSource='computer'; state.importPurpose='rts'; state.importedFile=null; return render(); }
+  if (name==='planned-rts-import'||name==='itineraries-rts-import') { state.modal='import'; state.importSource='computer'; state.importPurpose='itinerary-rts'; state.importedFile=null; return render(); }
+  if (name==='send-rts-to-sheets') return sendRtsTimesToGoogleSheets(el);
   if (name==='equipment-import') { state.modal='equipment'; state.importPurpose='equipment'; state.equipmentImport=null; return render(); }
   if (name==='fleet-import') { state.modal='fleet-import'; state.importPurpose='fleet'; state.fleetImportSourceHint=''; return render(); }
   if (name==='fleet-import-amazon') { state.importPurpose='fleet';state.fleetImportSourceHint='amazon';return fileInput.click(); }
@@ -2669,7 +2684,7 @@ function action(name,el) {
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
   if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.screenshotPreview=null;state.fleetRefreshPreview=null;return render(); }
-  if (name==='choose-file') { fileInput.accept='';return fileInput.click(); }
+  if (name==='choose-file') { fileInput.accept=state.importPurpose==='itinerary-rts'?'.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'';return fileInput.click(); }
   if (name==='schedule-import') { state.importPurpose='schedule';fileInput.accept='';return fileInput.click(); }
   if (name==='open-route-swap') return openRosterSwap(el.dataset.route||'',el.dataset.driverName||'',el.dataset.swapMode||'swap');
   if (name==='apply-roster-swap') return applyRosterSwap();
@@ -2884,6 +2899,20 @@ function routeDetailsFromRows(rows) {
   const routeIx=index('route','routecode','routeid','cx','cxnumber','cxroute','blockid','routeidentifier'), driverIx=index('driver','drivername','transportername','transporter','employeename','daname','associatename','name','deliveryassociate','associate'), firstIx=index('firstname','driverfirstname'), lastIx=index('lastname','driverlastname'), stopsIx=index('stops','stopcount','plannedstops','stopsplanned','numstops','totalstops','allstops'), plannedIx=index('planneddeparturetime','planneddeparttime','departuretime','plannedstarttime');
   const details={};
   rows.slice(header+1).forEach(row=>{const route=String(row[routeIx]||'').trim().toUpperCase();if(!route)return;const combined=[row[firstIx],row[lastIx]].filter(Boolean).join(' ').trim();const stops=Number(row[stopsIx]);const plannedRts=plannedIx>=0?normalizeTimeDisplay(row[plannedIx]):'';details[route]={driver:firstDriverName(row[driverIx]||combined||''),stops:Number.isFinite(stops)?stops:null,plannedRts};});
+  return details;
+}
+function normalizeCxRoute(value='') {
+  const text=String(value||'').trim().toUpperCase(),match=text.match(/\bCX\d+\b/);
+  return match?match[0]:text;
+}
+function itineraryRtsDetailsFromRows(rows=[]) {
+  const header=findImportHeader(rows,[['routecode'],['plannedreturntostation']]);
+  if(header<0)return {};
+  const headers=rows[header].map(headerKey),routeIx=headers.indexOf('routecode'),rtsIx=headers.indexOf('plannedreturntostation'),details={};
+  rows.slice(header+1).forEach(row=>{
+    const route=normalizeCxRoute(row[routeIx]),plannedRts=normalizeTimeDisplay(row[rtsIx]);
+    if(route&&plannedRts)details[route]={driver:'',stops:null,plannedRts};
+  });
   return details;
 }
 async function parseUploadedFile(file) {
@@ -3120,6 +3149,14 @@ async function readFiles(files) {
       persist(); render();
       return toast(`${contacts.length} driver contact${contacts.length===1?'':'s'} imported · ${total} total saved`);
     }
+    if(state.importPurpose==='itinerary-rts') {
+      const invalidName=parsed.find(file=>!/^itineraries_djt6/i.test(String(file.name||'')));
+      if(invalidName)throw new Error('RTS import requires a file beginning with Itineraries_DJT6');
+      const details=parsed.reduce((all,file)=>({...all,...itineraryRtsDetailsFromRows(file.rows||[])}),{}),count=Object.keys(details).length;
+      if(!count)throw new Error('No Route code + Planned return to station rows found');
+      state.importedFile={name:parsed.map(file=>file.name).join(' + '),headers:parsed[0]?.rows?.[0]||[],rows:parsed.flatMap(file=>(file.rows||[]).slice(1)),kind:'rts',routeDetails:details,routeDetailsCount:count};
+      render();return toast(`${count} Planned return to station times ready · no other Morning Sheet data will change`);
+    }
     const plan=parsed.find(f=>/day\s*of\s*ops\s*plan/i.test(f.name)||findImportHeader(f.rows,[['route','routecode','cxnumber','cxroute','blockid'],['wave','wavetime','starttime'],['staging','staginglocation']])>=0);
     const routeFile=parsed.find(f=>/route[_\s-]*djt6/i.test(f.name))||parsed.find(f=>f!==plan&&Object.keys(routeDetailsFromRows(f.rows)).length);
     const details=routeFile?routeDetailsFromRows(routeFile.rows):{};
@@ -3130,7 +3167,7 @@ async function readFiles(files) {
     state.importedFile={name:parsed.map(f=>f.name).join(' + '),headers:rows[0],rows:rows.slice(1),kind:state.importPurpose==='rts'?'rts':(plan?'plan':'details'),routeDetails:details,routeDetailsCount:Object.keys(details).length};
     render();toast(`${parsed.length} file${parsed.length===1?'':'s'} ready · CX routes will be matched automatically`);
   } catch(error) {
-    console.error(error);toast(state.importPurpose==='schedule'?'Could not find scheduled names, times, and shift labels. Upload the Paycom PDF, screenshot, CSV, Excel, or text export.':state.importPurpose==='fleet'?'Could not find VIN rows. Use a CSV/XLSX export with a VIN column.':state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV or XLSX file with Name and Personal Phone columns.':'These files could not be read. Choose DAYOFOPSPLAN and ROUTE_DJT6 as CSV or XLSX.','error');
+    console.error(error);if(state.importPurpose==='itinerary-rts')return toast(error?.message||'Choose an Itineraries_DJT6 XLSX containing Route code and Planned return to station','error');toast(state.importPurpose==='schedule'?'Could not find scheduled names, times, and shift labels. Upload the Paycom PDF, screenshot, CSV, Excel, or text export.':state.importPurpose==='fleet'?'Could not find VIN rows. Use a CSV/XLSX export with a VIN column.':state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV or XLSX file with Name and Personal Phone columns.':'These files could not be read. Choose DAYOFOPSPLAN and ROUTE_DJT6 as CSV or XLSX.','error');
   }
 }
 async function readFile(file) { return readFiles([file]); }
@@ -4058,6 +4095,16 @@ function morningSheetsConnectorPayload() {
   const dateTabs=operationDateTabNames(state.morningOperationDate),sheetName=dateTabs[0]||MORNING_TEMPLATE_SHEET_NAME;
   return {version:'relayops-morning-v1',templateUrl:MORNING_TEMPLATE_URL,templateSheet:MORNING_TEMPLATE_SHEET_NAME,templateLayout:'fixed-ops-log-2026',operationDate:state.morningOperationDate,sheetName,sheetNameCandidates:dateTabs.length?dateTabs:MORNING_TEMPLATE_SHEET_CANDIDATES,dsp:state.dspCode,generatedAt:new Date().toISOString(),startCell:'A3',writeRange:'A3:M',headers:morningConnectorHeaders,rows,rowTypes,sections:sectionMeta};
 }
+function morningRtsOnlyPayload() {
+  const dateTabs=operationDateTabNames(state.morningOperationDate),sections=morningSections(filteredMorningRows()).filter(section=>!section.dsp);
+  return {
+    version:'relayops-morning-v1',mode:'rts-only',operationDate:state.morningOperationDate,
+    sheetName:dateTabs[0]||MORNING_TEMPLATE_SHEET_NAME,sheetNameCandidates:dateTabs,
+    updates:filteredMorningRows().filter(route=>route.route&&route.plannedRts).map(route=>({route:normalizeCxRoute(route.route),plannedRts:route.plannedRts})),
+    waves:sections.filter(section=>section.hasTime&&/^WAVE\s*[1-5]$/i.test(section.label)).map(section=>({label:section.label,value:morningWaveTimeText(section)})),
+    generatedAt:new Date().toISOString()
+  };
+}
 function morningSheetsPreflight(payload=morningSheetsConnectorPayload()) {
   const rows=payload.rows||[], rowTypes=payload.rowTypes||[], sections=payload.sections||[], headers=payload.headers||[];
   const separatorIndexes=rowTypes.map((type,i)=>type==='separator'?i:-1).filter(i=>i>=0);
@@ -4162,7 +4209,7 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-12-current-date-number-fix';
+const RELAYOPS_BUILD = '2026-07-12-rts-only-itineraries';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -4215,6 +4262,17 @@ function doPost(e) {
   let lock = null;
   try {
     const payload = JSON.parse(e.postData.contents || '{}');
+    if (payload.mode === 'rts-only') {
+      const rtsValidation = validateRelayOpsRtsPayload(payload);
+      if (!rtsValidation.ready) throw new Error('RelayOps RTS-only preflight failed: ' + rtsValidation.errors.join('; '));
+      if (payload.dryRun) {
+        const target = resolveRelayOpsTarget(payload, false);
+        return relayOpsJson({ok:true,build:RELAYOPS_BUILD,mode:'rts-only',dryRun:true,sheet:target.targetName,wouldCreateSheet:target.wouldCreate,updates:payload.updates.length,waveTimes:payload.waves.length,preflight:rtsValidation,updatedAt:new Date().toISOString()});
+      }
+      lock = LockService.getDocumentLock();lock.waitLock(20000);
+      const rtsResult = writeRelayOpsRtsOnly(payload);
+      return relayOpsJson({ok:true,build:RELAYOPS_BUILD,mode:'rts-only',sheet:rtsResult.sheetName,updated:rtsResult.updated,waveTimes:rtsResult.waveTimes,missingRoutes:rtsResult.missingRoutes,preflight:rtsValidation,updatedAt:new Date().toISOString()});
+    }
     const validation = validateRelayOpsMorningPayload(payload);
     if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
     if (payload.dryRun) {
@@ -4344,6 +4402,33 @@ function validateRelayOpsMorningPayload(payload) {
     }
   });
   return {ready: errors.length === 0, errors: errors};
+}
+
+function validateRelayOpsRtsPayload(payload) {
+  const errors = [], allowed = relayOpsAllowedDateNames(payload && payload.operationDate), updates = payload && payload.updates || [], waves = payload && payload.waves || [];
+  if (!payload || payload.version !== 'relayops-morning-v1' || payload.mode !== 'rts-only') errors.push('Wrong RTS-only payload version');
+  if (!allowed.length || allowed.indexOf(payload.sheetName) < 0) errors.push('RTS target tab must match the operation date');
+  if (!updates.length) errors.push('No Planned RTS updates were supplied');
+  updates.forEach(function(update, index) { if (!String(update.route || '').trim() || !String(update.plannedRts || '').trim()) errors.push('RTS update ' + (index + 1) + ' needs Route and Planned RTS'); });
+  if (!waves.length) errors.push('Wave time/count labels are required');
+  return {ready:errors.length===0,errors:errors};
+}
+
+function relayOpsRouteKey(value) {
+  const text = String(value || '').toUpperCase(), match = text.match(/\bCX\d+\b/);
+  return match ? match[0] : text.replace(/\s+/g, '');
+}
+
+function writeRelayOpsRtsOnly(payload) {
+  const target = resolveRelayOpsTarget(payload, true), sheet = target.sheet;
+  validateRelayOpsTemplateSignature(sheet);
+  const routeRows = sheet.getRange(3, 3, 108, 1).getDisplayValues(), byRoute = {};
+  routeRows.forEach(function(row, index) { const key = relayOpsRouteKey(row[0]);if (key && !byRoute[key]) byRoute[key] = index + 3; });
+  let updated = 0;const missingRoutes = [];
+  (payload.updates || []).forEach(function(update) { const key = relayOpsRouteKey(update.route), row = byRoute[key];if (!row) { missingRoutes.push(key);return; }sheet.getRange(row, 21).setValue(update.plannedRts);updated++; });
+  let waveTimes = 0;
+  (payload.waves || []).forEach(function(wave) { const layout = relayOpsLayoutForSection({label:wave.label});if (!layout || !layout.timeRow) return;sheet.getRange(layout.timeRow, 1).setValue(wave.value || '');waveTimes++; });
+  return {sheetName:sheet.getName(),updated:updated,waveTimes:waveTimes,missingRoutes:missingRoutes};
 }
 
 function relayOpsValidateTemplate() {
@@ -4511,6 +4596,33 @@ async function postMorningSheetsPayload(endpoint,payload) {
   return parseMorningSheetsResponse(text,response.status);
 }
 
+async function sendRtsTimesToGoogleSheets(button=null) {
+  const endpoint=(state.morningSheetsEndpoint||'').trim(),payload=morningRtsOnlyPayload();
+  if(!endpoint){state.modal='morning-sheets-connector';render();return toast('Connect the Google Sheet first, then send RTS times','error');}
+  if(!payload.updates.length)return toast("Import an Itineraries_DJT6 file first — no Planned RTS times are ready",'error');
+  if(button){button.disabled=true;button.dataset.originalText=button.textContent;button.textContent='Checking RTS times…';}
+  try {
+    const dry=await postMorningSheetsPayload(endpoint,{...payload,dryRun:true});
+    if(!dry.dryRun||dry.mode!=='rts-only')throw new Error('Google did not confirm RTS-only mode');
+    if(dry.wouldCreateSheet)throw new Error('Send the full Morning Sheet once first. RTS-only send will not create a blank route sheet.');
+    if(button)button.textContent='Sending RTS times only…';
+    const result=await postMorningSheetsPayload(endpoint,payload);
+    if(result.mode!=='rts-only')throw new Error('Google did not confirm RTS-only write');
+    state.morningSheetsLastError='';persist();render();
+    toast(`Google updated ${result.updated||0} Planned RTS time${result.updated===1?'':'s'} and ${result.waveTimes||0} wave labels · no other cells changed`);
+    return true;
+  } catch(error) {
+    if(error?.relayOpsConfirmed){toast(error.message||'Google rejected the RTS-only update','error');return false;}
+    try {
+      await fetch(endpoint,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)});
+      toast('RTS-only update sent · verify Planned RTS and wave-time rows in Google Sheets');return true;
+    } catch {}
+    toast(error?.message||'RTS-only Google send failed','error');return false;
+  } finally {
+    if(button&&button.isConnected){button.disabled=false;button.textContent=button.dataset.originalText||'Send RTS Times to Google Sheets';}
+  }
+}
+
 async function syncFilteredMorningToSheets() {
   const endpoint=(state.morningSheetsEndpoint||'').trim();
   if(!endpoint) { state.modal='morning-sheets-connector'; render(); return toast('Connect the Google Sheet once, then this button sends filtered waves','error'); }
@@ -4557,7 +4669,7 @@ async function syncFilteredMorningToSheets() {
 }
 async function copyMorningAppsScript() {
   const code=morningSheetsAppsScript();
-  if(!code.includes('2026-07-12-current-date-number-fix')){toast('The revised Apps Script is still loading — refresh the dashboard and try again','error');return false;}
+  if(!code.includes('2026-07-12-rts-only-itineraries')){toast('The revised Apps Script is still loading — refresh the dashboard and try again','error');return false;}
   const ok=await writeClipboardText(code);
   toast(ok?'Revised original-template Apps Script copied — replace the old code, save, and deploy a new version':'Clipboard blocked — download the .gs script file instead',ok?'':'error');
   return ok;
@@ -4653,7 +4765,7 @@ async function testMorningSheetsConnector() {
     const response=await fetch(connectorUrlWithPing(endpoint),{method:'GET'});
     const text=await response.text();
     if(!response.ok||!/relayops-morning-v1/.test(text)||!/A3:V/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
-    if(!/2026-07-12-current-date-number-fix/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the current-date OPS LOG connector, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
+    if(!/2026-07-12-rts-only-itineraries/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the RTS-only Itineraries connector, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
     state.morningSheetsLastError='';
     persist(); render();
     toast('Google Sheets connector confirmed');
