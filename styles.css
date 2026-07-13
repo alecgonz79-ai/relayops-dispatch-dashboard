@@ -1885,6 +1885,11 @@ tbody tr:last-child td { border-bottom:0; }
   .readiness-steps { grid-template-columns:1fr; }
   .phase-strip { grid-template-columns:1fr 1fr; }
   .fleet-grid, .team-grid, .report-grid, .rivian-grid, .field-grid, .fleet-health-summary, .rivian-grid.tiny-view, .rivian-grid.columns-view { grid-template-columns:1fr; }
+  .rivian-panel .fleet-clean-head { flex-direction:column; align-items:stretch; }
+  .rivian-panel .fleet-primary-actions { display:grid; grid-template-columns:1fr 1fr; width:100%; }
+  .rivian-panel .fleet-primary-actions .fleet-search-input { grid-column:1/-1; width:100%; min-width:0; }
+  .rivian-panel .fleet-primary-actions .filter-select { width:100%; min-width:0; }
+  .rivian-panel .fleet-primary-actions .btn { width:100%; }
   .fleet-source-actions { grid-template-columns:1fr; margin-left:8px; margin-right:8px; }
   .fleet-source-actions > div { grid-template-columns:1fr; }
   .fleet-issues-panel { grid-template-columns:1fr; }
