@@ -763,8 +763,8 @@ function teamPage() {
 function fleetPage() {
   const vehicles=sortedRivianFleet(),electric=electricFleetVehicles(),gas=rivianFleet.filter(isGasFleetVehicle),low=electric.filter(v=>v.battery<40).length,charge=fleetChargeRows().length;
   const grounded=rivianFleet.filter(v=>v.operational==='Grounded').length,coverage=fleetCoverageStats();
-  const filters=['all','gas','changed','verified','needs-data','missing-fleetos','missing-amazon','amazon-only','fleetos-only','demo-only','low','grounded','inactive'];
-  const labels={'all':'All vehicles','gas':'Gas Vehicles','changed':'Changed only','verified':'Verified only','needs-data':'Needs data','missing-fleetos':'Missing FleetOS','missing-amazon':'Missing Amazon','amazon-only':'Amazon only','fleetos-only':'FleetOS only','demo-only':'Demo only','low':'Low-battery EVs','grounded':'Grounded only','inactive':'Inactive only'};
+  const filters=['all','gas','changed','verified','needs-data','missing-fleetos','missing-amazon','amazon-only','fleetos-only','issues','low','grounded','inactive'];
+  const labels={'all':'All vehicles','gas':'Gas Vehicles','changed':'Changed only','verified':'Verified only','needs-data':'Needs data','missing-fleetos':'Missing FleetOS','missing-amazon':'Missing Amazon','amazon-only':'Amazon only','fleetos-only':'FleetOS only','issues':'Issues','low':'Low-battery EVs','grounded':'Grounded only','inactive':'Inactive only'};
   return `${contextBar('<span class="status">Amazon names/status · FleetOS EV battery</span>')}
   ${fleetHealthSummary()}
   <section class="fleet-alert-squares"><button class="danger" data-action="fleet-filter-quick" data-filter="grounded"><span>Grounded vehicles</span><strong>${grounded}</strong><small>Red · do not assign</small></button><button class="battery" data-action="fleet-filter-quick" data-filter="low"><span>Low-battery EVs</span><strong>${low}</strong><small>Below 40%</small></button><button class="charge" data-action="fleet-filter-quick" data-filter="low"><span>Recommended to charge</span><strong>${charge}</strong><small>EVs below 50%</small></button><button class="review" data-action="fleet-filter-quick" data-filter="needs-data"><span>Needs information</span><strong>${coverage.needsData}</strong><small>Missing source fields</small></button></section>
@@ -1556,7 +1556,7 @@ function sortedRivianFleet() {
     if(state.fleetFilter==='fleetos-only')return fleetConfidence(v).label==='FleetOS only';
     if(state.fleetFilter==='missing-fleetos')return fleetConfidence(v).label==='Amazon only';
     if(state.fleetFilter==='missing-amazon')return fleetConfidence(v).label==='FleetOS only';
-    if(state.fleetFilter==='demo-only')return fleetConfidence(v).label==='Demo';
+    if(state.fleetFilter==='issues')return Boolean(fleetIssueForVehicle(v));
     return true;
   }).filter(v=>{
     if(!q)return true;
