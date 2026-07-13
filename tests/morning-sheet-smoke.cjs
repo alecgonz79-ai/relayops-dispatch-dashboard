@@ -368,9 +368,13 @@ const checks = `
   if (state.fleetFilter !== 'missing-amazon' || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('Missing-Amazon quick filter failed');
   resetFleetDemo();
   const issueVehicle=rivianFleet[0];
-  state.fleetIssues={[cleanVin(issueVehicle.vin)]:{label:issueVehicle.name,text:'Door issue',severity:'high'}};
+  const issueKey=cleanVin(issueVehicle.vin),issueRecord={id:'issue-sticky-1',category:'rollup-issues',group:'Body & doors',text:'Roll up door issues',severity:'high',createdAt:'2026-07-12T12:00:00Z',status:'active'};
+  state.fleetIssues={[issueKey]:{label:issueVehicle.name,active:[issueRecord],history:[issueRecord],updatedAt:issueRecord.createdAt}};
   state.fleetFilter = 'issues';
   if (!fleetPage().includes('Issues') || fleetPage().includes('Demo only') || sortedRivianFleet().length!==1 || sortedRivianFleet()[0].vin!==issueVehicle.vin || sortedRivianFleet().some(v => !fleetIssueForVehicle(v))) throw new Error('Fleet issues filter failed');
+  const stickyIssuesBeforeImport=JSON.stringify(state.fleetIssues);
+  applyFleetVehicles(mergedFleet,{silent:true});
+  if(JSON.stringify(state.fleetIssues)!==stickyIssuesBeforeImport||!state.fleetIssues[issueKey]?.active?.length)throw new Error('Fleet import cleared a persistent vehicle issue');
   state.fleetIssues={};
   applyFleetVehicles(mergedFleet,{silent:true});
   state.fleetFilter = 'all';
