@@ -214,6 +214,55 @@ function loadDeviceCustomRows() {
 
 const gasVehicleIds = ['F33','F34','R35','R36','R37','R54','R55','R62'];
 
+const FLEET_ISSUE_CATALOG = [
+  {group:'Tires',options:[
+    ['nail-front-driver','Nail in front driver tire'],['nail-rear-driver','Nail in rear driver tire'],
+    ['nail-front-passenger','Nail in front passenger tire'],['nail-rear-passenger','Nail in rear passenger tire'],
+    ['low-air-tires','Low air in tires'],['flat-tire','Flat tire'],
+    ['tread-front-driver','Low tire tread on front driver tire'],['tread-front-passenger','Low tread in front passenger tire'],
+    ['tread-rear-passenger','Low tread in rear passenger tire'],['tread-rear-driver','Low tread in rear driver tire']
+  ]},
+  {group:'Body & doors',options:[
+    ['missing-panels','Missing panels'],['undercarriage','Hanging undercarriage'],
+    ['rollup-not-closing','Roll up door not closing'],['rollup-issues','Roll up door issues'],
+    ['passenger-sliding-door','Passenger sliding door issues']
+  ]},
+  {group:'Lights & cameras',options:[
+    ['driver-tail-light','Cracked driver tail light'],['passenger-tail-light','Cracked passenger tail light'],
+    ['netradyne-camera','Hanging Netradyne camera'],['camera-360','360 Cam not working'],
+    ['missing-side-lights','Missing side lights'],['side-light-off','Side light off'],['front-top-lights','Front top lights out']
+  ]},
+  {group:'Documents',options:[
+    ['expired-registration','Expired tags/registration'],['missing-insurance','Missing insurance']
+  ]},
+  {group:'Drive & controls',options:[
+    ['turtle-mode','Turtle mode'],['shifter-broken','Shifter broken'],['exposed-wires','Exposed wires']
+  ]},
+  {group:'Cabin',options:[
+    ['wiper-fluid','Wiper fluid low'],['ac-not-working','A/C not working'],['ac-weak','A/C not blowing hard']
+  ]},
+  {group:'Other',options:[['custom','Custom issue']]}
+];
+const FLEET_ISSUE_LABELS = Object.fromEntries(FLEET_ISSUE_CATALOG.flatMap(group=>group.options));
+function issueId(){return globalThis.crypto?.randomUUID?.()||`issue-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;}
+function normalizeFleetIssuesStore(raw={}) {
+  const normalized={};
+  Object.entries(raw||{}).forEach(([key,value])=>{
+    if(!value||typeof value!=='object')return;
+    if(Array.isArray(value.active)||Array.isArray(value.history)){
+      const active=(value.active||[]).filter(Boolean).map(item=>({...item,id:item.id||issueId(),text:item.text||FLEET_ISSUE_LABELS[item.category]||'Reported issue'}));
+      const history=(value.history||[]).filter(Boolean).map(item=>({...item,id:item.id||issueId(),text:item.text||FLEET_ISSUE_LABELS[item.category]||'Reported issue'}));
+      normalized[key]={...value,active,history};return;
+    }
+    if(value.text){
+      const id=`legacy-${String(value.updatedAt||key).replace(/[^a-z0-9]/gi,'').slice(-24)}`;
+      const record={id,category:'custom',group:'Other',text:value.text,severity:value.severity||'watch',createdAt:value.updatedAt||new Date().toISOString(),status:'active'};
+      normalized[key]={label:value.label||key,active:[record],history:[record],updatedAt:value.updatedAt||record.createdAt};
+    }
+  });
+  return normalized;
+}
+
 let state = {
   page: localStorage.getItem('relayops_page') || 'dashboard',
   role: localStorage.getItem('relayops_role') || 'admin',
@@ -243,7 +292,9 @@ let state = {
   morningOperationDate: defaultOperationDate(),
   lastItineraryRts: JSON.parse(localStorage.getItem('relayops_last_itinerary_rts') || 'null') || {},
   fleetNameOverrides: JSON.parse(localStorage.getItem('relayops_fleet_name_overrides') || 'null') || {},
-  fleetIssues: JSON.parse(localStorage.getItem('relayops_fleet_issues') || 'null') || {},
+  fleetIssues: normalizeFleetIssuesStore(JSON.parse(localStorage.getItem('relayops_fleet_issues') || 'null') || {}),
+  morningIssueAcknowledgements: JSON.parse(localStorage.getItem('relayops_morning_issue_acknowledgements') || 'null') || {},
+  pendingMorningIssue: null,
   editingFleetVin: '',
   fleetAmazonUrl: localStorage.getItem('relayops_fleet_amazon_url') || AMAZON_FLEET_PORTAL_URL,
   fleetFleetosUrl: localStorage.getItem('relayops_fleet_fleetos_url') || FLEETOS_PORTAL_URL,
@@ -423,7 +474,7 @@ function topbarLegacy() {
   const fleetClean=state.page==='fleet';
   return `<header class="topbar">
     <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu">${ICONS.menu}</button><div class="page-heading"><h1>${title}</h1><p>${sub}</p></div></div>
-    <div class="top-actions">${fleetClean?'':`<label class="search">${ICONS.search}<input id="global-search" placeholder="Search driver, route, van…" value="${esc(state.search)}" /></label>`}${state.page==='morning'?'<button class="btn info-top-button" data-action="open-morning-diagnostics" title="Setup & diagnostics"><span>ℹ</span><span class="hide-mobile">Setup & diagnostics</span></button>':''}<button class="btn cloud-status-button ${esc(state.cloudStatus)}" data-action="cloud-account"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting…':state.cloudStatus==='signed-out'?'Dispatcher sign in':'Cloud setup'}</span></button><button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button><button class="icon-button" aria-label="Notifications">${ICONS.bell}<i class="notification-dot"></i></button>${state.page==='morning'?`<button class="icon-button connector-settings-icon" data-action="morning-sheets-connector" aria-label="Google Sheets connector settings" title="Google Sheets connector settings">${ICONS.settings||'⚙'}</button>`:''}${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
+    <div class="top-actions">${fleetClean?'':`<label class="search">${ICONS.search}<input id="global-search" placeholder="Search driver, route, van…" value="${esc(state.search)}" /></label>`}${state.page==='morning'?'<button class="btn info-top-button" data-action="open-morning-diagnostics" title="Setup & diagnostics"><span>ℹ</span><span class="hide-mobile">Setup & diagnostics</span></button>':''}<button class="btn cloud-status-button ${esc(state.cloudStatus)}" data-action="cloud-account"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting…':state.cloudStatus==='offline'?'Offline · saved here':state.cloudStatus==='signed-out'?'Dispatcher sign in':'Cloud setup'}</span></button><button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button><button class="icon-button" aria-label="Notifications">${ICONS.bell}<i class="notification-dot"></i></button>${state.page==='morning'?`<button class="icon-button connector-settings-icon" data-action="morning-sheets-connector" aria-label="Google Sheets connector settings" title="Google Sheets connector settings">${ICONS.settings||'⚙'}</button>`:''}${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
   </header>`;
 }
 
@@ -432,7 +483,7 @@ function topbar() {
 }
 
 function contextBar(extra='') {
-  const synced=state.cloudStatus==='synced',label=synced?`Shared workspace${state.cloudUser?` · ${state.cloudUser}`:''}`:state.cloudStatus==='signed-out'?'Local cache · sign in to share':state.cloudStatus==='connecting'?'Connecting shared workspace…':'Local cache · cloud setup required';
+  const synced=state.cloudStatus==='synced',label=synced?`Shared workspace${state.cloudUser?` · ${state.cloudUser}`:''}`:state.cloudStatus==='offline'?'Offline · edits saved and will sync automatically':state.cloudStatus==='signed-out'?'Local cache · sign in to share':state.cloudStatus==='connecting'?'Connecting shared workspace…':'Local cache · cloud setup required';
   return `<div class="context-bar"><div class="date-nav"><div class="date-chip">${ICONS.calendar}${fmtDate()}</div>${extra}</div><div class="sync-state ${synced?'cloud-live':''}"><i class="live-dot"></i>${esc(label)}</div></div>`;
 }
 
@@ -625,7 +676,7 @@ function morningWaveGroup(section,sectionIndex=0) {
   const waveTitle=section.dsp?'DSP':section.label;
   const waveTime=morningWaveTimeText(section);
   const attrs=(r,field,rowIndex,colIndex,extra='')=>interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}" ${edit?`contenteditable="true" data-edit-route="${esc(r?.route||'')}" data-edit-field="${field}" data-edit-wave="${esc(r?.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''} ${extra}`:'';
-  const cell=(r,field,value,colIndex,cls='')=>{const issue=field==='ev'?vehicleIssueForEquipmentId(value):null,issueClass=issue?.type==='grounded'?'grounded-van-cell':issue?.type==='battery'?'low-battery-van-cell':issue?.type==='reported'?'reported-van-cell':'';return `<td class="sheet-edit-cell copy-sheet-cell ${cls} ${issueClass} ${r?.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" data-view-route="${esc(r?.route||'')}" data-view-field="${field}" data-view-wave="${esc(r?.wave||section.wave||'')}" title="${issue?esc(issue.title):edit?'Press Enter to save':'Double-click to edit'}" ${attrs(r,field,rows.indexOf(r),colIndex)}>${issue?.type==='reported'?'<span class="van-issue-mark">⚠</span>':''}${esc(value??'')}</td>`;};
+  const cell=(r,field,value,colIndex,cls='')=>{const issue=field==='ev'?vehicleIssueForEquipmentId(value):null,acknowledged=issue?.type==='reported'&&morningIssueAcknowledged(r?.route,issue.reported),issueClass=issue?.type==='grounded'?'grounded-van-cell':issue?.type==='battery'?'low-battery-van-cell':issue?.type==='reported'?`reported-van-cell ${acknowledged?'acknowledged':''}`:'';return `<td class="sheet-edit-cell copy-sheet-cell ${cls} ${issueClass} ${r?.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" data-view-route="${esc(r?.route||'')}" data-view-field="${field}" data-view-wave="${esc(r?.wave||section.wave||'')}" title="${issue?esc(issue.title):edit?'Press Enter to save':'Double-click to edit'}" ${attrs(r,field,rows.indexOf(r),colIndex)}>${issue?.type==='reported'?`<button class="van-issue-mark ${acknowledged?'acknowledged':''}" data-action="open-morning-vehicle-issue" data-route="${esc(r?.route||'')}" data-equipment="${esc(value||'')}" title="${acknowledged?'Issue acknowledged':'Review and acknowledge issue'}" onclick="event.stopImmediatePropagation();openMorningVehicleIssue(this.dataset.route,this.dataset.equipment)">${acknowledged?'✓':'⚠'}</button>`:''}${esc(value??'')}</td>`;};
   const selectCell=(r,field,colIndex,cls='')=>`<td class="sheet-check-cell copy-sheet-cell ${cls}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rows.indexOf(r)-3}" data-sheet-col="${colIndex}"`:''}><input type="checkbox" data-check-field="${field}" data-check-route="${esc(r?.route||'')}" data-check-wave="${esc(r?.wave||section.wave||'')}" ${r?.[field]?'checked':''} aria-label="${field}"></td>`;
   const divider=(rowIndex,colIndex)=>`<td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}"`:''}></td>`;
   const waveCell=`<td class="wave-label ${section.dsp?'dsp-label':''} copy-sheet-cell" rowspan="${rows.length}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="0"`:''}><span>${esc(waveTitle)}</span></td>`;
@@ -684,28 +735,74 @@ function fleetIssueKey(vehicleOrId='') {
   if(typeof vehicleOrId==='object')return cleanVin(vehicleOrId.vin)||normalizeEquipmentId(fleetEquipmentIdentity(vehicleOrId)?.label||vehicleOrId.name||'');
   const vehicle=fleetVehicleForEquipmentId(vehicleOrId);return vehicle?fleetIssueKey(vehicle):normalizeEquipmentId(vehicleOrId);
 }
-function fleetIssueForVehicle(vehicle={}) {
-  const byVin=state.fleetIssues?.[cleanVin(vehicle.vin)],byLabel=state.fleetIssues?.[normalizeEquipmentId(fleetEquipmentIdentity(vehicle)?.label||vehicle.name||'')];
-  return byVin||byLabel||null;
+function fleetIssueStoreForVehicle(vehicle={}) {
+  const vinKey=cleanVin(vehicle.vin),labelKey=normalizeEquipmentId(fleetEquipmentIdentity(vehicle)?.label||vehicle.name||'');
+  const key=(vinKey&&state.fleetIssues?.[vinKey])?vinKey:(labelKey&&state.fleetIssues?.[labelKey])?labelKey:'';
+  return key?{key,store:state.fleetIssues[key]}:null;
 }
+function fleetIssueForVehicle(vehicle={}) {
+  const found=fleetIssueStoreForVehicle(vehicle);if(!found)return null;
+  const legacy=found.store.text?[{id:`legacy-${found.key}`,category:'custom',group:'Other',text:found.store.text,severity:found.store.severity||'watch',createdAt:found.store.updatedAt||'',status:'active'}]:[];
+  const active=(Array.isArray(found.store.active)?found.store.active:legacy).filter(record=>record?.status!=='fixed');if(!active.length)return null;
+  const severityRank={critical:3,high:2,watch:1};
+  const lead=[...active].sort((a,b)=>(severityRank[b.severity]||0)-(severityRank[a.severity]||0))[0];
+  return {...found.store,key:found.key,active,text:lead?.text||'Reported issue',severity:lead?.severity||'watch',lead};
+}
+function issueCatalogOptionsHtml(){return FLEET_ISSUE_CATALOG.map(group=>`<optgroup label="${esc(group.group)}">${group.options.map(([value,label])=>`<option value="${esc(value)}">${esc(label)}</option>`).join('')}</optgroup>`).join('');}
+function issueGroupForCategory(category=''){return FLEET_ISSUE_CATALOG.find(group=>group.options.some(([value])=>value===category))?.group||'Other';}
+function allActiveFleetIssueRecords(){return Object.values(state.fleetIssues||{}).flatMap(store=>(store?.active||[]).filter(record=>record?.status!=='fixed'));}
 function fleetIssuesPanel() {
-  const issues=Object.entries(state.fleetIssues||{}).filter(([,issue])=>issue?.text);
-  return `<section class="fleet-issues-panel card"><div class="fleet-issues-copy"><span class="eyebrow">FLEET BOT</span><div class="fleet-issues-title"><h2>Van Reports / Issues</h2><strong>${issues.length}</strong></div><p>Add a closer-reported problem. Details stay attached to the matching van but only the total is shown here.</p></div><div class="fleet-issue-entry"><label>Van / EV<input id="fleet-issue-vehicle" placeholder="EV21 or VIN"></label><label>Severity<select id="fleet-issue-severity"><option value="watch">Watch</option><option value="high">High</option><option value="critical">Do not assign</option></select></label><label class="issue-text">Input issue<input id="fleet-issue-text" placeholder="Example: rear door will not latch"></label><button class="btn primary" data-action="save-fleet-issue">Add issue</button></div><div class="fleet-issue-total" aria-label="${issues.length} total van issues"><span>⚠</span><b>${issues.length}</b><small>Total van issues</small></div></section>`;
+  const issues=allActiveFleetIssueRecords();
+  return `<section class="fleet-issues-panel card"><div class="fleet-issues-copy"><span class="eyebrow">FLEET BOT</span><div class="fleet-issues-title"><h2>Van Reports / Issues</h2><strong>${issues.length}</strong></div><p>Choose a common issue or add a custom one. Every report stays with the van through future imports.</p></div><div class="fleet-issue-entry"><label>Van / EV<input id="fleet-issue-vehicle" placeholder="EV21 or VIN"></label><label>Severity<select id="fleet-issue-severity"><option value="watch">Watch</option><option value="high">High</option><option value="critical">Do not assign</option></select></label><label class="issue-type">Issue<select id="fleet-issue-category">${issueCatalogOptionsHtml()}</select></label><label class="issue-text">Custom details<input id="fleet-issue-text" placeholder="Only needed for Custom issue"></label><button class="btn primary" data-action="save-fleet-issue" onclick="event.stopImmediatePropagation();saveFleetIssue()">Add issue</button></div><div class="fleet-issue-total" aria-label="${issues.length} active van issues"><span>⚠</span><b>${issues.length}</b><small>Active issues</small></div></section>`;
 }
 function saveFleetIssue() {
-  const label=document.getElementById('fleet-issue-vehicle')?.value.trim()||'',textValue=document.getElementById('fleet-issue-text')?.value.trim()||'',severity=document.getElementById('fleet-issue-severity')?.value||'watch';
-  if(!label||!textValue)return toast('Enter the van and the reported issue','error');
+  const label=document.getElementById('fleet-issue-vehicle')?.value.trim()||'',category=document.getElementById('fleet-issue-category')?.value||'custom',customText=document.getElementById('fleet-issue-text')?.value.trim()||'',severity=document.getElementById('fleet-issue-severity')?.value||'watch';
+  const textValue=category==='custom'?customText:(FLEET_ISSUE_LABELS[category]||customText);
+  if(!label||!textValue)return toast(category==='custom'?'Enter the van and custom issue details':'Enter the van for this issue','error');
   const key=fleetIssueKey(label);if(!key)return toast('Enter a valid EV, van name, or VIN','error');
-  state.fleetIssues[key]={label,text:textValue,severity,updatedAt:new Date().toISOString()};persist();render();toast(`Fleet Bot issue added to ${label}`);
+  const createdAt=new Date().toISOString(),record={id:issueId(),category,group:issueGroupForCategory(category),text:textValue,severity,createdAt,status:'active'};
+  const current=state.fleetIssues[key]||{label,active:[],history:[]};
+  current.label=current.label||label;current.active=[...(current.active||[]),record];current.history=[...(current.history||[]),record];current.updatedAt=createdAt;
+  state.fleetIssues[key]=current;persist();render();toast(`Fleet Bot issue added to ${label}`);
 }
-function removeFleetIssue(key='') { if(!state.fleetIssues?.[key])return;delete state.fleetIssues[key];persist();render();toast('Van issue removed'); }
+function markFleetIssueFixed(key='',issueIdValue='') {
+  const store=state.fleetIssues?.[key];if(!store)return;
+  const resolvedAt=new Date().toISOString(),target=(store.active||[]).find(record=>record.id===issueIdValue);if(!target)return;
+  store.active=(store.active||[]).filter(record=>record.id!==issueIdValue);
+  store.history=(store.history||[]).map(record=>record.id===issueIdValue?{...record,status:'fixed',resolvedAt}:record);
+  store.updatedAt=resolvedAt;persist();render();toast(`${target.text} marked fixed`);
+}
+function removeFleetIssue(key='') {
+  const store=state.fleetIssues?.[key];if(!store)return;
+  [...(store.active||[])].forEach(record=>markFleetIssueFixed(key,record.id));
+}
 function vehicleIssueForEquipmentId(value='') {
-  const vehicle=fleetVehicleForEquipmentId(value);if(!vehicle)return null;
+  const vehicle=fleetVehicleForEquipmentId(value);
+  if(!vehicle){
+    const key=normalizeEquipmentId(value),store=state.fleetIssues?.[key],active=(store?.active||[]).filter(record=>record?.status!=='fixed');
+    if(active.length)return {type:'reported',label:`⚠ ${active.length} issue${active.length===1?'':'s'}`,title:`Reported van issue: ${active.map(item=>item.text).join(' · ')}`,reported:{...store,key,active,text:active[0]?.text||'Reported issue'}};
+    return null;
+  }
   if(normalizeOperational(vehicle.operational||vehicle.status)==='Grounded')return {type:'grounded',label:'⛔ Grounded',title:'Grounded vehicle — do not assign'};
   if(normalizeActive(vehicle.active||vehicle.status)==='Inactive')return {type:'grounded',label:'Inactive',title:'Inactive vehicle — verify before assigning'};
   if(isElectricFleetVehicle(vehicle)&&Number(vehicle.battery)<40)return {type:'battery',label:`Low ${Number(vehicle.battery)}%`,title:`Low battery ${Number(vehicle.battery)}% — charge or swap before dispatch`};
-  const reported=fleetIssueForVehicle(vehicle);if(reported)return {type:'reported',label:'⚠ Issue',title:`Reported van issue: ${reported.text}`};
+  const reported=fleetIssueForVehicle(vehicle);if(reported)return {type:'reported',label:`⚠ ${reported.active.length} issue${reported.active.length===1?'':'s'}`,title:`Reported van issue: ${reported.active.map(item=>item.text).join(' · ')}`,reported};
   return null;
+}
+function morningIssueAckKey(route='',issueIdValue=''){return `${state.morningOperationDate}|${String(route||'').toUpperCase()}|${issueIdValue}`;}
+function morningIssueAcknowledged(route='',reported=null){
+  const records=reported?.active||[];return Boolean(records.length&&records.every(record=>state.morningIssueAcknowledgements?.[morningIssueAckKey(route,record.id)]));
+}
+function openMorningVehicleIssue(route='',equipment='') {
+  const issue=vehicleIssueForEquipmentId(equipment);if(issue?.type!=='reported')return;
+  state.pendingMorningIssue={route,equipment};state.modal='morning-vehicle-issue';render();
+}
+function acknowledgeMorningVehicleIssue() {
+  const pending=state.pendingMorningIssue;if(!pending)return;
+  const issue=vehicleIssueForEquipmentId(pending.equipment);if(issue?.type!=='reported')return;
+  const acknowledgedAt=new Date().toISOString(),acknowledgedBy=state.cloudUser||'Opening dispatcher';
+  issue.reported.active.forEach(record=>{state.morningIssueAcknowledgements[morningIssueAckKey(pending.route,record.id)]={acknowledgedAt,acknowledgedBy};});
+  state.pendingMorningIssue=null;state.modal=null;persist();render();toast(`${pending.equipment} issue acknowledged`);
 }
 function syncFleetVehiclesToDeviceSheet(vehicles=[]) {
   state.deviceCustomRows=state.deviceCustomRows||{ev:[],gas:[],helper:[]};
@@ -1622,7 +1719,18 @@ function fleetCardStatusPills(vehicle={}) {
 }
 function fleetCardIssueHtml(vehicle={}) {
   const issue=fleetIssueForVehicle(vehicle);if(!issue)return '';
-  return `<span class="fleet-reported-issue ${esc(issue.severity||'watch')}" title="${esc(issue.text)}">⚠ <b>${esc(issue.text)}</b></span>`;
+  return `<span class="fleet-reported-issue ${esc(issue.severity||'watch')}" title="${esc(issue.active.map(item=>item.text).join(' · '))}">⚠ <b>${issue.active.length} active issue${issue.active.length===1?'':'s'}</b></span>`;
+}
+function fleetIssueDate(value='') {
+  const date=new Date(value);if(!value||Number.isNaN(date.getTime()))return 'Date unavailable';
+  return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}).format(date);
+}
+function fleetCardIssueManagerHtml(vehicle={}) {
+  const found=fleetIssueStoreForVehicle(vehicle);if(!found)return `<section class="fleet-card-issue-manager empty"><b>No logged issues</b><span>This van has a clean issue history.</span></section>`;
+  const active=(found.store.active||[]).filter(record=>record.status!=='fixed');
+  const history=[...(found.store.history||[])].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  const recurring=history.reduce((counts,record)=>{const key=record.category||record.text;counts[key]=(counts[key]||0)+1;return counts;},{});
+  return `<section class="fleet-card-issue-manager"><div class="fleet-card-issue-head"><div><span class="eyebrow">VEHICLE ISSUE LOG</span><h4>${active.length} active · ${history.length} total</h4></div>${active.length?'<span class="issue-active-chip">Needs review</span>':'<span class="issue-clear-chip">All fixed</span>'}</div>${active.length?`<div class="fleet-active-issues">${active.map(record=>`<div class="fleet-active-issue ${esc(record.severity||'watch')}"><div><b>${esc(record.text)}</b><span>${esc(record.group||'Other')} · logged ${esc(fleetIssueDate(record.createdAt))}${(recurring[record.category||record.text]||0)>1?` · recurring ×${recurring[record.category||record.text]}`:''}</span></div><button class="btn small" data-action="mark-fleet-issue-fixed" data-issue-key="${esc(found.key)}" data-issue-id="${esc(record.id)}" onclick="event.stopImmediatePropagation();markFleetIssueFixed(this.dataset.issueKey,this.dataset.issueId)">✓ Mark fixed</button></div>`).join('')}</div>`:''}<details class="fleet-issue-history" ${active.length?'':'open'}><summary>Issue history (${history.length})</summary><div>${history.length?history.map(record=>`<span class="${record.status==='fixed'?'fixed':'active'}"><b>${record.status==='fixed'?'✓ Fixed':'⚠ Active'} · ${esc(record.text)}</b><small>Reported ${esc(fleetIssueDate(record.createdAt))}${record.resolvedAt?` · fixed ${esc(fleetIssueDate(record.resolvedAt))}`:''}</small></span>`).join(''):'<em>No issues have been logged for this van.</em>'}</div></details></section>`;
 }
 function fleetServiceTypeHtml(vehicle={}) { return vehicle.serviceType?`<span class="fleet-service-type">${esc(vehicle.serviceType)}</span>`:''; }
 function fleetBatteryFreshness(vehicle={}) {
@@ -1674,7 +1782,7 @@ function rivianCardIdSummary(v={},confidence={},batteryFreshness={}) {
 function gasFleetCard(v={}) {
   const grounded=normalizeOperational(v.operational||v.status)==='Grounded',inactive=normalizeActive(v.active||v.status)==='Inactive',open=state.expandedFleetVin===v.vin;
   const operational=normalizeOperational(v.operational||v.status)==='Operational';
-  return `<article class="fleet-card-shell ${open?'expanded':''}"><button class="rivian-card gas-fleet-card ${grounded?'hard-status grounded vehicle-grounded':operational?'vehicle-operational':''} ${inactive?'inactive':''} ${fleetIssueForVehicle(v)?'has-reported-issue':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(fleetDisplayName(v))}</h3>${grounded?'<span class="hard-status-pill grounded">Grounded</span>':''}</div><span class="gas-card-label">Gas vehicle</span>${fleetServiceTypeHtml(v)}<span class="rivian-vin"><b>VIN</b> ${esc(v.vin||'—')}</span>${fleetCardStatusPills(v)}${fleetCardIssueHtml(v)}</div>${gasCanIcon()}</div></button>${fleetNameEditorHtml(v)}</article>`;
+  return `<article class="fleet-card-shell ${open?'expanded':''}"><button class="rivian-card gas-fleet-card ${grounded?'hard-status grounded vehicle-grounded':operational?'vehicle-operational':''} ${inactive?'inactive':''} ${fleetIssueForVehicle(v)?'has-reported-issue':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(fleetDisplayName(v))}</h3>${grounded?'<span class="hard-status-pill grounded">Grounded</span>':''}</div><span class="gas-card-label">Gas vehicle</span>${fleetServiceTypeHtml(v)}<span class="rivian-vin"><b>VIN</b> ${esc(v.vin||'—')}</span>${fleetCardStatusPills(v)}${fleetCardIssueHtml(v)}</div>${gasCanIcon()}</div></button>${open?fleetCardIssueManagerHtml(v):''}${fleetNameEditorHtml(v)}</article>`;
 }
 function rivianCard(v) {
   if(isGasFleetVehicle(v))return gasFleetCard(v);
@@ -1693,7 +1801,7 @@ function rivianCard(v) {
   const compactDetails=`<div class="rivian-details simple-details"><span><b>VIN</b>${esc(v.vin||'—')}</span><span><b>Battery %</b>${v.battery??'—'}%</span><span><b>License plate #</b>${esc(v.plate||'—')}</span><span><b>Miles till empty</b>${esc(v.miles??'—')}</span><span class="${v.active==='Active'?'detail-ok':'detail-warn'}"><b>Active</b>${esc(v.active||'—')}</span><span class="${v.operational==='Operational'?'detail-ok':'detail-danger'}"><b>Status</b>${esc(v.operational||'—')}</span></div>`;
   const auditText=`Dispatch check ${dispatchReady.label}; Name source ${nameSource.detail}; Needs attention; Needs: ${missing.join(', ')||'real upload'}; Tap to collapse; Last change ${changedAt}; Amazon uploaded ${fleetSourceUploadedAt('amazon')}; FleetOS uploaded ${fleetSourceUploadedAt('fleetos')}; VIN source audit ${audit.summary}; Amazon row ${audit.amazon}; FleetOS row ${audit.fleetos}; Battery check ${batteryFreshness.label}; Confidence ${confidence.label}; Needs ${missing.join(', ')||'Nothing'}; <b>Changed</b> ${fleetChangeSourceLabels(changes).join(' | ')||'No changes'}; Source ${v.source||'Demo data'}; ${fleetChangeSourceLabels(changes).join(' | ')}; ${fleetChangeSourcePills(changes)}`;
   const operationalClass=v.operational==='Grounded'?'vehicle-grounded':v.operational==='Operational'?'vehicle-operational':'';
-  return `<article class="fleet-card-shell ${open?'expanded':''}"><button class="rivian-card ${tone} ${operationalClass} ${open?'expanded':''} ${changes.length?'updated':''} ${missing.length?'needs-data':''} ${hardStatus.length?'hard-status':''} ${fleetIssueForVehicle(v)?'has-reported-issue':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(displayName)}</h3>${v.name&&v.name!==displayName?`<span class="assistive-text">${esc(v.name)}</span>`:''}${hardStatusHtml}<span class="confidence-pill ${confidence.className}">${esc(confidence.label)}</span>${changes.length?'<span class="update-pill">Updated</span>':''}</div>${fleetServiceTypeHtml(v)}<span class="rivian-vin">${esc(v.vin)}</span>${fleetSourceBadges(v)}<span class="fleet-ready-pill ${dispatchReady.className}" title="${esc(dispatchReady.detail)}"><b>${esc(dispatchReady.label)}</b><em>${esc(dispatchReady.detail)}</em></span><span class="name-source-pill ${nameSource.className}" title="${esc(nameSource.detail)}"><b>${esc(nameSource.shortLabel)}</b><em>${esc(nameSource.label)}</em></span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles===undefined||v.battery===undefined?'— / —':`${v.miles} mi / ${v.battery}%`}</strong></div>${fleetCardStatusPills(v)}${fleetCardIssueHtml(v)}<span class="fleet-card-cue ${confidence.className}">${esc(fleetCardCue(v))}</span><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span><span class="battery-freshness ${batteryFreshness.className}">${esc(batteryFreshness.label)}</span><span class="tap-cue">${open?'Tap to collapse':'Tap for plate/status'}</span>${missing.length?`<span class="missing-line">Needs: ${esc(missing.join(', '))}</span>`:''}${changes.length?`<span class="change-line">Changed by source ${fleetChangeSourcePills(changes)}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`${rivianCardIdSummary(v,confidence,batteryFreshness)}${compactDetails}<span class="assistive-text">${auditText}</span>`:''}</button>${fleetNameEditorHtml(v)}</article>`;
+  return `<article class="fleet-card-shell ${open?'expanded':''}"><button class="rivian-card ${tone} ${operationalClass} ${open?'expanded':''} ${changes.length?'updated':''} ${missing.length?'needs-data':''} ${hardStatus.length?'hard-status':''} ${fleetIssueForVehicle(v)?'has-reported-issue':''}" data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" aria-expanded="${open?'true':'false'}"><div class="rivian-card-main"><div class="rivian-copy"><div class="rivian-title-line"><h3>${esc(displayName)}</h3>${v.name&&v.name!==displayName?`<span class="assistive-text">${esc(v.name)}</span>`:''}${hardStatusHtml}<span class="confidence-pill ${confidence.className}">${esc(confidence.label)}</span>${changes.length?'<span class="update-pill">Updated</span>':''}</div>${fleetServiceTypeHtml(v)}<span class="rivian-vin">${esc(v.vin)}</span>${fleetSourceBadges(v)}<span class="fleet-ready-pill ${dispatchReady.className}" title="${esc(dispatchReady.detail)}"><b>${esc(dispatchReady.label)}</b><em>${esc(dispatchReady.detail)}</em></span><span class="name-source-pill ${nameSource.className}" title="${esc(nameSource.detail)}"><b>${esc(nameSource.shortLabel)}</b><em>${esc(nameSource.label)}</em></span><div class="rivian-charge-line"><span class="battery-icon ${tone}"><i style="width:${Math.max(8,v.battery)}%"></i></span><strong>${v.miles===undefined||v.battery===undefined?'— / —':`${v.miles} mi / ${v.battery}%`}</strong></div>${fleetCardStatusPills(v)}${fleetCardIssueHtml(v)}<span class="fleet-card-cue ${confidence.className}">${esc(fleetCardCue(v))}</span><span class="rivian-live-status ${tone}">${esc(v.status)} · ${batteryLabel(v.battery)}</span><span class="battery-freshness ${batteryFreshness.className}">${esc(batteryFreshness.label)}</span><span class="tap-cue">${open?'Tap to collapse':'Tap for plate/status'}</span>${missing.length?`<span class="missing-line">Needs: ${esc(missing.join(', '))}</span>`:''}${changes.length?`<span class="change-line">Changed by source ${fleetChangeSourcePills(changes)}</span>`:''}</div>${amazonRivianIcon(tone)}</div>${open?`${rivianCardIdSummary(v,confidence,batteryFreshness)}${compactDetails}<span class="assistive-text">${auditText}</span>`:''}</button>${open?fleetCardIssueManagerHtml(v):''}${fleetNameEditorHtml(v)}</article>`;
 }
 
 function performancePage() {
@@ -1846,6 +1954,10 @@ function morningImportTemplateProofHtml(file=state.importedFile,payload=morningS
 
 function modal() {
   if (!state.modal) return '';
+  if (state.modal === 'morning-vehicle-issue' && state.pendingMorningIssue) {
+    const pending=state.pendingMorningIssue,issue=vehicleIssueForEquipmentId(pending.equipment),records=issue?.reported?.active||[],acknowledged=morningIssueAcknowledged(pending.route,issue?.reported);
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal morning-issue-modal" role="dialog" aria-modal="true" aria-labelledby="morning-issue-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">MORNING SAFETY CHECK</span><h2 id="morning-issue-title">${esc(pending.equipment)} has ${records.length} logged issue${records.length===1?'':'s'}</h2><p>${esc(pending.route)} · review before this van is assigned.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="morning-issue-list">${records.map(record=>`<div class="${esc(record.severity||'watch')}"><b>⚠ ${esc(record.text)}</b><span>${esc(record.group||'Other')} · reported ${esc(fleetIssueDate(record.createdAt))}</span></div>`).join('')}</div><div class="private-contact-note"><b>${acknowledged?'✓ Already acknowledged':'Opening dispatcher acknowledgement'}</b><span>${acknowledged?'This issue was reviewed for today’s operation.':'Acknowledge means you saw the warning. It does not mark the vehicle issue fixed.'}</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Close</button><button class="btn primary" data-action="acknowledge-morning-vehicle-issue" onclick="event.stopImmediatePropagation();acknowledgeMorningVehicleIssue()" ${acknowledged?'disabled':''}>${acknowledged?'Acknowledged':'I understand · acknowledge'}</button></div></div></div></div>`;
+  }
   if (state.modal === 'cloud-account') {
     const configured=Boolean(window.RelayOpsCloud?.configured),signedIn=Boolean(window.RelayOpsCloud?.session);
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal cloud-account-modal" role="dialog" aria-modal="true" aria-labelledby="cloud-account-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">SHARED RELAYOPS</span><h2 id="cloud-account-title">${!configured?'Connect the shared workspace':signedIn?'Dispatcher account':'Sign in to RelayOps'}</h2><p>${!configured?'Owner setup is required once. After setup, every authorized dispatcher uses the same live operational data.':signedIn?`Signed in as ${esc(state.cloudUser||'authorized dispatcher')}. Changes synchronize with your station in real time.`:'Enter your authorized dispatcher email. RelayOps will send a secure sign-in link.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${!configured?`<div class="cloud-setup-steps"><span><b>1</b>Create the RelayOps Supabase project</span><span><b>2</b>Run <code>supabase/schema.sql</code></span><span><b>3</b>Add project URL, anon key, organization ID, and station ID to <code>supabase/config.js</code></span></div><div class="private-contact-note"><b>Security requirement</b><span>Use only the public anon key here. Never add the Supabase service-role key, Amazon password, FleetOS password, or portal cookies.</span></div>`:signedIn?`<div class="cloud-account-summary"><span><b>✓</b>Authenticated</span><span><b>✓</b>Station access checked by database policies</span><span><b>✓</b>Realtime workspace updates enabled</span></div>`:`<label class="cloud-email-field"><span>Dispatcher email</span><input id="cloud-signin-email" type="email" autocomplete="email" placeholder="dispatcher@company.com"></label><div class="private-contact-note"><b>Passwordless sign-in</b><span>The secure email link identifies the dispatcher. Database roles decide what they can view or edit.</span></div>`}<div class="modal-actions"><button class="btn" data-action="close-modal">Close</button>${configured?(signedIn?'<button class="btn danger" data-action="cloud-sign-out">Sign out</button>':'<button class="btn primary" data-action="cloud-sign-in">Send sign-in link</button>'):''}</div></div></div></div>`;
@@ -2079,6 +2191,10 @@ function bind() {
   document.removeEventListener?.('pointerup',stopSheetDrag);
   document.removeEventListener?.('copy',handleSheetSelectionCopy);
   document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>go(el.dataset.page)));
+  document.querySelectorAll('[data-action="save-fleet-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();saveFleetIssue();}));
+  document.querySelectorAll('[data-action="mark-fleet-issue-fixed"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();markFleetIssueFixed(el.dataset.issueKey||'',el.dataset.issueId||'');}));
+  document.querySelectorAll('[data-action="open-morning-vehicle-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();openMorningVehicleIssue(el.dataset.route||'',el.dataset.equipment||'');}));
+  document.querySelectorAll('[data-action="acknowledge-morning-vehicle-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();acknowledgeMorningVehicleIssue();}));
   document.querySelectorAll('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
   document.querySelectorAll('[data-message-template]').forEach(el=>el.addEventListener('change',()=>{state.messageQueueTemplate=el.value;persist();render();toast('Message template updated');}));
   document.querySelectorAll('[data-schedule-filter]').forEach(el=>el.addEventListener('change',()=>{state.scheduleFilter=el.value;persist();render();}));
@@ -2710,7 +2826,10 @@ function action(name,el) {
   if (name==='fleet-import-amazon') { state.importPurpose='fleet';state.fleetImportSourceHint='amazon';fileInput.accept='.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';return fileInput.click(); }
   if (name==='fleet-import-fleetos') { state.importPurpose='fleet';state.fleetImportSourceHint='fleetos';fileInput.accept='.csv,text/csv';return fileInput.click(); }
   if (name==='save-fleet-issue') return saveFleetIssue();
+  if (name==='mark-fleet-issue-fixed') return markFleetIssueFixed(el.dataset.issueKey||'',el.dataset.issueId||'');
   if (name==='remove-fleet-issue') return removeFleetIssue(el.dataset.issueKey||'');
+  if (name==='open-morning-vehicle-issue') return openMorningVehicleIssue(el.dataset.route||'',el.dataset.equipment||'');
+  if (name==='acknowledge-morning-vehicle-issue') return acknowledgeMorningVehicleIssue();
   if (name==='driver-import') { state.importPurpose='drivers';fileInput.accept='.csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';return fileInput.click(); }
   if (name==='add-delivery-associate') { state.modal='add-driver';return render(); }
   if (name==='save-manual-driver') return saveManualDriver();
@@ -2719,7 +2838,7 @@ function action(name,el) {
   if (name==='parking-choose-file') { state.importPurpose='parking'; return fileInput.click(); }
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.screenshotPreview=null;state.fleetRefreshPreview=null;return render(); }
+  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingMorningIssue=null;state.screenshotPreview=null;state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=state.importPurpose==='itinerary-rts'?'.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'';return fileInput.click(); }
   if (name==='schedule-import') { state.importPurpose='schedule';fileInput.accept='';return fileInput.click(); }
   if (name==='open-route-swap') return openRosterSwap(el.dataset.route||'',el.dataset.driverName||'',el.dataset.swapMode||'swap');
@@ -5041,16 +5160,17 @@ localStorage.setItem('relayops_morning_operation_date',state.morningOperationDat
 localStorage.setItem('relayops_last_itinerary_rts',JSON.stringify(state.lastItineraryRts||{}));
 localStorage.setItem('relayops_fleet_name_overrides',JSON.stringify(state.fleetNameOverrides||{}));
 localStorage.setItem('relayops_fleet_issues',JSON.stringify(state.fleetIssues||{}));
+localStorage.setItem('relayops_morning_issue_acknowledgements',JSON.stringify(state.morningIssueAcknowledgements||{}));
 window.RelayOpsCloud?.schedule?.('workspace.autosave');
 }
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
 function sharedWorkspaceState() {
   return {
-    schemaVersion:1,dspCode:state.dspCode,organizationName:state.organizationName,stationCode:state.stationCode,routes:state.routes,morningRoutes:state.morningRoutes,
+    schemaVersion:2,dspCode:state.dspCode,organizationName:state.organizationName,stationCode:state.stationCode,routes:state.routes,morningRoutes:state.morningRoutes,
     lastImportExcluded:state.lastImportExcluded,rosterPublished:state.rosterPublished,
     fleetImport:state.fleetImport,fleetSourceUploads:state.fleetSourceUploads,fleetExpectedCount:state.fleetExpectedCount,
-    fleetNameOverrides:state.fleetNameOverrides,fleetIssues:state.fleetIssues,vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,chargingStationChecked:state.chargingStationChecked,
+    fleetNameOverrides:state.fleetNameOverrides,fleetIssues:state.fleetIssues,morningIssueAcknowledgements:state.morningIssueAcknowledgements,vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,chargingStationChecked:state.chargingStationChecked,
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,
     messageQueueTemplate:state.messageQueueTemplate,messageQueueStatus:state.messageQueueStatus,
@@ -5059,14 +5179,17 @@ function sharedWorkspaceState() {
   };
 }
 function applySharedWorkspaceState(payload={}) {
-  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','messageQueueTemplate','messageQueueStatus','scheduleEntries','scheduleImportName','callOffDriverKeys','scheduleDriverMarks','morningSheetsEndpoint'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','messageQueueTemplate','messageQueueStatus','scheduleEntries','scheduleImportName','callOffDriverKeys','scheduleDriverMarks','morningSheetsEndpoint'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
+  state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
+  state.morningIssueAcknowledgements=state.morningIssueAcknowledgements||{};
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   persist();render();
 }
 window.RelayOpsApp={sharedState:sharedWorkspaceState,applySharedState:applySharedWorkspaceState,operationDate:()=>state.morningOperationDate,morningSheetsPayload:()=>morningSheetsConnectorPayload()};
 window.RelayOpsCloud?.on?.(event=>{
-  if(event.type==='offline'){state.cloudStatus='setup-required';render();}
+  if(event.type==='offline'){state.cloudStatus='offline';render();}
+  if(event.type==='reconnecting'){state.cloudStatus='connecting';render();}
   if(event.type==='auth'){state.cloudStatus=event.session?'connecting':'signed-out';state.cloudUser=event.session?.user?.email||'';render();}
   if(event.type==='presence'){state.cloudPresence=event.users||[];render();}
   if(event.type==='loaded'||event.type==='saved'){state.cloudStatus='synced';render();}

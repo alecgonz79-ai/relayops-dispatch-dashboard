@@ -4,6 +4,30 @@
   let client=null,session=null,revision=0,channel=null,presenceChannel=null,saveTimer=null,applying=false;
   const listeners=new Set();
   const notify=event=>listeners.forEach(fn=>{try{fn(event);}catch(error){console.error(error);}});
+  const queueKey=()=>`relayops_cloud_queue:${config.stationId||'local'}:${operationDate()}`;
+  function storage(){try{return window.localStorage||globalThis.localStorage||null;}catch{return null;}}
+  function queueSnapshot(payload,action='workspace.offline'){
+    try{storage()?.setItem(queueKey(),JSON.stringify({payload,action,queuedAt:new Date().toISOString()}));}catch{}
+    notify({type:'queued',action});return payload;
+  }
+  function pendingSnapshot(){try{return JSON.parse(storage()?.getItem(queueKey())||'null');}catch{return null;}}
+  function clearPending(){try{storage()?.removeItem(queueKey());}catch{}}
+  function mergeIssueStores(remote={},local={}){
+    const merged={...remote};
+    Object.entries(local||{}).forEach(([key,entry])=>{
+      const current=merged[key]||{};
+      const historyById=new Map();
+      [...(current.history||[]),...(entry?.history||[])].forEach(record=>{if(record){const id=record.id||`${record.text}|${record.createdAt}`;historyById.set(id,record);}});
+      const history=[...historyById.values()];
+      const fixed=new Set(history.filter(record=>record?.status==='fixed').map(record=>record.id));
+      const active=[...(current.active||[]),...(entry?.active||[])].filter(record=>record&&!fixed.has(record.id)).filter((record,index,array)=>array.findIndex(item=>item.id===record.id)===index);
+      merged[key]={...current,...entry,active,history};
+    });
+    return merged;
+  }
+  function reconcilePayload(remote={},local={}){
+    return {...remote,...local,fleetIssues:mergeIssueStores(remote.fleetIssues,local.fleetIssues),morningIssueAcknowledgements:{...(remote.morningIssueAcknowledgements||{}),...(local.morningIssueAcknowledgements||{})}};
+  }
   function createClient(){
     if(!configured||!window.supabase?.createClient)return null;
     return window.supabase.createClient(config.supabaseUrl,config.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -28,23 +52,38 @@
     const date=operationDate();
     const {data,error}=await client.from('workspace_snapshots').select('payload,revision,updated_at,updated_by').eq('station_id',config.stationId).eq('operation_date',date).maybeSingle();
     if(error)throw error;
-    if(data){revision=Number(data.revision)||0;applying=true;window.RelayOpsApp?.applySharedState?.(data.payload||{});applying=false;notify({type:'loaded',revision,updatedAt:data.updated_at});}
+    if(data){
+      revision=Number(data.revision)||0;
+      const pending=pendingSnapshot(),payload=pending?.payload?reconcilePayload(data.payload||{},pending.payload):data.payload||{};
+      applying=true;window.RelayOpsApp?.applySharedState?.(payload);applying=false;notify({type:'loaded',revision,updatedAt:data.updated_at});
+      if(pending?.payload)setTimeout(()=>save('workspace.offline-reconcile').catch(error=>notify({type:'error',error})),0);
+    }
     else {revision=0;await save('workspace.initialize');}
     subscribe(date);subscribePresence(date);return data;
   }
   async function save(action='workspace.save'){
-    if(!client||!session||applying)return null;
     const payload=window.RelayOpsApp?.sharedState?.();if(!payload)return null;
-    const {data,error}=await client.rpc('save_workspace_snapshot',{target_station:config.stationId,target_date:operationDate(),expected_revision:revision,new_payload:payload,action_name:action});
-    if(error){if(String(error.message||'').includes('revision_conflict')){notify({type:'conflict'});await load();return null;}throw error;}
-    revision=Number(data?.revision)||revision+1;notify({type:'saved',revision,updatedAt:data?.updated_at});return data;
+    if(applying)return null;
+    queueSnapshot(payload,action);
+    if(!client||!session){notify({type:'offline',reason:'not-connected'});return null;}
+    try{
+      const {data,error}=await client.rpc('save_workspace_snapshot',{target_station:config.stationId,target_date:operationDate(),expected_revision:revision,new_payload:payload,action_name:action});
+      if(error){if(String(error.message||'').includes('revision_conflict')){notify({type:'conflict'});await load();return null;}throw error;}
+      revision=Number(data?.revision)||revision+1;clearPending();notify({type:'saved',revision,updatedAt:data?.updated_at});return data;
+    }catch(error){queueSnapshot(payload,action);notify({type:'offline',reason:'save-failed',error});throw error;}
   }
-  function schedule(action='workspace.autosave'){if(!client||!session||applying)return;clearTimeout(saveTimer);saveTimer=setTimeout(()=>save(action).catch(error=>notify({type:'error',error})),500);}
+  function schedule(action='workspace.autosave'){
+    if(applying)return;
+    const payload=window.RelayOpsApp?.sharedState?.();if(payload)queueSnapshot(payload,action);
+    clearTimeout(saveTimer);if(client&&session)saveTimer=setTimeout(()=>save(action).catch(error=>notify({type:'error',error})),500);
+  }
   function subscribe(date){
     if(channel)client.removeChannel(channel);
     channel=client.channel(`workspace:${config.stationId}:${date}`).on('postgres_changes',{event:'UPDATE',schema:'public',table:'workspace_snapshots',filter:`station_id=eq.${config.stationId}`},payload=>{
       const row=payload.new;if(row.operation_date!==date||Number(row.revision)<=revision)return;
-      revision=Number(row.revision);applying=true;window.RelayOpsApp?.applySharedState?.(row.payload||{});applying=false;notify({type:'remote-update',revision,updatedAt:row.updated_at});
+      const pending=pendingSnapshot(),next=pending?.payload?reconcilePayload(row.payload||{},pending.payload):row.payload||{};
+      revision=Number(row.revision);applying=true;window.RelayOpsApp?.applySharedState?.(next);applying=false;notify({type:'remote-update',revision,updatedAt:row.updated_at});
+      if(pending?.payload)setTimeout(()=>save('workspace.realtime-reconcile').catch(error=>notify({type:'error',error})),0);
     }).subscribe();
   }
   function subscribePresence(date){
@@ -62,6 +101,10 @@
     if(!client||!session)throw new Error('Sign in first');
     const {data,error}=await client.functions.invoke('invite-user',{body:{email,displayName,role,organizationId:config.organizationId,stationId:config.stationId,redirectTo:location.href.split('#')[0]}});
     if(error)throw error;notify({type:'member-invited',member:data});return data;
+  }
+  if(window.addEventListener){
+    window.addEventListener('online',()=>{notify({type:'reconnecting'});if(session)load().catch(error=>notify({type:'error',error}));});
+    window.addEventListener('offline',()=>notify({type:'offline',reason:'browser-offline'}));
   }
   window.RelayOpsCloud={configured,init,signIn,signOut,load,save,schedule,members,inviteMember,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get revision(){return revision;}};
 })();

@@ -261,6 +261,7 @@ body { letter-spacing:-.005em; }
   .fleet-source-actions { grid-template-columns:1fr; margin-left:8px; margin-right:8px; }
   .fleet-source-actions > div { grid-template-columns:1fr; }
   .fleet-issues-panel { grid-template-columns:1fr; }
+  .fleet-issues-copy,.fleet-issue-total,.fleet-issue-entry { grid-column:1; grid-row:auto; }
   .fleet-issue-entry { grid-template-columns:1fr 1fr; }
   .fleet-issue-entry .issue-text { grid-column:1/-1; }
   .topbar { height:68px; padding:0 14px; }
@@ -931,16 +932,19 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-small-tools .fleet-data-drawer { margin:0 10px 10px; }
 .fleet-import-button b small { display:inline; margin-left:4px; font-size:8px; font-weight:850; opacity:.72; }
 .fleet-import-button em { display:block; margin-top:4px; color:inherit; font-size:8px; font-style:normal; font-weight:800; opacity:.78; }
-.fleet-issues-panel { display:grid; grid-template-columns:minmax(220px,.7fr) minmax(420px,1.3fr) auto; gap:14px; align-items:center; margin:8px 0 10px; padding:12px 14px; border-color:#d5dadd; background:#edf0f2; box-shadow:0 5px 14px rgba(39,48,55,.05); }
+.fleet-issues-panel { display:grid; grid-template-columns:minmax(220px,1fr) auto; gap:12px 14px; align-items:center; margin:8px 0 10px; padding:12px 14px; border-color:#d5dadd; background:#edf0f2; box-shadow:0 5px 14px rgba(39,48,55,.05); }
 .fleet-issues-copy h2 { margin:4px 0; font:1000 14px "Manrope"; }
+.fleet-issues-copy { grid-column:1; grid-row:1; }
 .fleet-issues-title { display:flex; align-items:center; gap:8px; }
 .fleet-issues-title h2 { margin:4px 0; }
 .fleet-issues-title strong { display:grid; place-items:center; min-width:24px; height:24px; padding:0 7px; border-radius:999px; background:#d8dde1; color:#313a41; font:1000 10px "Manrope"; }
 .fleet-issues-copy p { margin:0; color:#68736c; font-size:8px; font-weight:800; line-height:1.45; }
-.fleet-issue-entry { display:grid; grid-template-columns:110px 100px minmax(180px,1fr) auto; gap:8px; align-items:end; }
+.fleet-issue-entry { display:grid; grid-template-columns:110px 100px minmax(170px,1fr) minmax(170px,1fr) auto; gap:8px; align-items:end; }
+.fleet-issue-entry { grid-column:1/-1; grid-row:2; }
 .fleet-issue-entry label { color:#667268; font-size:7px; font-weight:1000; text-transform:uppercase; letter-spacing:.05em; }
 .fleet-issue-entry input,.fleet-issue-entry select { display:block; width:100%; height:34px; margin-top:4px; padding:0 9px; border:1px solid #d9dfda; border-radius:9px; background:#fff; font-size:9px; }
-.fleet-issue-total { display:grid; grid-template-columns:auto auto; align-items:center; gap:2px 7px; min-width:112px; padding:9px 11px; border:1px solid #d0d6da; border-radius:11px; background:#f7f8f9; color:#49545c; }
+.fleet-issue-entry .btn { position:relative; z-index:5; min-width:86px; height:34px; pointer-events:auto; }
+.fleet-issue-total { grid-column:2; grid-row:1; display:grid; grid-template-columns:auto auto; align-items:center; gap:2px 7px; min-width:112px; padding:9px 11px; border:1px solid #d0d6da; border-radius:11px; background:#f7f8f9; color:#49545c; }
 .fleet-issue-total span { grid-row:1/3; font-size:16px; }
 .fleet-issue-total b { font:1000 17px/1 "Manrope"; }
 .fleet-issue-total small { font-size:7px; font-weight:900; text-transform:uppercase; letter-spacing:.05em; }
@@ -975,8 +979,38 @@ tbody tr:last-child td { border-bottom:0; }
 .fleet-reported-issue.high,.fleet-reported-issue.critical { background:#ffe1dc; color:#a32b20; }
 .rivian-card.has-reported-issue { box-shadow:inset 0 0 0 2px #e8aa2e,0 8px 22px rgba(24,40,32,.05); }
 .reported-van-cell { background:#fff0c7!important; color:#7a5300!important; font-weight:1000; }
-.van-issue-mark { margin-right:3px; font-size:9px; }
+.reported-van-cell.acknowledged { background:#edf7e8!important; color:#32652d!important; }
+.van-issue-mark { display:inline-grid; place-items:center; width:15px; height:15px; margin:0 3px 0 0; padding:0; border:0; border-radius:50%; background:#f4b93b; color:#4c3500; font:1000 9px/1 Manrope,sans-serif; vertical-align:middle; cursor:pointer; }
+.van-issue-mark.acknowledged { background:#5aa653; color:#fff; }
 .reported-vehicle-row th { background:#fff0c7!important; color:#7a5300!important; }
+.fleet-card-issue-manager { display:grid; gap:10px; margin:-2px 0 0; padding:12px; border:1px solid #d7dde0; border-top:0; border-radius:0 0 14px 14px; background:#f8fafb; color:#27323a; }
+.fleet-card-issue-manager.empty { grid-template-columns:auto 1fr; align-items:center; color:#66736c; font-size:9px; }
+.fleet-card-issue-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.fleet-card-issue-head h4 { margin:3px 0 0; font:900 12px Manrope,sans-serif; }
+.issue-active-chip,.issue-clear-chip { padding:5px 8px; border-radius:999px; font-size:8px; font-weight:900; }
+.issue-active-chip { background:#fff0c7; color:#805900; }
+.issue-clear-chip { background:#e4f4df; color:#33702f; }
+.fleet-active-issues { display:grid; gap:7px; }
+.fleet-active-issue { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 10px; border:1px solid #efd185; border-radius:10px; background:#fff9e8; }
+.fleet-active-issue.high,.fleet-active-issue.critical { border-color:#efaaa2; background:#fff0ed; }
+.fleet-active-issue > div { min-width:0; }
+.fleet-active-issue b,.fleet-active-issue span { display:block; }
+.fleet-active-issue b { font-size:10px; }
+.fleet-active-issue span { margin-top:3px; color:#6c7770; font-size:8px; }
+.fleet-active-issue .btn { flex:none; background:#fff; }
+.fleet-issue-history summary { cursor:pointer; color:#3f4a52; font-size:9px; font-weight:900; }
+.fleet-issue-history > div { display:grid; gap:5px; margin-top:7px; }
+.fleet-issue-history > div > span { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 8px; border-radius:8px; background:#eef1f3; }
+.fleet-issue-history > div > span.active { background:#fff6dc; }
+.fleet-issue-history b,.fleet-issue-history small { font-size:8px; }
+.fleet-issue-history small { color:#6f7b73; text-align:right; }
+.morning-issue-modal { max-width:560px; }
+.morning-issue-list { display:grid; gap:8px; }
+.morning-issue-list > div { padding:11px 12px; border:1px solid #efd185; border-radius:11px; background:#fff9e8; }
+.morning-issue-list > div.high,.morning-issue-list > div.critical { border-color:#efaaa2; background:#fff0ed; }
+.morning-issue-list b,.morning-issue-list span { display:block; }
+.morning-issue-list b { font-size:12px; }
+.morning-issue-list span { margin-top:4px; color:#68736c; font-size:9px; }
 .gas-fleet-card { min-height:112px; padding:10px; }
 .gas-fleet-card .rivian-vin { display:block!important; margin-top:7px; color:#53636f; font-size:8px; }
 .gas-card-label { display:inline-block; margin-top:5px; padding:3px 6px; border-radius:999px; background:#eceff2; color:#596772; font-size:7px; font-weight:900; text-transform:uppercase; }

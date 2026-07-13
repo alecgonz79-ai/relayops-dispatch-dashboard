@@ -72,12 +72,10 @@ const checks = `
   if (state.morningRoutes.length !== beforeBadImportRoutes || state.modal !== 'import' || !modal().includes('import-proof warn') || !modal().includes('Missing: Wave time')) throw new Error('Bad import should be blocked before changing the Morning Sheet');
   state.page = 'fleet';
   const fleetHtml = fleetPage();
-  const fleetRequirements=['Amazon Fleet Import','FleetOS Import','All vehicles','fleet-alert-squares','Grounded vehicles','Low-battery EVs','Recommended to charge','Needs information','Find vehicle, VIN, or plate','More fleet tools','Vehicle CSV','Copy visible VINs','Show all vehicles','tiny-view','EDV-014816','7FCEHEB79PN014816','98 mi / 63%'];
+  const fleetRequirements=['Amazon Fleet Import','VehiclesData files only','FleetOS Import','Vehicle_List files only','Gas Vehicles','Van Reports / Issues','Custom details','All vehicles','fleet-alert-squares','Grounded vehicles','Low-battery EVs','Recommended to charge','Needs information','Find vehicle, VIN, or plate','More fleet tools','tiny-view','EDV-014816','7FCEHEB79PN014816','98 mi / 63%'];
   const missingFleetRequirements=fleetRequirements.filter(value=>!fleetHtml.includes(value));
   if(missingFleetRequirements.length) throw new Error('Simplified mixed Fleet Health board missing: '+missingFleetRequirements.join(', '));
-  if (!fleetHtml.includes('Portal row-count check') || !fleetHtml.includes('Upload both portal exports to compare row counts') || !fleetHtml.includes('Amazon rows') || !fleetHtml.includes('FleetOS rows') || !fleetHtml.includes('matched rows')) throw new Error('Fleet row-count check missing');
-  if (!fleetHtml.includes('Dispatcher proof: WAIT before trusting board') || !fleetHtml.includes('Amazon official names') || !fleetHtml.includes('FleetOS battery rows') || !fleetHtml.includes('VIN match proof') || !fleetHtml.includes('Full roster count') || !fleetHtml.includes('Clean data check')) throw new Error('Fleet dispatcher proof strip missing');
-  if (!fleetHtml.includes('Live connector not connected yet') || !fleetHtml.includes('Set endpoint') || !fleetHtml.includes('Refresh will call the secure backend first') && fleetHtml.includes('Live connector ready')) throw new Error('Fleet live connector setup strip missing');
+  if (fleetHtml.includes('Live setup') || fleetHtml.includes('Vehicle CSV') || fleetHtml.includes('Gap CSV') || fleetHtml.includes('Data checks & setup')) throw new Error('Removed Fleet Health diagnostic/export controls should stay hidden');
   const savedParking=state.vanParking,savedParkingStatus=state.parkingChargerStatus,savedParkingNotes=state.parkingNotes,savedParkingDate=state.vanParkingUpdated,savedParkingRoutes=state.morningRoutes,savedFleetForParking=[...rivianFleet];
   state.vanParking=[{id:'w1',zone:'west',label:'Left 1',value:'91',kind:'spot'},{id:'w2',zone:'west',label:'Left 2',value:'92',kind:'spot'},{id:'e1',zone:'east',label:'Right 1',value:'93',kind:'spot'},{id:'e2',zone:'east',label:'Right 2',value:'94',kind:'spot'},{id:'n1',zone:'northRight',label:'Upper 1',value:'95',kind:'spot'},{id:'n2',zone:'northLeft',label:'Upper 2',value:'96',kind:'spot'}];state.parkingChargerStatus={};state.parkingNotes='Close lane after charging';state.vanParkingUpdated='2026-07-11';rivianFleet.push({name:'EV95',vin:'7FCEHEB79PN000095',battery:20,miles:30,vehicleType:'Rivian EDV 700',operational:'Operational',active:'Active',source:'FleetOS tracker'});
   const parkingHtml=vanParkingSection();
@@ -199,15 +197,28 @@ const checks = `
   if (!compactFleetHtml.includes('Tap for plate/status')) throw new Error('Compact EV cards should show tap-for-details cue');
   if (!compactFleetHtml.includes('hard-status-pill grounded') || !compactFleetHtml.includes('hard-status-pill inactive') || !compactFleetHtml.includes('hard-status')) throw new Error('Grounded/inactive EV cards should stay obvious in compact view');
   const amazonFleetRows = [
-    ['Vehicle Name','VIN','License Plate','Active','Operational Status'],
-    ['LLOL EV 21','7FCEHEB79PN014816','9ABC123','Inactive','Grounded']
+    ['Vehicle Name','VIN','License Plate','Active','operationalStatus','serviceType'],
+    ['LLOL EV 21','7FCEHEB79PN014816','9ABC123','Inactive','Grounded','Standard Parcel - EDV 700']
   ];
+  const actualVehiclesDataRow = fleetDetailsFromRows([
+    ['vin','serviceType','vehicleName','licensePlateNumber','make','model','subModel','status','statusPriority','statusReasonCode','statusReasonMessage','operationalStatus'],
+    ['7FCEHEB78PN015424','Standard Parcel Electric - Rivian MEDIUM','EV12','06813C4','Rivian','EDV 700','2dr Step Van','ACTIVE',3,'HEALTHY','', 'GROUNDED']
+  ],'Amazon fleet list');
+  if(actualVehiclesDataRow.length!==1||actualVehiclesDataRow[0].name!=='EV12'||actualVehiclesDataRow[0].operational!=='Grounded'||actualVehiclesDataRow[0].active!=='Active'||!rivianCard(actualVehiclesDataRow[0]).includes('vehicle-operational-pill danger')||!rivianCard(actualVehiclesDataRow[0]).includes('Grounded')) throw new Error('VehiclesData operationalStatus must override the earlier generic status column and render EV12 Grounded in red');
+  const fixedEv53 = normalizeFleetVehicle({name:'OLD AMAZON NAME',vin:'7FCEHEB25RN017610',operational:'Operational',source:'Amazon fleet list'});
+  if(fixedEv53.name!=='EV53'||fleetDisplayName(fixedEv53)!=='EV53'||fleetEquipmentIdentity(fixedEv53)?.label!=='EV53') throw new Error('VIN 7FCEHEB25RN017610 must always use EV53 across Fleet Health and equipment matching');
+  state.fleetIssues={'EV50':{label:'EV50',text:'Cracked windshield',severity:'high'}};
+  const revisedFleetPage=fleetPage();
+  if(revisedFleetPage.includes('Update Fleet Health')||revisedFleetPage.includes('fleet-simple-import')||!revisedFleetPage.includes('fleet-source-actions')||!revisedFleetPage.includes('Amazon Fleet Import')||!revisedFleetPage.includes('FleetOS Import')||!revisedFleetPage.includes('fleet-issue-total')||revisedFleetPage.includes('Cracked windshield')) throw new Error('Fleet Health should keep imports beside portal links and show issue total without listing issue details');
+  if(!rivianCard(fixedEv53).includes('vehicle-operational')) throw new Error('Operational fleet cards should retain a green outline class');
+  if(!rivianCard(actualVehiclesDataRow[0]).includes('vehicle-grounded')) throw new Error('Grounded fleet cards should retain a red outline class');
+  state.fleetIssues={};
   const fleetOsRows = [
     ['VIN','State of Charge','Estimated Range'],
     ['7FCEHEB79PN014816','41%','64 mi']
   ];
   const mergedFleet = [...fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),...fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx')];
-  if (mergedFleet.length !== 2 || mergedFleet[0].name !== 'LLOL EV 21' || mergedFleet[1].battery !== 41) throw new Error('FleetOS/Amazon fleet row parsing failed');
+  if (mergedFleet.length !== 2 || mergedFleet[0].name !== 'LLOL EV 21' || mergedFleet[0].operational !== 'Grounded' || mergedFleet[0].serviceType !== 'Standard Parcel - EDV 700' || mergedFleet[1].battery !== 41) throw new Error('FleetOS/Amazon fleet row parsing failed');
   state.fleetImport = { name: 'amazon fleet list.csv + FleetOS tracker.xlsx', vehicles: mergedFleet, uploadedAt: '2026-07-05T12:34:00.000Z' };
   state.fleetRefreshPreview = fleetRefreshPreviewFromVehicles(mergedFleet); state.modal = 'fleet-refresh';
   if (!state.fleetRefreshPreview.batteryChanges?.length || !modal().includes('Battery changes to review') || !modal().includes('63%') || !modal().includes('41%') || !modal().includes('98 mi') || !modal().includes('64 mi')) throw new Error('Fleet refresh preview should show old to new EV battery/range changes');
@@ -255,7 +266,7 @@ const checks = `
   if (amazonOnlyVehicle.battery !== currentBattery || !fleetPage().includes('Amazon only') || !fleetPage().includes('Amazon official') || !fleetPage().includes('Amazon name verified') || !fleetPage().includes('Needs: FleetOS battery') || !fleetPage().includes('Updated') || !fleetPage().includes('Changed by source') || !fleetPage().includes('Amazon: name, plate, active status, operational state')) throw new Error('Amazon fleet import should preserve battery and flag status changes');
   if (!fleetNextStepBox().includes('Upload FleetOS battery tracker next') || !fleetNextStepBox().includes('Add FleetOS so every VIN gets battery')) throw new Error('Amazon-only fleet next step should request FleetOS upload');
   if (!fleetSourceStatus().hasAmazon || fleetSourceStatus().hasFleetos) throw new Error('Fleet source status should detect Amazon-only import');
-  if (rivianFleet.length !== 1 || fleetCoverageStats().demo !== 0 || !fleetPage().includes('not in upload')) throw new Error('Real fleet import should replace demo-only EV rows');
+  if (rivianFleet.length !== 1 || fleetCoverageStats().demo !== 0) throw new Error('Real fleet import should replace demo-only EV rows');
   resetFleetDemo();
   let combinedSourceVehicles = rememberFleetSourceUpload(fleetDetailsFromRows(amazonFleetRows,'amazon fleet list.csv'),'amazon fleet list.csv','2026-07-05T12:00:00.000Z');
   if (state.fleetExpectedCount !== 1 || !fleetFullListStrip().includes('expected EVs from Amazon')) throw new Error('Amazon fleet upload should set expected EV count from official VIN list');
@@ -275,7 +286,7 @@ const checks = `
   applyFleetVehicles(mergedFleet,{silent:true});
   state.expandedFleetVin = '7FCEHEB79PN014816';
   const importedFleetHtml = fleetPage();
-  const importedFleetRequirements=['LLOL EV 21','9ABC123','41%','Verified','Amazon Fleet Import','FleetOS Import','All vehicles','Vehicle CSV','Gap CSV','Changed only'];
+  const importedFleetRequirements=['LLOL EV 21','9ABC123','41%','Verified','Amazon Fleet Import','FleetOS Import','All vehicles','Van Reports / Issues','Changed only'];
   const missingImportedFleet=importedFleetRequirements.filter(value=>!importedFleetHtml.includes(value));
   if(missingImportedFleet.length||importedFleetHtml.includes('Needs: FleetOS battery')) throw new Error('FleetOS/Amazon fleet import did not update simplified cards: '+missingImportedFleet.join(', '));
   action('fleet-filter-quick',{dataset:{filter:'changed'}});
@@ -284,7 +295,7 @@ const checks = `
   const staleAge = fleetUploadAge(new Date('2026-07-05T15:00:00.000Z'));
   if (!staleAge.stale || staleAge.label !== '2h 26m old') throw new Error('Fleet upload age warning calculation failed');
   state.fleetImport.uploadedAt = new Date(Date.now() - 130 * 60000).toISOString();
-  if (!fleetPage().includes('Battery data may be stale')) throw new Error('Fleet page should warn when upload is stale');
+  if (!fleetUploadAge().stale) throw new Error('Fleet upload age should still identify stale source data internally');
   const stalePreview = fleetRefreshPreviewFromVehicles(state.fleetImport.vehicles);
   if (!stalePreview.blockers.some(x => x.includes('Saved fleet upload') && x.includes('fresh Amazon/FleetOS exports'))) throw new Error('Fleet refresh should block stale saved portal uploads');
   state.fleetImport.uploadedAt = new Date().toISOString();
@@ -302,7 +313,7 @@ const checks = `
     ['LLOL EV 21 duplicate','7FCEHEB79PN014816','9ABC123','Active','Operational']
   ];
   applyFleetVehicles(fleetDetailsFromRows(duplicateFleetRows,'amazon fleet list.csv'),{silent:true});
-  if (state.fleetUpdateSummary.duplicates !== 1 || state.fleetUpdateSummary.conflicts !== 1 || !state.fleetUpdateSummary.duplicateVins.includes('7FCEHEB79PN014816') || !state.fleetUpdateSummary.conflictRows.some(x => x.vin === '7FCEHEB79PN014816' && x.field === 'Name') || !fleetPage().includes('duplicate VINs') || !fleetPage().includes('field conflicts') || !fleetTrustStrip().includes('1 duplicate VIN in upload') || !fleetTrustStrip().includes('1 conflicting field in upload') || !fleetDispatchChecklist().includes('No duplicate VINs') || !fleetDispatchChecklist().includes('1 duplicate VIN') || !fleetDispatchChecklist().includes('No conflicting VIN data') || !fleetAccuracyGate().includes('1 duplicate VIN') || !fleetAccuracyGate().includes('1 field conflict') || !fleetPage().includes('7FCEHEB79PN014816') || !fleetGapRows().some(row => row[0] === 'HIGH' && row[1] === 'Duplicate VIN in upload' && row[2] === '7FCEHEB79PN014816') || !fleetGapRows().some(row => row[0] === 'HIGH' && row[1] === 'Conflicting Name' && row[2] === '7FCEHEB79PN014816')) throw new Error('Fleet duplicate/conflicting VIN warning failed');
+  if (state.fleetUpdateSummary.duplicates !== 1 || state.fleetUpdateSummary.conflicts !== 1 || !state.fleetUpdateSummary.duplicateVins.includes('7FCEHEB79PN014816') || !state.fleetUpdateSummary.conflictRows.some(x => x.vin === '7FCEHEB79PN014816' && x.field === 'Name') || !fleetTrustStrip().includes('1 duplicate VIN in upload') || !fleetTrustStrip().includes('1 conflicting field in upload') || !fleetDispatchChecklist().includes('No duplicate VINs') || !fleetDispatchChecklist().includes('1 duplicate VIN') || !fleetDispatchChecklist().includes('No conflicting VIN data') || !fleetAccuracyGate().includes('1 duplicate VIN') || !fleetAccuracyGate().includes('1 field conflict') || !fleetPage().includes('7FCEHEB79PN014816') || !fleetGapRows().some(row => row[0] === 'HIGH' && row[1] === 'Duplicate VIN in upload' && row[2] === '7FCEHEB79PN014816') || !fleetGapRows().some(row => row[0] === 'HIGH' && row[1] === 'Conflicting Name' && row[2] === '7FCEHEB79PN014816')) throw new Error('Fleet duplicate/conflicting VIN warning failed');
   const duplicatePreview = fleetRefreshPreviewFromVehicles(fleetDetailsFromRows(duplicateFleetRows,'amazon fleet list.csv'));
   state.fleetRefreshPreview = duplicatePreview; state.modal = 'fleet-refresh';
   if (!duplicatePreview.blockers.some(x => x.includes('duplicate VIN')) || !duplicatePreview.blockers.some(x => x.includes('conflicting field')) || duplicatePreview.duplicates !== 1 || duplicatePreview.conflicts !== 1 || !modal().includes('Duplicate VINs in upload') || !modal().includes('Conflicting portal values') || !modal().includes('LLOL EV 21 vs LLOL EV 21 duplicate') || !modal().includes('7FCEHEB79PN014816')) throw new Error('Fleet refresh preview should block duplicate/conflicting VIN approval');
@@ -333,7 +344,7 @@ const checks = `
   if (missingFleetosVinText() !== '7FCEHEB79PN014816') throw new Error('Focused missing FleetOS VIN copy text failed');
   state.fleetExpectedCount = 0;
   state.fleetFilter = 'amazon-only';
-  if (!fleetPage().includes('Amazon only') || !fleetPage().includes('Upload missing source') || !fleetPage().includes('Partial source view') || !fleetPage().includes('Not uploaded yet') || !fleetPage().includes('Review missing FleetOS') || !fleetPage().includes('Copy FleetOS VINs') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'Amazon only')) throw new Error('Amazon-only fleet filter failed');
+  if (!fleetPage().includes('Amazon only') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'Amazon only')) throw new Error('Amazon-only fleet filter failed');
   action('fleet-filter-quick',{dataset:{filter:'missing-fleetos'}});
   if (state.fleetFilter !== 'missing-fleetos' || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'Amazon only')) throw new Error('Missing-FleetOS quick filter failed');
   if (visibleFleetVinText() !== '7FCEHEB79PN014816') throw new Error('Visible Fleet VIN copy text should follow active filter');
@@ -341,7 +352,7 @@ const checks = `
   applyFleetVehicles(fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx'),{silent:true});
   state.fleetFilter = 'fleetos-only';
   state.fleetImport = { name: 'FleetOS tracker.xlsx', vehicles: fleetDetailsFromRows(fleetOsRows,'FleetOS tracker.xlsx'), uploadedAt: new Date().toISOString() };
-  if (!fleetPage().includes('FleetOS only') || !fleetPage().includes('Needs Amazon') || !fleetPage().includes('missing Amazon') || !fleetPage().includes('Amazon name lock') || !fleetPage().includes('using VIN-only names') || !fleetPage().includes('Do not rename them manually') || !fleetPage().includes('temporary VIN name') || !fleetPage().includes('FleetOS roster view is showing') || !fleetPage().includes('FleetOS EV count') || !fleetPage().includes('Need Amazon') || !fleetPage().includes('FleetOS-only VINs need Amazon fleet-list name/status rows') || !fleetPage().includes('Review missing Amazon') || !fleetPage().includes('Copy Amazon VINs') || !fleetPage().includes('Download missing Amazon CSV') || missingAmazonVinText() !== '7FCEHEB79PN014816' || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('FleetOS-only fleet filter failed');
+  if (!fleetPage().includes('FleetOS only') || missingAmazonVinText() !== '7FCEHEB79PN014816' || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('FleetOS-only fleet filter failed');
   let capturedMissingAmazonCsv = null;
   downloadBlob = (data,type,name) => { capturedMissingAmazonCsv = { data, type, name }; };
   exportMissingAmazonCSV();
@@ -356,8 +367,11 @@ const checks = `
   action('fleet-filter-quick',{dataset:{filter:'missing-amazon'}});
   if (state.fleetFilter !== 'missing-amazon' || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'FleetOS only')) throw new Error('Missing-Amazon quick filter failed');
   resetFleetDemo();
-  state.fleetFilter = 'demo-only';
-  if (!fleetPage().includes('Demo only') || !sortedRivianFleet().length || sortedRivianFleet().some(v => fleetConfidence(v).label !== 'Demo')) throw new Error('Demo-only fleet filter failed');
+  const issueVehicle=rivianFleet[0];
+  state.fleetIssues={[cleanVin(issueVehicle.vin)]:{label:issueVehicle.name,text:'Door issue',severity:'high'}};
+  state.fleetFilter = 'issues';
+  if (!fleetPage().includes('Issues') || fleetPage().includes('Demo only') || sortedRivianFleet().length!==1 || sortedRivianFleet()[0].vin!==issueVehicle.vin || sortedRivianFleet().some(v => !fleetIssueForVehicle(v))) throw new Error('Fleet issues filter failed');
+  state.fleetIssues={};
   applyFleetVehicles(mergedFleet,{silent:true});
   state.fleetFilter = 'all';
   state.modal = 'fleet-import';
