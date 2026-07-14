@@ -9,7 +9,7 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-12-rts-only-itineraries';
+const RELAYOPS_BUILD = '2026-07-14-wave-count-safety';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -163,6 +163,14 @@ function relayOpsSectionRows(payload, section) {
   });
 }
 
+function relayOpsWaveTimeValue(section) {
+  const explicit = String(section && section.waveTime || '').trim();
+  if (explicit) return explicit;
+  const time = String(section && section.wave || '').replace(/\s*[AP]M\s*$/i, '').trim();
+  const count = Number(section && section.driverCount);
+  return time ? time + ' (' + (Number.isFinite(count) ? count : 0) + ')' : '';
+}
+
 function validateRelayOpsMorningPayload(payload) {
   const errors = [];
   const rows = payload && payload.rows || [];
@@ -314,7 +322,7 @@ function writeRelayOpsMorningSheet(payload) {
     }
     sheet.getRange(layout.startRow, 1).setValue(layout.label);
     if (section.pad !== undefined && section.pad !== null && String(section.pad) !== '') sheet.getRange(layout.startRow, 5).setValue(section.pad);
-    if (layout.timeRow) sheet.getRange(layout.timeRow, 1).setValue(section.waveTime || '');
+    if (layout.timeRow) sheet.getRange(layout.timeRow, 1).setValue(relayOpsWaveTimeValue(section));
   });
   return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V116', lastCell: 'V116', createdSheet: target.created};
 }

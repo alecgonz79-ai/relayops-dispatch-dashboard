@@ -1,4 +1,4 @@
-const CACHE='relayops-picklist-edit-sync-v8';
+const CACHE='relayops-opening-workflow-v9';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{

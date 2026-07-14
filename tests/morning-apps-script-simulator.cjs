@@ -231,7 +231,7 @@ const payload = {
     ['', '', '', '', '', '', '', '', '', '', '', '', '']
   ],
   rowTypes: ['route', 'route', 'time', 'separator'],
-  sections: [{ label: 'WAVE 1', waveTime: '11:15 (2)', pad: 'A', startRow: 3, rowCount: 2, timeRow: 5, separatorRow: 6 }]
+  sections: [{ label: 'WAVE 1', wave: '11:15 AM', driverCount: 2, waveTime: '', pad: 'A', startRow: 3, rowCount: 2, timeRow: 5, separatorRow: 6 }]
 };
 
 const sheet = createLegacyTemplate('7/12/26');
