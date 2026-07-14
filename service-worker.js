@@ -1,4 +1,4 @@
-const CACHE='relayops-opening-workflow-v9';
+const CACHE='relayops-roster-fairness-v10';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{

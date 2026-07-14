@@ -25,7 +25,9 @@ const context={
     RelayOpsApp:{operationDate:()=> '2026-07-11',sharedState:()=>savedPayload,persistentState:()=>persistentPayload,applySharedState:payload=>applied.push({kind:'daily',payload}),applyPersistentState:payload=>applied.push({kind:'persistent',payload})}
   }
 };
-vm.runInNewContext(fs.readFileSync('cloud-sync.js','utf8'),context,{filename:'cloud-sync.js'});
+const cloudSource=fs.readFileSync('cloud-sync.js','utf8');
+if(!cloudSource.includes('scheduleStayHomeHistory:{...(remote.scheduleStayHomeHistory||{}),...(local.scheduleStayHomeHistory||{})}')||!cloudSource.includes('scheduleBackupRecords:{...(remote.scheduleBackupRecords||{}),...(local.scheduleBackupRecords||{})}'))throw new Error('Cloud reconcile must merge the stay-home ledger and reduction-to-backup records from every dispatcher');
+vm.runInNewContext(cloudSource,context,{filename:'cloud-sync.js'});
 const cloud=context.window.RelayOpsCloud;
 cloud.on(event=>events.push(event));
 

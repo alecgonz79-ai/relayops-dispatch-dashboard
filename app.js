@@ -345,7 +345,9 @@ let state = {
   scheduleFilter: localStorage.getItem('relayops_schedule_filter') || 'all',
   callOffDriverKeys: JSON.parse(localStorage.getItem('relayops_call_off_driver_keys') || 'null') || {},
   scheduleDriverMarks: JSON.parse(localStorage.getItem('relayops_schedule_driver_marks') || 'null') || {},
+  scheduleBackupRecords: JSON.parse(localStorage.getItem('relayops_schedule_backup_records') || 'null') || {},
   scheduleStayHome: JSON.parse(localStorage.getItem('relayops_schedule_stay_home') || 'null') || {},
+  scheduleStayHomeHistory: JSON.parse(localStorage.getItem('relayops_schedule_stay_home_history') || 'null') || {},
   scheduleReductions: JSON.parse(localStorage.getItem('relayops_schedule_reductions') || 'null') || {},
   callOffReasons: JSON.parse(localStorage.getItem('relayops_call_off_reasons') || 'null') || {},
   openingPicklistTopics: JSON.parse(localStorage.getItem('relayops_opening_picklist_topics') || 'null') || ['', '', '', ''],
@@ -586,7 +588,7 @@ function openingPicklistSectionHtml(section={},sectionIndex=0) {
   return `<tbody class="picklist-section ${section.hasTime?'wave':'adhoc'} ${pending?'delete-pending':''}">${body}${time}<tr class="picklist-black-divider"><td colspan="8"></td></tr></tbody>`;
 }
 function openingPicklistBackupRows() {
-  return currentScheduleEntries().filter(entry=>state.scheduleDriverMarks[scheduleDriverMarkKey(entry.name)]==='backup').map(entry=>({...entry,vto:scheduleBackupLabel(entry.role)}));
+  return currentBackupDriverRows().map(entry=>({...entry,vto:scheduleBackupLabel(entry.role)}));
 }
 function openingPicklistCallOffRows() {
   return Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([key,value])=>({key,name:value.name||'',reason:state.callOffReasons?.[key]||'',route:value.route||''})).sort((a,b)=>a.name.localeCompare(b.name));
@@ -933,13 +935,27 @@ function livePage() {
   <div class="device-sheet-sticky-action"><div><strong>Ready to match equipment?</strong><span>The EV/VAN number is the match key. Driver names and routes stay unchanged.</span></div><button class="btn primary" data-action="device-sheet-to-morning">Input to Morning Sheet</button></div>`;
 }
 
+function stayHomeHistoryEntries() {
+  const merged={...(state.scheduleStayHome||{}),...(state.scheduleStayHomeHistory||{})};
+  return Object.entries(merged).map(([key,value])=>({key,date:value?.date||key.split('|')[0],name:value?.name||key.split('|').slice(1).join('|'),role:value?.role||'',at:value?.at||''})).filter(row=>row.date&&row.name);
+}
+function stayHomeWindowEntries(days=14) {
+  const anchor=Date.parse(`${state.morningOperationDate||defaultOperationDate()}T12:00:00Z`),span=Math.max(1,Number(days)||14)-1;
+  return stayHomeHistoryEntries().filter(row=>{const time=Date.parse(`${row.date}T12:00:00Z`),delta=(anchor-time)/86400000;return Number.isFinite(delta)&&delta>=0&&delta<=span;});
+}
+function driverStayHomeStats(name='',days=14) {
+  const identity=value=>nameKey(contactForMorningDriver(value)?.name||value),key=identity(name),recent=stayHomeWindowEntries(days).filter(row=>identity(row.name)===key).sort((a,b)=>b.date.localeCompare(a.date)),all=stayHomeHistoryEntries().filter(row=>identity(row.name)===key);
+  return {count:recent.length,total:all.length,recent,frequent:recent.length>=2,lastDate:recent[0]?.date||all.sort((a,b)=>b.date.localeCompare(a.date))[0]?.date||''};
+}
+function formatShortOperationDate(value='') { const [year,month,day]=String(value).split('-').map(Number);return year&&month&&day?`${month}/${day}`:value; }
+
 function teamPage() {
   const drivers=teamDriverRows(), contacts=state.driverContacts||[];
   const onRouteNames=new Set(filteredMorningRows().map(r=>nameKey(r.driver)).filter(Boolean));
   return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All status</option><option>Active</option><option>Leave</option></select><select class="filter-select"><option>All roles</option><option>Lead DA</option><option>Delivery Associate</option></select><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import Drivers CSV / Excel</button><button class="btn lime" data-action="add-delivery-associate">${ICONS.plus} Add Delivery Associate</button></div></div>
   <div class="driver-workforce-import card"><div><strong>Driver & phone import</strong><span>Drop in an AssociateData CSV or Excel workbook (.xlsx). RelayOps finds the associate sheet, matches Name with Personal Phone, and keeps Position, Transporter ID, and Active status.</span></div><div><button class="btn small primary" data-action="driver-import">Choose CSV or Excel</button><button class="btn small" data-action="add-delivery-associate">Add one manually</button></div><small>Contacts stay in this browser’s private storage. They are not embedded in or published with the public GitHub Pages website.</small></div>
   <div class="driver-message-readiness card"><div><strong>Future text reminder prep</strong><span>After the Morning Sheet is finalized, RelayOps can identify on-route drivers by the visible Morning Sheet names. Texting will need a secure SMS connector and driver opt-in before it sends anything.</span></div><div><b>${drivers.filter(d=>onRouteNames.has(nameKey(d.name))).length}</b><small>current team cards recognized on the Morning Sheet</small></div></div>
-  <section class="grid team-grid">${drivers.map(d=>{const whip=driverWhiparoundStats(d.name);return `<article class="card entity-card driver-card ${whip.frequent?'whip-frequent-driver':''}"><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(d.name)}</div><div class="driver-card-actions"><span class="status ${statusClass(d.status)}">${d.status}</span><button class="driver-delete-button" data-action="request-driver-removal" data-driver-key="${esc(nameKey(d.name))}" aria-label="Remove ${esc(d.name)}" title="Remove Delivery Associate">${ICONS.trash}</button></div></div><h3>${esc(d.name)}</h3><p>${esc(d.role)} · ${esc(d.id)}</p><div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div>${whip.missed?`<div class="driver-whiparound-flag ${whip.frequent?'frequent':''}">${ICONS.whiparound}<span><b>${whip.frequent?'Frequent Whiparound follow-up':'Whiparound follow-up'}</b><small>${whip.missed} missed form${whip.missed===1?'':'s'} across ${whip.missedDays} day${whip.missedDays===1?'':'s'}</small></span></div>`:''}<div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></article>`;}).join('')}</section>`;
+  <section class="grid team-grid">${drivers.map(d=>{const whip=driverWhiparoundStats(d.name),stay=driverStayHomeStats(d.name);return `<article class="card entity-card driver-card ${whip.frequent?'whip-frequent-driver':''} ${stay.frequent?'stay-home-frequent-driver':''}"><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(d.name)}</div><div class="driver-card-actions"><span class="status ${statusClass(d.status)}">${d.status}</span><button class="driver-delete-button" data-action="request-driver-removal" data-driver-key="${esc(nameKey(d.name))}" aria-label="Remove ${esc(d.name)}" title="Remove Delivery Associate">${ICONS.trash}</button></div></div><h3>${esc(d.name)}</h3><p>${esc(d.role)} · ${esc(d.id)}</p><div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div>${stay.count?`<div class="driver-stay-home-history ${stay.frequent?'frequent':''}"><b>${stay.count}</b><span><strong>Told to stay home · last 14 days</strong><small>${stay.recent.map(row=>formatShortOperationDate(row.date)).join(' · ')}${stay.total>stay.count?` · ${stay.total} all-time`:''}</small></span></div>`:''}${whip.missed?`<div class="driver-whiparound-flag ${whip.frequent?'frequent':''}">${ICONS.whiparound}<span><b>${whip.frequent?'Frequent Whiparound follow-up':'Whiparound follow-up'}</b><small>${whip.missed} missed form${whip.missed===1?'':'s'} across ${whip.missedDays} day${whip.missedDays===1?'':'s'}</small></span></div>`:''}<div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></article>`;}).join('')}</section>`;
 }
 
 function fleetPage() {
@@ -2313,7 +2329,12 @@ function enhanceDriverTextButtons() {
   });
 }
 function scheduleDriverMarkKey(name='') { return `${state.morningOperationDate}|${nameKey(name)}`; }
-function scheduleBackupLabel(role='') { const key=headerKey(role);return key.includes('rescue')?'VTO 2':key.includes('deliveryassociate')?'VTO 4':'BACKUP'; }
+function scheduleBackupLabel(role='') { const key=headerKey(role);return key.includes('deliveryassociate')?'VTO 4':'VTO 2'; }
+function currentBackupDriverRows() {
+  const scheduled=currentScheduleEntries().filter(entry=>state.scheduleDriverMarks[scheduleDriverMarkKey(entry.name)]==='backup'),byName=new Map(scheduled.map(entry=>[nameKey(entry.name),entry]));
+  rosterStatusRows(state.scheduleBackupRecords,'Backup driver').forEach(entry=>{if(!byName.has(nameKey(entry.name)))byName.set(nameKey(entry.name),entry);});
+  return [...byName.values()].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+}
 function rosterDriverUnavailable(name='') {
   const key=scheduleDriverMarkKey(name);
   return Boolean(state.scheduleStayHome?.[key]||state.scheduleReductions?.[key]||state.callOffDriverKeys?.[callOffStatusKey(name)]);
@@ -2331,14 +2352,15 @@ function rosterSearchHtml(kind='',placeholder='Search driver names') {
 function scheduledShiftRowsHtml(rows=[],empty='No scheduled shifts found',options={}) {
   const status=options.status||'';
   return rows.length?rows.map(row=>{
-    const mark=state.scheduleDriverMarks[scheduleDriverMarkKey(row.name)]||'',vto=scheduleBackupLabel(row.role),data=`data-roster-name="${esc(nameKey(row.name))}"`;
+    const mark=state.scheduleDriverMarks[scheduleDriverMarkKey(row.name)]||'',vto=scheduleBackupLabel(row.role),data=`data-roster-name="${esc(nameKey(row.name))}"`,stayStats=status==='stay-home'?driverStayHomeStats(row.name):null;
     let actions='';
     if(row.paycom&&isDriverHelperOnlyRole(row.role))actions=`<div class="paycom-driver-actions helper-only-actions"><button class="btn small stay-home-button" data-action="mark-paycom-stay-home" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">Told to stay home</button></div>`;
     else if(row.paycom)actions=`<div class="paycom-driver-actions"><button class="btn small ${mark==='backup'?'vto-button':''}" data-action="mark-paycom-backup" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">${mark==='backup'?esc(vto):'Mark backup'}</button><button class="btn small ${mark==='adhoc'?'lime':''}" data-action="mark-paycom-adhoc" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">${mark==='adhoc'?'Adhoc added':'Mark Adhoc'}</button>${canBecomeHelperRole(row.role)?`<button class="btn small helper-button" data-action="mark-paycom-helper" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">Helper</button>`:''}<button class="btn small stay-home-button" data-action="mark-paycom-stay-home" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">Told to stay home</button><button class="btn small reduction-button" data-action="add-roster-reduction" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}" data-driver-route="${esc(row.route||'')}">Add to Reductions</button></div>`;
-    else if(options.helperBox)actions=`<div class="paycom-driver-actions helper-box-actions"><button class="btn small primary" data-action="open-helper-match" data-driver-name="${esc(row.name)}">${row.matchedRoute?`Rematch · ${esc(row.matchedRoute)}`:'Match with Driver'}</button>${isDriverHelperOnlyRole(row.role)?`<button class="btn small stay-home-button" data-action="mark-paycom-stay-home" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">Told to stay home</button>`:''}</div>`;
-    else if(status)actions=`<div class="paycom-driver-actions"><button class="btn small" data-action="restore-roster-status" data-roster-status="${esc(status)}" data-driver-name="${esc(row.name)}">Restore</button></div>`;
+    else if(options.helperBox)actions=`<div class="paycom-driver-actions helper-box-actions"><button class="btn small primary" data-action="open-helper-match" data-driver-name="${esc(row.name)}">${row.matchedRoute?`Rematch · ${esc(row.matchedRoute)}`:'Match with Driver'}</button>${row.matchedRoute?`<button class="btn small danger-soft" data-action="unmatch-helper" data-driver-name="${esc(row.name)}">Un-match with Driver</button>`:''}${isDriverHelperOnlyRole(row.role)?`<button class="btn small stay-home-button" data-action="mark-paycom-stay-home" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">Told to stay home</button>`:''}</div>`;
+    else if(status)actions=`<div class="paycom-driver-actions"><button class="btn small" data-action="restore-roster-status" data-roster-status="${esc(status)}" data-driver-name="${esc(row.name)}">Restore</button>${status==='reduction'?`<button class="btn small vto-button" data-action="move-reduction-to-backup" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">Move to backup drivers · ${esc(vto)}</button>`:''}</div>`;
+    else if(options.backupBox)actions=`<div class="paycom-driver-actions helper-only-actions"><button class="btn small" data-action="restore-roster-status" data-roster-status="backup" data-driver-name="${esc(row.name)}">Remove from backups</button></div>`;
     else if(options.allowReduction)actions=`<div class="paycom-driver-actions"><button class="btn small reduction-button" data-action="add-roster-reduction" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}" data-driver-route="${esc(row.route||'')}">Add to Reductions</button></div>`;
-    return `<div class="scheduled-shift-row ${mark==='backup'?'backup-marked':mark==='adhoc'?'adhoc-marked':''}" ${data}><div><strong>${esc(row.name)}</strong><span>${esc(row.role)}</span></div><b>${esc(row.start)}${row.end?` - ${esc(row.end)}`:''}</b>${row.route?`<em>${esc(row.route)}</em>`:''}${actions}</div>`;
+    return `<div class="scheduled-shift-row ${mark==='backup'?'backup-marked':mark==='adhoc'?'adhoc-marked':''}" ${data}><div><strong>${esc(row.name)}</strong><span>${esc(row.role)}</span>${stayStats?.count?`<small class="stay-home-fairness">${stayStats.count} time${stayStats.count===1?'':'s'} in the last 14 days</small>`:''}</div><b>${esc(row.start)}${row.end?` - ${esc(row.end)}`:''}</b>${row.route?`<em>${esc(row.route)}</em>`:''}${actions}</div>`;
   }).join(''):`<div class="scheduled-shift-empty">${empty}</div>`;
 }
 function adhocIdentityKey(name='') { return nameKey(name); }
@@ -2346,24 +2368,28 @@ function legacyAdhocRoute(name='') { return `ADHOC-${nameKey(name).replace(/[^a-
 function removeDriverAdhocRoute(name='') { const key=adhocIdentityKey(name),legacy=legacyAdhocRoute(name);state.morningRoutes=state.morningRoutes.filter(row=>row.adhocKey!==key&&row.route!==legacy); }
 function markPaycomBackup(name='',role='') {
   const key=scheduleDriverMarkKey(name),current=state.scheduleDriverMarks[key];state.scheduleDriverMarks[key]=current==='backup'?'':'backup';
-  if(state.scheduleDriverMarks[key]){delete state.scheduleStayHome[key];delete state.scheduleReductions[key];delete state.scheduleHelpers[key];}
+  if(state.scheduleDriverMarks[key]){state.scheduleBackupRecords[key]=rosterRecord(contactForMorningDriver(name)?.name||name,role);delete state.scheduleStayHome[key];delete state.scheduleReductions[key];delete state.scheduleHelpers[key];}
+  else delete state.scheduleBackupRecords[key];
   removeDriverAdhocRoute(name);persist();render();toast(state.scheduleDriverMarks[key]?`${name} marked ${scheduleBackupLabel(role)}`:`${name} backup mark cleared`);
 }
 function markPaycomAdhoc(name='',role='') {
   const key=scheduleDriverMarkKey(name),adhocKey=adhocIdentityKey(name),legacy=legacyAdhocRoute(name),current=state.scheduleDriverMarks[key];
   if(current==='adhoc'){delete state.scheduleDriverMarks[key];removeDriverAdhocRoute(name);persist();render();return toast(`${name} removed from Adhoc`);}
-  state.scheduleDriverMarks[key]='adhoc';delete state.scheduleStayHome[key];delete state.scheduleReductions[key];delete state.scheduleHelpers[key];state.openingPicklistShowAdhoc=true;let route=state.morningRoutes.find(row=>row.adhocKey===adhocKey||row.route===legacy);if(!route)route=createManualMorningRoute({route:'AX',wave:'Ad hoc'});route.route='AX';route.adhocKey=adhocKey;route.driver=contactForMorningDriver(name)?.name||name;route.service=role||'Adhoc';
+  state.scheduleDriverMarks[key]='adhoc';delete state.scheduleBackupRecords[key];delete state.scheduleStayHome[key];delete state.scheduleReductions[key];delete state.scheduleHelpers[key];state.openingPicklistShowAdhoc=true;let route=state.morningRoutes.find(row=>row.adhocKey===adhocKey||row.route===legacy);if(!route)route=createManualMorningRoute({route:'AX',wave:'Ad hoc'});route.route='AX';route.adhocKey=adhocKey;route.driver=contactForMorningDriver(name)?.name||name;route.service=role||'Adhoc';
   persist();render();toast(`${name} added to the Morning Sheet as Adhoc`);
 }
 function markPaycomStayHome(name='',role='') {
   const key=scheduleDriverMarkKey(name);
-  state.scheduleStayHome[key]=rosterRecord(name,role);delete state.scheduleReductions[key];delete state.scheduleDriverMarks[key];delete state.scheduleHelpers[key];removeHelperFromMatchedDriver(name);state.morningRoutes=state.morningRoutes.filter(row=>row.helperAssignmentKey!==key||!/helper/i.test(String(row.service||'')));removeDriverAdhocRoute(name);persist();render();toast(`${name} moved to Told To Stay Home`);
+  const record=rosterRecord(contactForMorningDriver(name)?.name||name,role,{date:state.morningOperationDate});record.date=state.morningOperationDate;state.scheduleStayHome[key]=record;state.scheduleStayHomeHistory[key]={...(state.scheduleStayHomeHistory[key]||{}),...record,date:state.morningOperationDate};delete state.scheduleBackupRecords[key];delete state.scheduleReductions[key];delete state.scheduleDriverMarks[key];delete state.scheduleHelpers[key];removeHelperFromMatchedDriver(name);state.morningRoutes=state.morningRoutes.filter(row=>row.helperAssignmentKey!==key||!/helper/i.test(String(row.service||'')));removeDriverAdhocRoute(name);persist();render();toast(`${name} moved to Told To Stay Home · ${driverStayHomeStats(name).count} time${driverStayHomeStats(name).count===1?'':'s'} in 14 days`);
 }
 function addRosterReduction(name='',role='',route='',start='') {
-  const key=scheduleDriverMarkKey(name);state.scheduleReductions[key]=rosterRecord(name,role,{route,start});delete state.scheduleStayHome[key];delete state.scheduleDriverMarks[key];delete state.scheduleHelpers[key];removeHelperFromMatchedDriver(name);state.morningRoutes=state.morningRoutes.filter(row=>row.helperAssignmentKey!==key||!/helper/i.test(String(row.service||'')));removeDriverAdhocRoute(name);persist();render();toast(`${name} added to Reductions`);
+  const key=scheduleDriverMarkKey(name);state.scheduleReductions[key]=rosterRecord(name,role,{route,start});delete state.scheduleBackupRecords[key];delete state.scheduleStayHome[key];delete state.scheduleDriverMarks[key];delete state.scheduleHelpers[key];removeHelperFromMatchedDriver(name);state.morningRoutes=state.morningRoutes.filter(row=>row.helperAssignmentKey!==key||!/helper/i.test(String(row.service||'')));removeDriverAdhocRoute(name);persist();render();toast(`${name} added to Reductions`);
 }
 function restoreRosterStatus(name='',status='') {
-  const key=scheduleDriverMarkKey(name);if(status==='stay-home')delete state.scheduleStayHome[key];if(status==='reduction')delete state.scheduleReductions[key];persist();render();toast(`${name} returned to the PAYCOM list`);
+  const key=scheduleDriverMarkKey(name);if(status==='stay-home')delete state.scheduleStayHome[key];if(status==='reduction')delete state.scheduleReductions[key];if(status==='backup'){delete state.scheduleBackupRecords[key];delete state.scheduleDriverMarks[key];}persist();render();toast(`${name} returned to the PAYCOM list`);
+}
+function moveReductionToBackup(name='',role='') {
+  const key=scheduleDriverMarkKey(name),record=state.scheduleReductions[key]||rosterRecord(name,role);state.scheduleDriverMarks[key]='backup';state.scheduleBackupRecords[key]={...record,role:role||record.role||'Delivery Associate'};delete state.scheduleReductions[key];delete state.scheduleStayHome[key];delete state.scheduleHelpers[key];removeDriverAdhocRoute(name);persist();render();toast(`${record.name||name} moved to Backup drivers as ${scheduleBackupLabel(role||record.role)}`);
 }
 function waveNameForTime(time='') { if(/^ad\s*hoc/i.test(String(time)))return 'ADHOC';const waves=morningWaveList().filter(wave=>!/^ad\s*hoc/i.test(String(wave)));const index=waves.indexOf(time);return index>=0?`WAVE ${index+1}`:'WAVE'; }
 function routeDriverRowsHtml(rows=[]) {
@@ -2377,14 +2403,14 @@ function filteredScheduledDrivers(rows=[]) {
 }
 function openingRosterScheduleHtml() {
   const morning=filteredMorningRows().filter(row=>row.route&&!String(row.route).startsWith('__blank_')&&row.driver&&!/helper/i.test(String(row.service||''))),onRoute=morning.flatMap(row=>morningDriverNames(row.driver).map(name=>({name:contactForMorningDriver(name)?.name||name,sourceName:name,role:'Delivery Associate',start:row.wave||'',end:'',route:row.route})));
-  const routeNames=new Set(onRoute.map(row=>nameKey(row.name))),schedule=currentScheduleEntries(),driverShifts=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='driver'),helpers=helperRosterRows(),helperKeys=new Set(helpers.map(row=>nameKey(row.name))),allScheduledDrivers=driverShifts.map(entry=>({...entry,paycom:true,route:routeNames.has(nameKey(entry.name))?'On morning sheet':'Not rostered for route'})),backupDrivers=allScheduledDrivers.filter(entry=>state.scheduleDriverMarks[scheduleDriverMarkKey(entry.name)]==='backup'),stayHome=rosterStatusRows(state.scheduleStayHome,'Told to stay home'),reductions=rosterStatusRows(state.scheduleReductions,'Route reduction'),unavailableKeys=new Set([...backupDrivers,...stayHome,...reductions].map(row=>nameKey(row.name))),scheduledDrivers=filteredScheduledDrivers(allScheduledDrivers.filter(entry=>!unavailableKeys.has(nameKey(entry.name))&&!helperKeys.has(nameKey(entry.name)))),dispatch=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='dispatch'),other=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='other'||headerKey(entry.role).includes('modifiedduty')),filters=[['all','All shifts'],['deliveryassociate','Delivery Associate'],['rescue','Rescue'],['midshift','Midshift'],['modifiedduty','Modified duty'],['on-route','On morning sheet'],['not-rostered','Not rostered for route']],calledOff=Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([,value])=>({name:value.name,role:'Called off',start:'',end:'',route:value.route})),vto2=backupDrivers.filter(row=>scheduleBackupLabel(row.role)==='VTO 2').length,vto4=backupDrivers.filter(row=>scheduleBackupLabel(row.role)==='VTO 4').length;
-  return `<section class="opening-schedule-board"><div class="opening-schedule-head"><div><span class="eyebrow">TODAY'S OPENING TEAM</span><h2>Routes and scheduled shifts</h2><p>${state.scheduleImportName?`Paycom file: ${esc(state.scheduleImportName)}`:'Upload Paycom inside the green Paycom panel below.'}</p></div></div><div class="opening-schedule-grid"><article class="card scheduled-section route scroll-roster"><div class="scheduled-section-head"><h3>Drivers on route</h3><b>${onRoute.length}</b></div><div class="scheduled-list">${routeDriverRowsHtml(onRoute)}</div></article><article class="card scheduled-section helper-roster scroll-roster"><div class="scheduled-section-head"><div><h3>Helpers</h3><span>Match helpers to Wave 1 or Wave 2</span></div><b>${helpers.length}</b></div><div class="scheduled-list">${scheduledShiftRowsHtml(helpers,'No Driver Helper shifts or helper assignments found.',{helperBox:true})}</div></article><article class="card scheduled-section backup scroll-roster"><div class="scheduled-section-head paycom-head"><div><h3>All Scheduled driver shifts (PAYCOM)</h3><span>${scheduledDrivers.length} shown · ${allScheduledDrivers.length} total · ${backupDrivers.length} backups</span></div><div class="paycom-head-tools"><a class="btn small paycom-login-link" href="https://www.paycomonline.net/v4/cl/ta-schdisplaydash.php?outputtype=GRID&amp;la=&amp;session_nonce=f0ff47b9e9bb75cf8596eb08db2dd3ba" target="_blank" rel="noopener">Open Paycom login</a><select data-schedule-filter>${filters.map(([value,label])=>`<option value="${value}" ${state.scheduleFilter===value?'selected':''}>${label}</option>`).join('')}</select><button class="btn small primary" data-action="schedule-import">${ICONS.upload} Import Paycom</button></div></div>${rosterSearchHtml('paycom','Search scheduled drivers')}<div class="scheduled-list" data-roster-list="paycom">${scheduledShiftRowsHtml(scheduledDrivers,'No Paycom shifts match this filter.')}</div></article><article class="card scheduled-section paycom-backups scroll-roster"><div class="scheduled-section-head"><div><h3>Backup drivers</h3><span class="roster-count-chips"><i>VTO 2 · ${vto2}</i><i class="vto4">VTO 4 · ${vto4}</i></span></div><b>${backupDrivers.length}</b></div><div class="scheduled-list">${scheduledShiftRowsHtml(backupDrivers,'No Paycom drivers marked backup.',{allowReduction:true})}</div></article><article class="card scheduled-section called-off scroll-roster"><div class="scheduled-section-head"><h3>Called off today</h3><b>${calledOff.length}</b></div>${rosterSearchHtml('called-off','Search called-off drivers')}<div class="scheduled-list" data-roster-list="called-off">${scheduledShiftRowsHtml(calledOff,'No drivers have been marked called off.',{allowReduction:true})}</div></article><article class="card scheduled-section stay-home scroll-roster"><div class="scheduled-section-head"><h3>Told To Stay Home</h3><b>${stayHome.length}</b></div>${rosterSearchHtml('stay-home','Search stay-home drivers')}<div class="scheduled-list" data-roster-list="stay-home">${scheduledShiftRowsHtml(stayHome,'No drivers have been told to stay home.',{status:'stay-home'})}</div></article><article class="card scheduled-section reductions scroll-roster"><div class="scheduled-section-head"><h3>Reductions</h3><b>${reductions.length}</b></div>${rosterSearchHtml('reductions','Search route reductions')}<div class="scheduled-list" data-roster-list="reductions">${scheduledShiftRowsHtml(reductions,'No Amazon route reductions added.',{status:'reduction'})}</div></article><article class="card scheduled-section dispatch"><div class="scheduled-section-head"><h3>Dispatcher shifts</h3><b>${dispatch.length}</b></div>${scheduledShiftRowsHtml(dispatch,'No opening, fleet, or closing dispatcher shifts found.')}</article><article class="card scheduled-section other"><div class="scheduled-section-head"><h3>Other scheduled shifts</h3><b>${other.length}</b></div>${scheduledShiftRowsHtml(other,'No uncategorized or modified-duty shifts found.')}</article></div></section>`;
+  const routeNames=new Set(onRoute.map(row=>nameKey(row.name))),schedule=currentScheduleEntries(),driverShifts=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='driver'),helpers=helperRosterRows(),helperKeys=new Set(helpers.map(row=>nameKey(row.name))),allScheduledDrivers=driverShifts.map(entry=>({...entry,paycom:true,route:routeNames.has(nameKey(entry.name))?'On morning sheet':'Not rostered for route'})),scheduledBackups=allScheduledDrivers.filter(entry=>state.scheduleDriverMarks[scheduleDriverMarkKey(entry.name)]==='backup'),scheduledBackupKeys=new Set(scheduledBackups.map(row=>nameKey(row.name))),backupDrivers=[...scheduledBackups,...rosterStatusRows(state.scheduleBackupRecords,'Backup driver').filter(row=>!scheduledBackupKeys.has(nameKey(row.name)))],stayHome=rosterStatusRows(state.scheduleStayHome,'Told to stay home'),reductions=rosterStatusRows(state.scheduleReductions,'Route reduction'),unavailableKeys=new Set([...backupDrivers,...stayHome,...reductions].map(row=>nameKey(row.name))),scheduledDrivers=filteredScheduledDrivers(allScheduledDrivers.filter(entry=>!unavailableKeys.has(nameKey(entry.name))&&!helperKeys.has(nameKey(entry.name)))),dispatch=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='dispatch'),other=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='other'||headerKey(entry.role).includes('modifiedduty')),filters=[['all','All shifts'],['deliveryassociate','Delivery Associate'],['rescue','Rescue'],['midshift','Midshift'],['modifiedduty','Modified duty'],['on-route','On morning sheet'],['not-rostered','Not rostered for route']],calledOff=Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([,value])=>({name:value.name,role:'Called off',start:'',end:'',route:value.route})),vto2=backupDrivers.filter(row=>scheduleBackupLabel(row.role)==='VTO 2').length,vto4=backupDrivers.filter(row=>scheduleBackupLabel(row.role)==='VTO 4').length,stayHomeWindow=stayHomeWindowEntries();
+  return `<section class="opening-schedule-board"><div class="opening-schedule-head"><div><span class="eyebrow">TODAY'S OPENING TEAM</span><h2>Routes and scheduled shifts</h2><p>${state.scheduleImportName?`Paycom file: ${esc(state.scheduleImportName)}`:'Upload Paycom inside the green Paycom panel below.'}</p></div></div><div class="opening-schedule-grid"><article class="card scheduled-section route scroll-roster"><div class="scheduled-section-head"><h3>Drivers on route</h3><b>${onRoute.length}</b></div><div class="scheduled-list">${routeDriverRowsHtml(onRoute)}</div></article><article class="card scheduled-section helper-roster scroll-roster"><div class="scheduled-section-head"><div><h3>Helpers</h3><span>Match helpers to Wave 1 or Wave 2</span></div><b>${helpers.length}</b></div><div class="scheduled-list">${scheduledShiftRowsHtml(helpers,'No Driver Helper shifts or helper assignments found.',{helperBox:true})}</div></article><article class="card scheduled-section backup scroll-roster"><div class="scheduled-section-head paycom-head"><div><h3>All Scheduled driver shifts (PAYCOM)</h3><span>${scheduledDrivers.length} shown · ${allScheduledDrivers.length} total · ${backupDrivers.length} backups</span></div><div class="paycom-head-tools"><a class="btn small paycom-login-link" href="https://www.paycomonline.net/v4/cl/ta-schdisplaydash.php?outputtype=GRID&amp;la=&amp;session_nonce=f0ff47b9e9bb75cf8596eb08db2dd3ba" target="_blank" rel="noopener">Open Paycom login</a><select data-schedule-filter>${filters.map(([value,label])=>`<option value="${value}" ${state.scheduleFilter===value?'selected':''}>${label}</option>`).join('')}</select><button class="btn small primary" data-action="schedule-import">${ICONS.upload} Import Paycom</button></div></div>${rosterSearchHtml('paycom','Search scheduled drivers')}<div class="scheduled-list" data-roster-list="paycom">${scheduledShiftRowsHtml(scheduledDrivers,'No Paycom shifts match this filter.')}</div></article><article class="card scheduled-section paycom-backups scroll-roster"><div class="scheduled-section-head"><div><h3>Backup drivers</h3><span class="roster-count-chips"><i>VTO 2 · ${vto2}</i><i class="vto4">VTO 4 · ${vto4}</i></span></div><b>${backupDrivers.length}</b></div><div class="scheduled-list">${scheduledShiftRowsHtml(backupDrivers,'No Paycom drivers marked backup.',{backupBox:true})}</div></article><article class="card scheduled-section called-off scroll-roster"><div class="scheduled-section-head"><h3>Called off today</h3><b>${calledOff.length}</b></div>${rosterSearchHtml('called-off','Search called-off drivers')}<div class="scheduled-list" data-roster-list="called-off">${scheduledShiftRowsHtml(calledOff,'No drivers have been marked called off.',{allowReduction:true})}</div></article><article class="card scheduled-section stay-home scroll-roster"><div class="scheduled-section-head"><div><h3>Told To Stay Home</h3><span>${stayHomeWindow.length} decision${stayHomeWindow.length===1?'':'s'} saved in the last 14 days</span></div><b>${stayHome.length}</b></div>${rosterSearchHtml('stay-home','Search stay-home drivers')}<div class="scheduled-list" data-roster-list="stay-home">${scheduledShiftRowsHtml(stayHome,'No drivers have been told to stay home.',{status:'stay-home'})}</div></article><article class="card scheduled-section reductions scroll-roster"><div class="scheduled-section-head"><h3>Reductions</h3><b>${reductions.length}</b></div>${rosterSearchHtml('reductions','Search route reductions')}<div class="scheduled-list" data-roster-list="reductions">${scheduledShiftRowsHtml(reductions,'No Amazon route reductions added.',{status:'reduction'})}</div></article><article class="card scheduled-section dispatch"><div class="scheduled-section-head"><h3>Dispatcher shifts</h3><b>${dispatch.length}</b></div>${scheduledShiftRowsHtml(dispatch,'No opening, fleet, or closing dispatcher shifts found.')}</article><article class="card scheduled-section other"><div class="scheduled-section-head"><h3>Other scheduled shifts</h3><b>${other.length}</b></div>${scheduledShiftRowsHtml(other,'No uncategorized or modified-duty shifts found.')}</article></div></section>`;
 }
 function enhanceOpeningRoster() {
   if(state.page!=='roster')return;
   const table=document.querySelector?.('.content .table-card');
   table?.insertAdjacentHTML('beforebegin',openingRosterScheduleHtml());
-  document.querySelectorAll?.('.vto-button').forEach(button=>button.classList.add(button.textContent.trim()==='VTO 4'?'vto-4':'vto-2'));
+  document.querySelectorAll?.('.vto-button').forEach(button=>button.classList.add(button.textContent.includes('VTO 4')?'vto-4':'vto-2'));
 }
 function enhanceMorningParkingAssignment() {
   if(state.page!=='morning')return;
@@ -2492,6 +2518,7 @@ function acknowledgeVanIssueInline(route='',equipment='') {
 }
 
 function render() {
+  closeDriverSuggestions();
   app.innerHTML = `<div class="app-shell">${sidebar()}<main class="main">${topbar()}<div class="content">${pageContent()}</div></main></div>${modal()}<div class="toast-stack" id="toast-stack"></div>`;
   enhanceDriverTextButtons();
   enhanceOpeningRoster();
@@ -2520,6 +2547,8 @@ function bind() {
   document.removeEventListener?.('mouseup',stopSheetDrag);
   document.removeEventListener?.('pointerup',stopSheetDrag);
   document.removeEventListener?.('copy',handleSheetSelectionCopy);
+  document.removeEventListener?.('mousemove',handleDriverSuggestionPointerMove);
+  document.addEventListener?.('mousemove',handleDriverSuggestionPointerMove);
   document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>go(el.dataset.page)));
   document.querySelectorAll('[data-action="save-fleet-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();saveFleetIssue();}));
   document.querySelectorAll('[data-action="mark-fleet-issue-fixed"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();markFleetIssueFixed(el.dataset.issueKey||'',el.dataset.issueId||'');}));
@@ -2543,12 +2572,12 @@ function bind() {
   document.querySelectorAll('[data-picklist-date]').forEach(el=>el.addEventListener('change',()=>saveOpeningPicklistDate(el.value)));
   document.querySelectorAll('[data-picklist-view]').forEach(el=>el.addEventListener('dblclick',event=>{if(!state.editMode){event.preventDefault();startOpeningPicklistCellEdit(el);}}));
   document.querySelectorAll('[data-picklist-edit]').forEach(el=>{
-    if(el.dataset.picklistField==='driver'){el.addEventListener('focus',()=>showDriverNameSuggestions(el));el.addEventListener('input',()=>showDriverNameSuggestions(el));}
-    el.addEventListener('blur',()=>saveOpeningPicklistCell(el));
+    if(el.dataset.picklistField==='driver'){el.addEventListener('focus',()=>showDriverNameSuggestions(el));el.addEventListener('input',()=>showDriverNameSuggestions(el));el.addEventListener('mouseleave',()=>scheduleDriverSuggestionsClose());}
+    el.addEventListener('blur',()=>{saveOpeningPicklistCell(el);if(el.dataset.picklistField==='driver')scheduleDriverSuggestionsClose();});
     el.addEventListener('keydown',event=>handleOpeningPicklistKeydown(event,el));
     el.addEventListener('paste',event=>{const text=event.clipboardData?.getData('text/plain');if(text!==undefined){event.preventDefault();document.execCommand?.('insertText',false,text);}});
   });
-  document.querySelectorAll('[data-driver-name-input="true"]').forEach(el=>{el.addEventListener('focus',()=>showDriverNameSuggestions(el));el.addEventListener('input',()=>showDriverNameSuggestions(el));el.addEventListener('blur',()=>setTimeout(closeDriverSuggestions,120));});
+  document.querySelectorAll('[data-driver-name-input="true"]').forEach(el=>{el.addEventListener('focus',()=>showDriverNameSuggestions(el));el.addEventListener('input',()=>showDriverNameSuggestions(el));el.addEventListener('blur',()=>scheduleDriverSuggestionsClose());el.addEventListener('mouseleave',()=>scheduleDriverSuggestionsClose());});
   document.querySelectorAll('[data-phase]').forEach(el=>el.addEventListener('click',()=>{state.phase=Number(el.dataset.phase);persist();render();}));
   document.querySelectorAll('[data-morning-filter]').forEach(el=>el.addEventListener('change',()=>{const key=el.dataset.morningFilter;if(key!=='dsp')state.morningFilters[key]=el.value;render();}));
   document.querySelectorAll('[data-operation-date]').forEach(el=>el.addEventListener('change',()=>{state.morningOperationDate=el.value||defaultOperationDate();state.morningSheetsLastReceipt=null;persist();render();toast(`Google target set to ${operationDateTabNames(state.morningOperationDate).join(' or ')}`);}));
@@ -2586,10 +2615,10 @@ function bind() {
   });
   document.querySelectorAll('.morning-template-sheet [data-edit-field]').forEach(el=>{
     el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);if(el.dataset.editField==='driver')showDriverNameSuggestions(el);});
-    if(el.dataset.editField==='driver')el.addEventListener('input',()=>showDriverNameSuggestions(el));
+    if(el.dataset.editField==='driver'){el.addEventListener('input',()=>showDriverNameSuggestions(el));el.addEventListener('mouseleave',()=>scheduleDriverSuggestionsClose());}
     el.addEventListener('pointerdown',e=>handleSheetMouseDown(e,el));
     el.addEventListener('pointerenter',()=>handleSheetMouseEnter(el));
-    el.addEventListener('blur',()=>{saveMorningEditCell(el);if(el.dataset.editField==='driver')setTimeout(closeDriverSuggestions,120);});
+    el.addEventListener('blur',()=>{saveMorningEditCell(el);if(el.dataset.editField==='driver')scheduleDriverSuggestionsClose();});
     el.addEventListener('keydown',e=>handleSheetKeydown(e,el));
     el.addEventListener('paste',e=>handleSheetPaste(e,el));
   });
@@ -2877,14 +2906,23 @@ function saveMorningEditCell(el) {
   persist();
   return route;
 }
-function closeDriverSuggestions() { document.querySelector?.('.driver-name-suggestions')?.remove(); }
+let driverSuggestionCloseTimer=null;
+function closeDriverSuggestions() { clearTimeout(driverSuggestionCloseTimer);driverSuggestionCloseTimer=null;document.querySelector?.('.driver-name-suggestions')?.remove(); }
+function scheduleDriverSuggestionsClose(delay=140) { clearTimeout(driverSuggestionCloseTimer);driverSuggestionCloseTimer=setTimeout(closeDriverSuggestions,delay); }
+function handleDriverSuggestionPointerMove(event) {
+  const box=document.querySelector?.('.driver-name-suggestions');if(!box)return;
+  const target=event?.target,anchor=box._driverSuggestionAnchor;
+  if(box.contains?.(target)||anchor?.contains?.(target)){clearTimeout(driverSuggestionCloseTimer);driverSuggestionCloseTimer=null;return;}
+  scheduleDriverSuggestionsClose(80);
+}
 function showDriverNameSuggestions(el) {
   const isDriverCell=el.dataset.editField==='driver'||el.dataset.picklistField==='driver'||el.dataset.driverNameInput==='true';
   if(!isDriverCell)return;
   closeDriverSuggestions();
   const current=el.matches?.('input,textarea')?el.value:el.textContent,query=nameKey(current),names=[...new Set(teamDriverRows().map(row=>row.name))],matches=names.filter(name=>!query||nameKey(name).includes(query)).slice(0,7);
   if(!matches.length)return;
-  const box=document.createElement('div'),rect=el.getBoundingClientRect();box.className='driver-name-suggestions';box.style.left=`${Math.max(8,rect.left)}px`;box.style.top=`${rect.bottom+4}px`;box.style.minWidth=`${Math.max(220,rect.width)}px`;box.innerHTML=`<small>Suggested exact names</small>${matches.map(name=>`<button type="button" data-suggest-driver="${esc(name)}">${esc(name)}</button>`).join('')}`;document.body.appendChild(box);
+  const box=document.createElement('div'),rect=el.getBoundingClientRect();box.className='driver-name-suggestions';box._driverSuggestionAnchor=el;box.style.left=`${Math.max(8,rect.left)}px`;box.style.top=`${rect.bottom+4}px`;box.style.minWidth=`${Math.max(220,rect.width)}px`;box.innerHTML=`<small>Suggested exact names</small>${matches.map(name=>`<button type="button" data-suggest-driver="${esc(name)}">${esc(name)}</button>`).join('')}`;document.body.appendChild(box);
+  box.addEventListener('mouseenter',()=>{clearTimeout(driverSuggestionCloseTimer);driverSuggestionCloseTimer=null;});box.addEventListener('mouseleave',()=>scheduleDriverSuggestionsClose(80));
   box.querySelectorAll('[data-suggest-driver]').forEach(button=>button.addEventListener('mousedown',event=>{event.preventDefault();const value=button.dataset.suggestDriver;if(el.matches?.('input,textarea')){el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}else{el.textContent=value;if(el.dataset.editField==='driver')saveMorningEditCell(el);if(el.dataset.picklistField==='driver')saveOpeningPicklistCell(el);}closeDriverSuggestions();el.focus();}));
 }
 
@@ -3209,8 +3247,10 @@ function action(name,el) {
   if (name==='mark-paycom-helper') return markPaycomHelper(el.dataset.driverName||'',el.dataset.driverRole||'');
   if (name==='open-helper-match') return openHelperMatch(el.dataset.driverName||'');
   if (name==='apply-helper-match') return applyHelperMatch();
+  if (name==='unmatch-helper') return unmatchHelper(el.dataset.driverName||'');
   if (name==='mark-paycom-stay-home') return markPaycomStayHome(el.dataset.driverName||'',el.dataset.driverRole||'');
   if (name==='add-roster-reduction') return addRosterReduction(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.driverRoute||'',el.dataset.driverStart||'');
+  if (name==='move-reduction-to-backup') return moveReductionToBackup(el.dataset.driverName||'',el.dataset.driverRole||'');
   if (name==='restore-roster-status') return restoreRosterStatus(el.dataset.driverName||'',el.dataset.rosterStatus||'');
   if (name==='toggle-picklist-edit') { state.editMode=!state.editMode;if(state.editMode)state.copyMode=false;render();return toast(state.editMode?'Picklist editing is on — double-click or select a cell':'Picklist edits saved'); }
   if (name==='resize-picklist-area') return resizeOpeningPicklistArea(el.dataset.area||'',el.dataset.delta||0);
@@ -3670,7 +3710,7 @@ function markPaycomHelper(name='',role='') {
   if(current){delete state.scheduleHelpers[key];removeHelperFromMatchedDriver(name);state.morningRoutes=state.morningRoutes.filter(row=>row.helperAssignmentKey!==key||!/helper/i.test(String(row.service||'')));persist();render();return toast(`${name} removed from Helpers`);}
   const scheduled=currentScheduleEntries().find(entry=>nameKey(entry.name)===nameKey(name))||{};
   state.scheduleHelpers[key]={name:contactForMorningDriver(name)?.name||name,role:role||scheduled.role||'Driver Helper',start:scheduled.start||'',end:scheduled.end||'',matchedRoute:'',matchedDriver:'',helperBag:''};
-  delete state.scheduleStayHome[key];delete state.scheduleReductions[key];delete state.scheduleDriverMarks[key];removeDriverAdhocRoute(name);persist();render();toast(`${name} moved to the Helper box`);
+  delete state.scheduleStayHome[key];delete state.scheduleReductions[key];delete state.scheduleDriverMarks[key];delete state.scheduleBackupRecords[key];removeDriverAdhocRoute(name);persist();render();toast(`${name} moved to the Helper box`);
 }
 function helperDriverCandidates() {
   const waves=[...new Set((state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&!/helper|ad\s*hoc/i.test(`${row.service} ${row.wave}`)).map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).slice(0,2);
@@ -3683,13 +3723,19 @@ function openHelperMatch(name='') {
 }
 function helperMorningRouteFor(name='') { return (state.morningRoutes||[]).find(row=>row.helperAssignmentKey===scheduleHelperKey(name)&&/helper/i.test(`${row.service||''} ${row.wave||''}`)); }
 function removeHelperFromMatchedDriver(name='') {
-  const key=nameKey(name);(state.morningRoutes||[]).forEach(route=>{if(/helper/i.test(String(route.service||'')))return;const people=morningDriverNames(route.driver);if(people.length>1){route.driver=people.filter((person,index)=>index===0||nameKey(person)!==key).join(' + ');if(route.helperAssignmentKey===scheduleHelperKey(name)){delete route.helperAssignmentKey;delete route.helperBag;}}});
+  const key=nameKey(name),assignmentKey=scheduleHelperKey(name);(state.morningRoutes||[]).forEach(route=>{if(/helper/i.test(String(route.service||'')))return;const people=morningDriverNames(route.driver),filtered=people.filter((person,index)=>index===0||nameKey(person)!==key);if(filtered.length!==people.length)route.driver=filtered.join(' + ');if(route.helperAssignmentKey===assignmentKey){delete route.helperAssignmentKey;delete route.helperBag;}});
+}
+function unmatchHelper(name='') {
+  const key=scheduleHelperKey(name),helper=helperRosterRows().find(row=>nameKey(row.name)===nameKey(name));if(!helper)return toast('Helper was not found','error');
+  removeHelperFromMatchedDriver(name);state.morningRoutes=(state.morningRoutes||[]).filter(row=>!(row.helperAssignmentKey===key&&/helper/i.test(`${row.service||''} ${row.wave||''}`)));
+  const scheduled=currentScheduleEntries().find(entry=>nameKey(entry.name)===nameKey(name))||helper;state.scheduleHelpers[key]={...(state.scheduleHelpers[key]||{}),name:contactForMorningDriver(name)?.name||name,role:scheduled.role||helper.role||'Driver Helper',start:scheduled.start||helper.start||'',end:scheduled.end||helper.end||'',matchedRoute:'',matchedRouteUid:'',matchedDriver:'',helperBag:''};
+  persist();render();toast(`${name} un-matched and returned to the Helper box`);
 }
 function applyHelperMatch() {
   const pending=state.pendingHelperMatch,picker=document.getElementById('helper-match-driver'),uid=picker?.value||picker?.options?.[0]?.value;if(!pending||!uid)return toast('Choose a Wave 1 or Wave 2 driver','error');
   const route=morningRouteByUid(uid);if(!route)return toast('That Morning Sheet driver is no longer available','error');
-  const exactHelper=contactForMorningDriver(pending.name)?.name||pending.name,primary=morningDriverNames(route.driver)[0]||route.driver;
-  removeHelperFromMatchedDriver(exactHelper);route.driver=`${primary} + ${exactHelper}`;route.helperAssignmentKey=scheduleHelperKey(exactHelper);
+  const exactHelper=contactForMorningDriver(pending.name)?.name||pending.name;
+  removeHelperFromMatchedDriver(exactHelper);const people=morningDriverNames(route.driver),primary=people[0]||route.driver;if(!people.some(name=>nameKey(name)===nameKey(exactHelper)))people.push(exactHelper);route.driver=people.filter(Boolean).join(' + ');route.helperAssignmentKey=scheduleHelperKey(exactHelper);
   const key=scheduleHelperKey(exactHelper),scheduled=currentScheduleEntries().find(entry=>nameKey(entry.name)===nameKey(exactHelper))||{};
   state.scheduleHelpers[key]={...(state.scheduleHelpers[key]||{}),name:exactHelper,role:pending.role||scheduled.role||'Driver Helper',start:scheduled.start||'',end:scheduled.end||'',matchedRoute:route.route,matchedRouteUid:route.routeUid,matchedDriver:primary,helperBag:state.scheduleHelpers[key]?.helperBag||''};
   let helperRoute=helperMorningRouteFor(exactHelper);if(!helperRoute){helperRoute=createManualMorningRoute({route:'HELPER',wave:'Helper'});helperRoute.helperAssignmentKey=key;}
@@ -5644,7 +5690,9 @@ localStorage.setItem('relayops_schedule_import_name',state.scheduleImportName||'
 localStorage.setItem('relayops_schedule_filter',state.scheduleFilter||'all');
 localStorage.setItem('relayops_call_off_driver_keys',JSON.stringify(state.callOffDriverKeys||{}));
 localStorage.setItem('relayops_schedule_driver_marks',JSON.stringify(state.scheduleDriverMarks||{}));
+localStorage.setItem('relayops_schedule_backup_records',JSON.stringify(state.scheduleBackupRecords||{}));
 localStorage.setItem('relayops_schedule_stay_home',JSON.stringify(state.scheduleStayHome||{}));
+localStorage.setItem('relayops_schedule_stay_home_history',JSON.stringify(state.scheduleStayHomeHistory||{}));
 localStorage.setItem('relayops_schedule_reductions',JSON.stringify(state.scheduleReductions||{}));
 localStorage.setItem('relayops_call_off_reasons',JSON.stringify(state.callOffReasons||{}));
 localStorage.setItem('relayops_opening_picklist_topics',JSON.stringify(state.openingPicklistTopics||['','','','']));
@@ -5687,7 +5735,7 @@ function sharedWorkspaceState() {
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,
     messageQueueTemplate:state.messageQueueTemplate,messageQueueStatus:state.messageQueueStatus,
-    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleStayHome:state.scheduleStayHome,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,
+    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleBackupRecords:state.scheduleBackupRecords,scheduleStayHome:state.scheduleStayHome,scheduleStayHomeHistory:state.scheduleStayHomeHistory,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,
     whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
     morningSheetsEndpoint:state.morningSheetsEndpoint
   };
@@ -5700,16 +5748,18 @@ function persistentWorkspaceState() {
     vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,chargingStationChecked:state.chargingStationChecked,
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,
     equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
-    driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,
+    driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,scheduleStayHomeHistory:state.scheduleStayHomeHistory,
     whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
     morningSheetsEndpoint:state.morningSheetsEndpoint
   };
 }
 function applySharedWorkspaceState(payload={}) {
-  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','messageQueueTemplate','messageQueueStatus','scheduleEntries','scheduleImportName','callOffDriverKeys','scheduleDriverMarks','scheduleStayHome','scheduleReductions','scheduleHelpers','callOffReasons','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','morningSheetsEndpoint'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','messageQueueTemplate','messageQueueStatus','scheduleEntries','scheduleImportName','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleStayHomeHistory','scheduleReductions','scheduleHelpers','callOffReasons','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','morningSheetsEndpoint'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
   state.morningIssueAcknowledgements=state.morningIssueAcknowledgements||{};
+  state.scheduleStayHomeHistory=state.scheduleStayHomeHistory&&typeof state.scheduleStayHomeHistory==='object'?state.scheduleStayHomeHistory:{};
+  state.scheduleBackupRecords=state.scheduleBackupRecords&&typeof state.scheduleBackupRecords==='object'?state.scheduleBackupRecords:{};
   state.callOffReasons=state.callOffReasons||{};
   state.openingPicklistTopics=Array.isArray(state.openingPicklistTopics)?state.openingPicklistTopics:['','','',''];
   state.openingPicklistNotes=String(state.openingPicklistNotes||'');
@@ -5726,9 +5776,10 @@ function applySharedWorkspaceState(payload={}) {
   persist();render();
 }
 function applyPersistentWorkspaceState(payload={}) {
-  const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','morningSheetsEndpoint'];
+  const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','scheduleStayHomeHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','morningSheetsEndpoint'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
+  state.scheduleStayHomeHistory=state.scheduleStayHomeHistory&&typeof state.scheduleStayHomeHistory==='object'?state.scheduleStayHomeHistory:{};
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   persist();render();
 }
