@@ -2447,12 +2447,42 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .opening-roster-tools > summary small { color:#748692; font-size:9px; font-weight:600; }
 .opening-roster-tools > summary > b { padding:5px 9px; border-radius:999px; background:#edf3f6; color:#536b7a; font-size:8px; text-transform:uppercase; }
 .opening-roster-tools .opening-schedule-board { margin:0; padding:0 14px 14px; }
+.driver-alias-button { min-width:34px; padding-inline:8px!important; font-weight:900!important; letter-spacing:.02em; }
+.driver-alias-preview,.helper-alias-preview { display:block; margin-top:3px; color:#4a748e; font-size:9px; font-weight:800; }
+.driver-alias-field { display:grid; gap:6px; margin-top:12px; }
+.driver-alias-field > span { color:#607480; font-size:9px; font-weight:900; letter-spacing:.04em; text-transform:uppercase; }
+.driver-alias-field input { width:100%; min-height:42px; padding:9px 11px; border:1px solid #b8cbd6; border-radius:10px; background:#fff; color:#1d3340; font:800 13px Inter,system-ui,sans-serif; }
+.driver-alias-field input:focus { outline:3px solid rgba(61,145,197,.18); border-color:#418db8; }
+.alias-preview { margin:7px 0 0; color:#55707f; font-size:10px; line-height:1.45; }
+.whip-import-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.whip-send { background:#1e5273!important; border-color:#1e5273!important; color:#fff!important; }
+.training-browser { min-height:calc(100vh - 168px); overflow:hidden; border:1px solid #cbd9e2; border-radius:18px; background:#fff; box-shadow:0 18px 50px rgba(22,57,78,.12); }
+.training-browser-bar { min-height:58px; display:grid; grid-template-columns:auto minmax(180px,1fr) auto; align-items:center; gap:14px; padding:10px 14px; border-bottom:1px solid #d7e2e8; background:#eef4f7; }
+.training-browser-dots { display:flex; gap:6px; }
+.training-browser-dots i { width:10px; height:10px; border-radius:50%; background:#a7b7c0; }
+.training-browser-dots i:first-child { background:#e76d66; }
+.training-browser-dots i:nth-child(2) { background:#e9b94f; }
+.training-browser-dots i:last-child { background:#68b777; }
+.training-browser-address { min-width:0; min-height:36px; display:flex; align-items:center; gap:8px; padding:7px 12px; border:1px solid #d2dde3; border-radius:10px; background:#fff; color:#4f6877; font-size:11px; font-weight:700; }
+.training-browser-address span:last-child { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.training-browser-open-small { padding:8px 11px; border-radius:9px; background:#204f6c; color:#fff; font-size:10px; font-weight:900; text-decoration:none; }
+.training-browser-stage { min-height:calc(100vh - 228px); display:flex; align-items:center; justify-content:center; flex-direction:column; padding:42px 24px; text-align:center; background:radial-gradient(circle at 50% 35%,#f7fbfd 0,#edf5f9 43%,#e5eff4 100%); }
+.training-browser-mark { width:68px; height:68px; display:grid; place-items:center; margin-bottom:18px; border-radius:20px; background:linear-gradient(145deg,#79b8df,#2f75ad); color:#fff; box-shadow:0 14px 26px rgba(47,117,173,.24); font-size:34px; font-weight:900; }
+.training-browser-stage .eyebrow { margin:0 0 8px; color:#55809a; font-size:10px; font-weight:900; letter-spacing:.16em; }
+.training-browser-stage h2 { margin:0; color:#183c53; font-size:clamp(24px,3vw,42px); }
+.training-browser-copy { max-width:560px; margin:13px auto 22px; color:#536e7e; font-size:14px; line-height:1.55; }
+.training-browser-launch { min-height:46px; display:inline-flex; align-items:center; gap:10px; padding:0 20px; text-decoration:none; }
+.training-browser-note { max-width:520px; margin:18px auto 0; color:#718793; font-size:10px; line-height:1.45; }
 
 @media (max-width:760px) {
   .opening-picklist-toolbar { align-items:stretch; flex-direction:column; }
   .print-picklist-button { width:100%; }
   .picklist-tool-actions { align-items:stretch; flex-direction:column; }
   .picklist-tool-actions .btn { width:100%; }
+  .training-browser { min-height:calc(100vh - 120px); border-radius:12px; }
+  .training-browser-bar { grid-template-columns:1fr auto; }
+  .training-browser-dots { display:none; }
+  .training-browser-stage { min-height:calc(100vh - 182px); padding:28px 18px; }
 }
 
 @media print {

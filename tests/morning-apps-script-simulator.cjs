@@ -173,7 +173,7 @@ function createLegacyTemplate(name = 'OPS LOG 2026') {
   return sheet;
 }
 
-function runConnectorWithSheet(sheet, payload, rtsPayload = null) {
+function runConnectorWithSheet(sheet, payload, rtsPayload = null, whipPayload = null) {
   const connector = fs.readFileSync(require.resolve('../google-sheets/relayops-morning-connector.gs'), 'utf8');
   const template = sheet.getName() === 'OPS LOG 2026' ? sheet : createLegacyTemplate();
   const spreadsheet = new FakeSpreadsheet(template === sheet ? [sheet] : [template, sheet]);
@@ -200,7 +200,7 @@ function runConnectorWithSheet(sheet, payload, rtsPayload = null) {
       createTextOutput: text => ({ text, setMimeType() { return this; } })
     }
   };
-  const context = { ...sandbox, __payload: payload, __rtsPayload: rtsPayload, __ui: ui, __spreadsheet: spreadsheet };
+  const context = { ...sandbox, __payload: payload, __rtsPayload: rtsPayload, __whipPayload: whipPayload, __ui: ui, __spreadsheet: spreadsheet };
   vm.runInNewContext(`${connector}
     globalThis.__validation = validateRelayOpsMorningPayload(globalThis.__payload);
     globalThis.__ping = JSON.parse(doGet({}).text);
@@ -210,6 +210,10 @@ function runConnectorWithSheet(sheet, payload, rtsPayload = null) {
     if (globalThis.__rtsPayload) {
       globalThis.__rtsValidation = validateRelayOpsRtsPayload(globalThis.__rtsPayload);
       globalThis.__rtsResult = writeRelayOpsRtsOnly(globalThis.__rtsPayload);
+    }
+    if (globalThis.__whipPayload) {
+      globalThis.__whipValidation = validateRelayOpsWhiparoundPayload(globalThis.__whipPayload);
+      globalThis.__whipResult = writeRelayOpsWhiparoundOnly(globalThis.__whipPayload);
     }
     globalThis.__layoutAfter = relayOpsTemplateLayout(findRelayOpsMorningSheet(globalThis.__payload), globalThis.__payload.rows.length);
   `, context);
@@ -268,6 +272,13 @@ const rtsContext = runConnectorWithSheet(rtsSheet, payload, rtsOnlyPayload);
 if (!rtsContext.__rtsValidation.ready || rtsContext.__rtsResult.updated !== 2 || rtsContext.__rtsResult.waveTimes !== 1) throw new Error('RTS-only connector should validate and update two route times plus one wave label');
 if (rtsSheet.getCell(3, 21) !== '8:45 PM' || rtsSheet.getCell(4, 21) !== '9:06 PM' || rtsSheet.getCell(16, 1) !== '11:15 (2)') throw new Error('RTS-only connector should write only Planned RTS and wave-time/count cells');
 if (rtsSheet.getCell(3, 2) !== 'Driver One' || rtsSheet.getCell(3, 16) !== '188') throw new Error('RTS-only connector changed non-RTS Morning Sheet data');
+
+const whipOnlyPayload = {version:'relayops-morning-v1',mode:'whiparound-only',operationDate:'2026-07-12',sheetName:'7/12/26',sheetNameCandidates:['7/12/26','7.12.26'],updates:[{route:'CX201',driver:'Driver One',preWhip:true,postWhip:false},{route:'CX202',driver:'Driver Two',preWhip:true,postWhip:true}]};
+const whipSheet = createLegacyTemplate('7/12/26');
+const whipContext = runConnectorWithSheet(whipSheet, payload, null, whipOnlyPayload);
+if (!whipContext.__whipValidation.ready || whipContext.__whipResult.updated !== 2 || whipContext.__whipResult.missingRoutes.length) throw new Error('Whiparound-only connector should validate and update both matching route rows');
+if (whipSheet.getCell(3,11) !== true || whipSheet.getCell(3,13) !== false || whipSheet.getCell(4,11) !== true || whipSheet.getCell(4,13) !== true) throw new Error('Whiparound-only connector should write PRE-WHIP and POST-WHIP checkbox booleans');
+if (whipSheet.getCell(3,15) !== undefined || whipSheet.getCell(3,16) !== '188' || whipSheet.getCell(3,17) !== '331' || whipSheet.getCell(3,21) !== '5:35 PM' || whipSheet.getCell(3,2) !== 'Driver One') throw new Error('Whiparound-only connector changed unrelated Ops Log cells');
 
 const sentinelSheet = createLegacyTemplate('7.12.26');
 sentinelSheet.setCell(3, 14, 'DO NOT TOUCH N3');

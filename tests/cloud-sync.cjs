@@ -26,7 +26,7 @@ const context={
   }
 };
 const cloudSource=fs.readFileSync('cloud-sync.js','utf8');
-if(!cloudSource.includes('scheduleStayHomeHistory:{...(remote.scheduleStayHomeHistory||{}),...(local.scheduleStayHomeHistory||{})}')||!cloudSource.includes('scheduleBackupRecords:{...(remote.scheduleBackupRecords||{}),...(local.scheduleBackupRecords||{})}'))throw new Error('Cloud reconcile must merge the stay-home ledger and reduction-to-backup records from every dispatcher');
+if(!cloudSource.includes('scheduleStayHomeHistory:{...(remote.scheduleStayHomeHistory||{}),...(local.scheduleStayHomeHistory||{})}')||!cloudSource.includes('scheduleBackupRecords:{...(remote.scheduleBackupRecords||{}),...(local.scheduleBackupRecords||{})}')||!cloudSource.includes('driverNameAliases:{...(remote.driverNameAliases||{}),...(local.driverNameAliases||{})}'))throw new Error('Cloud reconcile must merge the stay-home ledger, driver aliases, and reduction-to-backup records from every dispatcher');
 vm.runInNewContext(cloudSource,context,{filename:'cloud-sync.js'});
 const cloud=context.window.RelayOpsCloud;
 cloud.on(event=>events.push(event));

@@ -9,7 +9,7 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-14-wave-count-safety';
+const RELAYOPS_BUILD = '2026-07-14-whiparound-checks';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -72,6 +72,17 @@ function doPost(e) {
       lock = LockService.getDocumentLock();lock.waitLock(20000);
       const rtsResult = writeRelayOpsRtsOnly(payload);
       return relayOpsJson({ok:true,build:RELAYOPS_BUILD,mode:'rts-only',sheet:rtsResult.sheetName,updated:rtsResult.updated,waveTimes:rtsResult.waveTimes,missingRoutes:rtsResult.missingRoutes,preflight:rtsValidation,updatedAt:new Date().toISOString()});
+    }
+    if (payload.mode === 'whiparound-only') {
+      const whipValidation = validateRelayOpsWhiparoundPayload(payload);
+      if (!whipValidation.ready) throw new Error('RelayOps Whiparound-only preflight failed: ' + whipValidation.errors.join('; '));
+      if (payload.dryRun) {
+        const target = resolveRelayOpsTarget(payload, false);
+        return relayOpsJson({ok:true,build:RELAYOPS_BUILD,mode:'whiparound-only',dryRun:true,sheet:target.targetName,wouldCreateSheet:target.wouldCreate,updates:payload.updates.length,preflight:whipValidation,updatedAt:new Date().toISOString()});
+      }
+      lock = LockService.getDocumentLock();lock.waitLock(20000);
+      const whipResult = writeRelayOpsWhiparoundOnly(payload);
+      return relayOpsJson({ok:true,build:RELAYOPS_BUILD,mode:'whiparound-only',sheet:whipResult.sheetName,updated:whipResult.updated,missingRoutes:whipResult.missingRoutes,preflight:whipValidation,updatedAt:new Date().toISOString()});
     }
     const validation = validateRelayOpsMorningPayload(payload);
     if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
@@ -222,6 +233,18 @@ function validateRelayOpsRtsPayload(payload) {
   return {ready:errors.length===0,errors:errors};
 }
 
+function validateRelayOpsWhiparoundPayload(payload) {
+  const errors = [], allowed = relayOpsAllowedDateNames(payload && payload.operationDate), updates = payload && payload.updates || [];
+  if (!payload || payload.version !== 'relayops-morning-v1' || payload.mode !== 'whiparound-only') errors.push('Wrong Whiparound-only payload version');
+  if (!allowed.length || allowed.indexOf(payload.sheetName) < 0) errors.push('Whiparound target tab must match the operation date');
+  if (!updates.length) errors.push('No Whiparound checks were supplied');
+  updates.forEach(function(update, index) {
+    if (!String(update.route || '').trim()) errors.push('Whiparound update ' + (index + 1) + ' needs a Route');
+    if (typeof update.preWhip !== 'boolean' || typeof update.postWhip !== 'boolean') errors.push('Whiparound update ' + (index + 1) + ' needs PRE-WHIP and POST-WHIP booleans');
+  });
+  return {ready:errors.length===0,errors:errors};
+}
+
 function relayOpsRouteKey(value) {
   const text = String(value || '').toUpperCase(), match = text.match(/\bCX\d+\b/);
   return match ? match[0] : text.replace(/\s+/g, '');
@@ -237,6 +260,21 @@ function writeRelayOpsRtsOnly(payload) {
   let waveTimes = 0;
   (payload.waves || []).forEach(function(wave) { const layout = relayOpsLayoutForSection({label:wave.label});if (!layout || !layout.timeRow) return;sheet.getRange(layout.timeRow, 1).setValue(wave.value || '');waveTimes++; });
   return {sheetName:sheet.getName(),updated:updated,waveTimes:waveTimes,missingRoutes:missingRoutes};
+}
+
+function writeRelayOpsWhiparoundOnly(payload) {
+  const target = resolveRelayOpsTarget(payload, true), sheet = target.sheet;
+  validateRelayOpsTemplateSignature(sheet);
+  const routeRows = sheet.getRange(3, 3, 108, 1).getDisplayValues(), byRoute = {};
+  routeRows.forEach(function(row, index) { const key = relayOpsRouteKey(row[0]);if (key && !byRoute[key]) byRoute[key] = index + 3; });
+  let updated = 0;const missingRoutes = [];
+  (payload.updates || []).forEach(function(update) {
+    const key = relayOpsRouteKey(update.route), row = byRoute[key];if (!row) { missingRoutes.push(key);return; }
+    sheet.getRange(row, 11).setValue(Boolean(update.preWhip));
+    sheet.getRange(row, 13).setValue(Boolean(update.postWhip));
+    updated++;
+  });
+  return {sheetName:sheet.getName(),updated:updated,missingRoutes:missingRoutes};
 }
 
 function relayOpsValidateTemplate() {
