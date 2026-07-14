@@ -143,9 +143,33 @@ const checks = `
   const normalizedPayloadRows = payload.rows.map(row => row.map(cell => String(cell ?? '')));
   const itineraryDetails=itineraryRtsDetailsFromRows([['Route code','Driver name','Planned Departure Time','Planned return to station'],['AX94|CX173','Do Not Import','11:40am','8:45pm'],['CX202','Do Not Import Either','11:40am','9:06pm']]);
   if (Object.keys(itineraryDetails).length !== 2 || itineraryDetails.CX173?.plannedRts !== '8:45 PM' || itineraryDetails.CX202?.plannedRts !== '9:06 PM' || itineraryDetails.CX173?.driver) throw new Error('Itineraries_DJT6 parser must use only Route code and Planned return to station');
+  const duplicateRouteDetails=itineraryRtsDetailsFromRows([
+    ['Driver name','Route code','All stops','total packages','Planned return to station'],
+    ['David,Flores jr','CX189',238,370,'9:14pm'],
+    ['Brady,Jones','CX189',41,59,'2:10pm']
+  ]);
+  if (Object.keys(duplicateRouteDetails).length !== 1 || duplicateRouteDetails.CX189?.plannedRts !== '9:14 PM' || duplicateRouteDetails.CX189?.allStops !== 238 || duplicateRouteDetails.CX189?.totalPackages !== 370) throw new Error('Duplicate CX rescue row must not replace the primary route RTS time');
+  const reverseDuplicateRouteDetails=itineraryRtsDetailsFromRows([
+    ['Driver name','Route code','All stops','total packages','Planned return to station'],
+    ['Brady,Jones','CX189',41,59,'2:10pm'],
+    ['David,Flores jr','CX189',238,370,'9:14pm']
+  ]);
+  if (reverseDuplicateRouteDetails.CX189?.plannedRts !== '9:14 PM') throw new Error('Primary-route RTS selection must not depend on workbook row order');
+  const mergedDuplicateUploads=mergeItineraryRtsDetails(
+    itineraryRtsDetailsFromRows([['Route code','All stops','total packages','Planned return to station'],['CX189',238,370,'9:14pm']]),
+    itineraryRtsDetailsFromRows([['Route code','All stops','total packages','Planned return to station'],['CX189',41,59,'2:10pm']])
+  );
+  if (mergedDuplicateUploads.CX189?.plannedRts !== '9:14 PM') throw new Error('A later rescue-only upload must not overwrite an earlier primary-route RTS time');
+  const missingPrimaryRts=itineraryRtsDetailsFromRows([
+    ['Route code','All stops','total packages','Planned return to station'],
+    ['CX777',220,350,'Missing'],
+    ['CX777',24,38,'2:10pm']
+  ]);
+  if (missingPrimaryRts.CX777) throw new Error('A rescue RTS must stay ignored when the primary route has no return time yet');
   const rtsPayload=morningRtsOnlyPayload();
   if (rtsPayload.mode !== 'rts-only' || !Array.isArray(rtsPayload.updates) || !Array.isArray(rtsPayload.waves) || Object.keys(rtsPayload).some(key=>['rows','headers','sections'].includes(key))) throw new Error('RTS-only Google payload must not contain the full Morning Sheet data');
   if (!morningRtsOnlyPayload.toString().includes('lastItineraryRts') || morningRtsOnlyPayload.toString().includes("filter(route=>route.route&&route.plannedRts)")) throw new Error('RTS-only send must use only the latest Itineraries_DJT6 source, never stale purple-cell values');
+  if (!morningRtsOnlyPayload.toString().includes("plannedRtsSource==='itinerary'")) throw new Error('RTS-only source lock must survive refresh through persisted Morning Sheet routes');
   if (!readFiles.toString().includes('filled automatically') || !readFiles.toString().includes('state.lastItineraryRts=details')) throw new Error('Itineraries_DJT6 upload must automatically apply and source-lock Planned RTS values');
   if (!action.toString().includes('itineraries-rts-import') || !action.toString().includes('send-rts-to-sheets') || !sendRtsTimesToGoogleSheets.toString().includes("mode!=='rts-only'") || !sendRtsTimesToGoogleSheets.toString().includes('no other cells changed')) throw new Error('Dedicated Itineraries RTS import/send controls are missing');
   const compactVisibleRows=morningCopyRowsForSections(morningSections(filteredMorningRows()).filter(section=>!section.dsp)).map(item=>item.values).map(cells=>[cells[0],cells[1],cells[2],cells[3],cells[4],cells[5],cells[6],cells[7],cells[8],cells[15],cells[16],cells[13],cells[20]]).map(row=>row.map(cell=>String(cell??'')));

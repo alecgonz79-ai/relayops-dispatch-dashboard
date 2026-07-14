@@ -4,9 +4,12 @@ const ICONS = {
   live: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>',
   users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   van: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17V6a2 2 0 0 1 2-2h9v13H3Z"/><path d="M14 9h4l3 4v4h-7V9Z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg>',
+  battery: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M19.5 9h2v6h-2M11 9v6M8 12h6"/></svg>',
+  parking: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="2" width="18" height="20" rx="3"/><path d="M9 18V6h4.1a4 4 0 0 1 0 8H9M9 10h4"/></svg>',
   chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9M10 19V5M16 19v-7M22 19V2"/></svg>',
   coach: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/><path d="m8 11 2 2 5-5"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+  whiparound: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="m8 15 2.2 2.2L16 11.5"/></svg>',
   inbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/></svg>',
   box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m21 8-9 5-9-5 9-5 9 5Z"/><path d="m3 8 9 5 9-5v8l-9 5-9-5V8Z"/></svg>',
   report: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2"/></svg>',
@@ -32,7 +35,7 @@ const NAV = [
     ['dashboard','Today','dashboard'], ['morning','Morning sheet','calendar'], ['roster','Opening roster','roster'], ['live','Device and Portable Sheet','phone']
   ]},
   { section: 'Operations', items: [
-    ['team','Drivers & team','users'], ['fleet','Fleet Health','van'], ['parking','Van Parking','check'], ['inbox','Team inbox','inbox','4'], ['inventory','Inventory','box']
+    ['team','Drivers & team','users'], ['fleet','Fleet Health','battery'], ['parking','Van Parking','parking'], ['inbox','Whiparound','whiparound'], ['inventory','Inventory','box']
   ]},
   { section: 'Improve', items: [
     ['performance','Performance','chart'], ['coaching','Coaching','coach','6'], ['reports','Reports & export','report']
@@ -341,6 +344,26 @@ let state = {
   scheduleFilter: localStorage.getItem('relayops_schedule_filter') || 'all',
   callOffDriverKeys: JSON.parse(localStorage.getItem('relayops_call_off_driver_keys') || 'null') || {},
   scheduleDriverMarks: JSON.parse(localStorage.getItem('relayops_schedule_driver_marks') || 'null') || {},
+  scheduleStayHome: JSON.parse(localStorage.getItem('relayops_schedule_stay_home') || 'null') || {},
+  scheduleReductions: JSON.parse(localStorage.getItem('relayops_schedule_reductions') || 'null') || {},
+  callOffReasons: JSON.parse(localStorage.getItem('relayops_call_off_reasons') || 'null') || {},
+  openingPicklistTopics: JSON.parse(localStorage.getItem('relayops_opening_picklist_topics') || 'null') || ['', '', '', ''],
+  openingPicklistNotes: localStorage.getItem('relayops_opening_picklist_notes') || '',
+  openingPicklistCalloffRows: Math.max(6,Number(localStorage.getItem('relayops_opening_picklist_calloff_rows') || 6)),
+  openingPicklistTopicRows: Math.max(4,Number(localStorage.getItem('relayops_opening_picklist_topic_rows') || 4)),
+  openingPicklistCalloffDrafts: JSON.parse(localStorage.getItem('relayops_opening_picklist_calloff_drafts') || 'null') || [],
+  openingPicklistBackupOverrides: JSON.parse(localStorage.getItem('relayops_opening_picklist_backup_overrides') || 'null') || {},
+  openingPicklistLabels: JSON.parse(localStorage.getItem('relayops_opening_picklist_labels') || 'null') || {},
+  whiparoundInspections: JSON.parse(localStorage.getItem('relayops_whiparound_inspections') || 'null') || [],
+  whiparoundRosterSnapshots: JSON.parse(localStorage.getItem('relayops_whiparound_roster_snapshots') || 'null') || {},
+  whiparoundNotOnRoute: JSON.parse(localStorage.getItem('relayops_whiparound_not_on_route') || 'null') || {},
+  whiparoundComplianceHistory: JSON.parse(localStorage.getItem('relayops_whiparound_compliance_history') || 'null') || {},
+  whiparoundImportName: localStorage.getItem('relayops_whiparound_import_name') || '',
+  whiparoundSelectedDate: localStorage.getItem('relayops_whiparound_selected_date') || '',
+  whiparoundReminderTemplates: JSON.parse(localStorage.getItem('relayops_whiparound_reminder_templates') || 'null') || {
+    pre:'Hi {first}, please complete or re-submit your Pre-Trip EDV Inspection (DVIR) in Whiparound before departure. Reply when it is submitted. Thank you — Dispatch.',
+    post:'Hi {first}, please complete or re-submit your Post-Trip EDV Inspection (DVIR) in Whiparound before clocking out. Reply when it is submitted. Thank you — Dispatch.'
+  },
   pendingRosterSwap: null,
   removedDriverKeys: JSON.parse(localStorage.getItem('relayops_removed_driver_keys') || 'null') || [],
   pendingDriverRemoval: null,
@@ -465,7 +488,7 @@ const pageInfo = {
   live:['Device and Portable Sheet','Type today’s assignments, then match them to every EV on the Morning Sheet'], team:['Drivers & team','Availability, compliance, recognition, and history'],
   fleet:['Fleet Health','Electric and gas vehicle status, battery, and operational health'], parking:['Van Parking','Interactive parking map for closing and morning dispatch'], performance:['Performance','Scorecard trends and driver-level focus areas'],
   coaching:['Coaching','Turn scorecard signals into consistent follow-through'], checklists:['Checklists','Repeatable opening, load-out, and closeout routines'],
-  inbox:['Team inbox','Calls, messages, and announcements in one place'], inventory:['Inventory','Devices, uniforms, supplies, and assignments'],
+  inbox:['Whiparound','Pre-trip and post-trip DVIR completion checker'], inventory:['Inventory','Devices, uniforms, supplies, and assignments'],
   reports:['Reports & export','Google Sheets-ready operational data'], admin:['Admin control','People, permissions, connections, and audit history']
 };
 
@@ -525,12 +548,50 @@ function routesTable(rows,title='Today’s route board',sub='Driver, route, equi
   return `<article class="card table-card"><div class="card-head"><div class="card-title"><h2>${title}</h2><p>${sub}</p></div><div class="head-actions"><button class="btn small" data-action="copy">${ICONS.copy} Copy</button><button class="btn small" data-action="export-menu">${ICONS.download} Export</button></div></div><div class="table-wrap"><table><thead><tr><th>Route / Driver</th><th>Wave</th><th>Van + device</th><th>Stops</th><th>Progress</th><th>Route health</th><th>Rescue plan</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td><div class="driver-cell"><div class="driver-avatar ${r.status==='At risk'?'gold':''}">${initials(r.driver)}</div><div class="driver-copy"><strong>${esc(r.driver)}</strong><span class="route-code">${esc(r.route)} · ${esc(r.id)}</span></div></div></td><td>${esc(r.wave)}<br><span style="color:#849087;font-size:8px">Stage ${esc(r.staging)}</span></td><td>${esc(r.van)}<br><span style="color:#849087;font-size:8px">${esc(r.device)}</span></td><td><strong>${r.stops}</strong><br><span style="color:#849087;font-size:8px">${r.packages} pkg</span></td><td><div class="progress-cell"><div class="progress-track"><div class="progress-fill ${r.status==='At risk'?'risk':r.status==='Watch'?'warn':''}" style="width:${r.progress}%"></div></div><strong>${r.progress}%</strong></div><span class="${r.delta<0?'metric-down':'metric-up'}">${r.delta>0?'+':''}${r.delta} stops</span></td><td><span class="status ${statusClass(r.status)}">${esc(r.status)}</span></td><td>${esc(r.rescue)}</td><td><button class="mini-icon-btn" data-action="route" data-route="${esc(r.route)}" aria-label="Route actions">${ICONS.more}</button></td></tr>`).join('')}</tbody></table></div></article>`;
 }
 
+function openingPicklistSections() {
+  ensureMorningRouteUids();
+  const eligible=(state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&!/helper/i.test(String(row.service||''))&&!String(row.route||'').startsWith('__blank_'));
+  const waveNames=[...new Set(eligible.filter(row=>!/ad\s*hoc|adhoc/i.test(`${row.wave} ${row.service}`)).map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b));
+  const waves=Array.from({length:5},(_,index)=>{const key=`wave-${index+1}`,wave=waveNames[index]||'',rows=wave?eligible.filter(row=>row.wave===wave):[];return {key,label:state.openingPicklistLabels?.[key]||`WAVE ${index+1}`,wave,rows,capacity:13,hasTime:true,pad:rows[0]?.padOverride||rows[0]?.pad||padForWave(wave)};});
+  const used=new Set(waves.flatMap(section=>section.rows.map(row=>row.route)));
+  const adhoc=eligible.filter(row=>!used.has(row.route)&&/ad\s*hoc|adhoc|extra/i.test(`${row.wave} ${row.service}`));
+  waves.push({key:'adhoc',label:state.openingPicklistLabels?.adhoc||"ADHOC'S",wave:'Ad hoc',rows:adhoc,capacity:15,hasTime:false,pad:''});
+  return waves;
+}
+function openingPicklistTime(section={}) { return section.wave?`${String(section.wave).replace(/\s*[AP]M/i,'')} (${section.rows.length})`:''; }
+function openingPicklistCellAttrs(section={},sectionIndex=0,row=null,rowIndex=0,field='') {
+  const routeIndex=row?state.morningRoutes.indexOf(row):-1,key=`${section.key}:${rowIndex}:${field}`;
+  return `data-picklist-cell="${esc(key)}" data-picklist-view="true" data-picklist-field="${esc(field)}" data-picklist-route-index="${routeIndex}" data-picklist-route-uid="${esc(row?.routeUid||'')}" data-picklist-wave="${esc(section.wave||'')}" data-picklist-section-key="${esc(section.key||'')}" data-picklist-section-index="${sectionIndex}" data-picklist-row-index="${rowIndex}" title="${state.editMode?'Press Enter to save':'Double-click to edit'}" ${state.editMode?'contenteditable="true" tabindex="0" data-picklist-edit="true"':''}`;
+}
+function openingPicklistSectionHtml(section={},sectionIndex=0) {
+  const rows=[...section.rows];while(rows.length<section.capacity)rows.push(null);
+  const cell=(row,index,field,value,cls='')=>{const issue=field==='ev'?vehicleIssueForEquipmentId(value):null,issueClass=issue?.type==='grounded'?'grounded-van-cell':issue?.type==='battery'?'low-battery-van-cell':issue?.type==='reported'?'reported-van-cell':'';return `<td class="picklist-data-cell ${cls} ${issueClass}" ${openingPicklistCellAttrs(section,sectionIndex,row,index,field)}>${esc(value||'')}</td>`;};
+  const body=rows.map((row,index)=>`<tr>${index===0?`<td class="picklist-wave-label picklist-data-cell" rowspan="${section.capacity}" data-picklist-meta="label" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'waveLabel')}><span>${esc(section.label)}</span></td>`:''}${cell(row,index,'driver',row?.driver||'','picklist-driver')}${cell(row,index,'route',row?.route||'')}${cell(row,index,'staging',row?.staging||'')}${index===0?`<td class="picklist-pad picklist-data-cell" rowspan="${section.capacity}" data-picklist-meta="pad" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'padOverride')}><span>${esc(section.pad||'')}</span></td>`:''}${cell(row,index,'ev',row?.ev||'')}${cell(row,index,'deviceName',row?.deviceName||'')}${cell(row,index,'portable',row?.portable||'')}</tr>`).join('');
+  const time=section.hasTime?`<tr class="picklist-wave-time"><td class="picklist-data-cell" data-picklist-meta="waveTime" ${openingPicklistCellAttrs(section,sectionIndex,null,section.capacity,'waveTime')}>${esc(openingPicklistTime(section))}</td><td colspan="3"></td><td></td><td></td><td></td><td></td></tr>`:'';
+  return `<tbody class="picklist-section ${section.hasTime?'wave':'adhoc'}">${body}${time}<tr class="picklist-black-divider"><td colspan="8"></td></tr></tbody>`;
+}
+function openingPicklistBackupRows() {
+  return currentScheduleEntries().filter(entry=>state.scheduleDriverMarks[scheduleDriverMarkKey(entry.name)]==='backup').map(entry=>({...entry,vto:scheduleBackupLabel(entry.role)}));
+}
+function openingPicklistCallOffRows() {
+  return Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([key,value])=>({key,name:value.name||'',reason:state.callOffReasons?.[key]||'',route:value.route||''})).sort((a,b)=>a.name.localeCompare(b.name));
+}
+function openingPicklistRightHtml() {
+  const backups=openingPicklistBackupRows(),vto2=backups.filter(row=>row.vto==='VTO 2'),vto4=backups.filter(row=>row.vto!=='VTO 2'),backupCount=Math.max(21,vto2.length,vto4.length);
+  const overrides=state.openingPicklistBackupOverrides||{},backupValue=(group,index,fallback)=>Object.prototype.hasOwnProperty.call(overrides,`${group}:${index}`)?overrides[`${group}:${index}`]:fallback;
+  const backupRows=Array.from({length:backupCount},(_,index)=>`<tr><td><input data-picklist-backup="vto2:${index}" value="${esc(backupValue('vto2',index,vto2[index]?.name||''))}" aria-label="VTO 2 backup ${index+1}" placeholder="Driver"></td><td><input data-picklist-backup="vto4:${index}" value="${esc(backupValue('vto4',index,vto4[index]?.name||''))}" aria-label="VTO 4 backup ${index+1}" placeholder="Driver"></td></tr>`).join('');
+  const calloffs=openingPicklistCallOffRows(),drafts=Array.isArray(state.openingPicklistCalloffDrafts)?state.openingPicklistCalloffDrafts:[],calloffCount=Math.max(6,state.openingPicklistCalloffRows||6,calloffs.length+drafts.length),calloffRows=Array.from({length:calloffCount},(_,index)=>{const row=calloffs[index],draftIndex=index-calloffs.length,draft=draftIndex>=0?(drafts[draftIndex]||{}):null;return `<tr><td><input ${row?`data-picklist-calloff-name="${esc(row.key)}"`:`data-picklist-calloff-draft="${draftIndex}" data-picklist-calloff-field="name"`} value="${esc(row?.name||draft?.name||'')}" aria-label="Call off ${index+1}" placeholder="Driver"></td><td><input ${row?`data-picklist-calloff-reason="${esc(row.key)}"`:`data-picklist-calloff-draft="${draftIndex}" data-picklist-calloff-field="reason"`} value="${esc(row?.reason||draft?.reason||'')}" aria-label="Reason ${index+1}" placeholder="Reason"></td></tr>`;}).join('');
+  const topicCount=Math.max(4,state.openingPicklistTopicRows||4,state.openingPicklistTopics?.length||0),topics=Array.from({length:topicCount},(_,index)=>`<tr><td colspan="2"><input data-picklist-topic="${index}" value="${esc(state.openingPicklistTopics?.[index]||'')}" aria-label="Stand up topic ${index+1}" placeholder="Stand up topic"></td></tr>`).join('');
+  return `<aside class="opening-picklist-right"><table class="picklist-side-table backup-table"><thead><tr><th colspan="2">Back Ups</th></tr><tr><th>VTO 2</th><th>VTO 4</th></tr></thead><tbody>${backupRows}</tbody></table><table class="picklist-side-table calloff-table"><thead><tr><th>CALL OFF</th><th>REASON</th></tr></thead><tbody>${calloffRows}</tbody></table><table class="picklist-side-table topics-table"><thead><tr><th colspan="2">STAND UP TOPICS</th></tr></thead><tbody>${topics}</tbody></table><section class="picklist-notes"><strong>NOTES</strong><textarea data-picklist-notes aria-label="Opening picklist notes" placeholder="Opening notes">${esc(state.openingPicklistNotes||'')}</textarea></section><label class="picklist-date"><span>DATE</span><input data-picklist-date value="${esc(openingPicklistDateText())}" inputmode="numeric" aria-label="Opening picklist date" placeholder="Month/Day/Year"></label><div class="picklist-side-filler"></div></aside>`;
+}
+function openingPicklistDateText() { const [year,month,day]=String(state.morningOperationDate||defaultOperationDate()).split('-').map(Number);return year&&month&&day?`${month}/${day}/${year}`:''; }
+function openingPicklistHtml() {
+  const sections=openingPicklistSections(),routeCount=sections.reduce((total,section)=>total+section.rows.length,0),backups=openingPicklistBackupRows(),calloffs=openingPicklistCallOffRows();
+  const tools=`<details class="card picklist-more-tools" open><summary><span><strong>More picklist tools</strong><small>Edit the same live route data used by the Morning Sheet, add writing room, or print</small></span><b>Tools</b></summary><div class="picklist-tool-actions"><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-picklist-edit">${state.editMode?'✓ Finish editing':'✎ Edit picklist'}</button><button class="btn small" data-action="add-picklist-calloff-row">＋ Add more call-off lines</button><button class="btn small" data-action="add-picklist-topic-row">＋ Add more stand-up topics</button><button class="btn small primary print-picklist-button" data-action="print-opening-picklist">${ICONS.download} Print the Opening Picklist</button></div></details>`;
+  return `${tools}<article class="card opening-picklist-print"><div class="opening-picklist-toolbar"><div><span class="eyebrow">UNIVERSAL OPENING VIEW</span><h2>Opening Picklist</h2><p>${routeCount} Morning Sheet routes · ${backups.length} backups · ${calloffs.length} call offs · Helpers and DSP excluded</p></div></div>${state.editMode?`<div class="picklist-edit-help">Editing is on. Click any worksheet cell and press Enter to save. Every route edit immediately updates the Morning Sheet.</div>`:''}<div class="opening-picklist-scroll"><div class="opening-picklist-sheet"><table class="opening-picklist-main"><colgroup><col class="pick-col-wave"><col class="pick-col-driver"><col class="pick-col-route"><col class="pick-col-staging"><col class="pick-col-pad"><col class="pick-col-ev"><col class="pick-col-device"><col class="pick-col-portable"></colgroup><thead><tr><th>WAVE</th><th>DRIVER</th><th>ROUTE</th><th>STAGING</th><th>PAD</th><th>EV</th><th>DEVICE</th><th>PORTABLE</th></tr></thead>${sections.map(openingPicklistSectionHtml).join('')}</table>${openingPicklistRightHtml()}</div></div></article>`;
+}
 function rosterPage() {
-  const rows = routeFiltered();
-  return `${contextBar(`<span class="status ${state.rosterPublished?'':'warn'}">${state.rosterPublished?'Published to team':'Draft · not sent'}</span>`)}${phaseStrip()}
-  <div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All waves</option><option>Wave 1</option><option>Wave 2</option><option>Ad hoc</option></select><select class="filter-select"><option>All readiness</option><option>Ready</option><option>Needs assignment</option></select><button class="btn" data-action="auto-assign">${ICONS.link} Auto-fill equipment</button></div><div class="toolbar-right"><button class="btn" data-action="add-route">${ICONS.plus} Add route</button><button class="btn lime" data-action="publish">${state.rosterPublished?'Republish updates':'Publish roster'}</button></div></div>
-  ${routesTable(rows,'Opening roster','Amazon roster → verified dispatch plan')}
-  <div class="card" style="margin-top:16px;padding:15px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap"><div><strong style="font-size:11px">Opening handoff</strong><div style="font-size:8px;color:var(--muted);margin-top:4px">Roster imported 8:04 AM · equipment filled 8:17 AM · last edit by Alex</div></div><div style="display:flex;gap:8px"><span class="status">${state.routes.length} staffed</span><span class="status">${state.routes.length} vans</span><span class="status">${state.routes.length} devices</span></div></div>`;
+  return `${contextBar(`<span class="status ${state.rosterPublished?'':'warn'}">${state.rosterPublished?'Published to team':'Draft · not sent'}</span>`)}${phaseStrip()}${openingPicklistHtml()}<details class="card opening-roster-tools" open><summary><span><strong>Opening roster controls</strong><small>PAYCOM schedule, route swaps, backups, call offs, stay-home, and reductions</small></span><b>Tools</b></summary>${openingRosterScheduleHtml()}</details>`;
 }
 
 function waveMinutes(value='') {
@@ -539,9 +600,12 @@ function waveMinutes(value='') {
 }
 function routeCompare(a='',b='') { return String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'}); }
 function stagingArea(value='') { const m=String(value).toUpperCase().match(/^STG\.([A-Z]+)/); return m?`STG.${m[1]}`:'Other'; }
+function ensureMorningRouteUids() { (state.morningRoutes||[]).forEach((row,index)=>{if(!row.routeUid)row.routeUid=`MR-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2,7)}`;}); }
+function morningRouteByUid(uid='') { return uid?(state.morningRoutes||[]).find(row=>row.routeUid===uid):null; }
 function morningWaveList() { return [...new Set(state.morningRoutes.filter(r=>r.dsp===state.dspCode).map(r=>r.wave))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)); }
 function padForWave(wave) { const pads=['A','B','C','A','B','C']; const i=morningWaveList().indexOf(wave); return pads[Math.max(0,i)%pads.length]; }
 function filteredMorningRows() {
+  ensureMorningRouteUids();
   return state.morningRoutes.filter(r=>r.dsp===state.dspCode).map(r=>({...r,pad:r.padOverride||padForWave(r.wave)})).filter(r=>
     (state.morningFilters.wave==='all'||r.wave===state.morningFilters.wave)&&
     (state.morningFilters.staging==='all'||r.staging===state.morningFilters.staging)&&
@@ -661,7 +725,7 @@ function morningCopyGrid(groups=[]) {
 }
 
 function createManualMorningRoute(seed={}) {
-  const route={dsp:state.dspCode,driver:'',route:seed.route||`MANUAL-${Date.now().toString().slice(-6)}`,service:'Manual opening edit',wave:seed.wave||'Manual',staging:'',duration:0,zones:0,packages:0,commercial:0,stops:0,eta:'',bags:0,overflow:0,parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
+  const route={routeUid:`MR-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,dsp:state.dspCode,driver:'',route:seed.route||`MANUAL-${Date.now().toString().slice(-6)}`,service:'Manual opening edit',wave:seed.wave||'Manual',staging:'',duration:0,zones:0,packages:0,commercial:0,stops:0,eta:'',bags:0,overflow:0,parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
   state.morningRoutes.push(route);
   return route;
 }
@@ -675,8 +739,8 @@ function morningWaveGroup(section,sectionIndex=0) {
   const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
   const waveTitle=section.dsp?'DSP':section.label;
   const waveTime=morningWaveTimeText(section);
-  const attrs=(r,field,rowIndex,colIndex,extra='')=>interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}" ${edit?`contenteditable="true" data-edit-route="${esc(r?.route||'')}" data-edit-field="${field}" data-edit-wave="${esc(r?.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''} ${extra}`:'';
-  const cell=(r,field,value,colIndex,cls='')=>{const issue=field==='ev'?vehicleIssueForEquipmentId(value):null,acknowledged=issue?.type==='reported'&&morningIssueAcknowledged(r?.route,issue.reported),issueClass=issue?.type==='grounded'?'grounded-van-cell':issue?.type==='battery'?'low-battery-van-cell':issue?.type==='reported'?`reported-van-cell ${acknowledged?'acknowledged':''}`:'';return `<td class="sheet-edit-cell copy-sheet-cell ${cls} ${issueClass} ${r?.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" data-view-route="${esc(r?.route||'')}" data-view-field="${field}" data-view-wave="${esc(r?.wave||section.wave||'')}" title="${issue?esc(issue.title):edit?'Press Enter to save':'Double-click to edit'}" ${attrs(r,field,rows.indexOf(r),colIndex)}>${issue?.type==='reported'?`<button class="van-issue-mark ${acknowledged?'acknowledged':''}" data-action="open-morning-vehicle-issue" data-route="${esc(r?.route||'')}" data-equipment="${esc(value||'')}" title="${acknowledged?'Issue acknowledged':'Review and acknowledge issue'}" onclick="event.stopImmediatePropagation();openMorningVehicleIssue(this.dataset.route,this.dataset.equipment)">${acknowledged?'✓':'⚠'}</button>`:''}${esc(value??'')}</td>`;};
+  const attrs=(r,field,rowIndex,colIndex,extra='')=>interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}" ${edit?`contenteditable="true" data-edit-route="${esc(r?.route||'')}" data-edit-uid="${esc(r?.routeUid||'')}" data-edit-field="${field}" data-edit-wave="${esc(r?.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''} ${extra}`:'';
+  const cell=(r,field,value,colIndex,cls='')=>{const issue=field==='ev'?vehicleIssueForEquipmentId(value):null,acknowledged=issue?.type==='reported'&&morningIssueAcknowledged(r?.route,issue.reported),issueClass=issue?.type==='grounded'?'grounded-van-cell':issue?.type==='battery'?'low-battery-van-cell':issue?.type==='reported'?`reported-van-cell ${acknowledged?'acknowledged':''}`:'';return `<td class="sheet-edit-cell copy-sheet-cell ${cls} ${issueClass} ${r?.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" data-view-route="${esc(r?.route||'')}" data-view-uid="${esc(r?.routeUid||'')}" data-view-field="${field}" data-view-wave="${esc(r?.wave||section.wave||'')}" title="${issue?esc(issue.title):edit?'Press Enter to save':'Double-click to edit'}" ${attrs(r,field,rows.indexOf(r),colIndex)}>${issue?.type==='reported'?`<button class="van-issue-mark ${acknowledged?'acknowledged':''}" data-action="open-morning-vehicle-issue" data-route="${esc(r?.route||'')}" data-equipment="${esc(value||'')}" title="${acknowledged?'Issue acknowledged':'Review and acknowledge issue'}" onclick="event.stopImmediatePropagation();openMorningVehicleIssue(this.dataset.route,this.dataset.equipment)">${acknowledged?'✓':'⚠'}</button>`:''}${esc(value??'')}</td>`;};
   const selectCell=(r,field,colIndex,cls='')=>`<td class="sheet-check-cell copy-sheet-cell ${cls}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rows.indexOf(r)-3}" data-sheet-col="${colIndex}"`:''}><input type="checkbox" data-check-field="${field}" data-check-route="${esc(r?.route||'')}" data-check-wave="${esc(r?.wave||section.wave||'')}" ${r?.[field]?'checked':''} aria-label="${field}"></td>`;
   const divider=(rowIndex,colIndex)=>`<td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}"`:''}></td>`;
   const waveCell=`<td class="wave-label ${section.dsp?'dsp-label':''} copy-sheet-cell" rowspan="${rows.length}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="0"`:''}><span>${esc(waveTitle)}</span></td>`;
@@ -854,7 +918,7 @@ function teamPage() {
   return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All status</option><option>Active</option><option>Leave</option></select><select class="filter-select"><option>All roles</option><option>Lead DA</option><option>Delivery Associate</option></select><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import Drivers CSV / Excel</button><button class="btn lime" data-action="add-delivery-associate">${ICONS.plus} Add Delivery Associate</button></div></div>
   <div class="driver-workforce-import card"><div><strong>Driver & phone import</strong><span>Drop in an AssociateData CSV or Excel workbook (.xlsx). RelayOps finds the associate sheet, matches Name with Personal Phone, and keeps Position, Transporter ID, and Active status.</span></div><div><button class="btn small primary" data-action="driver-import">Choose CSV or Excel</button><button class="btn small" data-action="add-delivery-associate">Add one manually</button></div><small>Contacts stay in this browser’s private storage. They are not embedded in or published with the public GitHub Pages website.</small></div>
   <div class="driver-message-readiness card"><div><strong>Future text reminder prep</strong><span>After the Morning Sheet is finalized, RelayOps can identify on-route drivers by the visible Morning Sheet names. Texting will need a secure SMS connector and driver opt-in before it sends anything.</span></div><div><b>${drivers.filter(d=>onRouteNames.has(nameKey(d.name))).length}</b><small>current team cards recognized on the Morning Sheet</small></div></div>
-  <section class="grid team-grid">${drivers.map(d=>`<article class="card entity-card driver-card"><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(d.name)}</div><div class="driver-card-actions"><span class="status ${statusClass(d.status)}">${d.status}</span><button class="driver-delete-button" data-action="request-driver-removal" data-driver-key="${esc(nameKey(d.name))}" aria-label="Remove ${esc(d.name)}" title="Remove Delivery Associate">${ICONS.trash}</button></div></div><h3>${esc(d.name)}</h3><p>${esc(d.role)} · ${esc(d.id)}</p><div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div><div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></article>`).join('')}</section>`;
+  <section class="grid team-grid">${drivers.map(d=>{const whip=driverWhiparoundStats(d.name);return `<article class="card entity-card driver-card ${whip.frequent?'whip-frequent-driver':''}"><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(d.name)}</div><div class="driver-card-actions"><span class="status ${statusClass(d.status)}">${d.status}</span><button class="driver-delete-button" data-action="request-driver-removal" data-driver-key="${esc(nameKey(d.name))}" aria-label="Remove ${esc(d.name)}" title="Remove Delivery Associate">${ICONS.trash}</button></div></div><h3>${esc(d.name)}</h3><p>${esc(d.role)} · ${esc(d.id)}</p><div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div>${whip.missed?`<div class="driver-whiparound-flag ${whip.frequent?'frequent':''}">${ICONS.whiparound}<span><b>${whip.frequent?'Frequent Whiparound follow-up':'Whiparound follow-up'}</b><small>${whip.missed} missed form${whip.missed===1?'':'s'} across ${whip.missedDays} day${whip.missedDays===1?'':'s'}</small></span></div>`:''}<div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></article>`;}).join('')}</section>`;
 }
 
 function fleetPage() {
@@ -934,14 +998,21 @@ function applyParkingBatteryTone(input,value) {
   chip.classList.remove('battery-empty','battery-neutral','battery-green','battery-yellow','battery-red');
   chip.classList.add(`battery-${parkingBatteryTone(value)}`);
 }
-function parkingChargerButton(key,label='Charger') {
+function parkingChargerButton(key,label='Charger',spotNumber='') {
   const status=state.parkingChargerStatus[key]||'unknown',text=status==='green'?'CHG':status==='red'?'FAULT':'SET';
-  return `<button type="button" class="parking-charger-toggle charger-${status}" data-parking-charger="${esc(key)}" title="${esc(label)}: click for green, red, or clear"><i></i><span>${text}</span></button>`;
+  return `<button type="button" class="parking-charger-toggle charger-${status}" data-parking-charger="${esc(key)}" title="${esc(label)}: click for green, red, or clear">${spotNumber!==''?`<small class="parking-spot-number">#${esc(spotNumber)}</small>`:''}<i></i><span>${text}</span></button>`;
+}
+function parkingSpotNumber(zone='',index=0) {
+  if(zone==='west')return index<17?index+1:index+20;
+  if(zone==='east')return index<19?36-index:'';
+  if(zone==='northRight')return 45-index;
+  if(zone==='northLeft')return 50-index;
+  return '';
 }
 function parkingChargerColumn() {
   const leftSlots=parkingSlots('west'),rightSlots=parkingSlots('east'),leftCount=leftSlots.length,rightCount=rightSlots.length,rows=Math.max(leftCount,rightCount,4);
   const tent=`<div class="parking-tent-square" title="Operations tent"><svg viewBox="0 0 64 52" aria-hidden="true"><path d="M32 5 57 45H7L32 5Z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="M32 5v40M20 45l12-18 12 18" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg><span>TENT</span></div>`;
-  return `<div class="parking-crosswalk charger-column"><div class="parking-charger-pairs">${Array.from({length:rows},(_,index)=>{const isTent=index===3,left=index<leftCount&&!isTent&&leftSlots[index]?.kind!=='crosswalk'?parkingChargerButton(`middle-${index+1}-left`,`Left charger ${index+1}`):'<span></span>',right=index<rightCount&&!isTent&&rightSlots[index]?.kind!=='crosswalk'?parkingChargerButton(`middle-${index+1}-right`,`Right charger ${index+1}`):'<span></span>';return isTent?`<div class="charger-pair tent-row"><span></span>${tent}<span></span></div>`:`<div class="charger-pair">${left}${right}</div>`;}).join('')}</div></div>`;
+  return `<div class="parking-crosswalk charger-column"><div class="parking-charger-pairs">${Array.from({length:rows},(_,index)=>{const isTent=index===3,left=index<leftCount&&!isTent&&leftSlots[index]?.kind!=='crosswalk'?parkingChargerButton(`middle-${index+1}-left`,`Left charger ${index+1}`,parkingSpotNumber('west',index)):'<span></span>',right=index<rightCount&&!isTent&&rightSlots[index]?.kind!=='crosswalk'?parkingChargerButton(`middle-${index+1}-right`,`Right charger ${index+1}`,parkingSpotNumber('east',index)):'<span></span>';return isTent?`<div class="charger-pair tent-row"><span></span>${tent}<span></span></div>`:`<div class="charger-pair">${left}${right}</div>`;}).join('')}</div></div>`;
 }
 function syncParkingSlotVisual(input) {
   const slot=input?.closest?.('.parking-slot');
@@ -960,7 +1031,8 @@ function parkingSlotInput(slot) {
   const charging=slot.kind==='charging'||/\(\d{1,3}%\)/.test(String(slot.value||''));
   const showBatteryBox=['west','east','northLeft','northRight'].includes(slot.zone);
   const status=battery!==''?`${esc(battery)}%`:blocked?'BLOCK':charging?'CHG':'';
-  const upperCharger=['northLeft','northRight'].includes(slot.zone)?parkingChargerButton(`upper-${slot.id}`,`${slot.label} charger`):'';
+  const upperIndex=['northLeft','northRight'].includes(slot.zone)?parkingSlots(slot.zone).findIndex(item=>item.id===slot.id):-1;
+  const upperCharger=upperIndex>=0?parkingChargerButton(`upper-${slot.id}`,`${slot.label} charger`,parkingSpotNumber(slot.zone,upperIndex)):'';
   return `<div class="parking-slot parking-slot-row zone-${esc(slot.zone)}${tone}${selected}${blocked?' blocked':''}${charging?' charging':''}${hasVehicle?' has-vehicle':''}${slot.zone==='gas'?' gas-vehicle':' ev-vehicle'}" title="${esc(slot.label)}"><label class="parking-van-cell" data-parking-select="${esc(slot.id)}"><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}" data-parking-id="${esc(slot.id)}" value="${esc(slot.value||'')}" placeholder="${slot.kind==='street'?'STREET':''}">${!showBatteryBox&&status?`<em>${status}</em>`:''}</label>${showBatteryBox?`<label class="parking-battery-mini battery-${batteryTone}" title="Battery % for ${esc(slot.value||slot.label)}"><input aria-label="Battery percent for ${esc(slot.value||slot.label)}" data-parking-battery="${esc(slot.id)}" type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="--"></label>`:''}${upperCharger}</div>`;
 }
 function parkingStack(zone,title,subtitle='') {
@@ -1831,9 +1903,113 @@ function checklistsPage() {
   return `${contextBar()}<section class="grid fleet-grid">${groups.map((g,gi)=>`<article class="card"><div class="card-head"><div class="card-title"><h2>${g[0]}</h2><p>${g[1]} complete</p></div><span class="status ${gi===2?'neutral':gi===1?'warn':''}">${g[2]}</span></div><div class="page-summary">${g[3].map((x,i)=>`<label style="display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid #eef0ed;font-size:9px"><input type="checkbox" class="check-item" ${gi===0&&i<4||gi===1&&i<3?'checked':''}/> ${x}</label>`).join('')}<button class="btn small" style="margin-top:14px;width:100%" data-action="checklist">Open full checklist</button></div></article>`).join('')}</section><article class="card" style="margin-top:16px"><div class="card-head"><div class="card-title"><h2>Recent completion history</h2><p>Accountability across every shift</p></div></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Opening dispatcher</th><th>Opening</th><th>Load-out</th><th>Closeout</th><th>Exceptions</th></tr></thead><tbody><tr><td>Wed, Jul 1</td><td>Alex Gonzalez</td><td><span class="status">100%</span></td><td><span class="status">100%</span></td><td><span class="status">100%</span></td><td>2 notes</td></tr><tr><td>Tue, Jun 30</td><td>Sam Rivera</td><td><span class="status">100%</span></td><td><span class="status">100%</span></td><td><span class="status warn">89%</span></td><td>1 overdue</td></tr></tbody></table></div></article>`;
 }
 
+function normalizeInspectionDate(value='') {
+  if(typeof value==='number'&&Number.isFinite(value)) {
+    const date=new Date(Date.UTC(1899,11,30)+Math.round(value)*86400000);
+    return date.toISOString().slice(0,10);
+  }
+  const text=String(value||'').trim(),match=text.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+  if(match){let year=Number(match[3]);if(year<100)year+=2000;return `${year}-${String(match[1]).padStart(2,'0')}-${String(match[2]).padStart(2,'0')}`;}
+  const parsed=new Date(text);return Number.isNaN(parsed.getTime())?'':parsed.toISOString().slice(0,10);
+}
+function inspectionDateLabel(value='') {
+  const date=normalizeInspectionDate(value);if(!date)return 'Choose a date';
+  const [year,month,day]=date.split('-').map(Number);return new Intl.DateTimeFormat('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}).format(new Date(year,month-1,day));
+}
+function inspectionFormType(value='') {
+  const form=String(value||'').trim().toLowerCase();
+  if(form.includes('pre-trip')&&form.includes('edv')&&form.includes('dvir'))return 'pre';
+  if(form.includes('post-trip')&&form.includes('edv')&&form.includes('dvir'))return 'post';
+  return '';
+}
+function personNameParts(value='') { return nameKey(value).split(' ').filter(Boolean); }
+function inspectionNameMatches(a='',b='') {
+  const left=nameKey(a),right=nameKey(b);if(!left||!right)return false;if(left===right)return true;
+  const ap=personNameParts(left),bp=personNameParts(right),al=ap.at(-1),bl=bp.at(-1);
+  return Boolean(al&&al===bl&&ap[0]?.[0]===bp[0]?.[0]);
+}
+function inspectionRecordsFromRows(rows=[]) {
+  const header=findImportHeader(rows,[['form'],['dateinspectionoccurred'],['assetname'],['driverfirstname'],['driverlastname']]);
+  if(header<0)return [];
+  const keys=rows[header].map(headerKey),index=(...names)=>keys.findIndex(key=>names.map(headerKey).includes(key));
+  const ix={form:index('form'),date:index('date inspection occurred'),asset:index('asset name'),first:index('driver first name'),last:index('driver last name')};
+  const unique=new Map();
+  rows.slice(header+1).forEach(row=>{
+    const type=inspectionFormType(row[ix.form]),date=normalizeInspectionDate(row[ix.date]),first=String(row[ix.first]||'').trim(),last=String(row[ix.last]||'').trim();
+    const driver=`${first} ${last}`.replace(/\s+/g,' ').trim(),asset=String(row[ix.asset]||'').trim();
+    if(!type||!date||!driver||headerKey(row[ix.form])==='form')return;
+    const id=`${date}|${type}|${nameKey(driver)}|${headerKey(asset)}`;
+    unique.set(id,{id,type,date,asset,driver,first,last});
+  });
+  return [...unique.values()];
+}
+function currentWhiparoundRoster() {
+  const roster=new Map(),add=(name,source,route='')=>{
+    const contact=contactForMorningDriver(name),display=contact?.name||String(name||'').trim(),key=nameKey(display);
+    if(!key||state.callOffDriverKeys[callOffStatusKey(display)])return;
+    const current=roster.get(key)||{key,name:display,sources:[],route:''};
+    if(!current.sources.includes(source))current.sources.push(source);if(route)current.route=route;roster.set(key,current);
+  };
+  filteredMorningRows().filter(row=>row.route&&!String(row.route).startsWith('__blank_')).forEach(row=>{const driver=morningDriverNames(row.driver)[0];if(driver)add(driver,'Morning Sheet',row.route);});
+  currentScheduleEntries().filter(entry=>scheduleRoleGroup(entry.role)==='driver').forEach(entry=>add(entry.name,'PAYCOM',entry.role));
+  return [...roster.values()].sort((a,b)=>Number(!a.sources.includes('Morning Sheet'))-Number(!b.sources.includes('Morning Sheet'))||a.name.localeCompare(b.name));
+}
+function whiparoundAvailableDates() {
+  return [...new Set((state.whiparoundInspections||[]).map(row=>row.date).filter(Boolean))].sort().reverse();
+}
+function selectedWhiparoundDate() { return state.whiparoundSelectedDate||whiparoundAvailableDates()[0]||state.morningOperationDate||defaultOperationDate(); }
+function whiparoundExpectedForDate(date=selectedWhiparoundDate()) {
+  const snapshot=state.whiparoundRosterSnapshots?.[date],rows=Array.isArray(snapshot)&&snapshot.length?snapshot:currentWhiparoundRoster();
+  return rows.filter(row=>!state.whiparoundNotOnRoute?.[`${date}|${nameKey(row.name)}`]);
+}
+function inspectionForDriver(records=[],driver='',type='') { return records.find(row=>row.type===type&&inspectionNameMatches(row.driver,driver)); }
+function whiparoundStatus(date=selectedWhiparoundDate()) {
+  const records=(state.whiparoundInspections||[]).filter(row=>row.date===date),expected=whiparoundExpectedForDate(date);
+  const rows=expected.map(person=>{const pre=inspectionForDriver(records,person.name,'pre'),post=inspectionForDriver(records,person.name,'post');return {...person,pre,post};});
+  const matchedIds=new Set(rows.flatMap(row=>[row.pre?.id,row.post?.id]).filter(Boolean));
+  return {date,records,expected:rows,preComplete:rows.filter(row=>row.pre),postComplete:rows.filter(row=>row.post),missingPre:rows.filter(row=>!row.pre),missingPost:rows.filter(row=>!row.post),unmatched:records.filter(row=>!matchedIds.has(row.id))};
+}
+function rebuildWhiparoundHistory(date=selectedWhiparoundDate()) {
+  const status=whiparoundStatus(date),next={...(state.whiparoundComplianceHistory||{})};
+  Object.keys(next).filter(key=>key.startsWith(`${date}|`)).forEach(key=>delete next[key]);
+  status.expected.forEach(row=>{next[`${date}|${nameKey(row.name)}`]={date,name:row.name,missingPre:!row.pre,missingPost:!row.post,pre:Boolean(row.pre),post:Boolean(row.post)};});
+  state.whiparoundComplianceHistory=next;return status;
+}
+function driverWhiparoundStats(name='') {
+  const records=Object.values(state.whiparoundComplianceHistory||{}).filter(row=>inspectionNameMatches(row.name,name));
+  const missed=records.reduce((sum,row)=>sum+Number(Boolean(row.missingPre))+Number(Boolean(row.missingPost)),0),missedDays=records.filter(row=>row.missingPre||row.missingPost).length;
+  return {missed,missedDays,checks:records.length,frequent:missed>=3||missedDays>=2};
+}
+function whiparoundReminderCard(row,type) {
+  const label=type==='pre'?'Pre-Trip':'Post-Trip',phone=contactForMorningDriver(row.name)?.phone||'',paycomOnly=!row.sources.includes('Morning Sheet');
+  return `<article class="whip-reminder-row"><div class="driver-avatar">${initials(row.name)}</div><div><strong>${esc(row.name)}</strong><span>${paycomOnly?'PAYCOM only':esc(row.route||'Morning Sheet')} · ${phone?esc(phone):'Phone not imported'}</span></div><button class="btn small primary" data-action="whiparound-remind" data-driver-name="${esc(row.name)}" data-inspection-type="${type}">${ICONS.phone} Text to remind driver</button><button class="btn small" data-action="whiparound-not-route" data-driver-name="${esc(row.name)}">Not on Route</button><b>${label}</b></article>`;
+}
 function inboxPage() {
-  const msgs=[['Andre Wilson','Running behind after late load-out. Apartments are heavy.','2 min','Unread'],['Nina Patel','Tire light came on. Pressure looks okay in the app.','8 min','Unread'],['Taylor Price','Ready for the rescue. Send the meet point.','12 min','Unread'],['Maya Collins','CX12 is clear. No support needed.','18 min','Read']];
-  return `${contextBar()}<section class="grid page-grid"><article class="card"><div class="card-head"><div class="card-title"><h2>Unified team inbox</h2><p>Calls, SMS, and operational updates</p></div><button class="btn small lime" data-action="message">${ICONS.plus} New message</button></div><div class="alert-stack">${msgs.map(m=>`<button class="alert-row" style="width:100%;border:0;background:transparent;text-align:left" data-action="open-message"><div class="driver-avatar">${initials(m[0])}</div><div class="alert-copy"><strong>${m[0]}</strong><span>${m[1]}</span></div><span class="alert-time">${m[2]}<br>${m[3]}</span></button>`).join('')}</div></article><article class="card"><div class="card-head"><div class="card-title"><h2>Broadcasts</h2><p>Reusable, approved messages</p></div></div><div class="page-summary"><button class="btn" style="width:100%;margin-bottom:8px" data-action="broadcast">Send shift details</button><button class="btn" style="width:100%;margin-bottom:8px" data-action="broadcast">Send lunch reminder</button><button class="btn" style="width:100%;margin-bottom:8px" data-action="broadcast">Send RTS reminder</button><div class="callout"><strong>Quiet hours active</strong><p>Non-urgent recurring messages will wait until 6:00 AM.</p></div></div></article></section>`;
+  const dates=whiparoundAvailableDates(),date=selectedWhiparoundDate(),status=whiparoundStatus(date),expected=status.expected.length,completeBoth=status.expected.filter(row=>row.pre&&row.post).length;
+  const excluded=Object.keys(state.whiparoundNotOnRoute||{}).filter(key=>key.startsWith(`${date}|`)&&state.whiparoundNotOnRoute[key]).map(key=>key.slice(date.length+1));
+  const sourceNote=state.whiparoundImportName?`${esc(state.whiparoundImportName)} · ${status.records.length} valid DVIR rows`:'No Whiparound report imported yet';
+  return `${contextBar(`<span class="status ${status.missingPre.length||status.missingPost.length?'warn':''}">${status.missingPre.length+status.missingPost.length} reminders</span>`)}
+  <section class="whip-hero card"><div class="whip-hero-icon">${ICONS.whiparound}</div><div><span class="eyebrow">WHIPAROUND CHECKER</span><h2>See who still owes a DVIR</h2><p>RelayOps compares the Whiparound report with Morning Sheet and PAYCOM names from the Opening Roster.</p></div><div class="whip-import-controls"><label><span>Inspection date</span><select data-whiparound-date>${dates.length?dates.map(value=>`<option value="${value}" ${value===date?'selected':''}>${esc(inspectionDateLabel(value))}</option>`).join(''):`<option value="${date}">${esc(inspectionDateLabel(date))}</option>`}</select></label><button class="btn primary" data-action="whiparound-import">${ICONS.upload} Whiparound Import <small>CSV / XLSX</small></button><small>${sourceNote}</small></div></section>
+  <section class="whip-kpis"><article><span>Expected drivers</span><strong>${expected}</strong><small>Morning Sheet + PAYCOM</small></article><article class="pre"><span>Pre-Trip complete</span><strong>${status.preComplete.length}/${expected}</strong><small>${status.missingPre.length} still missing</small></article><article class="post"><span>Post-Trip complete</span><strong>${status.postComplete.length}/${expected}</strong><small>${status.missingPost.length} still missing</small></article><article class="done"><span>Both complete</span><strong>${completeBoth}/${expected}</strong><small>${status.unmatched.length} report name${status.unmatched.length===1?'':'s'} unmatched</small></article></section>
+  ${!expected?`<div class="whip-empty-roster card">${ICONS.alert}<div><strong>No Opening Roster names found</strong><span>Fill the Morning Sheet or import PAYCOM first. Whiparound rows are saved and will match as soon as the roster is ready.</span></div></div>`:''}
+  <section class="whip-check-grid"><article class="card whip-check-card pre"><div class="whip-check-head"><div><span>BEFORE DEPARTURE</span><h3>Missing Pre-Trip DVIR</h3></div><b>${status.missingPre.length}</b></div><div class="whip-scroll-list">${status.missingPre.length?status.missingPre.map(row=>whiparoundReminderCard(row,'pre')).join(''):'<div class="whip-all-done">${ICONS.check}<strong>Everyone is complete</strong><span>No Pre-Trip reminders needed.</span></div>'}</div></article><article class="card whip-check-card post"><div class="whip-check-head"><div><span>BEFORE CLOCK-OUT</span><h3>Missing Post-Trip DVIR</h3></div><b>${status.missingPost.length}</b></div><div class="whip-scroll-list">${status.missingPost.length?status.missingPost.map(row=>whiparoundReminderCard(row,'post')).join(''):'<div class="whip-all-done">${ICONS.check}<strong>Everyone is complete</strong><span>No Post-Trip reminders needed.</span></div>'}</div></article></section>
+  <section class="whip-lower-grid"><article class="card whip-template-card"><div class="card-title"><h2>Prewritten reminders</h2><p>Edit once, then every reminder button uses the saved wording.</p></div><label><span>Pre-Trip message</span><textarea data-whiparound-template="pre">${esc(state.whiparoundReminderTemplates.pre||'')}</textarea></label><label><span>Post-Trip message</span><textarea data-whiparound-template="post">${esc(state.whiparoundReminderTemplates.post||'')}</textarea></label><small>Available placeholders: {first}, {form}, {date}. A dispatcher still reviews every message before it opens in Google Messages.</small></article><article class="card whip-complete-card"><div class="card-title"><h2>Completed inspections</h2><p>Only the five requested Whiparound fields are retained.</p></div><div class="whip-complete-list">${status.records.length?status.records.map(row=>`<div><span class="${row.type}">${row.type==='pre'?'PRE':'POST'}</span><strong>${esc(row.driver)}</strong><b>${esc(row.asset||'No asset')}</b></div>`).join(''):'<div class="whip-no-file">Import today’s Whiparound report to begin.</div>'}</div>${excluded.length?`<details class="whip-excluded"><summary>${excluded.length} marked Not on Route</summary>${excluded.map(key=>`<button class="btn small" data-action="whiparound-restore" data-driver-key="${esc(key)}">Restore ${esc(key.replace(/\b\w/g,c=>c.toUpperCase()))}</button>`).join('')}</details>`:''}</article></section>`;
+}
+function openWhiparoundReminder(name='',type='pre') {
+  const driver=contactForMorningDriver(name),phone=driver?.phone||'';
+  if(!phone)return toast(`${name} does not have an imported phone number yet`,'error');
+  const form=type==='post'?'Post-Trip EDV Inspection (DVIR)':'Pre-Trip EDV Inspection (DVIR)',first=(driver?.name||name).split(/\s+/)[0];
+  const template=state.whiparoundReminderTemplates?.[type]||'';
+  const message=template.replaceAll('{first}',first).replaceAll('{form}',form).replaceAll('{date}',inspectionDateLabel(selectedWhiparoundDate()));
+  state.pendingDriverText={name:driver?.name||name,phone,driverKey:nameKey(driver?.name||name),queueKey:'',message,source:'Whiparound reminder'};
+  state.modal='text-driver';render();
+}
+function markWhiparoundNotOnRoute(name='') {
+  const date=selectedWhiparoundDate(),key=`${date}|${nameKey(name)}`;
+  state.whiparoundNotOnRoute[key]=true;rebuildWhiparoundHistory(date);persist();render();toast(`${name} removed from the ${inspectionDateLabel(date)} DVIR checker`);
+}
+function restoreWhiparoundDriver(key='') {
+  const date=selectedWhiparoundDate();delete state.whiparoundNotOnRoute[`${date}|${nameKey(key)}`];rebuildWhiparoundHistory(date);persist();render();toast('Driver restored to the Whiparound checker');
 }
 
 function inventoryPage() {
@@ -1969,7 +2145,7 @@ function modal() {
   }
   if (state.modal === 'roster-swap' && state.pendingRosterSwap) {
     const swap=state.pendingRosterSwap,candidates=rosterSwapCandidates(swap.driverName);
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal add-driver-modal" role="dialog" aria-modal="true" aria-labelledby="roster-swap-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">OPENING ROSTER</span><h2 id="roster-swap-title">${swap.mode==='calloff'?'Call off & replace':'Swap off route'}</h2><p>${esc(swap.driverName)} · ${esc(swap.route)} · updates the Morning Sheet immediately.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="cloud-email-field"><span>Replacement driver</span><select id="roster-swap-replacement"><option value="">Choose an exact driver name…</option>${candidates.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('')}</select></label><div class="private-contact-note"><b>${swap.mode==='calloff'?'Call-off protection':'Schedule swap'}</b><span>${swap.mode==='calloff'?'The called-off driver is removed from today’s text queue. The replacement takes their Morning Sheet position.':'The original driver remains eligible as scheduled backup/support; only the route assignment changes.'}</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-roster-swap">Confirm swap</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal add-driver-modal" role="dialog" aria-modal="true" aria-labelledby="roster-swap-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">OPENING ROSTER</span><h2 id="roster-swap-title">${swap.mode==='calloff'?'Call off & replace':'Swap off route'}</h2><p>${esc(swap.driverLabel||swap.driverName)} · ${esc(swap.route)} · updates the Morning Sheet immediately.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="cloud-email-field"><span>Replacement driver</span><select id="roster-swap-replacement"><option value="">Choose an exact driver name…</option>${candidates.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('')}</select></label><div class="private-contact-note"><b>${swap.mode==='calloff'?'Call-off protection':'Schedule swap'}</b><span>${swap.mode==='calloff'?'The called-off driver is removed from today’s text queue. The replacement takes their Morning Sheet position.':'The original driver remains eligible as scheduled backup/support; only the route assignment changes.'}</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-roster-swap">Confirm swap</button></div></div></div></div>`;
   }
   if (state.modal === 'morning-diagnostics') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal diagnostics-modal" role="dialog" aria-modal="true" aria-labelledby="diagnostics-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">MORNING SHEET</span><h2 id="diagnostics-title">Setup & diagnostics</h2><p>Use only when imports or Google Sheets are not working.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body morning-advanced-content">${morningConnectorGuide()}${morningHandoffReadinessHtml()}${morningImportTemplateProofHtml()}${morningSheetsHandoffProofHtml()}${morningSheetStructureProofHtml()}${morningCopyFallbackProofHtml()}</div></div></div>`;
   if (state.modal === 'import') {
@@ -2041,7 +2217,7 @@ function morningMessageQueueRows() {
     const driver=contactForMorningDriver(name),queueKey=messageQueueStatusKey(`${row.route}:${nameKey(name)}`);
     return {name:driver?.name||name,driverKey:nameKey(driver?.name||name),phone:driver?.phone||'',route:row.route,wave:row.wave,staging:row.staging,queueKey,status:state.messageQueueStatus[queueKey]||'',source:index?'Helper / Ad hoc':'On route'};
   }));
-  const existing=new Set(routeRows.map(row=>nameKey(row.name))),backups=currentScheduleEntries().filter(entry=>scheduleRoleGroup(entry.role)==='driver'&&!existing.has(nameKey(entry.name))).map(entry=>{const driver=contactForMorningDriver(entry.name),queueKey=messageQueueStatusKey(`scheduled:${nameKey(entry.name)}`);return {name:driver?.name||entry.name,driverKey:nameKey(driver?.name||entry.name),phone:driver?.phone||'',route:entry.role,wave:entry.start,staging:'Scheduled backup/support',queueKey,status:state.messageQueueStatus[queueKey]||'',source:'Scheduled backup/support'};});
+  const existing=new Set(routeRows.map(row=>nameKey(row.name))),backups=currentScheduleEntries().filter(entry=>scheduleRoleGroup(entry.role)==='driver'&&!existing.has(nameKey(entry.name))&&!rosterDriverUnavailable(entry.name)).map(entry=>{const driver=contactForMorningDriver(entry.name),queueKey=messageQueueStatusKey(`scheduled:${nameKey(entry.name)}`);return {name:driver?.name||entry.name,driverKey:nameKey(driver?.name||entry.name),phone:driver?.phone||'',route:entry.role,wave:entry.start,staging:'Scheduled backup/support',queueKey,status:state.messageQueueStatus[queueKey]||'',source:'Scheduled backup/support'};});
   return [...routeRows,...backups].filter(row=>!state.callOffDriverKeys[callOffStatusKey(row.name)]);
 }
 function driverTextDraft(driver) {
@@ -2107,24 +2283,60 @@ function enhanceDriverTextButtons() {
     card.querySelector('.driver-phone-line')?.after(button);
   });
 }
-function scheduledShiftRowsHtml(rows=[],empty='No scheduled shifts found') {
-  return rows.length?rows.map(row=>{const mark=state.scheduleDriverMarks[scheduleDriverMarkKey(row.name)]||'',vto=scheduleBackupLabel(row.role);return `<div class="scheduled-shift-row ${mark==='backup'?'backup-marked':mark==='adhoc'?'adhoc-marked':''}"><div><strong>${esc(row.name)}</strong><span>${esc(row.role)}</span></div><b>${esc(row.start)}${row.end?` - ${esc(row.end)}`:''}</b>${row.route?`<em>${esc(row.route)}</em>`:''}${row.paycom?`<div class="paycom-driver-actions"><button class="btn small ${mark==='backup'?'vto-button':''}" data-action="mark-paycom-backup" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">${mark==='backup'?esc(vto):'Mark backup'}</button><button class="btn small ${mark==='adhoc'?'lime':''}" data-action="mark-paycom-adhoc" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">${mark==='adhoc'?'Adhoc added':'Mark Adhoc'}</button></div>`:''}</div>`;}).join(''):`<div class="scheduled-shift-empty">${empty}</div>`;
-}
 function scheduleDriverMarkKey(name='') { return `${state.morningOperationDate}|${nameKey(name)}`; }
 function scheduleBackupLabel(role='') { const key=headerKey(role);return key.includes('rescue')?'VTO 2':key.includes('deliveryassociate')?'VTO 4':'BACKUP'; }
+function rosterDriverUnavailable(name='') {
+  const key=scheduleDriverMarkKey(name);
+  return Boolean(state.scheduleStayHome?.[key]||state.scheduleReductions?.[key]||state.callOffDriverKeys?.[callOffStatusKey(name)]);
+}
+function rosterStatusRows(store={},fallbackRole='') {
+  return Object.entries(store||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([,value])=>({name:value.name,role:value.role||fallbackRole,start:value.start||'',end:value.end||'',route:value.route||''})).sort((a,b)=>a.name.localeCompare(b.name));
+}
+function rosterRecord(name='',role='',extra={}) {
+  const scheduled=currentScheduleEntries().find(entry=>nameKey(entry.name)===nameKey(name))||{};
+  return {name,role:role||scheduled.role||'Delivery Associate',start:extra.start||scheduled.start||'',end:extra.end||scheduled.end||'',route:extra.route||'',at:new Date().toISOString()};
+}
+function rosterSearchHtml(kind='',placeholder='Search driver names') {
+  return `<label class="roster-search">${ICONS.search||'⌕'}<input type="search" data-roster-search="${esc(kind)}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}"></label>`;
+}
+function scheduledShiftRowsHtml(rows=[],empty='No scheduled shifts found',options={}) {
+  const status=options.status||'';
+  return rows.length?rows.map(row=>{
+    const mark=state.scheduleDriverMarks[scheduleDriverMarkKey(row.name)]||'',vto=scheduleBackupLabel(row.role),data=`data-roster-name="${esc(nameKey(row.name))}"`;
+    let actions='';
+    if(row.paycom)actions=`<div class="paycom-driver-actions"><button class="btn small ${mark==='backup'?'vto-button':''}" data-action="mark-paycom-backup" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">${mark==='backup'?esc(vto):'Mark backup'}</button><button class="btn small ${mark==='adhoc'?'lime':''}" data-action="mark-paycom-adhoc" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">${mark==='adhoc'?'Adhoc added':'Mark Adhoc'}</button><button class="btn small stay-home-button" data-action="mark-paycom-stay-home" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">Told to stay home</button><button class="btn small reduction-button" data-action="add-roster-reduction" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}" data-driver-route="${esc(row.route||'')}">Add to Reductions</button></div>`;
+    else if(status)actions=`<div class="paycom-driver-actions"><button class="btn small" data-action="restore-roster-status" data-roster-status="${esc(status)}" data-driver-name="${esc(row.name)}">Restore</button></div>`;
+    else if(options.allowReduction)actions=`<div class="paycom-driver-actions"><button class="btn small reduction-button" data-action="add-roster-reduction" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}" data-driver-route="${esc(row.route||'')}">Add to Reductions</button></div>`;
+    return `<div class="scheduled-shift-row ${mark==='backup'?'backup-marked':mark==='adhoc'?'adhoc-marked':''}" ${data}><div><strong>${esc(row.name)}</strong><span>${esc(row.role)}</span></div><b>${esc(row.start)}${row.end?` - ${esc(row.end)}`:''}</b>${row.route?`<em>${esc(row.route)}</em>`:''}${actions}</div>`;
+  }).join(''):`<div class="scheduled-shift-empty">${empty}</div>`;
+}
+function adhocIdentityKey(name='') { return nameKey(name); }
+function legacyAdhocRoute(name='') { return `ADHOC-${nameKey(name).replace(/[^a-z0-9]+/g,'-').toUpperCase()}`; }
+function removeDriverAdhocRoute(name='') { const key=adhocIdentityKey(name),legacy=legacyAdhocRoute(name);state.morningRoutes=state.morningRoutes.filter(row=>row.adhocKey!==key&&row.route!==legacy); }
 function markPaycomBackup(name='',role='') {
   const key=scheduleDriverMarkKey(name),current=state.scheduleDriverMarks[key];state.scheduleDriverMarks[key]=current==='backup'?'':'backup';
-  const adhocRoute=`ADHOC-${nameKey(name).replace(/[^a-z0-9]+/g,'-').toUpperCase()}`;state.morningRoutes=state.morningRoutes.filter(row=>row.route!==adhocRoute);persist();render();toast(state.scheduleDriverMarks[key]?`${name} marked ${scheduleBackupLabel(role)}`:`${name} backup mark cleared`);
+  if(state.scheduleDriverMarks[key]){delete state.scheduleStayHome[key];delete state.scheduleReductions[key];}
+  removeDriverAdhocRoute(name);persist();render();toast(state.scheduleDriverMarks[key]?`${name} marked ${scheduleBackupLabel(role)}`:`${name} backup mark cleared`);
 }
 function markPaycomAdhoc(name='',role='') {
-  const key=scheduleDriverMarkKey(name),adhocRoute=`ADHOC-${nameKey(name).replace(/[^a-z0-9]+/g,'-').toUpperCase()}`,current=state.scheduleDriverMarks[key];
-  if(current==='adhoc'){delete state.scheduleDriverMarks[key];state.morningRoutes=state.morningRoutes.filter(row=>row.route!==adhocRoute);persist();render();return toast(`${name} removed from Adhoc`);}
-  state.scheduleDriverMarks[key]='adhoc';let route=state.morningRoutes.find(row=>row.route===adhocRoute);if(!route){route=createManualMorningRoute({route:adhocRoute,wave:'Ad hoc'});route.driver=contactForMorningDriver(name)?.name||name;route.service=role||'Adhoc';}
+  const key=scheduleDriverMarkKey(name),adhocKey=adhocIdentityKey(name),legacy=legacyAdhocRoute(name),current=state.scheduleDriverMarks[key];
+  if(current==='adhoc'){delete state.scheduleDriverMarks[key];removeDriverAdhocRoute(name);persist();render();return toast(`${name} removed from Adhoc`);}
+  state.scheduleDriverMarks[key]='adhoc';delete state.scheduleStayHome[key];delete state.scheduleReductions[key];let route=state.morningRoutes.find(row=>row.adhocKey===adhocKey||row.route===legacy);if(!route)route=createManualMorningRoute({route:'AX',wave:'Ad hoc'});route.route='AX';route.adhocKey=adhocKey;route.driver=contactForMorningDriver(name)?.name||name;route.service=role||'Adhoc';
   persist();render();toast(`${name} added to the Morning Sheet as Adhoc`);
+}
+function markPaycomStayHome(name='',role='') {
+  const key=scheduleDriverMarkKey(name);
+  state.scheduleStayHome[key]=rosterRecord(name,role);delete state.scheduleReductions[key];delete state.scheduleDriverMarks[key];removeDriverAdhocRoute(name);persist();render();toast(`${name} moved to Told To Stay Home`);
+}
+function addRosterReduction(name='',role='',route='',start='') {
+  const key=scheduleDriverMarkKey(name);state.scheduleReductions[key]=rosterRecord(name,role,{route,start});delete state.scheduleStayHome[key];delete state.scheduleDriverMarks[key];removeDriverAdhocRoute(name);persist();render();toast(`${name} added to Reductions`);
+}
+function restoreRosterStatus(name='',status='') {
+  const key=scheduleDriverMarkKey(name);if(status==='stay-home')delete state.scheduleStayHome[key];if(status==='reduction')delete state.scheduleReductions[key];persist();render();toast(`${name} returned to the PAYCOM list`);
 }
 function waveNameForTime(time='') { if(/^ad\s*hoc/i.test(String(time)))return 'ADHOC';const waves=morningWaveList().filter(wave=>!/^ad\s*hoc/i.test(String(wave)));const index=waves.indexOf(time);return index>=0?`WAVE ${index+1}`:'WAVE'; }
 function routeDriverRowsHtml(rows=[]) {
-  return rows.length?rows.map(row=>`<div class="scheduled-shift-row route-driver-row"><div><strong>${esc(row.name)}</strong><span>${esc(row.route)}</span></div><b>${esc(waveNameForTime(row.start))} · ${esc(row.start)}</b><div class="route-swap-actions"><button class="btn small danger-soft" data-action="open-route-swap" data-swap-mode="calloff" data-route="${esc(row.route)}" data-driver-name="${esc(row.name)}">Call off & swap</button><button class="btn small" data-action="open-route-swap" data-swap-mode="swap" data-route="${esc(row.route)}" data-driver-name="${esc(row.name)}">Swap off route</button></div></div>`).join(''):'<div class="scheduled-shift-empty">Fill the Morning Sheet to see route drivers.</div>';
+  return rows.length?rows.map(row=>`<div class="scheduled-shift-row route-driver-row" data-roster-name="${esc(nameKey(row.name))}"><div><strong>${esc(row.name)}</strong><span>${esc(row.route)}</span></div><b>${esc(waveNameForTime(row.start))} · ${esc(row.start)}</b><div class="route-swap-actions"><button class="btn small danger-soft" data-action="open-route-swap" data-swap-mode="calloff" data-route="${esc(row.route)}" data-driver-name="${esc(row.sourceName||row.name)}" data-driver-label="${esc(row.name)}">Call off & swap</button><button class="btn small" data-action="open-route-swap" data-swap-mode="swap" data-route="${esc(row.route)}" data-driver-name="${esc(row.sourceName||row.name)}" data-driver-label="${esc(row.name)}">Swap off route</button><button class="btn small reduction-button" data-action="add-roster-reduction" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}" data-driver-route="${esc(row.route)}" data-driver-start="${esc(row.start)}">Add to Reductions</button></div></div>`).join(''):'<div class="scheduled-shift-empty">Fill the Morning Sheet to see route drivers.</div>';
 }
 function filteredScheduledDrivers(rows=[]) {
   const filter=state.scheduleFilter;if(filter==='all')return rows;
@@ -2133,9 +2345,9 @@ function filteredScheduledDrivers(rows=[]) {
   return rows.filter(row=>headerKey(row.role).includes(filter));
 }
 function openingRosterScheduleHtml() {
-  const morning=filteredMorningRows().filter(row=>row.route&&!String(row.route).startsWith('__blank_')&&row.driver),onRoute=morning.flatMap(row=>morningDriverNames(row.driver).map(name=>({name:contactForMorningDriver(name)?.name||name,role:'Delivery Associate',start:row.wave||'',end:'',route:row.route})));
-  const routeNames=new Set(onRoute.map(row=>nameKey(row.name))),schedule=currentScheduleEntries(),driverShifts=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='driver'),allScheduledDrivers=driverShifts.map(entry=>({...entry,paycom:true,route:routeNames.has(nameKey(entry.name))?'On morning sheet':'Not rostered for route'})),backupDrivers=allScheduledDrivers.filter(entry=>state.scheduleDriverMarks[scheduleDriverMarkKey(entry.name)]==='backup'),scheduledDrivers=filteredScheduledDrivers(allScheduledDrivers.filter(entry=>!backupDrivers.some(backup=>nameKey(backup.name)===nameKey(entry.name)))),dispatch=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='dispatch'),other=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='other'),filters=[['all','All shifts'],['deliveryassociate','Delivery Associate'],['rescue','Rescue'],['midshift','Midshift'],['modifiedduty','Modified duty'],['on-route','On morning sheet'],['not-rostered','Not rostered for route']],calledOff=Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([,value])=>({name:value.name,role:'Called off',start:'',end:'',route:value.route}));
-  return `<section class="opening-schedule-board"><div class="opening-schedule-head"><div><span class="eyebrow">TODAY'S OPENING TEAM</span><h2>Routes and scheduled shifts</h2><p>${state.scheduleImportName?`Paycom file: ${esc(state.scheduleImportName)}`:'Upload Paycom inside the green Paycom panel below.'}</p></div></div><div class="opening-schedule-grid"><article class="card scheduled-section route"><div class="scheduled-section-head"><h3>Drivers on route</h3><b>${onRoute.length}</b></div>${routeDriverRowsHtml(onRoute)}</article><article class="card scheduled-section backup"><div class="scheduled-section-head paycom-head"><div><h3>All Scheduled driver shifts (PAYCOM)</h3><span>${scheduledDrivers.length} shown · ${allScheduledDrivers.length} total · ${backupDrivers.length} backups</span></div><div class="paycom-head-tools"><select data-schedule-filter>${filters.map(([value,label])=>`<option value="${value}" ${state.scheduleFilter===value?'selected':''}>${label}</option>`).join('')}</select><button class="btn small primary" data-action="schedule-import">${ICONS.upload} Import Paycom</button></div></div>${scheduledShiftRowsHtml(scheduledDrivers,'No Paycom shifts match this filter.')}</article><article class="card scheduled-section paycom-backups"><div class="scheduled-section-head"><h3>Backup drivers</h3><b>${backupDrivers.length}</b></div>${scheduledShiftRowsHtml(backupDrivers,'No Paycom drivers marked backup.')}</article><article class="card scheduled-section called-off"><div class="scheduled-section-head"><h3>Called off today</h3><b>${calledOff.length}</b></div>${scheduledShiftRowsHtml(calledOff,'No drivers have been marked called off.')}</article><article class="card scheduled-section dispatch"><div class="scheduled-section-head"><h3>Dispatcher shifts</h3><b>${dispatch.length}</b></div>${scheduledShiftRowsHtml(dispatch,'No opening, fleet, or closing dispatcher shifts found.')}</article><article class="card scheduled-section other"><div class="scheduled-section-head"><h3>Other scheduled shifts</h3><b>${other.length}</b></div>${scheduledShiftRowsHtml(other,'No uncategorized shifts found.')}</article></div></section>`;
+  const morning=filteredMorningRows().filter(row=>row.route&&!String(row.route).startsWith('__blank_')&&row.driver),onRoute=morning.flatMap(row=>morningDriverNames(row.driver).map(name=>({name:contactForMorningDriver(name)?.name||name,sourceName:name,role:'Delivery Associate',start:row.wave||'',end:'',route:row.route})));
+  const routeNames=new Set(onRoute.map(row=>nameKey(row.name))),schedule=currentScheduleEntries(),driverShifts=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='driver'),allScheduledDrivers=driverShifts.map(entry=>({...entry,paycom:true,route:routeNames.has(nameKey(entry.name))?'On morning sheet':'Not rostered for route'})),backupDrivers=allScheduledDrivers.filter(entry=>state.scheduleDriverMarks[scheduleDriverMarkKey(entry.name)]==='backup'),stayHome=rosterStatusRows(state.scheduleStayHome,'Told to stay home'),reductions=rosterStatusRows(state.scheduleReductions,'Route reduction'),unavailableKeys=new Set([...backupDrivers,...stayHome,...reductions].map(row=>nameKey(row.name))),scheduledDrivers=filteredScheduledDrivers(allScheduledDrivers.filter(entry=>!unavailableKeys.has(nameKey(entry.name)))),dispatch=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='dispatch'),other=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='other'||headerKey(entry.role).includes('modifiedduty')),filters=[['all','All shifts'],['deliveryassociate','Delivery Associate'],['rescue','Rescue'],['midshift','Midshift'],['modifiedduty','Modified duty'],['on-route','On morning sheet'],['not-rostered','Not rostered for route']],calledOff=Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([,value])=>({name:value.name,role:'Called off',start:'',end:'',route:value.route})),vto2=backupDrivers.filter(row=>scheduleBackupLabel(row.role)==='VTO 2').length,vto4=backupDrivers.filter(row=>scheduleBackupLabel(row.role)==='VTO 4').length;
+  return `<section class="opening-schedule-board"><div class="opening-schedule-head"><div><span class="eyebrow">TODAY'S OPENING TEAM</span><h2>Routes and scheduled shifts</h2><p>${state.scheduleImportName?`Paycom file: ${esc(state.scheduleImportName)}`:'Upload Paycom inside the green Paycom panel below.'}</p></div></div><div class="opening-schedule-grid"><article class="card scheduled-section route scroll-roster"><div class="scheduled-section-head"><h3>Drivers on route</h3><b>${onRoute.length}</b></div><div class="scheduled-list">${routeDriverRowsHtml(onRoute)}</div></article><article class="card scheduled-section backup scroll-roster"><div class="scheduled-section-head paycom-head"><div><h3>All Scheduled driver shifts (PAYCOM)</h3><span>${scheduledDrivers.length} shown · ${allScheduledDrivers.length} total · ${backupDrivers.length} backups</span></div><div class="paycom-head-tools"><a class="btn small paycom-login-link" href="https://www.paycomonline.net/v4/cl/ta-schdisplaydash.php?outputtype=GRID&amp;la=&amp;session_nonce=f0ff47b9e9bb75cf8596eb08db2dd3ba" target="_blank" rel="noopener">Open Paycom login</a><select data-schedule-filter>${filters.map(([value,label])=>`<option value="${value}" ${state.scheduleFilter===value?'selected':''}>${label}</option>`).join('')}</select><button class="btn small primary" data-action="schedule-import">${ICONS.upload} Import Paycom</button></div></div>${rosterSearchHtml('paycom','Search scheduled drivers')}<div class="scheduled-list" data-roster-list="paycom">${scheduledShiftRowsHtml(scheduledDrivers,'No Paycom shifts match this filter.')}</div></article><article class="card scheduled-section paycom-backups scroll-roster"><div class="scheduled-section-head"><div><h3>Backup drivers</h3><span class="roster-count-chips"><i>VTO 2 · ${vto2}</i><i class="vto4">VTO 4 · ${vto4}</i></span></div><b>${backupDrivers.length}</b></div><div class="scheduled-list">${scheduledShiftRowsHtml(backupDrivers,'No Paycom drivers marked backup.',{allowReduction:true})}</div></article><article class="card scheduled-section called-off scroll-roster"><div class="scheduled-section-head"><h3>Called off today</h3><b>${calledOff.length}</b></div>${rosterSearchHtml('called-off','Search called-off drivers')}<div class="scheduled-list" data-roster-list="called-off">${scheduledShiftRowsHtml(calledOff,'No drivers have been marked called off.',{allowReduction:true})}</div></article><article class="card scheduled-section stay-home scroll-roster"><div class="scheduled-section-head"><h3>Told To Stay Home</h3><b>${stayHome.length}</b></div>${rosterSearchHtml('stay-home','Search stay-home drivers')}<div class="scheduled-list" data-roster-list="stay-home">${scheduledShiftRowsHtml(stayHome,'No drivers have been told to stay home.',{status:'stay-home'})}</div></article><article class="card scheduled-section reductions scroll-roster"><div class="scheduled-section-head"><h3>Reductions</h3><b>${reductions.length}</b></div>${rosterSearchHtml('reductions','Search route reductions')}<div class="scheduled-list" data-roster-list="reductions">${scheduledShiftRowsHtml(reductions,'No Amazon route reductions added.',{status:'reduction'})}</div></article><article class="card scheduled-section dispatch"><div class="scheduled-section-head"><h3>Dispatcher shifts</h3><b>${dispatch.length}</b></div>${scheduledShiftRowsHtml(dispatch,'No opening, fleet, or closing dispatcher shifts found.')}</article><article class="card scheduled-section other"><div class="scheduled-section-head"><h3>Other scheduled shifts</h3><b>${other.length}</b></div>${scheduledShiftRowsHtml(other,'No uncategorized or modified-duty shifts found.')}</article></div></section>`;
 }
 function enhanceOpeningRoster() {
   if(state.page!=='roster')return;
@@ -2149,16 +2361,77 @@ function enhanceMorningParkingAssignment() {
 }
 function rosterSwapCandidates(currentName='') {
   const onRoute=new Set(filteredMorningRows().flatMap(row=>morningDriverNames(row.driver)).map(nameKey));
-  return [...new Set([...currentScheduleEntries().filter(entry=>scheduleRoleGroup(entry.role)==='driver').map(entry=>entry.name),...teamDriverRows().map(row=>row.name)])].filter(name=>nameKey(name)!==nameKey(currentName)&&!onRoute.has(nameKey(name))).sort((a,b)=>a.localeCompare(b));
+  return [...new Set(currentScheduleEntries().filter(entry=>scheduleRoleGroup(entry.role)==='driver').map(entry=>entry.name))].filter(name=>nameKey(name)!==nameKey(currentName)&&!onRoute.has(nameKey(name))&&!rosterDriverUnavailable(name)).sort((a,b)=>a.localeCompare(b));
 }
-function openRosterSwap(route='',driverName='',mode='swap') { state.pendingRosterSwap={route,driverName,mode};state.modal='roster-swap';render(); }
+function openRosterSwap(route='',driverName='',mode='swap',driverLabel='') { state.pendingRosterSwap={route,driverName,driverLabel:driverLabel||driverName,mode};state.modal='roster-swap';render(); }
+function rosterSwapDriverIndex(people=[],target='') {
+  const targetKey=nameKey(target),targetCanonical=nameKey(contactForMorningDriver(target)?.name||target);
+  return people.findIndex(name=>{const key=nameKey(name),canonical=nameKey(contactForMorningDriver(name)?.name||name);return key===targetKey||canonical===targetKey||key===targetCanonical||canonical===targetCanonical;});
+}
 function applyRosterSwap() {
   const swap=state.pendingRosterSwap,replacement=document.getElementById('roster-swap-replacement')?.value;if(!swap||!replacement)return toast('Choose the replacement driver','error');
-  const route=state.morningRoutes.find(row=>row.route===swap.route);if(!route)return toast('Morning Sheet route was not found','error');
-  const people=morningDriverNames(route.driver),index=people.findIndex(name=>nameKey(name)===nameKey(swap.driverName));if(index<0)return toast('Driver is no longer assigned to that route','error');
+  const route=state.morningRoutes.find(row=>row.route===swap.route&&rosterSwapDriverIndex(morningDriverNames(row.driver),swap.driverName)>=0)||state.morningRoutes.find(row=>row.route===swap.route);if(!route)return toast('Morning Sheet route was not found','error');
+  const people=morningDriverNames(route.driver),index=rosterSwapDriverIndex(people,swap.driverName);if(index<0)return toast('Driver is no longer assigned to that route','error');
   people[index]=replacement;route.driver=people.join(' + ');
-  if(swap.mode==='calloff')state.callOffDriverKeys[callOffStatusKey(swap.driverName)]={name:swap.driverName,route:swap.route,at:new Date().toISOString()};
-  state.pendingRosterSwap=null;state.modal=null;persist();render();toast(`${swap.driverName} replaced by ${replacement} on ${swap.route}`);
+  const calledOffName=swap.driverLabel||contactForMorningDriver(swap.driverName)?.name||swap.driverName;
+  if(swap.mode==='calloff')state.callOffDriverKeys[callOffStatusKey(calledOffName)]={name:calledOffName,route:swap.route,at:new Date().toISOString()};
+  state.pendingRosterSwap=null;state.modal=null;persist();render();toast(`${calledOffName} replaced by ${replacement} on ${swap.route}`);
+}
+
+function startOpeningPicklistCellEdit(source) {
+  const key=source.dataset.picklistCell;if(!key)return;
+  state.editMode=true;state.copyMode=false;render();
+  const target=[...document.querySelectorAll('[data-picklist-edit]')].find(cell=>cell.dataset.picklistCell===key);if(!target)return;
+  target.focus({preventScroll:true});
+  const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+  target.scrollIntoView({block:'nearest',inline:'nearest'});
+}
+function normalizedPicklistWave(value='',fallback='') {
+  let clean=String(value||'').replace(/\s*\(\d+\)\s*$/,'').trim();if(!clean)return fallback;
+  if(!/\b(?:AM|PM)\b/i.test(clean)){const meridian=String(fallback||'').match(/\b(AM|PM)\b/i)?.[1];if(meridian)clean=`${clean} ${meridian.toUpperCase()}`;}
+  return clean;
+}
+function saveOpeningPicklistCell(el) {
+  const field=el.dataset.picklistField,value=el.textContent.trim(),wave=el.dataset.picklistWave||'',sectionKey=el.dataset.picklistSectionKey||'';
+  if(field==='waveLabel'){state.openingPicklistLabels[sectionKey]=value||(sectionKey==='adhoc'?"ADHOC'S":`WAVE ${Number(sectionKey.split('-')[1])||1}`);persist();return;}
+  if(field==='padOverride'){state.morningRoutes.filter(row=>row.dsp===state.dspCode&&row.wave===wave).forEach(row=>{row.padOverride=value.toUpperCase();});persist();return;}
+  if(field==='waveTime'){
+    const next=normalizedPicklistWave(value,wave);if(next&&next!==wave)state.morningRoutes.filter(row=>row.dsp===state.dspCode&&row.wave===wave).forEach(row=>{row.wave=next;});persist();return;
+  }
+  let index=Number(el.dataset.picklistRouteIndex),route=morningRouteByUid(el.dataset.picklistRouteUid)||(Number.isInteger(index)&&index>=0?state.morningRoutes[index]:null);
+  if(!route&&value){route=createManualMorningRoute({route:'',wave:wave||'Ad hoc'});route.route='';route.service=sectionKey==='adhoc'?'Adhoc':'Manual opening edit';index=state.morningRoutes.indexOf(route);el.parentElement?.querySelectorAll('[data-picklist-route-index]').forEach(cell=>{cell.dataset.picklistRouteIndex=String(index);cell.dataset.picklistRouteUid=route.routeUid||'';});}
+  if(route)el.dataset.picklistRouteUid=route.routeUid||'';
+  if(!route)return;
+  const clean=['route','staging','ev','deviceName','portable'].includes(field)?value.toUpperCase():value;
+  route[field]=clean;
+  if(field==='ev')fillEquipmentForRoute(route);
+  persist();
+}
+function handleOpeningPicklistKeydown(event,el) {
+  if(event.key==='Enter'){event.preventDefault();saveOpeningPicklistCell(el);state.editMode=false;render();return toast('Picklist and Morning Sheet updated · editing off');}
+  if(event.key==='Escape'){event.preventDefault();el.blur();}
+}
+function renameOpeningPicklistCalloff(key='',name='') {
+  const previous=state.callOffDriverKeys[key]||{},reason=state.callOffReasons[key]||'';name=String(name||'').trim();
+  delete state.callOffDriverKeys[key];delete state.callOffReasons[key];
+  if(name){const nextKey=callOffStatusKey(name);state.callOffDriverKeys[nextKey]={...previous,name,at:previous.at||new Date().toISOString()};state.callOffReasons[nextKey]=reason;}
+  persist();render();
+}
+function updateOpeningPicklistCalloffDraft(index,field,value) {
+  state.openingPicklistCalloffDrafts=Array.isArray(state.openingPicklistCalloffDrafts)?state.openingPicklistCalloffDrafts:[];
+  state.openingPicklistCalloffDrafts[index]={...(state.openingPicklistCalloffDrafts[index]||{}),[field]:value};persist();
+}
+function commitOpeningPicklistCalloffDraft(index) {
+  const draft=state.openingPicklistCalloffDrafts?.[index],name=String(draft?.name||'').trim();if(!name)return;
+  const key=callOffStatusKey(name);state.callOffDriverKeys[key]={name,route:'',at:new Date().toISOString()};state.callOffReasons[key]=String(draft.reason||'').trim();state.openingPicklistCalloffDrafts.splice(index,1);persist();render();toast(`${name} added to Called off today`);
+}
+function saveOpeningPicklistDate(value='') {
+  const date=scheduleDateKey(value);if(!date)return toast('Use Month/Day/Year for the picklist date','error');
+  state.morningOperationDate=date;state.morningSheetsLastReceipt=null;persist();render();toast(`Opening date updated to ${openingPicklistDateText()}`);
+}
+function saveOpeningPicklistBackup(key='',value='') {
+  state.openingPicklistBackupOverrides=state.openingPicklistBackupOverrides&&typeof state.openingPicklistBackupOverrides==='object'?state.openingPicklistBackupOverrides:{};
+  state.openingPicklistBackupOverrides[key]=String(value||'').trim();persist();
 }
 
 function render() {
@@ -2197,7 +2470,26 @@ function bind() {
   document.querySelectorAll('[data-action="acknowledge-morning-vehicle-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();acknowledgeMorningVehicleIssue();}));
   document.querySelectorAll('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
   document.querySelectorAll('[data-message-template]').forEach(el=>el.addEventListener('change',()=>{state.messageQueueTemplate=el.value;persist();render();toast('Message template updated');}));
+  document.querySelectorAll('[data-whiparound-date]').forEach(el=>el.addEventListener('change',()=>{state.whiparoundSelectedDate=el.value;persist();render();}));
+  document.querySelectorAll('[data-whiparound-template]').forEach(el=>el.addEventListener('change',()=>{state.whiparoundReminderTemplates[el.dataset.whiparoundTemplate]=el.value.trim();persist();toast('Whiparound reminder saved');}));
   document.querySelectorAll('[data-schedule-filter]').forEach(el=>el.addEventListener('change',()=>{state.scheduleFilter=el.value;persist();render();}));
+  document.querySelectorAll('[data-roster-search]').forEach(el=>el.addEventListener('input',()=>{const query=nameKey(el.value),panel=el.closest('.scheduled-section');panel?.querySelectorAll('[data-roster-name]').forEach(row=>{row.hidden=Boolean(query&&!String(row.dataset.rosterName||'').includes(query));});}));
+  document.querySelectorAll('[data-picklist-calloff-reason]').forEach(el=>el.addEventListener('input',()=>{state.callOffReasons[el.dataset.picklistCalloffReason]=el.value;persist();}));
+  document.querySelectorAll('[data-picklist-backup]').forEach(el=>el.addEventListener('input',()=>saveOpeningPicklistBackup(el.dataset.picklistBackup,el.value)));
+  document.querySelectorAll('[data-picklist-calloff-name]').forEach(el=>el.addEventListener('change',()=>renameOpeningPicklistCalloff(el.dataset.picklistCalloffName,el.value)));
+  document.querySelectorAll('[data-picklist-calloff-draft]').forEach(el=>{
+    el.addEventListener('input',()=>updateOpeningPicklistCalloffDraft(Number(el.dataset.picklistCalloffDraft),el.dataset.picklistCalloffField,el.value));
+    if(el.dataset.picklistCalloffField==='name')el.addEventListener('change',()=>commitOpeningPicklistCalloffDraft(Number(el.dataset.picklistCalloffDraft)));
+  });
+  document.querySelectorAll('[data-picklist-topic]').forEach(el=>el.addEventListener('input',()=>{const index=Number(el.dataset.picklistTopic);state.openingPicklistTopics=Array.isArray(state.openingPicklistTopics)?state.openingPicklistTopics:['','','',''];state.openingPicklistTopics[index]=el.value;persist();}));
+  document.querySelectorAll('[data-picklist-notes]').forEach(el=>el.addEventListener('input',()=>{state.openingPicklistNotes=el.value;persist();}));
+  document.querySelectorAll('[data-picklist-date]').forEach(el=>el.addEventListener('change',()=>saveOpeningPicklistDate(el.value)));
+  document.querySelectorAll('[data-picklist-view]').forEach(el=>el.addEventListener('dblclick',event=>{if(!state.editMode){event.preventDefault();startOpeningPicklistCellEdit(el);}}));
+  document.querySelectorAll('[data-picklist-edit]').forEach(el=>{
+    el.addEventListener('blur',()=>saveOpeningPicklistCell(el));
+    el.addEventListener('keydown',event=>handleOpeningPicklistKeydown(event,el));
+    el.addEventListener('paste',event=>{const text=event.clipboardData?.getData('text/plain');if(text!==undefined){event.preventDefault();document.execCommand?.('insertText',false,text);}});
+  });
   document.querySelectorAll('[data-phase]').forEach(el=>el.addEventListener('click',()=>{state.phase=Number(el.dataset.phase);persist();render();}));
   document.querySelectorAll('[data-morning-filter]').forEach(el=>el.addEventListener('change',()=>{const key=el.dataset.morningFilter;if(key!=='dsp')state.morningFilters[key]=el.value;render();}));
   document.querySelectorAll('[data-operation-date]').forEach(el=>el.addEventListener('change',()=>{state.morningOperationDate=el.value||defaultOperationDate();state.morningSheetsLastReceipt=null;persist();render();toast(`Google target set to ${operationDateTabNames(state.morningOperationDate).join(' or ')}`);}));
@@ -2233,7 +2525,7 @@ function bind() {
     });
     el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();moveDeviceEntryDown(el);}});
   });
-  document.querySelectorAll('[data-edit-field]').forEach(el=>{
+  document.querySelectorAll('.morning-template-sheet [data-edit-field]').forEach(el=>{
     el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);if(el.dataset.editField==='driver')showDriverNameSuggestions(el);});
     if(el.dataset.editField==='driver')el.addEventListener('input',()=>showDriverNameSuggestions(el));
     el.addEventListener('pointerdown',e=>handleSheetMouseDown(e,el));
@@ -2479,11 +2771,11 @@ function handleEquipmentPaste(e) {
 }
 
 function startMorningCellEdit(source) {
-  const route=source.dataset.viewRoute||'', field=source.dataset.viewField||'', wave=source.dataset.viewWave||'';
+  const route=source.dataset.viewRoute||'',uid=source.dataset.viewUid||'', field=source.dataset.viewField||'', wave=source.dataset.viewWave||'';
   if(!field)return;
   state.editMode=true;state.copyMode=false;
   render();
-  const target=[...document.querySelectorAll('[data-edit-field]')].find(cell=>cell.dataset.editField===field&&(field==='padOverride'?cell.dataset.editWave===wave:cell.dataset.editRoute===route));
+  const target=[...document.querySelectorAll('.morning-template-sheet [data-edit-field]')].find(cell=>cell.dataset.editField===field&&(field==='padOverride'?cell.dataset.editWave===wave:uid?cell.dataset.editUid===uid:cell.dataset.editRoute===route));
   if(!target)return;
   target.focus({preventScroll:true});
   selectSheetCell(target);
@@ -2499,9 +2791,11 @@ function saveMorningEditCell(el) {
     state.morningRoutes.filter(r=>r.wave===el.dataset.editWave).forEach(r=>r[field]=value.toUpperCase());
     persist(); return null;
   }
-  let route=state.morningRoutes.find(r=>r.route===el.dataset.editRoute);
+  let route=morningRouteByUid(el.dataset.editUid)||state.morningRoutes.find(r=>r.route===el.dataset.editRoute);
   if(!route&&value) {
     route=createManualMorningRoute({route:field==='route'?value:'',wave:el.dataset.editWave||'Manual'});
+    el.dataset.editUid=route.routeUid||'';
+    updateSheetRowUid(el,route.routeUid||'');
     updateSheetRowRoute(el,route.route);
   }
   if(route) {
@@ -2536,6 +2830,7 @@ function showDriverNameSuggestions(el) {
 function updateSheetRowRoute(el,route) {
   el.parentElement?.querySelectorAll('[data-edit-route]').forEach(cell=>{cell.dataset.editRoute=route;});
 }
+function updateSheetRowUid(el,uid) { el.parentElement?.querySelectorAll('[data-edit-field]').forEach(cell=>{cell.dataset.editUid=uid;}); }
 
 function sheetCells() { return [...document.querySelectorAll('[data-sheet-cell="true"]')]; }
 function sheetCopyZone(col) {
@@ -2831,6 +3126,10 @@ function action(name,el) {
   if (name==='open-morning-vehicle-issue') return openMorningVehicleIssue(el.dataset.route||'',el.dataset.equipment||'');
   if (name==='acknowledge-morning-vehicle-issue') return acknowledgeMorningVehicleIssue();
   if (name==='driver-import') { state.importPurpose='drivers';fileInput.accept='.csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';return fileInput.click(); }
+  if (name==='whiparound-import') { state.importPurpose='whiparound';fileInput.accept='.csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';return fileInput.click(); }
+  if (name==='whiparound-remind') return openWhiparoundReminder(el.dataset.driverName||'',el.dataset.inspectionType||'pre');
+  if (name==='whiparound-not-route') return markWhiparoundNotOnRoute(el.dataset.driverName||'');
+  if (name==='whiparound-restore') return restoreWhiparoundDriver(el.dataset.driverKey||'');
   if (name==='add-delivery-associate') { state.modal='add-driver';return render(); }
   if (name==='save-manual-driver') return saveManualDriver();
   if (name==='request-driver-removal') return requestDriverRemoval(el.dataset.driverKey||'');
@@ -2841,10 +3140,17 @@ function action(name,el) {
   if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingMorningIssue=null;state.screenshotPreview=null;state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=state.importPurpose==='itinerary-rts'?'.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'';return fileInput.click(); }
   if (name==='schedule-import') { state.importPurpose='schedule';fileInput.accept='';return fileInput.click(); }
-  if (name==='open-route-swap') return openRosterSwap(el.dataset.route||'',el.dataset.driverName||'',el.dataset.swapMode||'swap');
+  if (name==='open-route-swap') return openRosterSwap(el.dataset.route||'',el.dataset.driverName||'',el.dataset.swapMode||'swap',el.dataset.driverLabel||'');
   if (name==='apply-roster-swap') return applyRosterSwap();
   if (name==='mark-paycom-backup') return markPaycomBackup(el.dataset.driverName||'',el.dataset.driverRole||'');
   if (name==='mark-paycom-adhoc') return markPaycomAdhoc(el.dataset.driverName||'',el.dataset.driverRole||'');
+  if (name==='mark-paycom-stay-home') return markPaycomStayHome(el.dataset.driverName||'',el.dataset.driverRole||'');
+  if (name==='add-roster-reduction') return addRosterReduction(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.driverRoute||'',el.dataset.driverStart||'');
+  if (name==='restore-roster-status') return restoreRosterStatus(el.dataset.driverName||'',el.dataset.rosterStatus||'');
+  if (name==='toggle-picklist-edit') { state.editMode=!state.editMode;if(state.editMode)state.copyMode=false;render();return toast(state.editMode?'Picklist editing is on — double-click or select a cell':'Picklist edits saved'); }
+  if (name==='add-picklist-calloff-row') { state.openingPicklistCalloffRows=Math.max(6,Number(state.openingPicklistCalloffRows)||6)+1;state.openingPicklistCalloffDrafts.push({name:'',reason:''});persist();render();return toast('One call-off and reason line added'); }
+  if (name==='add-picklist-topic-row') { state.openingPicklistTopicRows=Math.max(4,Number(state.openingPicklistTopicRows)||4)+1;while(state.openingPicklistTopics.length<state.openingPicklistTopicRows)state.openingPicklistTopics.push('');persist();render();return toast('One stand-up topic line added'); }
+  if (name==='print-opening-picklist') return window.print();
   if (name==='share-dispatcher-link') return shareDispatcherLink();
   if (name==='cloud-account') { state.modal='cloud-account';return render(); }
   if (name==='cloud-sign-in') return cloudSignIn();
@@ -3060,14 +3366,38 @@ function normalizeCxRoute(value='') {
   const text=String(value||'').trim().toUpperCase(),match=text.match(/\bCX\d+\b/);
   return match?match[0]:text;
 }
+function itineraryRouteCount(value) {
+  if(value===null||value===undefined||String(value).trim()===''||/^missing$/i.test(String(value).trim()))return null;
+  const count=Number(String(value).replace(/,/g,'').trim());
+  return Number.isFinite(count)?count:null;
+}
+function preferItineraryRtsCandidate(current,candidate) {
+  if(!current)return true;
+  const currentStops=current.allStops, candidateStops=candidate.allStops;
+  const currentPackages=current.totalPackages, candidatePackages=candidate.totalPackages;
+  const currentKnown=Number(currentStops!=null)+Number(currentPackages!=null), candidateKnown=Number(candidateStops!=null)+Number(candidatePackages!=null);
+  if(candidateKnown!==currentKnown)return candidateKnown>currentKnown;
+  if(candidateStops!=null&&currentStops!=null&&candidateStops!==currentStops)return candidateStops>currentStops;
+  if(candidatePackages!=null&&currentPackages!=null&&candidatePackages!==currentPackages)return candidatePackages>currentPackages;
+  return false;
+}
+function mergeItineraryRtsDetails(target={},source={}) {
+  Object.entries(source||{}).forEach(([route,candidate])=>{
+    if(preferItineraryRtsCandidate(target[route],candidate))target[route]=candidate;
+  });
+  return target;
+}
 function itineraryRtsDetailsFromRows(rows=[]) {
   const header=findImportHeader(rows,[['routecode'],['plannedreturntostation']]);
   if(header<0)return {};
-  const headers=rows[header].map(headerKey),routeIx=headers.indexOf('routecode'),rtsIx=headers.indexOf('plannedreturntostation'),details={};
+  const headers=rows[header].map(headerKey),routeIx=headers.indexOf('routecode'),rtsIx=headers.indexOf('plannedreturntostation'),stopsIx=headers.indexOf('allstops'),packagesIx=headers.indexOf('totalpackages'),selected={};
   rows.slice(header+1).forEach(row=>{
-    const route=normalizeCxRoute(row[routeIx]),plannedRts=normalizeTimeDisplay(row[rtsIx]);
-    if(route&&plannedRts)details[route]={driver:'',stops:null,plannedRts};
+    const route=normalizeCxRoute(row[routeIx]),rawRts=String(row[rtsIx]??'').trim(),plannedRts=/^(?:missing|n\/?a|null|-)?$/i.test(rawRts)?'':normalizeTimeDisplay(row[rtsIx]);
+    if(!route)return;
+    const candidate={driver:'',stops:null,plannedRts,allStops:stopsIx>=0?itineraryRouteCount(row[stopsIx]):null,totalPackages:packagesIx>=0?itineraryRouteCount(row[packagesIx]):null};
+    if(preferItineraryRtsCandidate(selected[route],candidate))selected[route]=candidate;
   });
+  const details={};Object.entries(selected).forEach(([route,candidate])=>{if(candidate.plannedRts)details[route]=candidate;});
   return details;
 }
 async function parseUploadedFile(file) {
@@ -3268,6 +3598,19 @@ async function readFiles(files) {
       if(invalid)throw new Error('FleetOS Import only accepts Vehicle_List… .csv files');
     }
     const parsed=await Promise.all(files.map(parseUploadedFile));
+    if(state.importPurpose==='whiparound') {
+      const records=parsed.flatMap(file=>inspectionRecordsFromRows(file.rows||[]));
+      if(!records.length)throw new Error('No Pre-Trip or Post-Trip EDV Inspection (DVIR) rows found');
+      const byId=new Map((state.whiparoundInspections||[]).map(row=>[row.id,row]));records.forEach(row=>byId.set(row.id,row));
+      state.whiparoundInspections=[...byId.values()].sort((a,b)=>b.date.localeCompare(a.date)||a.driver.localeCompare(b.driver));
+      const dates=[...new Set(records.map(row=>row.date))].sort().reverse(),roster=currentWhiparoundRoster();
+      dates.forEach(date=>{if(roster.length)state.whiparoundRosterSnapshots[date]=roster.map(row=>({...row,sources:[...row.sources]}));});
+      state.whiparoundSelectedDate=dates[0];state.whiparoundImportName=parsed.map(file=>file.name).join(' + ');
+      dates.forEach(date=>rebuildWhiparoundHistory(date));
+      const pre=records.filter(row=>row.type==='pre').length,post=records.filter(row=>row.type==='post').length;
+      state.importPurpose='morning';state.page='inbox';persist();render();
+      return toast(`${records.length} DVIR rows read · ${pre} Pre-Trip · ${post} Post-Trip`);
+    }
     if(state.importPurpose==='schedule') {
       const entries=parsed.flatMap(file=>file.rows?.length?scheduleEntriesFromRows(file.rows):scheduleEntriesFromText(file.text||''));
       if(!entries.length)throw new Error('no schedule shifts');
@@ -3316,7 +3659,7 @@ async function readFiles(files) {
     if(state.importPurpose==='itinerary-rts') {
       const invalidName=parsed.find(file=>!/^itineraries_djt6/i.test(String(file.name||'')));
       if(invalidName)throw new Error('RTS import requires a file beginning with Itineraries_DJT6');
-      const details=parsed.reduce((all,file)=>({...all,...itineraryRtsDetailsFromRows(file.rows||[])}),{}),count=Object.keys(details).length;
+      const details=parsed.reduce((all,file)=>mergeItineraryRtsDetails(all,itineraryRtsDetailsFromRows(file.rows||[])),{}),count=Object.keys(details).length;
       if(!count)throw new Error('No Route code + Planned return to station rows found');
       state.lastItineraryRts=details;
       state.importedFile={name:parsed.map(file=>file.name).join(' + '),headers:parsed[0]?.rows?.[0]||[],rows:parsed.flatMap(file=>(file.rows||[]).slice(1)),kind:'rts',routeDetails:details,routeDetailsCount:count};
@@ -3339,7 +3682,7 @@ async function readFiles(files) {
     state.importedFile={name:parsed.map(f=>f.name).join(' + '),headers:rows[0],rows:rows.slice(1),kind:state.importPurpose==='rts'?'rts':(plan?'plan':'details'),routeDetails:details,routeDetailsCount:Object.keys(details).length};
     render();toast(`${parsed.length} file${parsed.length===1?'':'s'} ready · CX routes will be matched automatically`);
   } catch(error) {
-    console.error(error);if(state.importPurpose==='itinerary-rts')return toast(error?.message||'Choose an Itineraries_DJT6 XLSX containing Route code and Planned return to station','error');toast(state.importPurpose==='schedule'?'Could not find scheduled names, times, and shift labels. Upload the Paycom PDF, screenshot, CSV, Excel, or text export.':state.importPurpose==='fleet'?(error?.message||'Could not find VIN rows in the selected fleet file.'):state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV or XLSX file with Name and Personal Phone columns.':'These files could not be read. Choose DAYOFOPSPLAN and ROUTE_DJT6 as CSV or XLSX.','error');
+    console.error(error);if(state.importPurpose==='itinerary-rts')return toast(error?.message||'Choose an Itineraries_DJT6 XLSX containing Route code and Planned return to station','error');toast(state.importPurpose==='whiparound'?(error?.message||'Could not find the five required Whiparound columns. Choose a CSV or XLSX inspection report.'):state.importPurpose==='schedule'?'Could not find scheduled names, times, and shift labels. Upload the Paycom PDF, screenshot, CSV, Excel, or text export.':state.importPurpose==='fleet'?(error?.message||'Could not find VIN rows in the selected fleet file.'):state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV or XLSX file with Name and Personal Phone columns.':'These files could not be read. Choose DAYOFOPSPLAN and ROUTE_DJT6 as CSV or XLSX.','error');
   }
 }
 async function readFile(file) { return readFiles([file]); }
@@ -3707,7 +4050,7 @@ async function parseXlsxArrayBuffer(buffer) {
   const paths=[]; const sheetRe=/<(?:\w+:)?sheet\b([^>]*?)(?:\/>|>[\s\S]*?<\/(?:\w+:)?sheet>)/gi; let sheet;
   while((sheet=sheetRe.exec(workbook))) { const id=(sheet[1].match(/\br:id="([^"]+)"/i)||[])[1], target=relationMap[id]; if(target){const clean=target.replace(/^\//,'').replace(/^\.\.\//,'');paths.push(clean.startsWith('xl/')?clean:`xl/${clean}`);} }
   if(!paths.length) paths.push(...Object.keys(zip.files).filter(p=>/^xl\/worksheets\/sheet\d+\.xml$/i.test(p)).sort());
-  let fallback=[], bestVinSheet=null, bestDriverSheet=null;
+  let fallback=[], bestVinSheet=null, bestDriverSheet=null, bestWhiparoundSheet=null;
   for(const path of paths) {
     const rows=parseWorksheetXml(await read(path),shared); if(!rows.length)continue; if(!fallback.length)fallback=rows;
     const driverHeader=findImportHeader(rows,[['name','nameandid','preferredname','fullname','driver','drivername','employeename','associate','associatename','deliveryassociate'],['phone','phonenumber','personalphone','personalphonenumber','primaryphone','mobile','mobilephone','cell','cellphone','telephone']]);
@@ -3716,6 +4059,8 @@ async function parseXlsxArrayBuffer(buffer) {
       const score=(rows.length-driverHeader)*10+keys.filter(h=>driverFields.includes(h)).length;
       if(!bestDriverSheet||score>bestDriverSheet.score) bestDriverSheet={score,rows:rows.slice(driverHeader)};
     }
+    const whiparoundHeader=findImportHeader(rows,[['form'],['dateinspectionoccurred'],['assetname'],['driverfirstname'],['driverlastname']]);
+    if(whiparoundHeader>=0){const score=(rows.length-whiparoundHeader)*10;if(!bestWhiparoundSheet||score>bestWhiparoundSheet.score)bestWhiparoundSheet={score,rows:rows.slice(whiparoundHeader)};}
     const header=rows.findIndex(row=>{const cells=row.map(v=>String(v).toLowerCase().replace(/[^a-z0-9]/g,''));return cells.includes('dsp')&&cells.includes('routecode')&&cells.includes('wave')&&cells.includes('staginglocation');});
     if(header>=0&&state.importPurpose!=='drivers') return rows.slice(header);
     const vinHeader=rows.findIndex(row=>row.map(headerKey).some(h=>['vin','vinnumber','vehiclevin','vehicleidentificationnumber'].includes(h)));
@@ -3727,7 +4072,8 @@ async function parseXlsxArrayBuffer(buffer) {
     }
   }
   if(state.importPurpose==='drivers'&&bestDriverSheet) return bestDriverSheet.rows;
-  return bestVinSheet?.rows||bestDriverSheet?.rows||fallback;
+  if(state.importPurpose==='whiparound'&&bestWhiparoundSheet) return bestWhiparoundSheet.rows;
+  return bestVinSheet?.rows||bestDriverSheet?.rows||bestWhiparoundSheet?.rows||fallback;
 }
 
 function applyImport() {
@@ -5152,6 +5498,23 @@ localStorage.setItem('relayops_schedule_import_name',state.scheduleImportName||'
 localStorage.setItem('relayops_schedule_filter',state.scheduleFilter||'all');
 localStorage.setItem('relayops_call_off_driver_keys',JSON.stringify(state.callOffDriverKeys||{}));
 localStorage.setItem('relayops_schedule_driver_marks',JSON.stringify(state.scheduleDriverMarks||{}));
+localStorage.setItem('relayops_schedule_stay_home',JSON.stringify(state.scheduleStayHome||{}));
+localStorage.setItem('relayops_schedule_reductions',JSON.stringify(state.scheduleReductions||{}));
+localStorage.setItem('relayops_call_off_reasons',JSON.stringify(state.callOffReasons||{}));
+localStorage.setItem('relayops_opening_picklist_topics',JSON.stringify(state.openingPicklistTopics||['','','','']));
+localStorage.setItem('relayops_opening_picklist_notes',state.openingPicklistNotes||'');
+localStorage.setItem('relayops_opening_picklist_calloff_rows',String(state.openingPicklistCalloffRows||6));
+localStorage.setItem('relayops_opening_picklist_topic_rows',String(state.openingPicklistTopicRows||4));
+localStorage.setItem('relayops_opening_picklist_calloff_drafts',JSON.stringify(state.openingPicklistCalloffDrafts||[]));
+localStorage.setItem('relayops_opening_picklist_backup_overrides',JSON.stringify(state.openingPicklistBackupOverrides||{}));
+localStorage.setItem('relayops_opening_picklist_labels',JSON.stringify(state.openingPicklistLabels||{}));
+localStorage.setItem('relayops_whiparound_inspections',JSON.stringify(state.whiparoundInspections||[]));
+localStorage.setItem('relayops_whiparound_roster_snapshots',JSON.stringify(state.whiparoundRosterSnapshots||{}));
+localStorage.setItem('relayops_whiparound_not_on_route',JSON.stringify(state.whiparoundNotOnRoute||{}));
+localStorage.setItem('relayops_whiparound_compliance_history',JSON.stringify(state.whiparoundComplianceHistory||{}));
+localStorage.setItem('relayops_whiparound_import_name',state.whiparoundImportName||'');
+localStorage.setItem('relayops_whiparound_selected_date',state.whiparoundSelectedDate||'');
+localStorage.setItem('relayops_whiparound_reminder_templates',JSON.stringify(state.whiparoundReminderTemplates||{}));
 localStorage.setItem('relayops_parking_charger_status',JSON.stringify(state.parkingChargerStatus||{}));
 localStorage.setItem('relayops_parking_notes',state.parkingNotes||'');
 localStorage.setItem('relayops_charging_station_checked',state.chargingStationChecked||'');
@@ -5174,7 +5537,8 @@ function sharedWorkspaceState() {
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,
     messageQueueTemplate:state.messageQueueTemplate,messageQueueStatus:state.messageQueueStatus,
-    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,
+    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleStayHome:state.scheduleStayHome,scheduleReductions:state.scheduleReductions,callOffReasons:state.callOffReasons,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,
+    whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
     morningSheetsEndpoint:state.morningSheetsEndpoint
   };
 }
@@ -5187,19 +5551,28 @@ function persistentWorkspaceState() {
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,
     equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,
+    whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
     morningSheetsEndpoint:state.morningSheetsEndpoint
   };
 }
 function applySharedWorkspaceState(payload={}) {
-  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','messageQueueTemplate','messageQueueStatus','scheduleEntries','scheduleImportName','callOffDriverKeys','scheduleDriverMarks','morningSheetsEndpoint'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','messageQueueTemplate','messageQueueStatus','scheduleEntries','scheduleImportName','callOffDriverKeys','scheduleDriverMarks','scheduleStayHome','scheduleReductions','callOffReasons','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','morningSheetsEndpoint'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
   state.morningIssueAcknowledgements=state.morningIssueAcknowledgements||{};
+  state.callOffReasons=state.callOffReasons||{};
+  state.openingPicklistTopics=Array.isArray(state.openingPicklistTopics)?state.openingPicklistTopics:['','','',''];
+  state.openingPicklistNotes=String(state.openingPicklistNotes||'');
+  state.openingPicklistCalloffRows=Math.max(6,Number(state.openingPicklistCalloffRows)||6);
+  state.openingPicklistTopicRows=Math.max(4,Number(state.openingPicklistTopicRows)||4);
+  state.openingPicklistCalloffDrafts=Array.isArray(state.openingPicklistCalloffDrafts)?state.openingPicklistCalloffDrafts:[];
+  state.openingPicklistBackupOverrides=state.openingPicklistBackupOverrides&&typeof state.openingPicklistBackupOverrides==='object'?state.openingPicklistBackupOverrides:{};
+  state.openingPicklistLabels=state.openingPicklistLabels&&typeof state.openingPicklistLabels==='object'?state.openingPicklistLabels:{};
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   persist();render();
 }
 function applyPersistentWorkspaceState(payload={}) {
-  const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','morningSheetsEndpoint'];
+  const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','morningSheetsEndpoint'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
