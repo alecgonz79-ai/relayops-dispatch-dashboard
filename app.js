@@ -3277,7 +3277,7 @@ function action(name,el) {
   if (name==='load-slack-demo') return loadSlackDemo();
   if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.screenshotPreview=null;state.screenshotKind='';state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=state.importPurpose==='itinerary-rts'?'.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'';return fileInput.click(); }
-  if (name==='schedule-import') { state.importPurpose='schedule';fileInput.accept='';return fileInput.click(); }
+  if (name==='schedule-import') { state.importPurpose='schedule';fileInput.accept='.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf';return fileInput.click(); }
   if (name==='open-route-swap') return openRosterSwap(el.dataset.route||'',el.dataset.driverName||'',el.dataset.swapMode||'swap',el.dataset.driverLabel||'');
   if (name==='apply-roster-swap') return applyRosterSwap();
   if (name==='mark-paycom-backup') return markPaycomBackup(el.dataset.driverName||'',el.dataset.driverRole||'');
@@ -3557,6 +3557,15 @@ async function parseUploadedFile(file) {
   if(file.type==='application/pdf'||name.endsWith('.pdf')) return {name:file.name,rows:[],text:await readPdfText(await file.arrayBuffer()),kind:'pdf'};
   if(name.endsWith('.csv')) rows=parseCSV(await file.text());
   else if(name.endsWith('.xlsx')) rows=await parseXlsxArrayBuffer(await file.arrayBuffer());
+  else if(name.endsWith('.xls')) {
+    const buffer=await file.arrayBuffer(),text=new TextDecoder('utf-8').decode(buffer);
+    if(/<table\b/i.test(text)) {
+      rows=htmlTableRows(text);
+      if(rows.length<2)throw new Error('empty Paycom HTML workbook');
+      return {name:file.name,rows,text:rowsToText(rows),kind:'paycom-html-xls'};
+    }
+    rows=await parseXlsxArrayBuffer(buffer);
+  }
   else return {name:file.name,rows:[],text:await file.text().catch(()=>''),kind:'text'};
   if(rows.length<2) throw new Error('empty');
   return {name:file.name,rows};
@@ -3711,8 +3720,74 @@ async function readPdfText(buffer) {
     return pieces.join('\n');
   } catch { return ''; }
 }
-function normalizeScheduleRole(value='') { return String(value||'').replace(/resuce/ig,'Rescue').replace(/\s+/g,' ').trim(); }
+function decodeHtmlTableCell(value='') {
+  const decoded=String(value||'')
+    .replace(/<br\s*\/?\s*>/gi,'\n')
+    .replace(/<\/(?:p|div|li)>/gi,'\n')
+    .replace(/<[^>]+>/g,'')
+    .replace(/&#x([0-9a-f]+);/gi,(_,code)=>String.fromCodePoint(parseInt(code,16)))
+    .replace(/&#(\d+);/g,(_,code)=>String.fromCodePoint(Number(code)))
+    .replace(/&nbsp;/gi,' ')
+    .replace(/&amp;/gi,'&')
+    .replace(/&quot;/gi,'"')
+    .replace(/&#39;|&apos;/gi,"'")
+    .replace(/&lt;/gi,'<')
+    .replace(/&gt;/gi,'>')
+    .replace(/\r/g,'');
+  const clean=decoded.split('\n').map(line=>line.replace(/\s+/g,' ').trim()).filter(Boolean).join('\n').trim();
+  return clean.replace(/^"([\s\S]*)"$/,'$1').trim();
+}
+function htmlTableRows(html='') {
+  const rows=[];let rowMatch;
+  const rowRe=/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+  while((rowMatch=rowRe.exec(String(html||'')))) {
+    const cells=[];let cellMatch;
+    const cellRe=/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi;
+    while((cellMatch=cellRe.exec(rowMatch[1])))cells.push(decodeHtmlTableCell(cellMatch[1]));
+    if(cells.some(Boolean))rows.push(cells);
+  }
+  return rows;
+}
+function paycomReportDate(value='') {
+  const text=String(value||'').replace(/[,]+/g,' ').replace(/\s+/g,' ').trim();
+  const numeric=text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  if(numeric) {
+    let year=Number(numeric[3]||String(state.morningOperationDate||'').slice(0,4)||new Date().getFullYear());if(year<100)year+=2000;
+    return `${Number(numeric[1])}/${Number(numeric[2])}/${year}`;
+  }
+  const months={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12};
+  const named=text.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:\s+(\d{4}))?\b/i);
+  if(!named)return '';
+  const year=Number(named[3]||String(state.morningOperationDate||'').slice(0,4)||new Date().getFullYear());
+  return `${months[named[1].toLowerCase()]}/${Number(named[2])}/${year}`;
+}
+function normalizeScheduleEmployeeName(value='') {
+  const clean=String(value||'').replace(/^"|"$/g,'').replace(/\s+/g,' ').trim();
+  if(!clean)return '';
+  const parts=clean.split(',').map(part=>part.trim()).filter(Boolean),ordered=parts.length>1?`${parts.slice(1).join(' ')} ${parts[0]}`:clean;
+  return ordered.toLowerCase().replace(/(^|[\s'-])([a-z])/g,(_,lead,letter)=>lead+letter.toUpperCase()).replace(/\s+/g,' ').trim();
+}
+function scheduleEntriesFromPaycomReportRows(rows=[]) {
+  const header=rows.findIndex(row=>headerKey(row[0])==='employee'&&row.slice(1).some(cell=>paycomReportDate(cell)));
+  if(header<0)return [];
+  const date=rowDate(rows[header])||paycomReportDate(rows[header][1]),entries=[];
+  rows.slice(header+1).forEach(row=>{
+    const rawName=String(row[0]||'').trim(),details=String(row.slice(1).find(Boolean)||'').replace(/\r/g,'').trim();
+    const times=details.match(/(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
+    if(!rawName||!times)return;
+    const name=normalizeScheduleEmployeeName(rawName),role=normalizeScheduleRole(details.slice(0,times.index).replace(/^"|"$/g,'').trim());
+    if(!name||!role)return;
+    entries.push({date,name,start:normalizeTimeDisplay(times[1]),end:normalizeTimeDisplay(times[2]),role});
+  });
+  return entries;
+  function rowDate(row){for(const cell of row.slice(1)){const parsed=paycomReportDate(cell);if(parsed)return parsed;}return '';}
+}
+function normalizeScheduleRole(value='') { return String(value||'').replace(/res(?:cue|uce|ceus?)/ig,'Rescue').replace(/\s+/g,' ').trim(); }
 function scheduleEntriesFromText(text='') {
+  if(/<table\b/i.test(String(text||''))) {
+    const paycom=scheduleEntriesFromPaycomReportRows(htmlTableRows(text));
+    if(paycom.length)return paycom;
+  }
   const clean=String(text||'').replace(/\r/g,'').replace(/[–—]/g,'-').replace(/\(cid:\d+\)/g,'').split('\n').map(line=>line.trim()).filter(line=>line&&!/^Schedule Exchange/i.test(line)&&!/^https?:/i.test(line)&&!/^Page \d+/i.test(line)&&!/^Search$/i.test(line));
   const entries=[],day=/^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)$/i,date=/^\d{1,2}\/\d{1,2}(?:\/\d{2,4})?$/,time=/^(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)$/i;
   for(let i=0;i<clean.length-4;i++) {
@@ -3724,6 +3799,7 @@ function scheduleEntriesFromText(text='') {
   return entries;
 }
 function scheduleEntriesFromRows(rows=[]) {
+  const paycom=scheduleEntriesFromPaycomReportRows(rows);if(paycom.length)return paycom;
   const header=findImportHeader(rows,[['name','employee','employeename','associate','deliveryassociate'],['shift','position','role','job','schedule']]);
   if(header<0)return scheduleEntriesFromText(rowsToText(rows));
   const keys=rows[header].map(headerKey),index=(...names)=>keys.findIndex(key=>names.map(headerKey).includes(key));
@@ -3732,7 +3808,7 @@ function scheduleEntriesFromRows(rows=[]) {
 }
 function scheduleRoleGroup(role='') {
   const key=headerKey(role);
-  if(/firstopeningdispatcher|fleetcoordinator|secondopeningdispatcher|closingdispatcher|secondcloser/.test(key))return 'dispatch';
+  if(/firstopeningdispatch|fleetcoordinator|secondopeningdispatch|closingdispatch|secondcloser|leaddispatch/.test(key))return 'dispatch';
   if(/deliveryassociate|driverhelper|rescue|midshift|modifiedduty/.test(key))return 'driver';
   return 'other';
 }

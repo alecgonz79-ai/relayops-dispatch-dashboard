@@ -15,6 +15,7 @@ const context = {
   Intl,
   Blob,
   URL,
+  TextDecoder,
   setTimeout,
   clearTimeout,
   navigator: { clipboard: { writeText: async () => {} } },
@@ -127,6 +128,7 @@ const checks = `
   const paycomText=['Sun','7/5','JOSE LOPEZ RAMIREZ','7:30 AM - 4:00 PM','First Opening Dispatcher','Sun','7/5','STEVEN SCICCHITANO','8:00 AM - 4:30 PM','Fleet Coordinator/Resuce','Sun','7/5','VANESSA BALDERAMA','10:30 AM - 2:30 PM','Rescue','Sun','7/5','FREDY GUERRA','12:00 PM - 8:30 PM','Midshift','Sun','7/5','JORDAN LEE','10:30 AM - 7:00 PM','Delivery Associate','Sun','7/5','CASEY NOLAN','10:30 AM - 7:00 PM','Modified Duty','Sun','7/5','GERARDO GODINEZ','2:00 PM - 10:30 PM','Closing Dispatcher','Sun','7/5','WAREHOUSE PERSON','9:00 AM - 5:00 PM','Warehouse Support'].join('\\n');
   state.morningOperationDate='2026-07-05';state.scheduleEntries=scheduleEntriesFromText(paycomText);state.scheduleImportName='Schedule Exchange.pdf';
   if(state.scheduleEntries.length!==8||state.scheduleEntries[1].role!=='Fleet Coordinator/Rescue'||scheduleRoleGroup(state.scheduleEntries[0].role)!=='dispatch'||scheduleRoleGroup(state.scheduleEntries[2].role)!=='driver'||scheduleRoleGroup(state.scheduleEntries[7].role)!=='other') throw new Error('Paycom schedule text classification failed');
+  action('schedule-import',{});if(!String(fileInput.accept||'').includes('.xls')||!String(fileInput.accept||'').includes('application/vnd.ms-excel'))throw new Error('Paycom import chooser must accept HTML-based XLS exports');
   state.morningRoutes=[{dsp:'LLOL',driver:'Maya Collins',route:'CX777',wave:'11:15 AM',staging:'STG.V.1',padOverride:'',ev:'',deviceName:'',portable:'',stops:188,packages:332}];
   state.morningFilters={wave:'all',staging:'all',pad:'all'};state.messageQueueStatus={};state.messageQueueTemplate='standup';
   const queueRows=morningMessageQueueRows(),queueHtml=morningMessageQueueHtml();
@@ -703,6 +705,15 @@ const checks = `
   state.screenshotPreview = 'data:image/jpeg;base64,demo'; state.modal = 'screenshot';
   if (!modal().includes('Approve & save JPEG') || !modal().includes('Driver/Helper')) throw new Error('JPEG approval dialog missing');
   globalThis.__parseXlsx = parseXlsxArrayBuffer;
+  globalThis.__parsePaycomFile = async file => {
+    state.importPurpose='schedule';
+    const parsed=await parseUploadedFile(file);
+    return {parsed,entries:scheduleEntriesFromRows(parsed.rows||[])};
+  };
+  globalThis.__renderPaycomEntries = entries => {
+    state.morningOperationDate='2026-07-14';state.scheduleEntries=entries;state.scheduleImportName='ReportClass-20260714050418.xls';
+    return openingRosterScheduleHtml();
+  };
   globalThis.__parseDriverWorkbook = async buffer => {
     state.importPurpose='drivers';
     const rows=await parseXlsxArrayBuffer(buffer);
@@ -743,6 +754,14 @@ const fleetCss = fs.readFileSync('styles.css','utf8');
   const fleetWorkbook = await fleetZip.generateAsync({ type: 'nodebuffer' });
   const parsedFleetWorkbook = await context.__parseXlsx(fleetWorkbook);
   if (parsedFleetWorkbook.length !== 2 || parsedFleetWorkbook[0][0] !== 'VIN' || parsedFleetWorkbook[1][0] !== '7FCEHEB79PN014816') throw new Error('XLSX fleet parser should choose the VIN roster tab over workbook instructions');
+  const actualPaycomPath='/Users/alecgonzo/Downloads/ReportClass-20260714050418.xls';
+  const paycomHtml=fs.existsSync(actualPaycomPath)?fs.readFileSync(actualPaycomPath):Buffer.from('<table><tr><td>Employee</td><td>Tue Jul 14</td></tr><tr><td>"ALONSO, ELISABETH"</td><td>"Delivery Associate\n10:30 AM - 07:00 PM Comment:"</td></tr><tr><td>"GONZALEZ, ALEC"</td><td>"Second Closer\n02:00 PM - 10:30 PM Comment:"</td></tr></table>');
+  const paycomFile={name:'ReportClass-20260714050418.xls',type:'application/vnd.ms-excel',arrayBuffer:async()=>paycomHtml.buffer.slice(paycomHtml.byteOffset,paycomHtml.byteOffset+paycomHtml.byteLength)};
+  const parsedPaycom=await context.__parsePaycomFile(paycomFile),paycomEntries=parsedPaycom.entries;
+  const expectedPaycomCount=fs.existsSync(actualPaycomPath)?83:2;
+  if(parsedPaycom.parsed.kind!=='paycom-html-xls'||paycomEntries.length!==expectedPaycomCount||paycomEntries[0]?.name!=='Elisabeth Alonso'||paycomEntries[0]?.date!=='7/14/2026'||paycomEntries[0]?.start!=='10:30 AM'||paycomEntries[0]?.end!=='7:00 PM'||!paycomEntries.some(entry=>entry.name==='Alec Gonzalez'&&entry.role==='Second Closer'))throw new Error(`Paycom HTML-XLS import mismatch: ${JSON.stringify({kind:parsedPaycom.parsed.kind,count:paycomEntries.length,first:paycomEntries[0],last:paycomEntries.at(-1)})}`);
+  const paycomBox=context.__renderPaycomEntries(paycomEntries);
+  if(!paycomBox.includes('All Scheduled driver shifts (PAYCOM)')||!paycomBox.includes('Elisabeth Alonso')||!paycomBox.includes('Alec Gonzalez')||!paycomBox.includes('Dispatcher shifts'))throw new Error('Parsed ReportClass XLS rows did not populate the Opening Roster Paycom box');
   const actualItineraryPath='/Users/alecgonzo/Downloads/Itineraries_DJT6_2026-07-13_12_43 (PDT).xlsx';
   if(fs.existsSync(actualItineraryPath)) {
     const itineraryBuffer=fs.readFileSync(actualItineraryPath);
