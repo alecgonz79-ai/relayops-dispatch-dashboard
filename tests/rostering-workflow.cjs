@@ -44,12 +44,13 @@ function run() {
       {date:'7/15/2026',name:'Maya Collins',role:'Delivery Associate',start:'11:15 AM',end:'9:15 PM'},
       {date:'7/15/2026',name:'John Helper',role:'Driver Helper',start:'11:20 AM',end:'9:20 PM'},
       {date:'7/15/2026',name:'Nina Patel',role:'Rescue',start:'11:25 AM',end:'9:25 PM'},
+      {date:'7/15/2026',name:'Rex Rescue',role:'Rescue',start:'11:30 AM',end:'9:30 PM'},
       {date:'7/15/2026',name:'Evan Stone',role:'Delivery Associate',start:'11:40 AM',end:'9:40 PM'},
       {date:'7/15/2026',name:'Riley Rookie',role:'Ride Along',start:'11:15 AM',end:'9:15 PM'},
       {date:'7/15/2026',name:'Terry Trainer',role:'Fleet Coordinator',start:'10:00 AM',end:'8:00 PM'}
     ];
     state.driverContacts=[
-      {name:'Maya Collins',key:'maya collins'},{name:'John Helper',key:'john helper'},{name:'Nina Patel',key:'nina patel'},{name:'Evan Stone',key:'evan stone'}
+      {name:'Maya Collins',key:'maya collins'},{name:'John Helper',key:'john helper'},{name:'Nina Patel',key:'nina patel'},{name:'Rex Rescue',key:'rex rescue'},{name:'Evan Stone',key:'evan stone'}
       ,{name:'Riley Rookie',key:'riley rookie',transporterId:'RID-RILEY'},{name:'Terry Trainer',key:'terry trainer',transporterId:'RID-TERRY'}
     ];
     state.driverProfiles={};state.driverContacts.forEach(contact=>ensureDriverProfile(contact));toggleDriverCapability('Terry Trainer','trainer');
@@ -71,23 +72,31 @@ function run() {
     globalThis.__duplicateAdded=fillRosteringFromPaycom('',{silent:true});
     globalThis.__after={rostered:plan.assignments.filter(row=>row.associate).length,helpers:plan.assignments.filter(row=>row.associate==='John Helper').map(row=>plan.services.find(service=>service.id===row.serviceId)?.kind),mayaCount:rosteringStayHomeCount('Maya Collins'),ninaCount:rosteringStayHomeCount('Nina Patel'),evanCount:rosteringStayHomeCount('Evan Stone')};
     globalThis.__html=rosteringPage();
-    state.rosteringPlans={};const autoPlan=currentRosteringPlan();globalThis.__autoResult=autoRosterFromPaycom({silent:true});
+    state.rosteringPlans={};state.rosteringAutoMode='abc';const autoPlan=currentRosteringPlan();globalThis.__autoResult=autoRosterFromPaycom({silent:true});
     globalThis.__autoRows=autoPlan.assignments.filter(row=>row.source==='auto-roster').map(row=>row.associate);
     globalThis.__autoHelpers=autoPlan.assignments.filter(row=>row.source==='auto-helper').map(row=>row.associate);
+    globalThis.__donationAutoRows=autoPlan.assignments.filter(row=>row.serviceId==='xl-donations'&&row.associate).length;
+    state.rosteringOpenServices['xl-donations']=true;globalThis.__donationHtml=rosteringServiceHtml(autoPlan.services.find(row=>row.id==='xl-donations'),autoPlan,new Set());
+    globalThis.__orders={abc:rosteringOrderEntries([{name:'Charlie'},{name:'Alpha'},{name:'Bravo'}],'abc').map(row=>row.name),random:rosteringOrderEntries([{name:'Alpha'},{name:'Bravo'},{name:'Charlie'}],'random',()=>0).map(row=>row.name)};
     globalThis.__helperHtml=rosteringHelperShiftsHtml(autoPlan);
+    state.scheduleEntries.push({date:'7/15/2026',name:'Zora VTO Four',role:'Delivery Associate',start:'11:45 AM',end:'9:45 PM'},{date:'7/15/2026',name:'Morgan Midshift',role:'Midshift',start:'2:00 PM',end:'8:00 PM'});
+    globalThis.__paycomHtml=rosteringPaycomHtml(autoPlan);globalThis.__backupEmail=rosteringBackupEmailText(autoPlan);globalThis.__backupGroups=rosteringUnrosteredBackupGroups(autoPlan);
+    state.rosteringPaycomCategory='vto2';globalThis.__vto2PaycomHtml=rosteringPaycomHtml(autoPlan);state.rosteringPaycomCategory='all';
     state.scheduleEntries.push({date:'7/15/2026',name:'Riley R',role:'Training',start:'11:15 AM',end:'9:15 PM'});
     globalThis.__trainingHtml=rosteringTrainingHtml();globalThis.__trainingRidealongCount=[...new Map(scheduleEntriesForDate(state.rosteringDate).filter(entry=>isRidealongRole(entry.role)).map(entry=>[driverIdentityKey(entry.name),entry])).values()].length;
-    assignRosteringTrainer('Riley R','Coach T');globalThis.__trainingMatch=state.rosteringTrainingMatches[rosteringTrainingKey('Riley Rookie')];
+    assignRosteringTrainer('Riley R','Coach T');globalThis.__trainingMatch=state.rosteringTrainingMatches[rosteringTrainingKey('Riley Rookie')];globalThis.__matchedTrainingHtml=rosteringTrainingHtml();clearRosteringTrainerMatch('Riley R');globalThis.__swapCleared=!state.rosteringTrainingMatches[rosteringTrainingKey('Riley Rookie')];assignRosteringTrainer('Riley R','Coach T');
     trainerProfile.tags=[];globalThis.__staleTrainingHtml=rosteringTrainingHtml();trainerProfile.tags=['trainer'];
     globalThis.__roleGroups=['Ride Along','Ride-Along Shift','Training','Trainee','New Hire'].map(scheduleRoleGroup);
     const screenshotText=[
       'Standard Parcel - Extra Large Van - AMZ Donations - Default as station - 10 Hours 2 Confirmed 2 Rostered',
+      '11:10 am Donation Placeholder Driver',
       'XL-US - Default as station - 10 Hours 3 Confirmed 3 Rostered',
       'Standard Parcel Electric - Rivian MEDIUM with Helper - Default as station - 10 Hours 4 Confirmed 4 Rostered',
       'Standard Parcel Electric - Rivian MEDIUM - Default as station - 10 Hours 40 Confirmed 40 Rostered',
       'Standard Parcel Electric - Rivian MEDIUM with Helper: Helper - Default as station - 10 Hours 4 Confirmed 4 Rostered',
       'Standard Parcel Electric - Rivian MEDIUM - Default as station - 10 Hours 40 Confirmed 40 Rostered',
       'Confirmed Routes',
+      'Confirmed Services',
       '11:15 am Bulk Import Associates 2',
       '11:15 am Maya Collins +19511234567 Riverside (DJT6) - Amazon.com',
       'No Route Generated',
@@ -102,6 +111,7 @@ function run() {
     globalThis.__nav={sections:NAV.map(group=>group.section),achatSection:NAV.find(group=>group.items.some(item=>item[0]==='achat'))?.section,achatIndex:NAV.find(group=>group.items.some(item=>item[0]==='achat'))?.items.findIndex(item=>item[0]==='achat')};
     globalThis.__daily=sharedWorkspaceState();
     globalThis.__persistent=persistentWorkspaceState();
+    const custom={id:'delete-me',name:'Delete confirmation service',confirmed:1,kind:'driver',defaultTime:'11:15 AM'};autoPlan.services.push(custom);autoPlan.assignments.push({id:'delete-row',serviceId:'delete-me',start:'11:15 AM',associate:'Maya Collins',route:'',role:'',source:'manual'});requestDeleteRosteringService('delete-me');globalThis.__deleteModal=modal();confirmDeleteRosteringService();globalThis.__deleted=!autoPlan.services.some(row=>row.id==='delete-me')&&!autoPlan.assignments.some(row=>row.serviceId==='delete-me');
   `, context);
 
   assert(context.__defaults.services === 4, 'Rostering must start with the four confirmed Amazon-style service groups');
@@ -113,25 +123,40 @@ function run() {
   assert(context.__html.includes('Rostering') && context.__html.includes('CONFIRMED SERVICES') && context.__html.includes('All Scheduled driver shifts'), 'Rostering page lost its confirmed-services or PAYCOM surfaces');
   assert(context.__html.includes('1× stay-home') && context.__html.includes('2× stay-home') && context.__html.includes('3× · prioritize hours') && context.__html.includes('level-3'), 'One-to-three stay-home events must render progressively stronger fairness flags');
   assert(context.__html.includes('Maya Collins') && context.__html.includes('John Helper') && context.__html.includes('Nina Patel'), 'PAYCOM drivers must remain visible in the roster or import panel');
-  assert(context.__autoResult.drivers === 3 && context.__autoResult.helpers === 1 && context.__autoRows[0] === 'Nina Patel', 'Auto Roster must place the three route candidates and prioritize the three-time stay-home Rescue driver first');
+  assert(context.__autoResult.drivers === 3 && context.__autoResult.helpers === 1 && context.__autoResult.mode === 'abc' && context.__autoRows.join(',') === 'Evan Stone,Maya Collins,Nina Patel', 'ABC Auto Roster must place eligible route drivers alphabetically');
+  assert(!context.__autoRows.includes('Rex Rescue'), 'Rescue/VTO 2 drivers without Told To Stay Home history must stay out of the active roster');
+  assert(context.__donationAutoRows === 0, 'AMZ Donations must remain empty and manual-only during Auto Roster');
+  assert(context.__donationHtml.includes('Manual assignment only') && !context.__donationHtml.includes('Bulk Import Associates'), 'AMZ Donations must not expose an automatic PAYCOM fill control');
+  assert(context.__orders.abc.join(',') === 'Alpha,Bravo,Charlie' && context.__orders.random.join(',') === 'Bravo,Charlie,Alpha', 'Auto Roster must offer deterministic ABC order and a genuinely shuffled random mode');
   assert(context.__autoHelpers.length === 1 && context.__autoHelpers[0] === 'John Helper' && context.__helperHtml.includes('Added to Helper roster'), 'Scheduled Helper shifts must automatically populate the Helper service and box');
+  assert(context.__paycomHtml.indexOf('Evan Stone') < context.__paycomHtml.indexOf('Rex Rescue') && context.__paycomHtml.includes('class="assigned"') && context.__paycomHtml.includes('class="unassigned"'), 'PAYCOM shifts must sort rostered dark-green rows before unrostered dark-yellow rows');
+  assert(context.__paycomHtml.includes('data-rostering-paycom-search') && context.__paycomHtml.includes('data-rostering-category="vto2"') && context.__vto2PaycomHtml.includes('data-rostering-paycom-category="vto2"'), 'PAYCOM category buttons and name/role search hooks must render');
+  assert(context.__backupGroups.vto2.some(row=>row.name==='Rex Rescue') && context.__backupGroups.vto4.some(row=>row.name==='Zora VTO Four') && context.__backupGroups.other.some(row=>row.name==='Morgan Midshift'), 'Unrostered backup builder must group VTO 2, VTO 4, and all other roles');
+  assert(context.__paycomHtml.includes('Copy email text') && context.__backupEmail.includes('VTO 2 · Rescue') && context.__backupEmail.includes('Rex Rescue') && context.__backupEmail.includes('Zora VTO Four') && context.__backupEmail.includes('Morgan Midshift'), 'Backup builder must produce grouped email-ready text');
   assert(context.__trainingHtml.includes('Riley R') && context.__trainingHtml.includes('Coach T') && context.__trainingHtml.includes('scheduled'), 'Ridealong shifts must render with saved display names beside scheduled Trainer-tagged drivers');
   assert(context.__trainingRidealongCount === 1, 'Canonical and nickname variants of the same ridealong must render as one training match');
   assert(context.__trainingMatch?.trainer === 'Terry Trainer', 'Ridealong-to-trainer matches must save by roster date');
+  assert(context.__matchedTrainingHtml.includes('Swap Trainer') && context.__swapCleared, 'Each matched ridealong must expose a working Swap Trainer control');
   assert(!context.__staleTrainingHtml.includes('✓ Matched') && context.__staleTrainingHtml.includes('Saved trainer unavailable'), 'A removed or unavailable Trainer flag must not leave a stale matched status');
   assert(context.__roleGroups.every(group=>group==='training'), 'PAYCOM ridealong and training role variants must be recognized as training shifts');
-  assert(context.__screenshotSummary.services === 5 && context.__screenshotSummary.xlUs === 3 && context.__screenshotSummary.medium === 40 && context.__screenshotSummary.associates.length === 2, 'Amazon roster screenshot text must rebuild every known service group, including shorthand XL-US, counts, and associates');
+  assert(context.__screenshotSummary.services === 5 && context.__screenshotSummary.xlUs === 3 && context.__screenshotSummary.medium === 40 && context.__screenshotSummary.associates.length === 2, 'Amazon roster screenshot text must rebuild every known service group, including shorthand XL-US, counts, and associates, without auto-filling AMZ Donations');
+  assert(!context.__screenshotSummary.associates.some(row=>/Donation Placeholder|Confirmed Services/i.test(row.name)), 'Screenshot OCR must never create placeholder people from Confirmed Services or AMZ Donations');
   assert(context.__screenshotSummary.associates.some(row=>row.name==='Maya Collins'&&row.route==='No Route Generated') && context.__screenshotSummary.associates.some(row=>row.name==='Nina Patel'&&row.route==='CX101') && context.__screenshotSummary.source==='amazon-roster.png', 'Screenshot import must retain recognized routes and source proof');
   assert(context.__singleClear.associate===''&&context.__singleClear.route==='CX909'&&context.__singleClear.confirmed===40&&context.__singleClear.rows===40, 'Per-row Clear name must keep the route, confirmed count, and shift row');
   assert(context.__serviceClear.names.every(name=>name==='')&&context.__serviceClear.routes.join(',')==='CX910,CX911'&&context.__serviceClear.confirmed===40&&context.__serviceClear.rows===40, 'Per-service Clear roster must clear names without deleting routes, confirmed count, or shift rows');
   assert(context.__flagLabels.length===8&&['Late Driver','Violations','Performance','Suspended','Modified Duty','Only Later Waves','Likes Helper Routes','New Driver'].every(label=>context.__flagLabels.includes(label)), 'PAYCOM Driver Notes must preserve all eight supported flags');
   assert(context.__notesHtml.includes('Maya Collins')&&context.__notesHtml.includes('Late Driver')&&context.__notesHtml.includes('New Driver'), 'Scheduled PAYCOM Driver Notes must surface saved profile flags');
+  assert(context.__notesHtml.includes('data-rostering-driver-note-search') && context.__notesHtml.indexOf('Evan Stone') < context.__notesHtml.indexOf('Maya Collins') && context.__notesHtml.indexOf('Maya Collins') < context.__notesHtml.indexOf('Rex Rescue'), 'Driver flags must be searchable and alphabetically ordered');
   assert((context.__flagsModal.match(/data-driver-flag-option/g)||[]).length===8, 'Driver Notes editor must render all eight PAYCOM profile flags');
   assert(context.__rosteringFlagHtml.includes('data-driver-profile-name="Maya Collins"')&&context.__rosteringFlagHtml.includes('data-driver-flags="Late Driver'), 'Rostering rows must expose shared driver flags for hover');
   assert(context.__morningFlagHtml.includes('data-driver-profile-name="Maya Collins + John Helper"')&&context.__morningFlagHtml.includes('data-driver-flags="Late Driver')&&context.__picklistFlagHtml.includes('data-driver-profile-name="Maya Collins + John Helper"'), 'Morning Sheet and Picklist combined Driver + Helper rows must expose shared profile flags for hover');
   assert(context.__nav.sections.join('|')==='Opening Operations|Closing Operations|Improve|Owner'&&context.__nav.achatSection==='Improve'&&context.__nav.achatIndex===3, 'Navigation group renames or A-Chat placement changed unexpectedly');
   assert(context.__daily.rosteringPlans && context.__persistent.rosteringPlans && context.__daily.rosteringTrainingMatches && context.__persistent.rosteringTrainingMatches, 'Rostering plans and training matches must be included in shared and persistent workspace state');
   const appSource=fs.readFileSync(require.resolve('../app.js'),'utf8');
+  const styleSource=fs.readFileSync(require.resolve('../styles.css'),'utf8');
+  assert(context.__deleteModal.includes('Delete roster block') && context.__deleteModal.includes('Delete confirmation service') && context.__deleted, 'Deleting a roster block must require confirmation and remove only the selected block');
+  assert(appSource.includes("if (name==='rostering-paycom-category')") && appSource.includes("document.querySelectorAll('[data-rostering-paycom-search]')") && styleSource.includes('.rostering-paycom-list>div.assigned') && styleSource.includes('.rostering-paycom-list>div.unassigned'), 'PAYCOM category/search behavior and high-contrast roster states must remain wired');
+  assert(styleSource.includes('.rostering-driver-note-list') && styleSource.includes('max-height:320px') && styleSource.includes('overflow:auto'), 'Driver flags must remain in a compact scrollable list');
   assert(appSource.includes("el.addEventListener('pointerleave',closeDriverProfilePopover)")&&/function render\(\) \{[\s\S]{0,220}closeDriverProfilePopover\(\)/.test(appSource), 'Driver-note hover popovers must close on pointer exit and before rerendering any page');
   console.log('Rostering confirmed-services, PAYCOM fill, and fairness rotation tests passed');
 }
