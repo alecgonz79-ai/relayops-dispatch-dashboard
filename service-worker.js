@@ -1,4 +1,4 @@
-const CACHE='relayops-full-goal-print-v17';
+const CACHE='relayops-full-goal-live-v18';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{
