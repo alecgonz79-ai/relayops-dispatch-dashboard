@@ -14,11 +14,11 @@ Deno.serve(async request=>{
     if(userError||!user)return json({error:'Unauthorized'},401);
     const body=await request.json();
     const email=String(body.email||'').trim().toLowerCase(),organizationId=String(body.organizationId||''),stationId=String(body.stationId||''),displayName=String(body.displayName||'').trim();
-    const allowedRoles=['owner','ops_manager','dispatcher','fleet_lead','viewer'];
+    const allowedRoles=['ops_manager','dispatcher','fleet_lead','viewer'];
     const role=allowedRoles.includes(body.role)?body.role:'viewer';
     if(!email||!organizationId||!stationId)return json({error:'Email, organization, and station are required'},400);
     const {data:membership}=await caller.from('memberships').select('role').eq('organization_id',organizationId).eq('user_id',user.id).eq('active',true).maybeSingle();
-    if(!membership||!['owner','ops_manager'].includes(membership.role))return json({error:'Owner or operations manager access required'},403);
+    if(!membership||membership.role!=='owner')return json({error:'Owner access required'},403);
     const redirectTo=String(body.redirectTo||'');
     const {data:invite,error:inviteError}=await admin.auth.admin.inviteUserByEmail(email,{redirectTo,data:{display_name:displayName,organization_id:organizationId,station_id:stationId}});
     if(inviteError)return json({error:inviteError.message},400);

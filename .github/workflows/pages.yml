@@ -28,10 +28,40 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
+      - name: Use Node.js for release checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run release regression gate
+        run: |
+          set -e
+          node --check app.js
+          node --check cloud-sync.js
+          node --check live-connector/server.mjs
+          for test_file in tests/*.cjs; do
+            if [ "${test_file}" = "tests/picklist-print-browser.cjs" ]; then
+              echo "Skipping ${test_file} in Pages CI (real Chromium proof runs in local release QA)"
+              continue
+            fi
+            echo "Running ${test_file}"
+            node "${test_file}"
+          done
+          git diff-tree --check --no-commit-id --root -r HEAD
+
+      - name: Build public site allowlist
+        run: |
+          mkdir -p _site/assets _site/vendor _site/supabase _site/google-sheets
+          cp index.html 404.html .nojekyll app.js cloud-sync.js service-worker.js styles.css _site/
+          cp assets/rivian-prime-van.png _site/assets/
+          cp vendor/jszip.min.js _site/vendor/
+          cp supabase/config.js _site/supabase/
+          cp google-sheets/relayops-morning-connector.gs _site/google-sheets/
+
       - name: Upload site files
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment

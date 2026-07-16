@@ -87,9 +87,10 @@ alter table audit_log enable row level security;
 create policy org_read on organizations for select using (is_org_member(id));
 create policy station_read on stations for select using (is_org_member(organization_id) and can_access_station(id));
 create policy membership_read on memberships for select using (is_org_member(organization_id));
-create policy membership_admin on memberships for all using (has_org_role(organization_id,array['owner','ops_manager']::relayops_role[])) with check (has_org_role(organization_id,array['owner','ops_manager']::relayops_role[]));
+create policy membership_owner_insert on memberships for insert with check (has_org_role(organization_id,array['owner']::relayops_role[]) and role<>'owner');
+create policy membership_owner_update on memberships for update using (has_org_role(organization_id,array['owner']::relayops_role[]) and role<>'owner') with check (has_org_role(organization_id,array['owner']::relayops_role[]) and role<>'owner');
 create policy station_membership_read on station_memberships for select using (can_access_station(station_id));
-create policy station_membership_admin on station_memberships for all using (exists(select 1 from stations s where s.id=station_id and has_org_role(s.organization_id,array['owner','ops_manager']::relayops_role[]))) with check (exists(select 1 from stations s where s.id=station_id and has_org_role(s.organization_id,array['owner','ops_manager']::relayops_role[])));
+create policy station_membership_owner_admin on station_memberships for all using (exists(select 1 from stations s where s.id=station_id and has_org_role(s.organization_id,array['owner']::relayops_role[]))) with check (exists(select 1 from stations s where s.id=station_id and has_org_role(s.organization_id,array['owner']::relayops_role[])));
 create policy snapshot_read on workspace_snapshots for select using (is_org_member(organization_id) and can_access_station(station_id));
 create policy snapshot_write on workspace_snapshots for insert with check (can_access_station(station_id) and has_org_role(organization_id,array['owner','ops_manager','dispatcher','fleet_lead']::relayops_role[]));
 create policy snapshot_update on workspace_snapshots for update using (can_access_station(station_id) and has_org_role(organization_id,array['owner','ops_manager','dispatcher','fleet_lead']::relayops_role[])) with check (can_access_station(station_id) and has_org_role(organization_id,array['owner','ops_manager','dispatcher','fleet_lead']::relayops_role[]));
@@ -113,4 +114,3 @@ begin
 end; $$;
 
 alter publication supabase_realtime add table public.workspace_snapshots;
-

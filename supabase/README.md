@@ -5,7 +5,7 @@ RelayOps uses Supabase for email authentication, database-enforced roles, synchr
 ## Owner setup
 
 1. Create a Supabase project for Legacy Logistics / LLOL.
-2. In **SQL Editor**, run `schema.sql` once.
+2. In **SQL Editor**, run `schema.sql` once. Existing projects created before July 14, 2026 must also run `migrations/20260714_owner_member_access.sql` once.
 3. In **Authentication → URL Configuration**, add the exact GitHub Pages dashboard URL as a redirect URL.
 4. In **Authentication → Users**, invite the owner email first.
 5. Run the bootstrap SQL below after replacing the owner user UUID with the UUID from Authentication → Users.
@@ -48,7 +48,7 @@ insert into public.station_memberships(station_id,user_id)
 values ('STATION_UUID','DISPATCHER_AUTH_USER_UUID');
 ```
 
-Allowed roles are `owner`, `ops_manager`, `dispatcher`, `fleet_lead`, and `viewer`. Viewers cannot modify the shared workspace. Owner and ops-manager membership changes are enforced in the database rather than only hidden in the interface.
+Allowed member roles are `ops_manager`, `dispatcher`, `fleet_lead`, and `viewer`; the bootstrapped owner remains locked. Viewers cannot modify the shared workspace. Member role and active-status changes require an active owner and are enforced by database row-level security rather than only hidden in the interface.
 
 ## What synchronizes
 
@@ -58,5 +58,12 @@ Allowed roles are `owner`, `ops_manager`, `dispatcher`, `fleet_lead`, and `viewe
 - Device and Portable assignments and custom rows
 - Van Parking layout, battery entries, and last-updated value
 - Station/DSP settings needed by daily operations
+- Coaching review queue and shared message template
 
 Each day is stored as a versioned station workspace. Writes use an expected revision, reload newer work on a conflict, publish realtime changes to open dispatcher sessions, and write an audit event.
+
+## Authenticated Fleet refresh
+
+Deploy `functions/fleet-live-proxy` when live Fleet refresh is enabled. The public dashboard sends the signed-in dispatcher Supabase access token to this function; the function validates active organization membership and station access before calling the private Fleet connector.
+
+Configure `FLEET_PROXY_ALLOWED_ORIGINS`, `FLEET_CONNECTOR_URL`, and `FLEET_CONNECTOR_TOKEN` as Supabase function secrets. Never place the connector token, portal cookies, passwords, or upstream URLs in public dashboard files. Full setup: [`functions/fleet-live-proxy/README.md`](functions/fleet-live-proxy/README.md).

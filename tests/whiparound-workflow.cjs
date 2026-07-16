@@ -20,6 +20,14 @@ const rows=[
 ];
 const records=inspectionRecordsFromRows(rows);
 if(records.length!==3||records.some(row=>Object.prototype.hasOwnProperty.call(row,'Ignored field'))||records[0].date!=='2026-07-12')throw new Error('Whiparound five-column parser failed');
+const duplicateRows=[
+ ['Form','Date inspected','Asset name','Driver first name','Driver last name'],
+ ['Pre-Trip EDV Inspection (DVIR)','07/12/2026 7:15 AM','EV1','Maya','Collins'],
+ ['Pre-Trip EDV Inspection (DVIR)','07/12/2026 8:45 AM','EV1','Maya','Cole'],
+ ['Pre-Trip EDV Inspection (DVIR)','07/12/2026 9:00 AM','EV9','Maya','Collins']
+];
+const duplicateRecords=inspectionRecordsFromRows(duplicateRows),newestAssignedEv=inspectionForDriver(duplicateRecords,'Maya Collins','pre','EV1');
+if(duplicateRecords.length!==3||newestAssignedEv?.last!=='Cole')throw new Error('Whiparound must choose the most recent first-name + assigned-EV form');
 state.morningOperationDate='2026-07-12';
 state.morningRoutes=[{dsp:'LLOL',driver:'Maya Collins + Helper Name',route:'CX1',wave:'11:15 AM',staging:'STG.V.1'},{dsp:'LLOL',driver:'Jordan Lee',route:'CX2',wave:'11:20 AM',staging:'STG.P.1'}];
 state.scheduleEntries=[{date:'07/12/2026',name:'Fredy Guerra',start:'10:30 AM',end:'6:00 PM',role:'Rescue'}];

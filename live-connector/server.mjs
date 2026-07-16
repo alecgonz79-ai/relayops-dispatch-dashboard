@@ -20,12 +20,25 @@ function loadDotEnv(path = '.env') {
 const env = { ...loadDotEnv(), ...process.env };
 
 const PORT = Number(env.PORT || 8787);
-const ALLOW_ORIGIN = env.ALLOW_ORIGIN || '*';
+const ALLOW_ORIGIN = env.ALLOW_ORIGIN || '';
+const CONNECTOR_TOKEN = env.CONNECTOR_TOKEN || '';
+
+function allowedHosts(value = '') {
+  return String(value).split(',').map(host => host.trim().toLowerCase()).filter(Boolean);
+}
+
+function trustedPortalUrl(value, hosts, label) {
+  if (!value) return '';
+  const url = new URL(value);
+  if (url.protocol !== 'https:') throw new Error(`${label} URL must use HTTPS`);
+  if (!hosts.length || !hosts.includes(url.hostname.toLowerCase())) throw new Error(`${label} URL host is not allowlisted`);
+  return url.toString();
+}
 
 function sendJson(res, status, data) {
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
-    'access-control-allow-origin': ALLOW_ORIGIN,
+    ...(ALLOW_ORIGIN ? { 'access-control-allow-origin': ALLOW_ORIGIN, vary: 'origin' } : {}),
     'access-control-allow-methods': 'GET,OPTIONS',
     'access-control-allow-headers': 'content-type,authorization'
   });
@@ -53,15 +66,16 @@ function normalizeFleetOS(row = {}) {
   };
 }
 
-async function fetchPortalJson(url, cookie = '') {
+async function fetchPortalJson(url, cookie = '', hosts = [], label = 'Portal') {
   if (!url) return [];
-  const response = await fetch(url, {
+  const trustedUrl = trustedPortalUrl(url, hosts, label);
+  const response = await fetch(trustedUrl, {
     headers: {
       accept: 'application/json',
       ...(cookie ? { cookie } : {})
     }
   });
-  if (!response.ok) throw new Error(`${url} returned ${response.status}`);
+  if (!response.ok) throw new Error(`${label} returned ${response.status}`);
   const json = await response.json();
   if (Array.isArray(json)) return json;
   if (Array.isArray(json.vehicles)) return json.vehicles;
@@ -70,12 +84,14 @@ async function fetchPortalJson(url, cookie = '') {
   return [];
 }
 
-async function liveFleetPayload(options = {}) {
-  const amazonUrl = options.amazonUrl || env.AMAZON_FLEET_JSON_URL;
-  const fleetosUrl = options.fleetosUrl || env.FLEETOS_JSON_URL;
+async function liveFleetPayload() {
+  const amazonUrl = env.AMAZON_FLEET_JSON_URL;
+  const fleetosUrl = env.FLEETOS_JSON_URL;
+  const amazonHosts = allowedHosts(env.AMAZON_ALLOWED_HOSTS);
+  const fleetosHosts = allowedHosts(env.FLEETOS_ALLOWED_HOSTS);
   const [amazonRaw, fleetosRaw] = await Promise.all([
-    fetchPortalJson(amazonUrl, env.AMAZON_COOKIE),
-    fetchPortalJson(fleetosUrl, env.FLEETOS_COOKIE)
+    fetchPortalJson(amazonUrl, env.AMAZON_COOKIE, amazonHosts, 'Amazon Fleet'),
+    fetchPortalJson(fleetosUrl, env.FLEETOS_COOKIE, fleetosHosts, 'FleetOS')
   ]);
 
   return {
@@ -91,15 +107,14 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   if (url.pathname === '/health') return sendJson(res, 200, { ok: true });
   if (url.pathname !== '/api/fleet/live') return sendJson(res, 404, { error: 'Not found' });
+  if (!CONNECTOR_TOKEN) return sendJson(res, 503, { error: 'Connector token is not configured' });
+  if (req.headers.authorization !== `Bearer ${CONNECTOR_TOKEN}`) return sendJson(res, 401, { error: 'Unauthorized' });
 
   try {
-    const payload = await liveFleetPayload({
-      amazonUrl: url.searchParams.get('amazonJsonUrl') || '',
-      fleetosUrl: url.searchParams.get('fleetosJsonUrl') || ''
-    });
+    const payload = await liveFleetPayload();
     payload.portalLinks = {
-      amazon: url.searchParams.get('amazonPortalUrl') || env.AMAZON_FLEET_PORTAL_URL || 'https://logistics.amazon.com/fleet-management/#vehicles',
-      fleetos: url.searchParams.get('fleetosPortalUrl') || env.FLEETOS_PORTAL_URL || 'https://business.rivian.com/vehicles/tracker'
+      amazon: env.AMAZON_FLEET_PORTAL_URL || 'https://logistics.amazon.com/fleet-management/#vehicles',
+      fleetos: env.FLEETOS_PORTAL_URL || 'https://business.rivian.com/vehicles/tracker'
     };
     sendJson(res, 200, payload);
   } catch (error) {

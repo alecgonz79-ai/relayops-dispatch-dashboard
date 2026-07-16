@@ -9,7 +9,7 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-14-whiparound-checks';
+const RELAYOPS_BUILD = '2026-07-14-workflow-hardening';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -71,7 +71,7 @@ function doPost(e) {
       }
       lock = LockService.getDocumentLock();lock.waitLock(20000);
       const rtsResult = writeRelayOpsRtsOnly(payload);
-      return relayOpsJson({ok:true,build:RELAYOPS_BUILD,mode:'rts-only',sheet:rtsResult.sheetName,updated:rtsResult.updated,waveTimes:rtsResult.waveTimes,missingRoutes:rtsResult.missingRoutes,preflight:rtsValidation,updatedAt:new Date().toISOString()});
+      return relayOpsJson({ok:true,build:RELAYOPS_BUILD,mode:'rts-only',sheet:rtsResult.sheetName,updated:rtsResult.updated,waveTimes:rtsResult.waveTimes,missingRoutes:rtsResult.missingRoutes,sectionMismatches:rtsResult.sectionMismatches,preflight:rtsValidation,updatedAt:new Date().toISOString()});
     }
     if (payload.mode === 'whiparound-only') {
       const whipValidation = validateRelayOpsWhiparoundPayload(payload);
@@ -82,7 +82,7 @@ function doPost(e) {
       }
       lock = LockService.getDocumentLock();lock.waitLock(20000);
       const whipResult = writeRelayOpsWhiparoundOnly(payload);
-      return relayOpsJson({ok:true,build:RELAYOPS_BUILD,mode:'whiparound-only',sheet:whipResult.sheetName,updated:whipResult.updated,missingRoutes:whipResult.missingRoutes,preflight:whipValidation,updatedAt:new Date().toISOString()});
+      return relayOpsJson({ok:true,build:RELAYOPS_BUILD,mode:'whiparound-only',sheet:whipResult.sheetName,updated:whipResult.updated,missingRoutes:whipResult.missingRoutes,driverMismatches:whipResult.driverMismatches,sectionMismatches:whipResult.sectionMismatches,preflight:whipValidation,updatedAt:new Date().toISOString()});
     }
     const validation = validateRelayOpsMorningPayload(payload);
     if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
@@ -103,6 +103,7 @@ function doPost(e) {
         lastCell: 'V116',
         rows: (payload.rows || []).length,
         sections: (payload.sections || []).length,
+        writeMode: payload.writeMode,
         layout: layout,
         preflight: validation,
         updatedAt: new Date().toISOString()
@@ -121,6 +122,10 @@ function doPost(e) {
       lastCell: result.lastCell,
       rows: (payload.rows || []).length,
       sections: (payload.sections || []).length,
+      writeMode: result.writeMode,
+      updated: result.updated,
+      missingRoutes: result.missingRoutes,
+      sectionMismatches: result.sectionMismatches,
       preflight: validation,
       updatedAt: new Date().toISOString()
     });
@@ -168,7 +173,7 @@ function relayOpsLayoutForSection(section) {
 }
 
 function relayOpsSectionRows(payload, section) {
-  const sourceIndex = Math.max(0, Number(section.startRow || RELAYOPS_START_ROW) - RELAYOPS_START_ROW);
+  const sourceIndex = Math.max(0, section.sourceIndex === undefined ? Number(section.startRow || RELAYOPS_START_ROW) - RELAYOPS_START_ROW : Number(section.sourceIndex));
   return (payload.rows || []).slice(sourceIndex, sourceIndex + Number(section.rowCount || 0)).filter(function(row) {
     return row && [row[1], row[2], row[5]].some(function(value) { return String(value || '').trim() !== ''; });
   });
@@ -189,6 +194,7 @@ function validateRelayOpsMorningPayload(payload) {
   const headers = payload && payload.headers || [];
   const sections = payload && payload.sections || [];
   if (!payload || payload.version !== 'relayops-morning-v1') errors.push('Wrong payload version');
+  if (payload && ['full-replace','partial-update'].indexOf(payload.writeMode) < 0) errors.push('Write mode must be full-replace or partial-update');
   const allowedDateNames = relayOpsAllowedDateNames(payload && payload.operationDate);
   if (!allowedDateNames.length) errors.push('Operation date must be YYYY-MM-DD');
   if (allowedDateNames.length && allowedDateNames.indexOf(payload.sheetName) < 0) errors.push('Target tab must match operation date: ' + allowedDateNames.join(' or '));
@@ -200,7 +206,7 @@ function validateRelayOpsMorningPayload(payload) {
     if (!Array.isArray(row) || row.length !== RELAYOPS_COLS) errors.push('Row ' + (i + 1) + ' must have 13 columns');
   });
   if (rowTypes.length !== rows.length) errors.push('Row types must match row count');
-  if (rowTypes.indexOf('route') < 0 || rowTypes.indexOf('time') < 0 || rowTypes.indexOf('separator') < 0) errors.push('Missing route/time/separator row types');
+  if (rowTypes.indexOf('route') < 0 || (payload.writeMode === 'full-replace' && (rowTypes.indexOf('time') < 0 || rowTypes.indexOf('separator') < 0))) errors.push('Missing required route/time/separator row types');
   rowTypes.forEach(function(type, i) {
     if (type === 'separator' && rows[i] && rows[i].some(function(cell) { return String(cell || '') !== ''; })) errors.push('Separator row ' + (i + 1) + ' must be empty');
   });
@@ -213,6 +219,7 @@ function validateRelayOpsMorningPayload(payload) {
     const fixedLayout = relayOpsLayoutForSection(section);
     if (!fixedLayout) errors.push('Section ' + (i + 1) + ' is not supported by OPS LOG 2026: ' + String(section.label || section.wave || 'unnamed'));
     else {
+      if (section.slotKey && relayOpsSectionKey(section.slotKey) !== fixedLayout.key) errors.push('Section ' + (i + 1) + ' slot identity does not match ' + fixedLayout.label);
       const invalidBase = !start || start < RELAYOPS_START_ROW || !count;
       const invalidTime = Boolean(fixedLayout.timeRow) && (!time || time <= start);
       const invalidSeparator = Boolean(fixedLayout.separatorRow) && (!separator || separator <= start || (fixedLayout.timeRow && separator <= time));
@@ -228,7 +235,10 @@ function validateRelayOpsRtsPayload(payload) {
   if (!payload || payload.version !== 'relayops-morning-v1' || payload.mode !== 'rts-only') errors.push('Wrong RTS-only payload version');
   if (!allowed.length || allowed.indexOf(payload.sheetName) < 0) errors.push('RTS target tab must match the operation date');
   if (!updates.length) errors.push('No Planned RTS updates were supplied');
-  updates.forEach(function(update, index) { if (!String(update.route || '').trim() || !String(update.plannedRts || '').trim()) errors.push('RTS update ' + (index + 1) + ' needs Route and Planned RTS'); });
+  updates.forEach(function(update, index) {
+    if (!String(update.route || '').trim() || !String(update.plannedRts || '').trim()) errors.push('RTS update ' + (index + 1) + ' needs Route and Planned RTS');
+    if (update.expectedSection && !relayOpsLayoutForSection({label:update.expectedSection})) errors.push('RTS update ' + (index + 1) + ' has an unsupported fixed wave slot');
+  });
   if (!waves.length) errors.push('Wave time/count labels are required');
   return {ready:errors.length===0,errors:errors};
 }
@@ -240,6 +250,8 @@ function validateRelayOpsWhiparoundPayload(payload) {
   if (!updates.length) errors.push('No Whiparound checks were supplied');
   updates.forEach(function(update, index) {
     if (!String(update.route || '').trim()) errors.push('Whiparound update ' + (index + 1) + ' needs a Route');
+    if (!String(update.driver || '').trim()) errors.push('Whiparound update ' + (index + 1) + ' needs a Driver');
+    if (update.expectedSection && !relayOpsLayoutForSection({label:update.expectedSection})) errors.push('Whiparound update ' + (index + 1) + ' has an unsupported fixed wave slot');
     if (typeof update.preWhip !== 'boolean' || typeof update.postWhip !== 'boolean') errors.push('Whiparound update ' + (index + 1) + ' needs PRE-WHIP and POST-WHIP booleans');
   });
   return {ready:errors.length===0,errors:errors};
@@ -250,31 +262,61 @@ function relayOpsRouteKey(value) {
   return match ? match[0] : text.replace(/\s+/g, '');
 }
 
+function relayOpsLayoutForRow(row) {
+  for (var i = 0; i < RELAYOPS_LAYOUT.length; i++) {
+    const layout = RELAYOPS_LAYOUT[i];
+    if (row >= layout.startRow && row < layout.startRow + layout.routeCapacity) return layout;
+  }
+  return null;
+}
+
+function relayOpsDriverKey(value) {
+  const primary = String(value || '').split(/\s*(?:\+|\||&|\band\b)\s*/i)[0] || '';
+  return primary.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function relayOpsRouteIndex(sheet) {
+  const values = sheet.getRange(3, 2, 108, 2).getDisplayValues(), byRoute = {};
+  values.forEach(function(row, index) {
+    const key = relayOpsRouteKey(row[1]), sheetRow = index + 3, layout = relayOpsLayoutForRow(sheetRow);
+    if (key && layout && !byRoute[key]) byRoute[key] = {row:sheetRow,driver:String(row[0] || '').trim(),layout:layout};
+  });
+  return byRoute;
+}
+
 function writeRelayOpsRtsOnly(payload) {
-  const target = resolveRelayOpsTarget(payload, true), sheet = target.sheet;
+  const target = resolveRelayOpsTarget(payload, false);if (target.wouldCreate) throw new Error('Send the full Morning Sheet once before RTS-only updates');const sheet = target.sheet;
   validateRelayOpsTemplateSignature(sheet);
-  const routeRows = sheet.getRange(3, 3, 108, 1).getDisplayValues(), byRoute = {};
-  routeRows.forEach(function(row, index) { const key = relayOpsRouteKey(row[0]);if (key && !byRoute[key]) byRoute[key] = index + 3; });
-  let updated = 0;const missingRoutes = [];
-  (payload.updates || []).forEach(function(update) { const key = relayOpsRouteKey(update.route), row = byRoute[key];if (!row) { missingRoutes.push(key);return; }sheet.getRange(row, 21).setValue(update.plannedRts);updated++; });
+  const byRoute = relayOpsRouteIndex(sheet);
+  let updated = 0;const missingRoutes = [], sectionMismatches = [];
+  (payload.updates || []).forEach(function(update) {
+    const key = relayOpsRouteKey(update.route), record = byRoute[key];
+    if (!record) { missingRoutes.push(key);return; }
+    const expected = update.expectedSection ? relayOpsLayoutForSection({label:update.expectedSection}) : null;
+    if (expected && expected.key !== record.layout.key) { sectionMismatches.push({route:key,expectedSection:expected.label,actualSection:record.layout.label});return; }
+    sheet.getRange(record.row, 21).setValue(update.plannedRts);updated++;
+  });
   let waveTimes = 0;
   (payload.waves || []).forEach(function(wave) { const layout = relayOpsLayoutForSection({label:wave.label});if (!layout || !layout.timeRow) return;sheet.getRange(layout.timeRow, 1).setValue(wave.value || '');waveTimes++; });
-  return {sheetName:sheet.getName(),updated:updated,waveTimes:waveTimes,missingRoutes:missingRoutes};
+  return {sheetName:sheet.getName(),updated:updated,waveTimes:waveTimes,missingRoutes:missingRoutes,sectionMismatches:sectionMismatches};
 }
 
 function writeRelayOpsWhiparoundOnly(payload) {
-  const target = resolveRelayOpsTarget(payload, true), sheet = target.sheet;
+  const target = resolveRelayOpsTarget(payload, false);if (target.wouldCreate) throw new Error('Send the full Morning Sheet once before Whiparound-only updates');const sheet = target.sheet;
   validateRelayOpsTemplateSignature(sheet);
-  const routeRows = sheet.getRange(3, 3, 108, 1).getDisplayValues(), byRoute = {};
-  routeRows.forEach(function(row, index) { const key = relayOpsRouteKey(row[0]);if (key && !byRoute[key]) byRoute[key] = index + 3; });
-  let updated = 0;const missingRoutes = [];
+  const byRoute = relayOpsRouteIndex(sheet);
+  let updated = 0;const missingRoutes = [], driverMismatches = [], sectionMismatches = [];
   (payload.updates || []).forEach(function(update) {
-    const key = relayOpsRouteKey(update.route), row = byRoute[key];if (!row) { missingRoutes.push(key);return; }
+    const key = relayOpsRouteKey(update.route), record = byRoute[key];if (!record) { missingRoutes.push(key);return; }
+    const expected = update.expectedSection ? relayOpsLayoutForSection({label:update.expectedSection}) : null;
+    if (expected && expected.key !== record.layout.key) { sectionMismatches.push({route:key,expectedSection:expected.label,actualSection:record.layout.label});return; }
+    if (relayOpsDriverKey(update.driver) !== relayOpsDriverKey(record.driver)) { driverMismatches.push({route:key,expectedDriver:String(update.driver || ''),actualDriver:record.driver,row:record.row});return; }
+    const row = record.row;
     sheet.getRange(row, 11).setValue(Boolean(update.preWhip));
     sheet.getRange(row, 13).setValue(Boolean(update.postWhip));
     updated++;
   });
-  return {sheetName:sheet.getName(),updated:updated,missingRoutes:missingRoutes};
+  return {sheetName:sheet.getName(),updated:updated,missingRoutes:missingRoutes,driverMismatches:driverMismatches,sectionMismatches:sectionMismatches};
 }
 
 function relayOpsValidateTemplate() {
@@ -331,22 +373,43 @@ function freezeRelayOpsHeader(sheet) {
 function writeRelayOpsMorningSheet(payload) {
   const validation = validateRelayOpsMorningPayload(payload);
   if (!validation.ready) throw new Error('RelayOps preflight failed: ' + validation.errors.join('; '));
-  const target = resolveRelayOpsTarget(payload, true);
+  const writeMode = payload.writeMode;
+  const target = resolveRelayOpsTarget(payload, writeMode === 'full-replace');
+  if (writeMode === 'partial-update' && target.wouldCreate) throw new Error('Send all waves once before using a filtered partial update');
   const sheet = target.sheet;
   validateRelayOpsTemplateSignature(sheet);
 
   // Clear only dashboard-owned cells inside the fixed OPS LOG 2026 sections.
   // Existing merges, headers, widths, colors, checkboxes J:M, divider N,
   // and operations columns O/R/S/T/V remain untouched.
-  RELAYOPS_LAYOUT.forEach(function(layout) {
-    sheet.getRange(layout.startRow, 2, layout.routeCapacity, 3).clearContent();
-    sheet.getRange(layout.startRow, 6, layout.routeCapacity, 3).clearContent();
-    sheet.getRange(layout.startRow, 16, layout.routeCapacity, 2).clearContent();
-    sheet.getRange(layout.startRow, 16, layout.routeCapacity, 2).setNumberFormat('0');
-    sheet.getRange(layout.startRow, 21, layout.routeCapacity, 1).clearContent();
-    sheet.getRange(layout.startRow, 1).setValue(layout.label);
-    if (layout.timeRow) sheet.getRange(layout.timeRow, 1).clearContent();
-  });
+  if (writeMode === 'full-replace') {
+    RELAYOPS_LAYOUT.forEach(function(layout) {
+      sheet.getRange(layout.startRow, 2, layout.routeCapacity, 3).clearContent();
+      sheet.getRange(layout.startRow, 6, layout.routeCapacity, 3).clearContent();
+      sheet.getRange(layout.startRow, 16, layout.routeCapacity, 2).clearContent();
+      sheet.getRange(layout.startRow, 16, layout.routeCapacity, 2).setNumberFormat('0');
+      sheet.getRange(layout.startRow, 21, layout.routeCapacity, 1).clearContent();
+      sheet.getRange(layout.startRow, 1).setValue(layout.label);
+      if (layout.timeRow) sheet.getRange(layout.timeRow, 1).clearContent();
+    });
+  }
+
+  if (writeMode === 'partial-update') {
+    const byRoute = relayOpsRouteIndex(sheet), missingRoutes = [], sectionMismatches = [];let updated = 0;
+    (payload.sections || []).forEach(function(section) {
+      const layout = relayOpsLayoutForSection(section);if (!layout) return;
+      relayOpsSectionRows(payload, section).forEach(function(row) {
+        const key = relayOpsRouteKey(row[2]), record = byRoute[key];
+        if (!record) { missingRoutes.push(key);return; }
+        if (record.layout.key !== layout.key) { sectionMismatches.push({route:key,expectedSection:layout.label,actualSection:record.layout.label});return; }
+        sheet.getRange(record.row, 2, 1, 3).setValues([[row[1], row[2], row[3]]]);
+        sheet.getRange(record.row, 6, 1, 3).setValues([[row[5], row[6], row[7]]]);
+        sheet.getRange(record.row, 16, 1, 2).setValues([[row[9], row[10]]]).setNumberFormat('0');
+        sheet.getRange(record.row, 21).setValue(row[12]);updated++;
+      });
+    });
+    return {sheetName:sheet.getName(),startCell:'A3',writeRange:RELAYOPS_TEMPLATE_RANGE,writtenRange:'matched routes only',lastCell:'',createdSheet:false,writeMode:writeMode,updated:updated,missingRoutes:missingRoutes,sectionMismatches:sectionMismatches};
+  }
 
   (payload.sections || []).forEach(function(section) {
     const layout = relayOpsLayoutForSection(section);
@@ -362,7 +425,7 @@ function writeRelayOpsMorningSheet(payload) {
     if (section.pad !== undefined && section.pad !== null && String(section.pad) !== '') sheet.getRange(layout.startRow, 5).setValue(section.pad);
     if (layout.timeRow) sheet.getRange(layout.timeRow, 1).setValue(relayOpsWaveTimeValue(section));
   });
-  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V116', lastCell: 'V116', createdSheet: target.created};
+  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V116', lastCell: 'V116', createdSheet: target.created, writeMode:writeMode, updated:(payload.rows || []).filter(function(row){return row && String(row[2] || '').trim();}).length, missingRoutes:[], sectionMismatches:[]};
 }
 
 function validateRelayOpsTemplateSignature(sheet) {
@@ -406,6 +469,7 @@ function findRelayOpsMorningSheet(payload) {
 function testRelayOpsMorningSheet() {
   const sample = {
     version: 'relayops-morning-v1',
+    writeMode: 'full-replace',
     startCell: 'A3',
     writeRange: 'A3:M',
     headers: ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','STOP COUNT','PACKAGE COUNT','','PLANNED RTS'],

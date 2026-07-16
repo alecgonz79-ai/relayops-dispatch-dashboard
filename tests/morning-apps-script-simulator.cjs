@@ -222,6 +222,7 @@ function runConnectorWithSheet(sheet, payload, rtsPayload = null, whipPayload = 
 
 const payload = {
   version: 'relayops-morning-v1',
+  writeMode: 'full-replace',
   startCell: 'A3',
   writeRange: 'A3:M',
   headers: ['WAVE', 'DRIVER', 'ROUTE', 'STAGING', 'PAD', 'EV', 'DEVICE', 'PORTABLE', '', 'STOP COUNT', 'PACKAGE COUNT', '', 'PLANNED RTS'],

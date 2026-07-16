@@ -15,7 +15,7 @@ Do not shorten or swap the GitHub account name in the URL. For example, `https:/
 
 ## Local preview
 
-Serve this folder with any static web server, then open `index.html` through that server. The prototype has no build step.
+Serve this folder with any static web server, then open `index.html` through that server. The dashboard has no front-end build step.
 
 ## Included
 
@@ -28,11 +28,13 @@ Serve this folder with any static web server, then open `index.html` through tha
 - Tab-separated copy for Google Sheets
 - Google Sheets Apps Script connector that maps the dashboard into the original A:V Ops Log without replacing its formatting
 - Responsive desktop, tablet, and mobile layouts
-- Local demo persistence through browser storage
+- Offline-safe local persistence plus synchronized station workspaces through Supabase
+- Passwordless dispatcher sign-in, database-enforced organization/station access, and realtime presence
+- Actionable fleet/RTS/Whiparound notification center and shared inventory movements
 
 ## Current boundary
 
-This GitHub Pages version is a functional front-end prototype. It is suitable for workflow validation and file exports, but GitHub Pages is static hosting: it cannot safely hold Amazon or FleetOS credentials or enforce shared user accounts by itself. Real authentication, role enforcement, shared cloud data, true XLSX export, notifications, and approved Amazon/FleetOS connectivity require a secure backend. The intended production architecture is documented in `PRODUCTION_BUILD_BRIEF.md` and can be implemented with a backend provider while GitHub remains the source of truth.
+GitHub Pages serves only the public front-end files. Authentication, organization/station membership, realtime workspace data, and row-level access are handled by the configured Supabase project; they are not trusted to browser-only controls. Imports are parsed locally before the resulting operational state is synchronized to authorized dispatchers. Amazon Logistics and FleetOS credentials still must never be stored in the public front end. True live pulls require the authenticated server-side proxy documented under `live-connector/`; file imports remain the safe fallback whenever that proxy is unavailable.
 
 ## Morning Sheet connectors
 
@@ -63,18 +65,19 @@ Browser copy/paste remains available as a fallback, but it cannot guarantee merg
 
 ## Live Fleet connector
 
-The Fleet page now supports a live connector endpoint. In Fleet → Live setup, paste a secure backend URL such as:
+The Fleet page accepts only the authenticated `fleet-live-proxy` endpoint. Deploy `supabase/functions/fleet-live-proxy`, then save its HTTPS URL in Fleet Health → More fleet tools → Authenticated Fleet proxy:
 
 ```text
-https://your-backend.example.com/api/fleet/live
+https://YOUR_PROJECT_REF.supabase.co/functions/v1/fleet-live-proxy
 ```
 
-When configured, the Refresh button pulls live Amazon + FleetOS data from that endpoint first, then opens the same approval screen before updating EV cards.
+Dispatchers must sign in before cloud refresh. The browser sends the current Supabase user access token and public organization/station IDs. The Edge Function verifies user, membership, and station access, then calls the private connector with `FLEET_CONNECTOR_URL` and `FLEET_CONNECTOR_TOKEN` stored as server secrets. The private token, portal credentials, cookies, and upstream URLs never enter public JavaScript.
 
-Backend scaffold and the required JSON shape live in:
+Proxy deployment and private connector setup are documented in:
 
 ```text
+supabase/functions/fleet-live-proxy/
 live-connector/
 ```
 
-Never put Amazon/FleetOS usernames, passwords, cookies, or tokens in the GitHub Pages dashboard. Keep those only in the backend connector.
+The dashboard rejects non-HTTPS proxy URLs (except localhost development), private connector URLs, query parameters, Amazon/FleetOS portal URLs, and signed-out cloud pulls. File imports remain the supported fallback whenever the authenticated proxy is not deployed or available.

@@ -5,6 +5,9 @@ const JSZip = require('../vendor/jszip.min.js');
 const app = { innerHTML: '' };
 const fileInput = { addEventListener() {}, click() {} };
 const storage = new Map();
+// This suite validates the connected production handoff UI. Deployment-security.cjs
+// separately verifies that a fresh browser receives no public writable endpoint.
+storage.set('relayops_morning_sheets_endpoint', 'https://script.google.com/macros/s/relayops-test/exec');
 const element = () => ({
   addEventListener() {}, appendChild() {}, remove() {}, classList: { add() {}, remove() {}, toggle() {} },
   setAttribute() {}, style: {}, focus() {}, setSelectionRange() {}, click() {}
@@ -58,14 +61,16 @@ const checks = `
   state.editMode = false;
   state.morningOperationDate = '2026-07-11';
   const html = morningSheetPage();
-  if (!html.includes('Ops Log connector setup')) throw new Error('Morning connector guide missing');
-  if (!html.includes('Day of operation') || !html.includes('7/11/26 or 7.11.26') || !html.includes('Slack Import') || !html.includes('LOCKED') || !html.includes('Setup & diagnostics') || !html.includes('ℹ')) throw new Error('Morning setup should expose operation date, locked Slack, and top diagnostics entry');
-  const bridgeRequirements=['Filtered waves','Fixed Ops Log check','Dated Ops Log','Send filtered waves','Dry run happens before every send','Copy fallback','Handoff proof','Google range','Connector rows','Import / route source','Visible rows = payload','Exact connector'];
+  if (!html.includes('Day of operation') || !html.includes('7/11/26 or 7.11.26') || !html.includes('DAYOFOPSPLAN + ROUTE_DJT6') || html.includes('Slack Import') || html.includes('id="morning-diagnostics"')) throw new Error('Morning setup should expose the real day-file flow without locked Slack or duplicate inline diagnostics');
+  const bridgeRequirements=['Filtered waves','Fixed Ops Log check','Dated Ops Log','Send filtered waves','Dry run happens before every send','Copy fallback'];
   const missingBridgeRequirements=bridgeRequirements.filter(value=>!html.includes(value));
   if (missingBridgeRequirements.length) throw new Error('Fixed OPS LOG 2026 handoff UI missing: '+missingBridgeRequirements.join(', '));
   if (!html.includes('data-copy-block="all"') || !html.includes('data-copy-block="setup"') || !html.includes('data-copy-block="counts"') || !html.includes('data-copy-block="rts"') || !html.includes('A–H') || !html.includes('P–Q') || !html.includes('U')) throw new Error('Copy mode should expose original A-V block shortcuts');
   if (!html.includes(MORNING_TEMPLATE_URL)) throw new Error('Google Sheets template link missing');
-  if (!html.includes('creates it by duplicating the blank OPS LOG 2026 template')) throw new Error('Dated Google tab creation guidance missing');
+  action('open-morning-diagnostics',{});
+  const diagnostics=modal();
+  if(!diagnostics.includes('Setup & diagnostics')||!diagnostics.includes('Ops Log connector setup')||!diagnostics.includes('creates it by duplicating the blank OPS LOG 2026 template')||!diagnostics.includes('Handoff proof')||!diagnostics.includes('Google Sheets structure proof'))throw new Error('Top diagnostics modal should retain connector guidance and proof details');
+  state.modal=null;
   if (!html.includes('sheet-letters-row')) throw new Error('Column letters header missing');
   if (!html.includes('<th class="sheet-row-num">1</th>')) throw new Error('Copy-mode header row number missing');
   if (html.includes('<th class="sheet-row-num">#</th>')) throw new Error('Copy mode should use normal Google Sheets row numbering, not #');
@@ -192,7 +197,9 @@ const checks = `
   if (copyMorningAppsScript.toString().includes('fetch(') || !copyMorningAppsScript.toString().includes('morningSheetsAppsScript()')) throw new Error('Copy Apps Script must use the embedded connector without a network fetch');
   if (!script.includes('function onOpen') || !script.includes("createMenu('RelayOps')") || !script.includes('relayOpsConnectorStatus') || !script.includes('Validate template layout') || !script.includes('Run demo write')) throw new Error('Apps Script should add a RelayOps menu for install verification');
   if (!script.includes('function doGet') || !script.includes('relayops-morning-v1') || !script.includes('function doPost') || !script.includes('writeRelayOpsMorningSheet') || !script.includes('RELAYOPS_TEMPLATE_SHEET') || !script.includes('RELAYOPS_LAYOUT') || !script.includes('resolveRelayOpsTarget') || !script.includes('validateRelayOpsTemplateSignature')) throw new Error('Morning Sheets Apps Script connector missing fixed OPS LOG 2026 writer code');
-  if (!script.includes("payload.mode === 'rts-only'") || !script.includes('function validateRelayOpsRtsPayload') || !script.includes('function writeRelayOpsRtsOnly') || !script.includes('getDisplayValues()') || !script.includes('sheet.getRange(row, 21).setValue(update.plannedRts)') || !script.includes('sheet.getRange(layout.timeRow, 1).setValue')) throw new Error('Apps Script must support an isolated Planned RTS + wave-label update path');
+  const rtsConnectorContracts=["payload.mode === 'rts-only'",'function validateRelayOpsRtsPayload','function writeRelayOpsRtsOnly','function relayOpsRouteIndex','sheet.getRange(record.row, 21).setValue(update.plannedRts)','sheet.getRange(layout.timeRow, 1).setValue'];
+  const missingRtsContracts=rtsConnectorContracts.filter(token=>!script.includes(token));
+  if (missingRtsContracts.length) throw new Error('Apps Script must support a route-indexed, fixed-section Planned RTS + wave-label update path; missing '+missingRtsContracts.join(', '));
   if (!script.includes("payload.mode === 'whiparound-only'") || !script.includes('function validateRelayOpsWhiparoundPayload') || !script.includes('function writeRelayOpsWhiparoundOnly') || !script.includes('sheet.getRange(row, 11).setValue(Boolean(update.preWhip))') || !script.includes('sheet.getRange(row, 13).setValue(Boolean(update.postWhip))')) throw new Error('Apps Script must support isolated PRE-WHIP and POST-WHIP checkbox updates');
   if (!script.includes('function relayOpsValidateTemplate') || !script.includes('RelayOps template layout is ready') || !script.includes('writeRange: RELAYOPS_WRITE_RANGE') || !script.includes('function relayOpsDefaultPayload')) throw new Error('Apps Script should expose safe template layout validation');
   if (!script.includes('function validateRelayOpsMorningPayload') || !script.includes("const RELAYOPS_WRITE_RANGE = 'A3:M'") || !script.includes('Write range must be A3:M') || !script.includes('Header row must match A-M template') || !script.includes('Row types must match row count') || !script.includes('Separator row ') || !script.includes('has invalid merge rows')) throw new Error('Apps Script should validate payload before writing');
@@ -211,7 +218,7 @@ const checks = `
   if (!${JSON.stringify(connectorFile)}.includes('function onOpen') || !${JSON.stringify(connectorFile)}.includes("createMenu('RelayOps')") || !${JSON.stringify(connectorFile)}.includes('Validate template layout') || !${JSON.stringify(connectorFile)}.includes('function relayOpsValidateTemplate') || !${JSON.stringify(connectorFile)}.includes('function validateRelayOpsMorningPayload') || !${JSON.stringify(connectorFile)}.includes('Write range must be A3:M') || !${JSON.stringify(connectorFile)}.includes('payload.dryRun') || !${JSON.stringify(connectorFile)}.includes('function relayOpsTemplateLayout') || !${JSON.stringify(connectorFile)}.includes('function ensureRelayOpsTemplateCapacity') || !${JSON.stringify(connectorFile)}.includes("RELAYOPS_TEMPLATE_RANGE = 'A3:V'") || !${JSON.stringify(connectorFile)}.includes('function findRelayOpsMorningSheet') || !${JSON.stringify(connectorFile)}.includes('ok: false') || !${JSON.stringify(connectorFile)}.includes('LockService.getDocumentLock()') || !${JSON.stringify(connectorFile)}.includes('function doPost') || !${JSON.stringify(connectorFile)}.includes('writeRelayOpsMorningSheet') || !${JSON.stringify(connectorFile)}.includes('sheet: result.sheetName')) throw new Error('Permanent Apps Script connector file missing original-template behavior');
   if (connectorUrlWithPing('https://script.google.com/macros/s/demo/exec') !== 'https://script.google.com/macros/s/demo/exec?relayops=ping') throw new Error('Connector ping URL without query failed');
   if (connectorUrlWithPing('https://script.google.com/macros/s/demo/exec?x=1') !== 'https://script.google.com/macros/s/demo/exec?x=1&relayops=ping') throw new Error('Connector ping URL with query failed');
-  if (!testMorningSheetsConnector.toString().includes('A3:V') || !testMorningSheetsConnector.toString().includes('2026-07-14-whiparound-checks') || !testMorningSheetsConnector.toString().includes('Connector deployment is outdated')) throw new Error('Connector test should verify the current OPS LOG 2026 Whiparound deployment');
+  if (!testMorningSheetsConnector.toString().includes('A3:V') || !testMorningSheetsConnector.toString().includes('2026-07-14-workflow-hardening') || !testMorningSheetsConnector.toString().includes('Connector deployment is outdated')) throw new Error('Connector test should verify the current OPS LOG 2026 workflow-hardening deployment');
   if (!syncFilteredMorningToSheets.toString().includes("mode:'no-cors'") || !syncFilteredMorningToSheets.toString().includes('needs-verification')) throw new Error('One-click Google bridge should fall back safely when Apps Script CORS blocks response reading');
   if (parseMorningSheetsResponse('{"ok":true,"rows":12}', 200).rows !== 12) throw new Error('Connector response parser should accept ok:true JSON');
   let rejected = false;
