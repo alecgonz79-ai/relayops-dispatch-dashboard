@@ -467,6 +467,7 @@ let state = {
   inventoryPendingId: '',
   pendingRosterSwap: null,
   pendingRosterDestination: null,
+  pendingVtoRouteSwap: null,
   removedDriverKeys: JSON.parse(localStorage.getItem('relayops_removed_driver_keys') || 'null') || [],
   pendingDriverRemoval: null,
   cloudStatus: window.RelayOpsCloud?.configured?'connecting':'setup-required',
@@ -892,7 +893,8 @@ function picklistVtoDriverCell(group='',index=0,row=null,value='') {
   const input=`<input data-picklist-backup="${esc(group)}:${index}" data-driver-name-input="true" value="${esc(name)}" aria-label="${label} backup ${index+1}" placeholder="Driver">`;
   if(!name)return input;
   const action=(target,text,tone='')=>`<button type="button" class="${esc(tone)}" data-action="picklist-vto-action" data-vto-target="${esc(target)}" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}">${esc(text)}</button>`;
-  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('adhoc','Adhoc','adhoc')}</div></div></div>`;
+  const swap=`<button type="button" class="swap-route" data-action="open-vto-route-swap" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}" data-vto-label="${esc(label)}">Swap To Route</button>`;
+  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('adhoc','Adhoc','adhoc')}</div></div></div>`;
 }
 function openingPicklistCallOffRows() {
   return Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([key,value])=>({key,name:value.name||'',reason:state.callOffReasons?.[key]||'',route:value.route||''})).sort((a,b)=>a.name.localeCompare(b.name));
@@ -3021,6 +3023,7 @@ function modal() {
     const pending=state.pendingRosterDestination,destination=pending.destination||'',helper=state.scheduleHelpers?.[scheduleHelperKey(pending.name)],button=(target,label,tone='')=>`<button class="btn roster-destination-action ${tone}" data-action="apply-roster-destination-action" data-roster-target="${esc(target)}">${esc(label)}</button>`,actions=[];
     if(destination==='route')actions.push(button('calloff','Call off & replace','danger-soft'),button('swap','Swap off route'),button('reduction','Move to Reductions','reduction-button'));
     if(destination==='helper')actions.push(button(helper?.matchedRoute?'helper-unmatch':'helper-match',helper?.matchedRoute?'Un-match from driver':'Match with driver','primary'));
+    if(['vto2','vto4','backup'].includes(destination))actions.push(button('swap-to-route','Swap To Route','swap-route'));
     if(destination==='reduction')actions.push(button('return','Restore original route','primary'));
     else if(destination==='called-off')actions.push(button('return','Return to scheduled drivers'));
     else if(destination==='stay-home')actions.push(button('return','Return to scheduled drivers'));
@@ -3032,6 +3035,10 @@ function modal() {
     if(destination!=='stay-home')actions.push(button('stay-home','Told to stay home','stay-home-button'));
     if(destination!=='reduction'&&destination!=='route')actions.push(button('reduction','Move to Reductions','reduction-button'));
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal roster-destination-modal" role="dialog" aria-modal="true" aria-labelledby="roster-destination-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">OPENING ROSTER ACTIONS</span><h2 id="roster-destination-title">${esc(pending.name)}</h2><p>${esc(pending.role||'Scheduled driver')} · ${esc(destination.replace(/-/g,' ')||'roster destination')}${pending.route?` · ${esc(pending.route)}`:''}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${pending.automatic?`<div class="private-contact-note"><b>Automatic backup</b><span>This ${automaticBackupLabel(pending.role)} assignment comes from a scheduled ${esc(pending.role)} shift that is not on the Morning Sheet. Choose a different destination to override it.</span></div>`:''}<div class="roster-destination-actions">${actions.join('')}</div><div class="modal-actions"><button class="btn" data-action="close-modal">Done</button></div></div></div></div>`;
+  }
+  if (state.modal === 'vto-route-swap' && state.pendingVtoRouteSwap) {
+    const pending=state.pendingVtoRouteSwap,candidates=vtoRouteSwapCandidates(pending.name),size=Math.min(10,Math.max(4,candidates.length));
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal vto-route-swap-modal" role="dialog" aria-modal="true" aria-labelledby="vto-route-swap-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">VTO ROUTE SWAP</span><h2 id="vto-route-swap-title">Swap ${esc(pending.name)} to a route</h2><p>${esc(pending.vtoLabel||scheduleBackupLabel(pending.role))} · choose the route driver who will move into this VTO spot.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="vto-route-picker"><span>Driver currently on route</span><select id="vto-route-swap-target" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.routeUid)}" ${index===0?'selected':''}>${esc(row.driver)} · ${esc(row.route)} · ${esc(waveNameForTime(row.wave))} ${esc(row.wave)}</option>`).join('')}</select></label>${candidates.length?'':`<div class="private-contact-note"><b>No eligible routes found</b><span>Fill the Morning Sheet with at least one assigned route before using this swap.</span></div>`}<div class="private-contact-note"><b>Safe one-step swap</b><span>${esc(pending.name)} takes the selected route. The current primary driver moves to VTO 2 or VTO 4 based on their scheduled PAYCOM role. Route, staging, pad, van, stop count, package count, Planned RTS, and any helper remain unchanged.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-vto-route-swap" ${candidates.length?'':'disabled'}>Confirm Swap To Route</button></div></div></div></div>`;
   }
   if (state.modal === 'roster-swap' && state.pendingRosterSwap) {
     const swap=state.pendingRosterSwap,candidates=rosterSwapCandidates(swap.driverName);
@@ -3415,9 +3422,13 @@ function openRosterDestinationActions(name='',role='',destination='',route='',st
   state.pendingRosterDestination={name:contactForMorningDriver(name)?.name||name,role:role||'',destination:destination||'',route:route||'',start:start||'',automatic:automatic===true||automatic==='true'};
   state.modal='roster-destination';render();
 }
+function setRosterBackupState(name='',role='',label='') {
+  const exactName=contactForMorningDriver(name)?.name||name,key=scheduleDriverMarkKey(exactName),record=rosterRecord(exactName,role),vto=label||scheduleBackupLabel(role||record.role);
+  reconcileDailyRosterFlags(exactName,'backup');state.scheduleDriverMarks[key]='backup';state.scheduleBackupRecords[key]={...record,originalRole:role||record.role||'',vto};removeDriverAdhocRoute(exactName);
+  return {name:exactName,role:role||record.role||'Delivery Associate',vto};
+}
 function moveRosterDriverToVto(name='',role='',label='VTO 2') {
-  const exactName=contactForMorningDriver(name)?.name||name,key=scheduleDriverMarkKey(exactName),record=rosterRecord(exactName,role);
-  reconcileDailyRosterFlags(exactName,'backup');state.scheduleDriverMarks[key]='backup';state.scheduleBackupRecords[key]={...record,originalRole:role||record.role||'',vto:label};removeDriverAdhocRoute(exactName);persist();render();toast(`${exactName} moved to ${label}`);
+  const backup=setRosterBackupState(name,role,label);persist();render();toast(`${backup.name} moved to ${backup.vto}`);
 }
 function restoreCalledOffToPaycom(name='') {
   const exactName=contactForMorningDriver(name)?.name||name;reconcileDailyRosterFlags(exactName,'paycom');state.scheduleDriverMarks[scheduleDriverMarkKey(exactName)]='paycom';persist();render();toast(`${exactName} returned to the PAYCOM list`);
@@ -3425,6 +3436,7 @@ function restoreCalledOffToPaycom(name='') {
 function applyRosterDestinationAction(target='') {
   const pending=state.pendingRosterDestination;if(!pending)return false;
   state.pendingRosterDestination=null;state.modal=null;
+  if(target==='swap-to-route')return openVtoRouteSwap(pending.name,pending.role,pending.destination);
   if(target==='vto2')return moveRosterDriverToVto(pending.name,pending.role,'VTO 2');
   if(target==='vto4')return moveRosterDriverToVto(pending.name,pending.role,'VTO 4');
   if(target==='adhoc')return markPaycomAdhoc(pending.name,pending.role);
@@ -3502,6 +3514,34 @@ function enhanceMorningParkingAssignment() {
 function rosterSwapCandidates(currentName='') {
   const onRoute=new Set(filteredMorningRows().flatMap(row=>morningDriverNames(row.driver)).map(nameKey));
   return [...new Set(currentScheduleEntries().filter(entry=>scheduleRoleGroup(entry.role)==='driver').map(entry=>entry.name))].filter(name=>nameKey(name)!==nameKey(currentName)&&!onRoute.has(nameKey(name))&&!rosterDriverUnavailable(name)).sort((a,b)=>a.localeCompare(b));
+}
+function isDedicatedHelperMorningRoute(row={}) { return headerKey(row.route)==='helper'||headerKey(row.wave)==='helper'||headerKey(row.service)==='driverhelper'; }
+function vtoRouteSwapCandidates(incomingName='') {
+  ensureMorningRouteUids();
+  return (state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&row.route&&!String(row.route).startsWith('__blank_')&&!isDedicatedHelperMorningRoute(row)&&!isExplicitAdhocMorningRoute(row)&&!routeMissingPrimary(row)).map(row=>({routeUid:row.routeUid,route:row.route,wave:row.wave||'',driver:contactForMorningDriver(morningDriverNames(row.driver)[0])?.name||morningDriverNames(row.driver)[0]||''})).filter(row=>row.driver&&driverIdentityKey(row.driver)!==driverIdentityKey(incomingName)).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||String(a.route).localeCompare(String(b.route)));
+}
+function vtoLabelFromOrigin(origin='',role='') {
+  const normalized=headerKey(origin);return normalized==='vto2'?'VTO 2':normalized==='vto4'?'VTO 4':/^VTO\s+[24]$/i.test(String(origin||'').trim())?String(origin).trim().toUpperCase():scheduleBackupLabel(role);
+}
+function openVtoRouteSwap(name='',role='',origin='') {
+  const exactName=contactForMorningDriver(name)?.name||name;if(!exactName)return false;
+  const candidates=vtoRouteSwapCandidates(exactName);if(!candidates.length){toast('No assigned routes are available to swap','error');return false;}
+  state.pendingVtoRouteSwap={name:exactName,role:role||'',vtoLabel:vtoLabelFromOrigin(origin,role)};state.pendingRosterDestination=null;state.modal='vto-route-swap';render();return true;
+}
+function performVtoRouteSwap(routeUid='') {
+  const pending=state.pendingVtoRouteSwap,route=morningRouteByUid(routeUid);if(!pending)return {ok:false,error:'Choose a VTO driver first'};
+  if(!route||route.dsp!==state.dspCode||routeMissingPrimary(route)||isDedicatedHelperMorningRoute(route)||isExplicitAdhocMorningRoute(route))return {ok:false,error:'That route is no longer available'};
+  const people=morningDriverNames(route.driver),outgoingRaw=people[0]||'',incoming=contactForMorningDriver(pending.name)?.name||pending.name,outgoing=contactForMorningDriver(outgoingRaw)?.name||outgoingRaw;
+  if(!outgoing||driverIdentityKey(outgoing)===driverIdentityKey(incoming))return {ok:false,error:'Choose a different route driver'};
+  const scheduled=currentScheduleEntries().find(entry=>driverIdentityKey(entry.name)===driverIdentityKey(outgoing)),outgoingRole=scheduled?.role||'Delivery Associate',outgoingVto=scheduleBackupLabel(outgoingRole);
+  const applied=protectRouteOperationalData(route,()=>{people[0]=incoming;route.driver=people.join(' + ');clearRouteAssignmentVacancy(route);return true;});
+  if(!applied)return {ok:false,error:'The route swap could not be completed'};
+  reconcileDailyRosterFlags(incoming,'on-route');setRosterBackupState(outgoing,outgoingRole,outgoingVto);
+  return {ok:true,incoming,outgoing,outgoingVto,route:route.route,wave:route.wave};
+}
+function applyVtoRouteSwap() {
+  const routeUid=document.getElementById('vto-route-swap-target')?.value||'',result=performVtoRouteSwap(routeUid);if(!result.ok)return toast(result.error,'error');
+  state.pendingVtoRouteSwap=null;state.modal=null;persist();render();toast(`${result.incoming} took ${result.route} · ${result.outgoing} moved to ${result.outgoingVto}`);return true;
 }
 function openRosterSwap(route='',driverName='',mode='swap',driverLabel='') { state.pendingRosterSwap={route,driverName,driverLabel:driverLabel||driverName,mode};state.modal='roster-swap';render(); }
 function rosterSwapDriverIndex(people=[],target='') {
@@ -4622,7 +4662,7 @@ function action(name,el) {
   if (name==='copy-open-charger-slack') return copyChargerReportAndOpenSlack();
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.fleetRefreshPreview=null;return render(); }
+  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=importAcceptForPurpose(state.importPurpose);return fileInput.click(); }
   if (name==='schedule-import') { state.scheduleImportDestination=state.page==='rostering'?'rostering':'roster';state.importPurpose='schedule';fileInput.accept='.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf';return fileInput.click(); }
   if (name==='rostering-import-screenshot') { state.importPurpose='rostering-screenshot';fileInput.accept=importAcceptForPurpose('rostering-screenshot');return fileInput.click(); }
@@ -4647,6 +4687,8 @@ function action(name,el) {
   if (name==='open-roster-destination-actions') return openRosterDestinationActions(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.rosterDestination||'',el.dataset.driverRoute||'',el.dataset.driverStart||'',el.dataset.rosterAutomatic||'');
   if (name==='apply-roster-destination-action') return applyRosterDestinationAction(el.dataset.rosterTarget||'');
   if (name==='picklist-vto-action') return applyPicklistVtoAction(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.vtoTarget||'');
+  if (name==='open-vto-route-swap') return openVtoRouteSwap(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.vtoLabel||'');
+  if (name==='apply-vto-route-swap') return applyVtoRouteSwap();
   if (name==='open-route-swap') return openRosterSwap(el.dataset.route||'',el.dataset.driverName||'',el.dataset.swapMode||'swap',el.dataset.driverLabel||'');
   if (name==='apply-roster-swap') return applyRosterSwap();
   if (name==='leave-route-unassigned') return leaveRosterRouteUnassigned();

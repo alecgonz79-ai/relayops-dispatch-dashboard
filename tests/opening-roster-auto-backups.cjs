@@ -66,6 +66,7 @@ function testDestinationPopupAndManualOverride() {
   assert(context.__autoModal.includes('Automatic backup') && context.__autoModal.includes('Choose a different destination to override it'), 'Automatic VTO popup must explain why the driver was placed there');
   assert(!context.__autoModal.includes('Remove from backups'), 'Automatic VTO rows must not offer a no-op remove action');
   assert(context.__manualModal.includes('Remove from backups'), 'Manual backup rows must offer a return action');
+  assert(context.__autoModal.includes('Swap To Route') && context.__manualModal.includes('Swap To Route'), 'Both automatic and manual VTO destination popups must offer Swap To Route');
   assert(context.__manualModal.includes('Move to VTO 4 · Delivery Associate') && context.__manualModal.includes('Add as Adhoc'), 'Destination popup must expose the common roster moves');
   assert(context.__record.vto === 'VTO 4' && context.__rows.some(row => row.name === 'Casey Rescue' && row.vto === 'VTO 4'), 'A manual VTO override must persist and stay in the correct Picklist column');
 }
@@ -95,8 +96,57 @@ function testRestoreIsSingleDestinationAndPicklistActions() {
   const paycom = context.__restoredHtml.split('All Scheduled driver shifts (PAYCOM)')[1].split('scheduled-section called-off')[0];
   assert((paycom.match(/data-roster-name="casey rescue"/g)||[]).length === 1, 'Restored driver must appear exactly once in the PAYCOM list');
   assert(context.__picklistActions.includes('picklist-vto-actions') && context.__picklistActions.includes('data-vto-target="calloff"') && context.__picklistActions.includes('data-vto-target="reduction"') && context.__picklistActions.includes('data-vto-target="stay-home"'), 'Picklist VTO names must expose the scrollable destination action controls');
+  assert(context.__picklistActions.includes('data-action="open-vto-route-swap"') && context.__picklistActions.includes('Swap To Route'), 'Every populated Picklist VTO hover menu must expose Swap To Route');
   assert(context.__calledOff.length === 1 && context.__calledOff[0].name === 'Casey Rescue', 'A Picklist VTO action must move the driver to the selected destination exactly once');
   assert(context.__calledOffHtml.includes('roster-destination-called-off'), 'Destination rows must retain a visible status color class');
+}
+
+function testAtomicVtoToRouteSwap() {
+  const context = appContext();
+  vm.runInContext(`
+    state.dspCode='LLOL';state.morningOperationDate='2026-07-16';
+    state.morningRoutes=[{
+      routeUid:'route-cx225',dsp:'LLOL',driver:'Primary Driver + Route Helper',route:'CX225',wave:'11:20 AM',service:'Standard Parcel with Helper',
+      staging:'STG.V.4',pad:'B',padOverride:'B',ev:'EV12',deviceName:'12',portable:'13',stops:181,packages:333,plannedRts:'7:45 PM'
+    }];
+    state.scheduleEntries=[
+      {date:'7/16/2026',name:'Primary Driver',start:'10:30 AM',end:'7:00 PM',role:'Delivery Associate'},
+      {date:'7/16/2026',name:'Casey Rescue',start:'10:30 AM',end:'7:00 PM',role:'Rescue'},
+      {date:'7/16/2026',name:'Route Helper',start:'10:30 AM',end:'7:00 PM',role:'Driver Helper'}
+    ];
+    state.scheduleDriverMarks={};state.scheduleBackupRecords={};state.scheduleStayHome={};state.scheduleReductions={};state.scheduleHelpers={};state.callOffDriverKeys={};state.callOffReasons={};state.openingPicklistBackupOverrides={};
+    moveRosterDriverToVto('Casey Rescue','Rescue','VTO 2');
+    openVtoRouteSwap('Casey Rescue','Rescue','VTO 2');
+    globalThis.__swapModal=modal();
+    globalThis.__before=Object.fromEntries(ROUTE_DATA_PROTECTED_FIELDS.map(field=>[field,state.morningRoutes[0][field]]));
+    globalThis.__result=performVtoRouteSwap('route-cx225');
+    globalThis.__route=state.morningRoutes[0];
+    globalThis.__after=Object.fromEntries(ROUTE_DATA_PROTECTED_FIELDS.map(field=>[field,state.morningRoutes[0][field]]));
+    globalThis.__backups=currentBackupDriverRows();
+  `, context);
+  assert(context.__swapModal.includes('id="vto-route-swap-target"') && context.__swapModal.includes('Primary Driver · CX225') && context.__swapModal.includes('Confirm Swap To Route'), 'Swap To Route must open a scrollable route-driver picker with an explicit confirmation');
+  assert(context.__result.ok === true, 'The selected VTO-to-route swap must complete atomically');
+  assert(context.__route.driver === 'Casey Rescue + Route Helper', 'The VTO driver must replace only the primary while the existing helper remains attached');
+  assert(JSON.stringify(context.__before) === JSON.stringify(context.__after), 'A VTO route swap must not alter route, staging, pad, wave, counts, or Planned RTS');
+  assert(context.__backups.filter(row => row.name === 'Primary Driver' && row.vto === 'VTO 4').length === 1, 'The outgoing Delivery Associate must move exactly once to VTO 4');
+  assert(!context.__backups.some(row => row.name === 'Casey Rescue'), 'The incoming route driver must be removed from VTO after the swap');
+}
+
+function testVtoSwapUsesRescueDestination() {
+  const context = appContext();
+  vm.runInContext(`
+    state.dspCode='LLOL';state.morningOperationDate='2026-07-16';
+    state.morningRoutes=[{routeUid:'route-cx240',dsp:'LLOL',driver:'Rescue Route Driver',route:'CX240',wave:'11:25 AM',service:'Standard Parcel',staging:'STG.P.4',stops:170,packages:290,plannedRts:'7:30 PM'}];
+    state.scheduleEntries=[
+      {date:'7/16/2026',name:'Rescue Route Driver',start:'10:30 AM',end:'7:00 PM',role:'Rescue'},
+      {date:'7/16/2026',name:'Dana Associate',start:'10:30 AM',end:'7:00 PM',role:'Delivery Associate'}
+    ];
+    state.scheduleDriverMarks={};state.scheduleBackupRecords={};state.scheduleStayHome={};state.scheduleReductions={};state.scheduleHelpers={};state.callOffDriverKeys={};state.callOffReasons={};state.openingPicklistBackupOverrides={};
+    moveRosterDriverToVto('Dana Associate','Delivery Associate','VTO 4');
+    openVtoRouteSwap('Dana Associate','Delivery Associate','VTO 4');
+    globalThis.__result=performVtoRouteSwap('route-cx240');globalThis.__backups=currentBackupDriverRows();
+  `, context);
+  assert(context.__result.ok === true && context.__backups.some(row => row.name === 'Rescue Route Driver' && row.vto === 'VTO 2'), 'An outgoing Rescue shift must move to VTO 2 after the route swap');
 }
 
 function testPicklistAndConnectorSurface() {
@@ -119,5 +169,7 @@ function testPicklistAndConnectorSurface() {
 testAutomaticVtoDestinations();
 testDestinationPopupAndManualOverride();
 testRestoreIsSingleDestinationAndPicklistActions();
+testAtomicVtoToRouteSwap();
+testVtoSwapUsesRescueDestination();
 testPicklistAndConnectorSurface();
 console.log('Opening Roster automatic VTO, destination actions, Picklist, and Connector Settings contracts passed.');

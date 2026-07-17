@@ -1,4 +1,4 @@
-const CACHE='relayops-vto-team-search-v23';
+const CACHE='relayops-vto-route-swap-v24';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{
