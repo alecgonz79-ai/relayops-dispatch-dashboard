@@ -32,6 +32,7 @@ vm.runInContext(`
   applyImport();
   globalThis.__imported=JSON.parse(JSON.stringify(state.morningRoutes));
   globalThis.__sections=morningSections(allMorningRows()).map(section=>({label:section.label,routes:section.rows.map(row=>row.route)}));
+  globalThis.__picklistSections=openingPicklistSections().map(section=>({label:section.label,wave:section.wave,routes:section.rows.map(row=>row.route)}));
 
   state.driverContacts=[];state.driverProfiles={};state.driverNameAliases={};
   mergeDriverContacts([{name:'Alice Driver',phone:'(555) 111-1111',role:'Delivery Associate',transporterId:'A1',key:'alice driver'},{name:'Bob Driver',phone:'(555) 222-2222',role:'Delivery Associate',transporterId:'B1',key:'bob driver'},{name:'Cara Driver',phone:'(555) 333-3333',role:'Delivery Associate',transporterId:'C1',key:'cara driver'}]);
@@ -66,6 +67,11 @@ assert(context.__imported.find(row=>row.route==='CX107').wave==='11:15 AM','Nume
 for(const service of ['Standard Parcel Electric - Rivian MEDIUM','Nursery Route Level 1 - Electric Vehicle','Nursery Route Level 2 - Electric Vehicle','Nursery Route Level 3 - Electric Vehicle','Standard Parcel - Extra Large Van - US','Standard Parcel - Small Van','Standard Parcel Electric - Rivian MEDIUM with Helper','Extra Large - AMZ Donations','XL_US Custom Service'])assert(context.__imported.some(row=>row.service===service),`Service Type was dropped or rewritten: ${service}`);
 const sectionRoutes=context.__sections.flatMap(section=>section.routes);
 assert(['CX101','CX102','CX103','CX104','CX105','CX106','CX107','CX108','CX109'].every(route=>sectionRoutes.includes(route)),'Morning Sheet sections must render every imported Service Type route');
+assert(!context.__sections.some(section=>['ADHOC\'s','HELPERS'].includes(section.label)&&section.routes.length),'Imported CX routes must never be redirected into Adhocs or Helpers because of Service Type text');
+assert(context.__sections.find(section=>section.label==='WAVE 1')?.routes.join(',')==='CX107','The 11:15 Helper-service CX must stay in its normal Wave 1');
+assert(context.__sections.find(section=>section.label==='WAVE 2')?.routes.join(',')==='CX102,CX103,CX104','Nursery CX routes must stay in their 11:20 wave');
+assert(context.__sections.find(section=>section.label==='WAVE 5')?.routes.join(',')==='CX105,CX109','Extra-large CX routes must stay in their 11:45 wave');
+assert(context.__picklistSections.find(section=>section.label==='WAVE 1')?.routes.includes('CX107')&&context.__picklistSections.find(section=>section.label==='WAVE 5')?.routes.includes('CX105'),'Opening Picklist must use the same actual CX waves as the Morning Sheet');
 
 assert(context.__aliceProfileAfterImport.canonical==='Alice A. Driver'&&context.__aliceProfileAfterImport.preferredEvs.join(',')==='3,2','Preferred EV order must survive a same-TransporterID team reimport');
 assert(Object.values(context.__savedProfiles).some(profile=>profile.transporterId==='A1'&&profile.preferredEvs.join(',')==='3,2'),'Preferred EVs must persist in local workspace state');

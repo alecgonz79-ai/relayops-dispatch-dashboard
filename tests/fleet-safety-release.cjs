@@ -75,6 +75,14 @@ vm.runInContext(`
   globalThis.__unknown=normalizeFleetVehicle({name:'EV10',vin:'7FCEHEB79PN000010',active:'Active',operational:'Operational',source:'Amazon fleet list'});
   globalThis.__unknownCard=rivianCard(globalThis.__unknown);
   globalThis.__manualWarnings={low:vehicleIssueForEquipmentId('5'),reported:vehicleIssueForEquipmentId('7')};
+  state.fleetFilter='low';
+  globalThis.__lowBatterySection={
+    threshold:LOW_BATTERY_SECTION_THRESHOLD,
+    filtered:sortedRivianFleet().map(vehicle=>vehicle.name),
+    chargeRows:fleetChargeRows().map(vehicle=>vehicle.name),
+    alertCount:operationalAlertGroups().find(group=>group.id==='low')?.count,
+    page:fleetPage()
+  };
 `, context);
 
 const e = context.__eligibility;
@@ -97,5 +105,9 @@ assert(context.__unknown.battery === null && context.__unknown.miles === null, '
 assert(context.__unknownCard.includes('Unknown battery / range') && !context.__unknownCard.includes('63%'), 'Fleet card must honestly display unknown battery/range');
 assert(context.__unknownCard.includes('Battery unknown') && !context.__unknownCard.includes('Charge now'), 'Unknown charge must not be categorized as a zero-percent/charge-now battery');
 assert(context.__manualWarnings.low?.type === 'battery' && context.__manualWarnings.reported?.type === 'reported', 'Manual Morning Sheet edits must retain low-battery and reported-issue flags');
+assert(context.__lowBatterySection.threshold===80,'Fleet low-battery section threshold must be 80%');
+assert(context.__lowBatterySection.filtered.length===3&&['EV2','EV5','EV8'].every(name=>context.__lowBatterySection.filtered.includes(name)),'Low-battery filter must include every EV at 80% or lower and exclude EVs above 80%');
+assert(context.__lowBatterySection.chargeRows.join(',')==='EV5,EV8,EV2','Recommended charging section must use the same inclusive 80% threshold');
+assert(context.__lowBatterySection.alertCount===3&&context.__lowBatterySection.page.includes('80% or lower'),'Fleet alert counts and visible copy must explain the inclusive 80% threshold');
 
 console.log('Fleet assignment safety and honest unknown-battery regression contracts passed');

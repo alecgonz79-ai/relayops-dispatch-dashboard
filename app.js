@@ -62,6 +62,8 @@ const MORNING_TEMPLATE_SHEET_CANDIDATES = [MORNING_TEMPLATE_SHEET_NAME];
 const MORNING_APPS_SCRIPT_URL = 'google-sheets/relayops-morning-connector.gs';
 const PERFORMANCE_TRAINING_URL = 'https://cdfda-performance.pplx.app/#/';
 const AMAZON_SCHEDULING_URL = 'https://logistics.amazon.com/scheduling?serviceAreaId=f0c05ae0-b2c0-462c-8ee0-f72f5ab653ec';
+const LOW_BATTERY_SECTION_THRESHOLD = 80;
+const DISPATCH_BATTERY_BLOCK_THRESHOLD = 40;
 const DEFAULT_ROSTERING_SERVICES = Object.freeze([
   {id:'xl-donations',name:'Standard Parcel - Extra Large Van - AMZ Donations - Default as station - 10 Hours',confirmed:2,kind:'driver',defaultTime:'11:15 AM'},
   {id:'rivian-helper-route',name:'Standard Parcel Electric - Rivian MEDIUM with Helper - Default as station - 10 Hours',confirmed:4,kind:'driver',defaultTime:'11:15 AM'},
@@ -775,14 +777,14 @@ function operationalAlertGroups() {
   const preview=rows=>rows.slice(0,3).map(vehicle=>fleetDisplayName(vehicle)||vehicle.name||vehicle.vin).join(', ')+(rows.length>3?` +${rows.length-3}`:'');
   const grounded=rivianFleet.filter(vehicle=>String(vehicle.operational||'').toLowerCase()==='grounded');
   const inactive=rivianFleet.filter(vehicle=>String(vehicle.active||'').toLowerCase()==='inactive');
-  const low=rivianFleet.filter(vehicle=>isElectricFleetVehicle(vehicle)&&knownBatteryPercent(vehicle.battery)!==null&&knownBatteryPercent(vehicle.battery)<40);
+  const low=rivianFleet.filter(isFleetLowBattery);
   const issueVans=Object.values(state.fleetIssues||{}).filter(group=>group?.active?.length),issueRows=issueVans.flatMap(group=>group.active);
   const rts=(state.morningRoutes||[]).filter(route=>route.dsp===state.dspCode&&route.plannedRtsIssue);
   let whip={missingPre:[],missingPost:[]};try{whip=whiparoundStatus();}catch(error){console.warn('Alert center could not build Whiparound summary',error);}
   return [
     {id:'grounded',label:'Grounded vehicles',count:grounded.length,detail:preview(grounded)||'No grounded vans',tone:'danger',page:'fleet',filter:'grounded'},
     {id:'inactive',label:'Inactive vehicles',count:inactive.length,detail:preview(inactive)||'No inactive vans',tone:'danger',page:'fleet',filter:'inactive'},
-    {id:'low',label:'Low-battery EVs',count:low.length,detail:preview(low)||'No EVs below 40%',tone:'warn',page:'fleet',filter:'low'},
+    {id:'low',label:'Low-battery EVs',count:low.length,detail:preview(low)||`No EVs at or below ${LOW_BATTERY_SECTION_THRESHOLD}%`,tone:'warn',page:'fleet',filter:'low'},
     {id:'issues',label:'Vans with reported issues',count:issueVans.length,detail:issueRows.length?`${issueVans.length} van${issueVans.length===1?'':'s'} · ${issueRows.length} active report${issueRows.length===1?'':'s'}`:'No active reports',tone:'warn',page:'fleet',filter:'issues'},
     {id:'rts',label:'Morning RTS flags',count:rts.length,detail:rts.length?rts.slice(0,3).map(route=>route.route).join(', ')+(rts.length>3?` +${rts.length-3}`:''):'No irregular Planned RTS times',tone:'warn',page:'morning'},
     {id:'whip-pre',label:'Missing Pre-Trip DVIR',count:whip.missingPre.length,detail:whip.missingPre.length?whip.missingPre.slice(0,3).map(row=>row.name).join(', ')+(whip.missingPre.length>3?` +${whip.missingPre.length-3}`:''):'Pre-Trip checks complete',tone:'info',page:'inbox'},
@@ -853,12 +855,12 @@ function routesTable(rows,title='Today’s route board',sub='Driver, route, equi
 
 function openingPicklistSections() {
   ensureMorningRouteUids();
-  const eligible=(state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&!/helper/i.test(String(row.service||''))&&!String(row.route||'').startsWith('__blank_'));
-  const waveNames=[...new Set(eligible.filter(row=>!/ad\s*hoc|adhoc/i.test(`${row.wave} ${row.service}`)).map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b));
+  const eligible=(state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&!isExplicitHelperMorningRoute(row)&&!String(row.route||'').startsWith('__blank_'));
+  const waveNames=[...new Set(eligible.filter(row=>!isExplicitAdhocMorningRoute(row)).map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b));
   const waveSlots=Math.max(0,Math.min(5,Number(state.openingPicklistWaveSlots??5)));
   const waves=Array.from({length:waveSlots},(_,index)=>{const key=`wave-${index+1}`,wave=waveNames[index]||'',rows=wave?eligible.filter(row=>row.wave===wave):[],capacity=state.fitMorningRows?Math.max(1,rows.length):13;return {key,label:state.openingPicklistLabels?.[key]||`WAVE ${index+1}`,wave,rows,capacity,hasTime:true,pad:rows[0]?.padOverride||rows[0]?.pad||padForWave(wave)};});
   const used=new Set(waves.flatMap(section=>section.rows.map(row=>row.route)));
-  const adhoc=eligible.filter(row=>!used.has(row.route)&&/ad\s*hoc|adhoc|extra/i.test(`${row.wave} ${row.service}`));
+  const adhoc=eligible.filter(row=>!used.has(row.route)&&isExplicitAdhocMorningRoute(row));
   if(state.openingPicklistShowAdhoc)waves.push({key:'adhoc',label:state.openingPicklistLabels?.adhoc||"ADHOC'S",wave:'Ad hoc',rows:adhoc,capacity:state.fitMorningRows?Math.max(1,adhoc.length):15,hasTime:false,pad:''});
   return waves;
 }
@@ -1150,7 +1152,7 @@ function morningFiltersAreActive() {
 }
 function fixedMorningSections(rows=filteredMorningRows()) {
   const visibleIds=new Set(rows.map(row=>row.routeUid||`${normalizeCxRoute(row.route)}|${nameKey(row.driver)}`));
-  return morningSections(allMorningRows()).map(section=>({...section,rows:section.rows.filter(row=>visibleIds.has(row.routeUid||`${normalizeCxRoute(row.route)}|${nameKey(row.driver)}`))})).filter(section=>section.rows.length&&!section.dsp);
+  return morningSections(allMorningRows()).map(section=>({...section,rows:section.rows.filter(row=>visibleIds.has(row.routeUid||`${normalizeCxRoute(row.route)}|${nameKey(row.driver)}`))})).filter(section=>!section.dsp&&(section.rows.length||!morningFiltersAreActive()));
 }
 function morningFixedSectionByRoute() {
   const byRoute=new Map();
@@ -1201,11 +1203,11 @@ function morningConnectorGuide() {
 }
 
 function morningSections(rows) {
-  const regular=rows.filter(r=>!/helper|ad\s*hoc|adhoc|nursery|extra/i.test(`${r.wave} ${r.service}`)),waveGroups=[...new Set(regular.map(r=>r.wave))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).map(w=>({label:'',wave:w,rows:regular.filter(r=>r.wave===w)}));
+  const regular=rows.filter(r=>isCxMorningRoute(r)||(!isExplicitHelperMorningRoute(r)&&!isExplicitAdhocMorningRoute(r))),waveGroups=[...new Set(regular.map(r=>r.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).map(w=>({label:'',wave:w,rows:regular.filter(r=>r.wave===w)}));
   const sections=waveGroups.slice(0,5).map((g,i)=>({...g,label:`WAVE ${i+1}`,routeCapacity:13,hasTime:true,separatorRows:i===4?2:1}));
   const used=new Set(sections.flatMap(s=>s.rows.map(r=>r.route)));
-  const adHoc=rows.filter(r=>!used.has(r.route)&&/ad\s*hoc|adhoc|nursery|extra/i.test(`${r.wave} ${r.service}`));
-  const helpers=rows.filter(r=>/helper/i.test(r.service||'')&&!used.has(r.route)&&!adHoc.some(x=>x.route===r.route));
+  const adHoc=rows.filter(r=>!used.has(r.route)&&isExplicitAdhocMorningRoute(r));
+  const helpers=rows.filter(r=>!used.has(r.route)&&isExplicitHelperMorningRoute(r)&&!adHoc.some(x=>x.route===r.route));
   sections.push({label:"ADHOC's",wave:'',rows:adHoc,routeCapacity:15,hasTime:false,separatorRows:1});
   sections.push({label:'HELPERS',wave:'',rows:helpers,routeCapacity:15,hasTime:false,separatorRows:1});
   sections.push({label:'DSP',wave:'',rows:[],routeCapacity:6,hasTime:false,separatorRows:0,dsp:true});
@@ -1397,7 +1399,7 @@ function vehicleIssueForEquipmentId(value='') {
   if(normalizeOperational(vehicle.operational||vehicle.status)==='Grounded')return {type:'grounded',label:'⛔ Grounded',title:'Grounded vehicle — do not assign'};
   if(normalizeActive(vehicle.active||vehicle.status)==='Inactive')return {type:'grounded',label:'Inactive',title:'Inactive vehicle — verify before assigning'};
   const battery=knownBatteryPercent(vehicle.battery);
-  if(isElectricFleetVehicle(vehicle)&&battery!==null&&battery<40)return {type:'battery',label:`Low ${battery}%`,title:`Low battery ${battery}% — charge or swap before dispatch`};
+  if(isElectricFleetVehicle(vehicle)&&battery!==null&&battery<DISPATCH_BATTERY_BLOCK_THRESHOLD)return {type:'battery',label:`Low ${battery}%`,title:`Low battery ${battery}% — charge or swap before dispatch`};
   const reported=fleetIssueForVehicle(vehicle);if(reported)return {type:'reported',label:`⚠ ${reported.active.length} issue${reported.active.length===1?'':'s'}`,title:`Reported van issue: ${reported.active.map(item=>item.text).join(' · ')}`,reported};
   return null;
 }
@@ -1513,13 +1515,13 @@ function teamPage() {
 }
 
 function fleetPage() {
-  const vehicles=sortedRivianFleet(),electric=electricFleetVehicles(),gas=rivianFleet.filter(isGasFleetVehicle),low=electric.filter(v=>knownBatteryPercent(v.battery)!==null&&knownBatteryPercent(v.battery)<40).length,charge=fleetChargeRows().length;
+  const vehicles=sortedRivianFleet(),electric=electricFleetVehicles(),gas=rivianFleet.filter(isGasFleetVehicle),low=electric.filter(isFleetLowBattery).length,charge=fleetChargeRows().length;
   const grounded=rivianFleet.filter(v=>v.operational==='Grounded').length,coverage=fleetCoverageStats();
   const filters=['all','gas','changed','verified','needs-data','missing-fleetos','missing-amazon','amazon-only','fleetos-only','issues','low','grounded','inactive'];
   const labels={'all':'All vehicles','gas':'Gas Vehicles','changed':'Changed only','verified':'Verified only','needs-data':'Needs data','missing-fleetos':'Missing FleetOS','missing-amazon':'Missing Amazon','amazon-only':'Amazon only','fleetos-only':'FleetOS only','issues':'Issues','low':'Low-battery EVs','grounded':'Grounded only','inactive':'Inactive only'};
   return `${contextBar('<span class="status">Amazon names/status · FleetOS EV battery</span>')}
   ${fleetHealthSummary()}
-  <section class="fleet-alert-squares"><button class="danger" data-action="fleet-filter-quick" data-filter="grounded"><span>Grounded vehicles</span><strong>${grounded}</strong><small>Red · do not assign</small></button><button class="battery" data-action="fleet-filter-quick" data-filter="low"><span>Low-battery EVs</span><strong>${low}</strong><small>Below 40%</small></button><button class="charge" data-action="fleet-filter-quick" data-filter="low"><span>Recommended to charge</span><strong>${charge}</strong><small>EVs below 50%</small></button><button class="review" data-action="fleet-filter-quick" data-filter="needs-data"><span>Needs information</span><strong>${coverage.needsData}</strong><small>Missing source fields</small></button></section>
+  <section class="fleet-alert-squares"><button class="danger" data-action="fleet-filter-quick" data-filter="grounded"><span>Grounded vehicles</span><strong>${grounded}</strong><small>Red · do not assign</small></button><button class="battery" data-action="fleet-filter-quick" data-filter="low"><span>Low-battery EVs</span><strong>${low}</strong><small>${LOW_BATTERY_SECTION_THRESHOLD}% or lower</small></button><button class="charge" data-action="fleet-filter-quick" data-filter="low"><span>Recommended to charge</span><strong>${charge}</strong><small>${LOW_BATTERY_SECTION_THRESHOLD}% or lower</small></button><button class="review" data-action="fleet-filter-quick" data-filter="needs-data"><span>Needs information</span><strong>${coverage.needsData}</strong><small>Missing source fields</small></button></section>
   ${fleetIssuesPanel()}
   <article class="card rivian-panel simplified"><div class="card-head fleet-clean-head"><div class="card-title"><h2>All vehicles</h2><p>${electric.length} electric · ${gas.length} gas · names remain the same everywhere in RelayOps</p></div><div class="head-actions fleet-primary-actions"><input class="fleet-search-input" data-fleet-search placeholder="Find vehicle, VIN, or plate" value="${esc(state.fleetSearch)}"><select class="filter-select" data-fleet-filter>${filters.map(value=>`<option value="${value}" ${state.fleetFilter===value?'selected':''}>${labels[value]}</option>`).join('')}</select><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><button class="btn small" data-action="clear-fleet-search">Clear</button><button class="btn small primary" data-action="refresh-fleet">Refresh</button></div></div>
   <div class="fleet-source-actions"><div class="amazon"><a href="${esc(fleetAmazonPortalUrl())}" target="_blank" rel="noopener">${ICONS.link}<span><b>Amazon Fleet</b><small>Names · VIN · status</small></span></a><button class="fleet-import-button amazon" data-action="fleet-import-amazon">${ICONS.upload}<span><b>Amazon Fleet Import <small>(.xlsx)</small></b><em>VehiclesData files only</em></span></button></div><div class="fleetos"><a href="${esc(fleetFleetosPortalUrl())}" target="_blank" rel="noopener">${ICONS.link}<span><b>FleetOS</b><small>Battery · range</small></span></a><button class="fleet-import-button fleetos" data-action="fleet-import-fleetos">${ICONS.upload}<span><b>FleetOS Import <small>(.csv)</small></b><em>Vehicle_List files only</em></span></button></div></div>
@@ -1548,21 +1550,21 @@ function fleetViewSwitcher() {
 }
 
 function fleetHealthSummary() {
-  const coverage=fleetCoverageStats(),electric=electricFleetVehicles(),gas=rivianFleet.filter(isGasFleetVehicle),known=electric.map(v=>knownBatteryPercent(v.battery)).filter(v=>v!==null),low=known.filter(v=>v<40).length,grounded=rivianFleet.filter(v=>v.operational==='Grounded').length;
+  const coverage=fleetCoverageStats(),electric=electricFleetVehicles(),gas=rivianFleet.filter(isGasFleetVehicle),known=electric.map(v=>knownBatteryPercent(v.battery)).filter(v=>v!==null),low=electric.filter(isFleetLowBattery).length,grounded=rivianFleet.filter(v=>v.operational==='Grounded').length;
   const avg=known.length?Math.round(known.reduce((n,v)=>n+v,0)/known.length):null;
   const sourceStatus=fleetSourceStatus();
   const liveReady=!!fleetLiveEndpoint();
-  return `<div class="fleet-health-summary compact"><div class="fleet-health-card primary"><strong>${rivianFleet.length}</strong><span>All vehicles</span><small>${electric.length} electric · ${gas.length} gas</small></div><div class="fleet-health-card ${low||!known.length?'warn':'ok'}"><strong>${avg===null?'—':`${avg}%`}</strong><span>EV battery average</span><small>${known.length?`${low} below 40%`:'Battery data unavailable'}</small></div><div class="fleet-health-card ${grounded?'danger':'ok'}"><strong>${grounded}</strong><span>Grounded</span><small>Do not assign</small></div><div class="fleet-health-card ${coverage.needsData?'warn':'ok'}"><strong>${coverage.verified}/${coverage.total}</strong><span>Verified sources</span><small>${sourceStatus.hasAmazon?'Amazon loaded':'Needs Amazon'} · ${sourceStatus.hasFleetos?'FleetOS loaded':'Needs FleetOS'} · ${liveReady?'Live ready':'Manual import'}</small></div></div>`;
+  return `<div class="fleet-health-summary compact"><div class="fleet-health-card primary"><strong>${rivianFleet.length}</strong><span>All vehicles</span><small>${electric.length} electric · ${gas.length} gas</small></div><div class="fleet-health-card ${low||!known.length?'warn':'ok'}"><strong>${avg===null?'—':`${avg}%`}</strong><span>EV battery average</span><small>${known.length?`${low} at or below ${LOW_BATTERY_SECTION_THRESHOLD}%`:'Battery data unavailable'}</small></div><div class="fleet-health-card ${grounded?'danger':'ok'}"><strong>${grounded}</strong><span>Grounded</span><small>Do not assign</small></div><div class="fleet-health-card ${coverage.needsData?'warn':'ok'}"><strong>${coverage.verified}/${coverage.total}</strong><span>Verified sources</span><small>${sourceStatus.hasAmazon?'Amazon loaded':'Needs Amazon'} · ${sourceStatus.hasFleetos?'FleetOS loaded':'Needs FleetOS'} · ${liveReady?'Live ready':'Manual import'}</small></div></div>`;
 }
 
 function fleetChargeRows() {
-  return electricFleetVehicles().filter(v=>knownBatteryPercent(v.battery)!==null&&knownBatteryPercent(v.battery)<50).sort((a,b)=>knownBatteryPercent(a.battery)-knownBatteryPercent(b.battery)||String(a.name||'').localeCompare(String(b.name||'')));
+  return electricFleetVehicles().filter(isFleetLowBattery).sort((a,b)=>knownBatteryPercent(a.battery)-knownBatteryPercent(b.battery)||String(a.name||'').localeCompare(String(b.name||'')));
 }
 function fleetChargeRecommendations() {
   const rows=fleetChargeRows();
-  const urgent=rows.filter(v=>Number(v.battery)<40).length;
-  const preview=rows.slice(0,8).map(v=>`<button data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" class="${Number(v.battery)<40?'urgent':'watch'}"><b>${esc(fleetDisplayName(v))}</b><span>${v.battery}% · ${v.miles} mi</span><small>${esc(v.plate||v.vin)} · ${esc(v.operational||'—')}</small></button>`).join('');
-  return `<div class="fleet-charge-recommendations ${rows.length?'warn':'ok'}"><div><strong>Recommended to be charged</strong><span>${rows.length?`${rows.length} EV${rows.length===1?'':'s'} under 50% · ${urgent} priority under 40%`:'No EVs under 50% right now'}</span></div><div class="fleet-charge-preview">${preview||'<span class="charge-empty">Fleet is above the watch threshold.</span>'}</div><div class="fleet-charge-actions"><button class="btn small ${rows.length?'primary':'ghost'}" data-action="copy-charge-recommendations">${ICONS.copy} Copy charge list</button><button class="btn small" data-action="fleet-filter-quick" data-filter="low">Show low battery</button></div></div>`;
+  const urgent=rows.filter(v=>isDispatchBatteryBlocked(v)).length;
+  const preview=rows.slice(0,8).map(v=>`<button data-action="toggle-fleet-card" data-vin="${esc(v.vin)}" class="${isDispatchBatteryBlocked(v)?'urgent':'watch'}"><b>${esc(fleetDisplayName(v))}</b><span>${v.battery}% · ${v.miles} mi</span><small>${esc(v.plate||v.vin)} · ${esc(v.operational||'—')}</small></button>`).join('');
+  return `<div class="fleet-charge-recommendations ${rows.length?'warn':'ok'}"><div><strong>Recommended to be charged</strong><span>${rows.length?`${rows.length} EV${rows.length===1?'':'s'} at or below ${LOW_BATTERY_SECTION_THRESHOLD}% · ${urgent} priority under ${DISPATCH_BATTERY_BLOCK_THRESHOLD}%`:`No EVs at or below ${LOW_BATTERY_SECTION_THRESHOLD}% right now`}</span></div><div class="fleet-charge-preview">${preview||'<span class="charge-empty">Fleet is above the watch threshold.</span>'}</div><div class="fleet-charge-actions"><button class="btn small ${rows.length?'primary':'ghost'}" data-action="copy-charge-recommendations">${ICONS.copy} Copy charge list</button><button class="btn small" data-action="fleet-filter-quick" data-filter="low">Show low battery</button></div></div>`;
 }
 
 function parkingSlots(zone) {
@@ -1753,7 +1755,7 @@ function fleetSourceTimestampStrip() {
 function fleetNextStepBox() {
   const stats=fleetPortalMatchStats(), coverage=fleetCoverageStats(), amazonAge=fleetSourceAge('amazon'), fleetosAge=fleetSourceAge('fleetos');
   const expected=Number(state.fleetExpectedCount)||0, expectedShort=expected?Math.max(0,expected-stats.uniqueVins.size):0;
-  const duplicates=state.fleetUpdateSummary?.duplicates||0, conflicts=state.fleetUpdateSummary?.conflicts||0, grounded=rivianFleet.filter(v=>v.operational==='Grounded').length, low=rivianFleet.filter(v=>knownBatteryPercent(v.battery)!==null&&knownBatteryPercent(v.battery)<40).length;
+  const duplicates=state.fleetUpdateSummary?.duplicates||0, conflicts=state.fleetUpdateSummary?.conflicts||0, grounded=rivianFleet.filter(v=>v.operational==='Grounded').length, low=rivianFleet.filter(isDispatchBatteryBlocked).length;
   const hasAmazon=stats.amazon.size>0||coverage.amazonOnly>0||coverage.verified>0;
   const hasFleetos=stats.fleetos.size>0||coverage.fleetosOnly>0||coverage.verified>0;
   let step={tone:'warn',badge:'1',title:'Upload today’s Amazon + FleetOS files',detail:'Start here: upload both portal exports so EV names, VINs, status, and battery % can match.',action:'fleet-import',button:'Upload files'};
@@ -1765,7 +1767,7 @@ function fleetNextStepBox() {
   else if(conflicts) step={tone:'warn',badge:'!',title:'Fix conflicting VIN data',detail:`${conflicts} conflicting field${conflicts===1?'':'s'} found for the same VIN/source. Clean the export before refresh.`,action:'export-fleet-gaps',button:'Gap CSV'};
   else if(expectedShort) step={tone:'warn',badge:'!',title:'Fleet list is short',detail:`${expectedShort} EV${expectedShort===1?' is':'s are'} missing from expected ${expected}. Check if the export was partial.`,action:'export-fleet-gaps',button:'Gap CSV'};
   else if(coverage.needsData) step={tone:'warn',badge:'3',title:'Review EVs missing data',detail:`${coverage.needsData} card${coverage.needsData===1?' needs':'s need'} plate, status, Amazon name, or FleetOS battery data.`,action:'fleet-filter-quick',filter:'needs-data',button:'Show needs data'};
-  else if(grounded||low) step={tone:'caution',badge:'4',title:'Review grounded or low-battery EVs',detail:`${grounded} grounded · ${low} below 40%. Decide what needs charge, swap, or maintenance follow-up.`,action:'fleet-filter-quick',filter:grounded?'grounded':'low',button:'Review EVs'};
+  else if(grounded||low) step={tone:'caution',badge:'4',title:'Review grounded or priority-charge EVs',detail:`${grounded} grounded · ${low} under ${DISPATCH_BATTERY_BLOCK_THRESHOLD}%. Decide what needs charge, swap, or maintenance follow-up.`,action:'fleet-filter-quick',filter:grounded?'grounded':'low',button:'Review EVs'};
   else if(stats.amazon.size&&stats.fleetos.size) step={tone:'ok',badge:'✓',title:'Ready — review refresh before launch',detail:'Both portals are matched by VIN. Press Refresh to review any final battery/status changes before using the board.',action:'refresh-fleet',button:'Review refresh'};
   return `<div class="fleet-next-step ${step.tone}"><div class="next-step-badge">${esc(step.badge)}</div><div><strong>Next step: ${esc(step.title)}</strong><span>${esc(step.detail)}</span></div><button class="btn small ${step.tone==='ok'?'lime':'primary'}" data-action="${esc(step.action)}" ${step.filter?`data-filter="${esc(step.filter)}"`:''}>${esc(step.button)}</button></div>`;
 }
@@ -1800,7 +1802,7 @@ function fleetDispatchChecklist() {
   const expected=Number(state.fleetExpectedCount)||0, expectedShort=expected?Math.max(0,expected-stats.uniqueVins.size):0;
   const duplicateVins=state.fleetUpdateSummary?.duplicateVins||[], duplicateCount=duplicateVins.length;
   const conflictCount=state.fleetUpdateSummary?.conflicts||0;
-  const grounded=rivianFleet.filter(v=>v.operational==='Grounded').length, low=rivianFleet.filter(v=>knownBatteryPercent(v.battery)!==null&&knownBatteryPercent(v.battery)<40).length;
+  const grounded=rivianFleet.filter(v=>v.operational==='Grounded').length, low=rivianFleet.filter(isFleetLowBattery).length;
   const missingPortalFilter=stats.amazonOnly.length?'missing-fleetos':stats.fleetosOnly.length?'missing-amazon':'';
   const items=[
     {ok:amazonAge.hasUpload&&!amazonAge.stale,label:'Amazon fleet list loaded',detail:amazonAge.hasUpload?amazonAge.label:'Need official names/status',action:'fleet-import',button:'Upload'},
@@ -1841,7 +1843,7 @@ function fleetQuickFilterChips() {
   const counts={
     all:rivianFleet.length,
     verified:rivianFleet.filter(v=>fleetConfidence(v).label==='Verified').length,
-    low:rivianFleet.filter(v=>knownBatteryPercent(v.battery)!==null&&knownBatteryPercent(v.battery)<40).length,
+    low:rivianFleet.filter(isFleetLowBattery).length,
     grounded:rivianFleet.filter(v=>v.operational==='Grounded').length,
     'needs-data':rivianFleet.filter(v=>fleetMissingFields(v).length).length,
     changed:fleetRecentChanges().length
@@ -1858,7 +1860,7 @@ function fleetQuickFilterChips() {
 }
 
 function fleetAttentionStrip() {
-  const charge=rivianFleet.filter(v=>knownBatteryPercent(v.battery)!==null&&knownBatteryPercent(v.battery)<40);
+  const charge=rivianFleet.filter(isFleetLowBattery);
   const grounded=rivianFleet.filter(v=>v.operational==='Grounded');
   const missing=rivianFleet.filter(v=>fleetMissingFields(v).length);
   const attention=fleetAttentionRows();
@@ -2327,6 +2329,14 @@ function isGasFleetVehicle(vehicle={}) {
 function isElectricFleetVehicle(vehicle={}) {
   return !isGasFleetVehicle(vehicle)&&(/\b(?:EV\s*\d+|EDV|RIVIAN)\b/i.test(String(vehicle.name||''))||/fleetos|rivian/i.test(String(vehicle.source||''))||Boolean(vehicle.hasBattery));
 }
+function isFleetLowBattery(vehicle={}) {
+  const battery=knownBatteryPercent(vehicle?.battery);
+  return isElectricFleetVehicle(vehicle)&&battery!==null&&battery<=LOW_BATTERY_SECTION_THRESHOLD;
+}
+function isDispatchBatteryBlocked(vehicle={}) {
+  const battery=knownBatteryPercent(vehicle?.battery);
+  return isElectricFleetVehicle(vehicle)&&battery!==null&&battery<DISPATCH_BATTERY_BLOCK_THRESHOLD;
+}
 function fleetVehicleAssignmentEligibility(vehicleOrId='') {
   const vehicle=typeof vehicleOrId==='object'&&vehicleOrId?vehicleOrId:fleetVehicleForEquipmentId(vehicleOrId);
   if(!vehicle)return {eligible:false,primary:false,reason:'vehicle missing from Fleet Health',vehicle:null};
@@ -2341,7 +2351,7 @@ function fleetVehicleAssignmentEligibility(vehicleOrId='') {
     const source=String(vehicle.source||'').toLowerCase(),battery=knownBatteryPercent(vehicle.battery);
     const fleetosVerified=Boolean(vehicle.hasBattery&&battery!==null&&(source.includes('fleetos tracker')||source.includes('rivian')));
     if(!fleetosVerified)return {eligible:false,primary:false,reason:'FleetOS battery unverified',vehicle};
-    if(battery<40)return {eligible:false,primary:false,reason:`low battery ${battery}%`,vehicle,lowBattery:true};
+    if(battery<DISPATCH_BATTERY_BLOCK_THRESHOLD)return {eligible:false,primary:false,reason:`low battery ${battery}%`,vehicle,lowBattery:true};
   }
   return {eligible:true,primary:true,reason:'dispatch safe',vehicle};
 }
@@ -2353,7 +2363,7 @@ function sortedRivianFleet() {
   const q=String(state.fleetSearch||'').trim().toLowerCase();
   const filtered=rows.filter(v=>{
     if(state.fleetFilter==='gas')return isGasFleetVehicle(v);
-    if(state.fleetFilter==='low')return isElectricFleetVehicle(v)&&knownBatteryPercent(v.battery)!==null&&knownBatteryPercent(v.battery)<40;
+    if(state.fleetFilter==='low')return isFleetLowBattery(v);
     if(state.fleetFilter==='grounded')return v.operational==='Grounded';
     if(state.fleetFilter==='inactive')return v.active==='Inactive';
     if(state.fleetFilter==='changed')return (state.fleetChangedVins?.[v.vin]||v.changedFields||[]).length>0;
@@ -3060,7 +3070,7 @@ function aChatSnapshot() {
   const routes=filteredMorningRows().filter(row=>row.route&&!String(row.route).startsWith('__blank_')&&!/helper/i.test(String(row.service||'')));
   const missingDrivers=routes.filter(routeMissingPrimary),missingHelpers=routes.filter(routeMissingHelper);
   const grounded=rivianFleet.filter(vehicle=>String(vehicle.operational||'').toLowerCase()==='grounded');
-  const lowBattery=rivianFleet.filter(vehicle=>isElectricFleetVehicle(vehicle)&&knownBatteryPercent(vehicle.battery)!==null&&knownBatteryPercent(vehicle.battery)<40);
+  const lowBattery=rivianFleet.filter(isFleetLowBattery);
   const issueVans=Object.entries(state.fleetIssues||{}).filter(([,group])=>group?.active?.length);
   let whip={missingPre:[],missingPost:[]};try{whip=whiparoundStatus();}catch{}
   return {routes,missingDrivers,missingHelpers,grounded,lowBattery,issueVans,whip};
@@ -3073,7 +3083,7 @@ function aChatAnswer(prompt='') {
   if(/unassigned|missing driver|empty route|route needed|need a driver|needs a driver/.test(q))return data.missingDrivers.length?`${data.missingDrivers.length} route${data.missingDrivers.length===1?' is':'s are'} missing a driver: ${aChatList(data.missingDrivers,row=>row.route)}. They are highlighted red with a ? on the Morning Sheet and Picklist.`:'Every route currently has a primary driver.';
   if(/helper|missing helper/.test(q))return data.missingHelpers.length?`${data.missingHelpers.length} assignment${data.missingHelpers.length===1?' needs':'s need'} a helper: ${aChatList(data.missingHelpers,row=>row.route)}. Use Opening roster → Helpers to match them.`:'No helper vacancy is currently flagged.';
   if(/ground|operational|safe van/.test(q))return data.grounded.length?`${data.grounded.length} grounded vehicle${data.grounded.length===1?' is':'s are'} blocked from normal assignment: ${aChatList(data.grounded,fleetDisplayName)}.`:'No grounded vehicle is loaded in Fleet Health.';
-  if(/battery|charge|charging|low ev/.test(q))return data.lowBattery.length?`${data.lowBattery.length} EV${data.lowBattery.length===1?' is':'s are'} below 40%: ${aChatList(data.lowBattery,vehicle=>`${fleetDisplayName(vehicle)} (${knownBatteryPercent(vehicle.battery)}%)`)}.`:'No imported EV is below 40% battery.';
+  if(/battery|charge|charging|low ev/.test(q))return data.lowBattery.length?`${data.lowBattery.length} EV${data.lowBattery.length===1?' is':'s are'} at or below ${LOW_BATTERY_SECTION_THRESHOLD}%: ${aChatList(data.lowBattery,vehicle=>`${fleetDisplayName(vehicle)} (${knownBatteryPercent(vehicle.battery)}%)`)}.`:`No imported EV is at or below ${LOW_BATTERY_SECTION_THRESHOLD}% battery.`;
   if(/issue|repair|fleet report/.test(q))return data.issueVans.length?`${data.issueVans.length} van${data.issueVans.length===1?' has':'s have'} active reports: ${aChatList(data.issueVans,([key,group])=>group.label||key)}. Open Fleet Health → Van Reports / Issues for details.`:'No active van issue is logged.';
   if(/whip|dvir|pre trip|post trip|inspection/.test(q))return `Whiparound for ${inspectionDateLabel(selectedWhiparoundDate())}: ${data.whip.missingPre.length} missing Pre-Trip and ${data.whip.missingPost.length} missing Post-Trip. The newest first-name + assigned-EV match is used for duplicate forms.`;
   if(/wave|morning|route count|how many route/.test(q))return `${data.routes.length} route${data.routes.length===1?' is':'s are'} on the current Morning Sheet. ${data.missingDrivers.length} need a primary driver and ${data.missingHelpers.length} need a helper.`;
@@ -3565,7 +3575,7 @@ function requestDeletePicklistWave(sectionKey='') {
 function confirmDeletePicklistWave() {
   const pending=state.pendingPicklistWaveDelete;if(!pending)return;
   pushSheetHistory(`Delete ${pending.label}`,'both');
-  if(pending.key==='adhoc'){state.morningRoutes=(state.morningRoutes||[]).filter(row=>!(/ad\s*hoc|adhoc|extra/i.test(`${row.wave} ${row.service}`)&&row.dsp===state.dspCode));state.openingPicklistShowAdhoc=false;}
+  if(pending.key==='adhoc'){state.morningRoutes=(state.morningRoutes||[]).filter(row=>!(isExplicitAdhocMorningRoute(row)&&row.dsp===state.dspCode));state.openingPicklistShowAdhoc=false;}
   else {state.morningRoutes=(state.morningRoutes||[]).filter(row=>!(row.dsp===state.dspCode&&row.wave===pending.wave));state.openingPicklistWaveSlots=Math.max(0,Number(state.openingPicklistWaveSlots||5)-1);}
   const label=pending.label;state.pendingPicklistWaveDelete=null;state.modal=null;persist();render();toast(`${label} deleted from Picklist and Morning Sheet`);
 }
@@ -4834,6 +4844,17 @@ function normalizeCxRoute(value='') {
   const text=String(value||'').trim().toUpperCase(),match=text.match(/\bCX\d+\b/);
   return match?match[0]:text;
 }
+function isCxMorningRoute(row={}) {
+  return /^CX\d+$/i.test(normalizeCxRoute(row?.route));
+}
+function isExplicitAdhocMorningRoute(row={}) {
+  if(isCxMorningRoute(row))return false;
+  const route=String(row?.route||'').trim();
+  return /^AX(?:\d+)?$/i.test(route)||/ad\s*hoc|adhoc/i.test(`${row?.wave||''} ${row?.service||''}`);
+}
+function isExplicitHelperMorningRoute(row={}) {
+  return !isCxMorningRoute(row)&&/helper/i.test(`${row?.wave||''} ${row?.service||''} ${row?.route||''}`);
+}
 function itineraryRouteCount(value) {
   if(value===null||value===undefined||String(value).trim()===''||/^missing$/i.test(String(value).trim()))return null;
   const count=Number(String(value).replace(/,/g,'').trim());
@@ -5750,7 +5771,7 @@ function applyImport() {
       return {dsp:ix.dsp>=0?String(r[ix.dsp]).trim().toUpperCase():state.dspCode,driver:firstDriverName(detail?.driver||(ix.driver>=0&&r[ix.driver])||known?.driver||'Unassigned driver'),route,service:(ix.service>=0&&r[ix.service])||known?.service||'Standard Parcel',wave,staging:r[ix.staging]||'—',duration,zones,packages,commercial:Number(r[ix.commercial])||known?.commercial||0,stops:detail?.stops!==null&&detail?.stops!==undefined?detail.stops:(Number.isFinite(importedStops)&&importedStops?importedStops:known?.stops||Math.round(135+zones*2.2)),eta:known?.eta||'—',bags:known?.bags||Math.max(1,Math.round(packages/13)),overflow:known?.overflow||Math.max(0,Math.round(packages/24)),parking:known?.parking||'',ev:known?.ev||'',deviceName:known?.deviceName||'',portable:known?.portable||'',preDvic:Boolean(known?.preDvic),preWhip:Boolean(known?.preWhip),postDvic:Boolean(known?.postDvic),postWhip:Boolean(known?.postWhip),rescued:Boolean(known?.rescued),packageReturns:known?.packageReturns||'',endTime:known?.endTime||'',rtsTime:known?.rtsTime||'',plannedRts,plannedRtsIssue:isIrregularPlannedRts(plannedRts,wave,duration),clockOutTime:known?.clockOutTime||'',checkedIn:Boolean(known?.checkedIn),vanReady:Boolean(known?.vanReady),deviceReady:Boolean(known?.deviceReady),portableReady:Boolean(known?.portableReady),loadReady:false};
     }).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||routeCompare(a.route,b.route)||a.staging.localeCompare(b.staging,undefined,{numeric:true}));
     state.routes=state.morningRoutes.map((r,i)=>({route:r.route,driver:r.driver,id:`DA-${1100+i}`,wave:r.wave,staging:r.staging,van:'Unassigned',device:'Unassigned',stops:r.stops,packages:r.packages,progress:0,delta:0,status:r.driver==='Unassigned driver'?'Needs review':'Assigned',rescue:'—'}));
-    const importedWaves=[...new Set(state.morningRoutes.filter(row=>!/ad\s*hoc|adhoc|extra/i.test(`${row.wave} ${row.service}`)).map(row=>row.wave).filter(Boolean))];state.openingPicklistWaveSlots=Math.min(5,importedWaves.length);state.openingPicklistShowAdhoc=true;
+    const importedWaves=[...new Set(state.morningRoutes.filter(row=>!isExplicitAdhocMorningRoute(row)&&!isExplicitHelperMorningRoute(row)).map(row=>row.wave).filter(Boolean))];state.openingPicklistWaveSlots=Math.min(5,importedWaves.length);state.openingPicklistShowAdhoc=true;
     state.lastImportExcluded=excluded;state.modal=null;state.page='morning';state.morningFilters={wave:'all',staging:'all',pad:'all'};state.rosterPublished=false;persist();render();return toast(`${state.morningRoutes.length} ${state.dspCode} routes loaded across every Service Type · ${excluded} other-DSP or non-route rows skipped`);
   }
   state.routes=f.rows.map((r,i)=>({route:r[ix.route]||`IMP-${i+1}`,driver:firstDriverName(r[ix.driver]||'Unassigned driver'),id:`DA-${1100+i}`,wave:r[ix.wave]||'Wave pending',staging:r[ix.staging]||'—',van:r[ix.van]||'Unassigned',device:r[ix.device]||'Unassigned',stops:Number(r[ix.stops])||0,packages:Number(r[ix.packages])||0,progress:0,delta:0,status:(r[ix.driver]&&r[ix.van])?'Assigned':'Needs review',rescue:'—'}));
@@ -6362,11 +6383,11 @@ function visibleFleetVinText(){return sortedRivianFleet().map(v=>cleanVin(v.vin)
 async function copyVisibleFleetVins(){const rows=sortedRivianFleet(), text=visibleFleetVinText();if(!rows.length)return toast('No visible EV VINs to copy');const ok=await writeClipboardText(text);toast(ok?`${rows.length} visible EV VIN${rows.length===1?'':'s'} copied`:'Clipboard access was blocked — use EV CSV instead',ok?'':'error');return ok;}
 function refreshMissingVinText(){return (state.fleetRefreshPreview?.missingVinPreview||[]).map(x=>cleanVin(x.vin)||x.vin).filter(Boolean).join('\n');}
 async function copyRefreshMissingVins(){const rows=state.fleetRefreshPreview?.missingVinPreview||[], text=refreshMissingVinText();if(!rows.length)return toast('No missing source VINs shown in refresh review');const ok=await writeClipboardText(text);toast(ok?`${rows.length} refresh review VIN${rows.length===1?'':'s'} copied`:'Clipboard access was blocked — use the gap CSV instead',ok?'':'error');return ok;}
-function fleetAttentionRows(){const byVin=new Map();rivianFleet.forEach(v=>{const battery=knownBatteryPercent(v.battery),reasons=[battery!==null&&battery<40?`battery ${battery}%`:'',v.operational==='Grounded'?'grounded':'',v.active==='Inactive'?'inactive':''].filter(Boolean);if(reasons.length)byVin.set(cleanVin(v.vin),{v,reasons});});return [...byVin.values()];}
+function fleetAttentionRows(){const byVin=new Map();rivianFleet.forEach(v=>{const battery=knownBatteryPercent(v.battery),reasons=[isFleetLowBattery(v)?`battery ${battery}%`:'',v.operational==='Grounded'?'grounded':'',v.active==='Inactive'?'inactive':''].filter(Boolean);if(reasons.length)byVin.set(cleanVin(v.vin),{v,reasons});});return [...byVin.values()];}
 function fleetAttentionText(){return fleetAttentionRows().map(({v,reasons})=>`${v.name} | ${v.vin} | ${knownBatteryPercent(v.battery)===null?'unknown battery / range':`${v.battery}% / ${v.miles} mi`} | ${v.active||'—'} | ${v.operational||'—'} | ${reasons.join(', ')}`).join('\n');}
 async function copyFleetAttentionList(){const rows=fleetAttentionRows(), text=fleetAttentionText();if(!rows.length)return toast('No low-battery or grounded EVs to copy');const ok=await writeClipboardText(text);toast(ok?`${rows.length} EV alert${rows.length===1?'':'s'} copied for dispatch chat`:'Clipboard access was blocked — use EV CSV instead',ok?'':'error');return ok;}
-function chargeRecommendationText(){return fleetChargeRows().map(v=>`${fleetDisplayName(v)} | ${v.vin} | ${v.battery}% | ${v.miles} mi | Plate ${v.plate||'—'} | ${v.active||'—'} | ${v.operational||'—'}${Number(v.battery)<40?' | PRIORITY PLUG-IN':' | plug in if available'}`).join('\n');}
-async function copyChargeRecommendations(){const rows=fleetChargeRows(), text=chargeRecommendationText();if(!rows.length)return toast('No EVs under 50% to send for charging');const ok=await writeClipboardText(text);toast(ok?`${rows.length} charge recommendation${rows.length===1?'':'s'} copied for fleet`:'Clipboard access was blocked — use EV CSV instead',ok?'':'error');return ok;}
+function chargeRecommendationText(){return fleetChargeRows().map(v=>`${fleetDisplayName(v)} | ${v.vin} | ${v.battery}% | ${v.miles} mi | Plate ${v.plate||'—'} | ${v.active||'—'} | ${v.operational||'—'}${isDispatchBatteryBlocked(v)?' | PRIORITY PLUG-IN':' | plug in if available'}`).join('\n');}
+async function copyChargeRecommendations(){const rows=fleetChargeRows(), text=chargeRecommendationText();if(!rows.length)return toast(`No EVs at or below ${LOW_BATTERY_SECTION_THRESHOLD}% to send for charging`);const ok=await writeClipboardText(text);toast(ok?`${rows.length} charge recommendation${rows.length===1?'':'s'} copied for fleet`:'Clipboard access was blocked — use EV CSV instead',ok?'':'error');return ok;}
 function exportExcel(){
   const rows=[exportHeaders,...exportRows()];
   const xml=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1D4D35" ss:Pattern="Solid"/></Style><Style ss:ID="Cell"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E6DF"/></Borders></Style></Styles><Worksheet ss:Name="Daily Roster"><Table>${rows.map((r,i)=>`<Row>${r.map(v=>`<Cell ss:StyleID="${i===0?'Header':'Cell'}"><Data ss:Type="${typeof v==='number'?'Number':'String'}">${xmlEscape(v)}</Data></Cell>`).join('')}</Row>`).join('')}</Table><AutoFilter xmlns="urn:schemas-microsoft-com:office:excel" x:Range="R1C1:R${rows.length}C${exportHeaders.length}" xmlns:x="urn:schemas-microsoft-com:office:excel"/></Worksheet></Workbook>`;

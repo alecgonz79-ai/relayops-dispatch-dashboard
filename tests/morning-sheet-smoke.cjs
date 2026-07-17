@@ -370,7 +370,7 @@ const checks = `
   state.fleetFilter = 'grounded';
   if (!fleetPage().includes('LLOL EV 21') || sortedRivianFleet().some(v => v.operational !== 'Grounded')) throw new Error('Grounded fleet filter failed');
   action('fleet-filter-quick',{dataset:{filter:'low'}});
-  if (state.fleetFilter !== 'low' || sortedRivianFleet().some(v => v.battery >= 40)) throw new Error('Fleet attention strip quick filter failed');
+  if (state.fleetFilter !== 'low' || sortedRivianFleet().some(v => v.battery > LOW_BATTERY_SECTION_THRESHOLD)) throw new Error('Fleet attention strip quick filter failed');
   state.fleetFilter = 'verified';
   if (!fleetPage().includes('Verified only') || !sortedRivianFleet().every(v => fleetConfidence(v).label === 'Verified')) throw new Error('Verified fleet filter failed');
   state.fleetFilter = 'needs-data';
