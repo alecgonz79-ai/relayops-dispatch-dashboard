@@ -1,5 +1,6 @@
 const fs = require('fs');
 const vm = require('vm');
+const crypto = require('crypto');
 const JSZip = require('../vendor/jszip.min.js');
 
 function assert(condition, message) {
@@ -144,11 +145,12 @@ async function testReportClassHtmlXls() {
     arrayBuffer: async () => new TextEncoder().encode(html).buffer,
     text: async () => html
   };
-  await vm.runInContext(`parseUploadedFile(globalThis.__file).then(file=>{globalThis.__parsedFile=file;globalThis.__entries=scheduleEntriesFromRows(file.rows);})`, context);
+  vm.runInContext(`state.morningOperationDate='2031-01-01'`, context);
+  await vm.runInContext(`parseUploadedFile(globalThis.__file).then(file=>{globalThis.__parsedFile=file;globalThis.__entries=scheduleEntriesFromRows(file.rows,{fileName:file.name});})`, context);
   const file = context.__parsedFile, entries = context.__entries;
   assert(file.kind === 'paycom-html-xls' && file.rows.length === 4, 'ReportClass HTML .xls must be recognized before attempting XLSX parsing');
   assert(entries.length === 3, 'ReportClass HTML .xls must produce all scheduled shift rows');
-  assert(entries[0].name === 'Casey Driver' && entries[0].date === '7/14/2026' && entries[0].role === 'Delivery Associate', 'ReportClass employee/date/role normalization failed');
+  assert(entries[0].name === 'Casey Driver' && entries[0].date === '7/14/2026' && entries[0].role === 'Delivery Associate', 'ReportClass employee/date/role normalization or filename year hint failed');
   assert(entries[1].name === 'Harper Helper' && entries[1].start === '10:25 AM', 'ReportClass helper shift normalization failed');
   assert(entries[2].role === 'First Opening Dispatcher', 'ReportClass dispatcher role must remain available for dispatcher grouping');
 
@@ -160,9 +162,31 @@ async function testReportClassHtmlXls() {
       arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
       text: async () => bytes.toString('utf8')
     };
-    await vm.runInContext(`parseUploadedFile(globalThis.__actualPaycom).then(file=>{globalThis.__actualEntries=scheduleEntriesFromRows(file.rows);})`, context);
+    await vm.runInContext(`parseUploadedFile(globalThis.__actualPaycom).then(file=>{globalThis.__actualEntries=scheduleEntriesFromRows(file.rows,{fileName:file.name});})`, context);
     assert(context.__actualEntries.length === 83, `The supplied ReportClass file should produce 83 shifts, received ${context.__actualEntries.length}`);
     assert(context.__actualEntries.every(entry => entry.date === '7/14/2026'), 'The supplied ReportClass shifts must retain the report operation date');
+  }
+
+  const matchedPath = '/Users/alecgonzo/Downloads/ReportClass-20260715055736.xls';
+  if (fs.existsSync(matchedPath)) {
+    const bytes = fs.readFileSync(matchedPath);
+    context.__matchedPaycom = {
+      name: 'ReportClass-20260715055736.xls', type: 'application/vnd.ms-excel',
+      arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      text: async () => bytes.toString('utf8')
+    };
+    await vm.runInContext(`parseUploadedFile(globalThis.__matchedPaycom).then(file=>{globalThis.__matchedEntries=scheduleEntriesFromRows(file.rows,{fileName:file.name});})`, context);
+    const matched = context.__matchedEntries;
+    assert(matched.length === 81 && new Set(matched.map(entry => entry.name.toLowerCase())).size === 81, `The 7/15 ReportClass file should produce 81 unique shifts, received ${matched.length}`);
+    assert(matched.every(entry => entry.date === '7/15/2026' && entry.name && entry.start && entry.end && entry.role), 'Every 7/15 ReportClass shift must retain its date, name, times, and role');
+    const roleCounts = Object.fromEntries([...new Set(matched.map(entry => entry.role))].map(role => [role, matched.filter(entry => entry.role === role).length]));
+    assert(roleCounts['Delivery Associate'] === 59 && roleCounts.Rescue === 12 && roleCounts['Driver Helper'] === 1 && roleCounts['Closing Dispatcher'] === 1, 'The 7/15 ReportClass role totals no longer match the Paycom PDF proof');
+    assert(matched.some(entry => entry.name === 'Alec Gonzalez' && entry.role === 'Closing Dispatcher' && entry.start === '2:00 PM' && entry.end === '10:30 PM'), 'The expected XLS-only Alec Gonzalez shift is missing or incorrect');
+    const canonical = rows => rows.map(entry => [entry.date, entry.name, entry.start, entry.end, entry.role].join('|')).sort().join('\n');
+    const allHash = crypto.createHash('sha256').update(canonical(matched)).digest('hex');
+    const pdfReferenceHash = crypto.createHash('sha256').update(canonical(matched.filter(entry => entry.name !== 'Alec Gonzalez'))).digest('hex');
+    assert(allHash === '1d855638d033c1a0115310e3f920f5ee305994e93e316ae76566923d174ad301', 'One or more 7/15 XLS names, times, or roles changed from the verified 81-row source');
+    assert(pdfReferenceHash === '915c5a4425298bca9cd6b69c8189a075c589a6d2a5aa988864bd58e983970777', 'The 80 PDF-backed shifts no longer match the verified same-day Schedule Exchange roster');
   }
 }
 

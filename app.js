@@ -5097,17 +5097,21 @@ function htmlTableRows(html='') {
   }
   return rows;
 }
-function paycomReportDate(value='') {
+function paycomFileDateHint(value='') {
+  const match=String(value||'').match(/ReportClass-(\d{4})(\d{2})(\d{2})/i);if(!match)return '';
+  return `${Number(match[2])}/${Number(match[3])}/${Number(match[1])}`;
+}
+function paycomReportDate(value='',fallbackYear=0) {
   const text=String(value||'').replace(/[,]+/g,' ').replace(/\s+/g,' ').trim();
   const numeric=text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
   if(numeric) {
-    let year=Number(numeric[3]||String(state.morningOperationDate||'').slice(0,4)||new Date().getFullYear());if(year<100)year+=2000;
+    let year=Number(numeric[3]||fallbackYear||String(state.morningOperationDate||'').slice(0,4)||new Date().getFullYear());if(year<100)year+=2000;
     return `${Number(numeric[1])}/${Number(numeric[2])}/${year}`;
   }
   const months={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12};
   const named=text.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:\s+(\d{4}))?\b/i);
   if(!named)return '';
-  const year=Number(named[3]||String(state.morningOperationDate||'').slice(0,4)||new Date().getFullYear());
+  const year=Number(named[3]||fallbackYear||String(state.morningOperationDate||'').slice(0,4)||new Date().getFullYear());
   return `${months[named[1].toLowerCase()]}/${Number(named[2])}/${year}`;
 }
 function normalizeScheduleEmployeeName(value='') {
@@ -5116,10 +5120,11 @@ function normalizeScheduleEmployeeName(value='') {
   const parts=clean.split(',').map(part=>part.trim()).filter(Boolean),ordered=parts.length>1?`${parts.slice(1).join(' ')} ${parts[0]}`:clean;
   return ordered.toLowerCase().replace(/(^|[\s'-])([a-z])/g,(_,lead,letter)=>lead+letter.toUpperCase()).replace(/\s+/g,' ').trim();
 }
-function scheduleEntriesFromPaycomReportRows(rows=[]) {
-  const header=rows.findIndex(row=>headerKey(row[0])==='employee'&&row.slice(1).some(cell=>paycomReportDate(cell)));
+function scheduleEntriesFromPaycomReportRows(rows=[],options={}) {
+  const fileDate=paycomFileDateHint(options.fileName||''),fallbackYear=Number(fileDate.split('/')[2]||0);
+  const header=rows.findIndex(row=>headerKey(row[0])==='employee'&&row.slice(1).some(cell=>paycomReportDate(cell,fallbackYear)));
   if(header<0)return [];
-  const date=rowDate(rows[header])||paycomReportDate(rows[header][1]),entries=[];
+  const date=rowDate(rows[header])||fileDate||paycomReportDate(rows[header][1],fallbackYear),entries=[];
   rows.slice(header+1).forEach(row=>{
     const rawName=String(row[0]||'').trim(),details=String(row.slice(1).find(Boolean)||'').replace(/\r/g,'').trim();
     const times=details.match(/(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
@@ -5129,7 +5134,7 @@ function scheduleEntriesFromPaycomReportRows(rows=[]) {
     entries.push({date,name,start:normalizeTimeDisplay(times[1]),end:normalizeTimeDisplay(times[2]),role});
   });
   return entries;
-  function rowDate(row){for(const cell of row.slice(1)){const parsed=paycomReportDate(cell);if(parsed)return parsed;}return '';}
+  function rowDate(row){for(const cell of row.slice(1)){const parsed=paycomReportDate(cell,fallbackYear);if(parsed)return parsed;}return '';}
 }
 function normalizeScheduleRole(value='') { return String(value||'').replace(/res(?:cue|uce|ceus?)/ig,'Rescue').replace(/\s+/g,' ').trim(); }
 function scheduleEntriesFromText(text='') {
@@ -5147,8 +5152,8 @@ function scheduleEntriesFromText(text='') {
   }
   return entries;
 }
-function scheduleEntriesFromRows(rows=[]) {
-  const paycom=scheduleEntriesFromPaycomReportRows(rows);if(paycom.length)return paycom;
+function scheduleEntriesFromRows(rows=[],options={}) {
+  const paycom=scheduleEntriesFromPaycomReportRows(rows,options);if(paycom.length)return paycom;
   const header=findImportHeader(rows,[['name','employee','employeename','associate','deliveryassociate'],['shift','position','role','job','schedule']]);
   if(header<0)return scheduleEntriesFromText(rowsToText(rows));
   const keys=rows[header].map(headerKey),index=(...names)=>keys.findIndex(key=>names.map(headerKey).includes(key));
@@ -5271,7 +5276,7 @@ async function readFiles(files) {
       return toast(`${records.length} DVIR rows read · ${applied.pre} Pre-Trip and ${applied.post} Post-Trip Morning Sheet checks updated`);
     }
     if(state.importPurpose==='schedule') {
-      const entries=parsed.flatMap(file=>file.rows?.length?scheduleEntriesFromRows(file.rows):scheduleEntriesFromText(file.text||''));
+      const entries=parsed.flatMap(file=>file.rows?.length?scheduleEntriesFromRows(file.rows,{fileName:file.name}):scheduleEntriesFromText(file.text||''));
       if(!entries.length)throw new Error('no schedule shifts');
       const destination=state.scheduleImportDestination||'roster',entryDate=entries.map(entry=>scheduleDateKey(entry.date)).find(Boolean);state.scheduleEntries=entries;state.scheduleImportName=parsed.map(file=>file.name).join(' + ');
       let helperAdded=0;if(destination==='rostering'){if(entryDate)state.rosteringDate=entryDate;helperAdded=syncRosteringHelperShifts(currentRosteringPlan());}
