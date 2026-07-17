@@ -70,6 +70,35 @@ function testDestinationPopupAndManualOverride() {
   assert(context.__record.vto === 'VTO 4' && context.__rows.some(row => row.name === 'Casey Rescue' && row.vto === 'VTO 4'), 'A manual VTO override must persist and stay in the correct Picklist column');
 }
 
+function testRestoreIsSingleDestinationAndPicklistActions() {
+  const context = appContext();
+  vm.runInContext(`
+    state.dspCode='LLOL';state.morningOperationDate='2026-07-16';state.morningRoutes=[];
+    state.scheduleEntries=[{date:'7/16/2026',name:'Casey Rescue',start:'10:30 AM',end:'7:00 PM',role:'Rescue'}];
+    state.scheduleDriverMarks={};state.scheduleBackupRecords={};state.scheduleStayHome={};state.scheduleReductions={};state.scheduleHelpers={};state.callOffDriverKeys={};state.callOffReasons={};state.openingPicklistBackupOverrides={'vto2:0':'Casey Rescue'};
+    moveRosterDriverToVto('Casey Rescue','Rescue','VTO 2');
+    globalThis.__before=currentBackupDriverRows().filter(row=>driverIdentityKey(row.name)===driverIdentityKey('Casey Rescue')).length;
+    restoreRosterStatus('Casey Rescue','backup');
+    globalThis.__after=currentBackupDriverRows().filter(row=>driverIdentityKey(row.name)===driverIdentityKey('Casey Rescue')).length;
+    globalThis.__mark=dailyRosterMark('Casey Rescue');
+    globalThis.__override=Object.values(state.openingPicklistBackupOverrides).includes('Casey Rescue');
+    globalThis.__restoredHtml=openingRosterScheduleHtml();
+    moveRosterDriverToVto('Casey Rescue','Rescue','VTO 2');
+    globalThis.__picklistActions=openingPicklistRightHtml();
+    applyPicklistVtoAction('Casey Rescue','Rescue','calloff');
+    globalThis.__calledOff=rosterStatusRows(state.callOffDriverKeys,'Called off');
+    globalThis.__calledOffHtml=openingRosterScheduleHtml();
+  `, context);
+  assert(context.__before === 1, 'A driver identity must have only one VTO record before restore');
+  assert(context.__after === 0 && context.__mark === 'paycom', 'Restore must suppress automatic VTO recreation and return the driver to PAYCOM');
+  assert(context.__override === false, 'Restore must clear a matching saved Picklist backup cell');
+  const paycom = context.__restoredHtml.split('All Scheduled driver shifts (PAYCOM)')[1].split('scheduled-section called-off')[0];
+  assert((paycom.match(/data-roster-name="casey rescue"/g)||[]).length === 1, 'Restored driver must appear exactly once in the PAYCOM list');
+  assert(context.__picklistActions.includes('picklist-vto-actions') && context.__picklistActions.includes('data-vto-target="calloff"') && context.__picklistActions.includes('data-vto-target="reduction"') && context.__picklistActions.includes('data-vto-target="stay-home"'), 'Picklist VTO names must expose the scrollable destination action controls');
+  assert(context.__calledOff.length === 1 && context.__calledOff[0].name === 'Casey Rescue', 'A Picklist VTO action must move the driver to the selected destination exactly once');
+  assert(context.__calledOffHtml.includes('roster-destination-called-off'), 'Destination rows must retain a visible status color class');
+}
+
 function testPicklistAndConnectorSurface() {
   const context = appContext();
   vm.runInContext(`
@@ -89,5 +118,6 @@ function testPicklistAndConnectorSurface() {
 
 testAutomaticVtoDestinations();
 testDestinationPopupAndManualOverride();
+testRestoreIsSingleDestinationAndPicklistActions();
 testPicklistAndConnectorSurface();
 console.log('Opening Roster automatic VTO, destination actions, Picklist, and Connector Settings contracts passed.');

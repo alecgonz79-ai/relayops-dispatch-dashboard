@@ -51,7 +51,13 @@ function run() {
     globalThis.__aliasImportContact=state.driverContacts.find(row=>row.transporterId==='A2J6');
     globalThis.__oldResolves=canonicalDriverName('Alex Jonathan Gonzalez');
     globalThis.__nicknameResolves=canonicalDriverName('Alec G');
+    mergeDriverContacts([
+      {name:'Alec Jonathan Gonzalez',phone:'',role:'Dispatcher',transporterId:'DSP-A',status:'ACTIVE',key:'alec jonathan gonzalez'},
+      {name:'Jose Lopez Ramirez',phone:'',role:'Dispatcher',transporterId:'DSP-J',status:'ACTIVE',key:'jose lopez ramirez'},
+      {name:'Regular Driver',phone:'',role:'Delivery Associate',transporterId:'DA-R',status:'ACTIVE',key:'regular driver'}
+    ]);
     globalThis.__teamHtml=teamPage();
+    globalThis.__dispatcherChecks=[isDesignatedDispatcher('Alec Jonathan Gonzalez'),isDesignatedDispatcher('Jose Lopez Ramirez'),isDesignatedDispatcher('Regular Driver')];
     globalThis.__daily=sharedWorkspaceState();globalThis.__persistent=persistentWorkspaceState();
     state.driverProfiles['id:OTHER']={canonical:'Another Driver',nickname:'',names:['Another Driver','AJ'],tags:[],transporterId:'OTHER'};
     globalThis.__collision=driverIdentityCollision(['AJ'],'id:A2J6');
@@ -66,6 +72,9 @@ function run() {
   assert(storage.has('relayops_driver_profiles'), 'Driver profiles must be written to local storage');
   assert(context.__daily.driverProfiles && context.__persistent.driverProfiles, 'Driver profiles must be included in shared and persistent cloud snapshots');
   assert(context.__teamHtml.includes('team-directory-layout') && context.__teamHtml.includes('team-message-column') && context.__teamHtml.includes('Trainer') && context.__teamHtml.includes('Helper Driver'), 'Drivers & Team must render the compact right-side queue and capability controls');
+  assert(context.__teamHtml.includes('data-team-search') && context.__teamHtml.includes('data-team-driver-name'), 'Drivers & Team must expose a dedicated searchable name index');
+  assert((context.__teamHtml.match(/dispatcher-driver-card/g)||[]).length === 2 && context.__teamHtml.includes('dispatcher-badge'), 'Designated dispatchers must render with the gold dispatcher frame and badge');
+  assert(context.__dispatcherChecks[0] && context.__dispatcherChecks[1] && !context.__dispatcherChecks[2], 'Dispatcher identity matching must allow middle names without framing regular drivers');
   assert(context.__collision?.profile?.canonical === 'Another Driver', 'Duplicate known names must be detected before an alias is saved');
 
   const fieldValues = {

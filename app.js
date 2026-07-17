@@ -887,6 +887,13 @@ function openingPicklistSectionHtml(section={},sectionIndex=0) {
 function openingPicklistBackupRows() {
   return currentBackupDriverRows().map(entry=>({...entry,vto:entry.vto||scheduleBackupLabel(entry.role)}));
 }
+function picklistVtoDriverCell(group='',index=0,row=null,value='') {
+  const name=String(value||'').trim(),label=group==='vto2'?'VTO 2':'VTO 4',role=row?.role||(group==='vto2'?'Rescue':'Delivery Associate');
+  const input=`<input data-picklist-backup="${esc(group)}:${index}" data-driver-name-input="true" value="${esc(name)}" aria-label="${label} backup ${index+1}" placeholder="Driver">`;
+  if(!name)return input;
+  const action=(target,text,tone='')=>`<button type="button" class="${esc(tone)}" data-action="picklist-vto-action" data-vto-target="${esc(target)}" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}">${esc(text)}</button>`;
+  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('adhoc','Adhoc','adhoc')}</div></div></div>`;
+}
 function openingPicklistCallOffRows() {
   return Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([key,value])=>({key,name:value.name||'',reason:state.callOffReasons?.[key]||'',route:value.route||''})).sort((a,b)=>a.name.localeCompare(b.name));
 }
@@ -894,7 +901,7 @@ function openingPicklistRightHtml() {
   const controls=area=>`<span class="picklist-row-controls" aria-label="Add or subtract ${esc(area)} row"><button type="button" data-action="resize-picklist-area" data-area="${esc(area)}" data-delta="-1" title="Subtract one line">−</button><button type="button" data-action="resize-picklist-area" data-area="${esc(area)}" data-delta="1" title="Add one line">+</button></span>`;
   const backups=openingPicklistBackupRows(),vto2=backups.filter(row=>row.vto==='VTO 2'),vto4=backups.filter(row=>row.vto!=='VTO 2'),backupCount=Math.max(1,state.openingPicklistBackupRows||21,vto2.length,vto4.length);
   const overrides=state.openingPicklistBackupOverrides||{},backupValue=(group,index,fallback)=>Object.prototype.hasOwnProperty.call(overrides,`${group}:${index}`)?overrides[`${group}:${index}`]:fallback;
-  const backupRows=Array.from({length:backupCount},(_,index)=>`<tr><td><input data-picklist-backup="vto2:${index}" data-driver-name-input="true" value="${esc(backupValue('vto2',index,vto2[index]?.name||''))}" aria-label="VTO 2 backup ${index+1}" placeholder="Driver"></td><td><input data-picklist-backup="vto4:${index}" data-driver-name-input="true" value="${esc(backupValue('vto4',index,vto4[index]?.name||''))}" aria-label="VTO 4 backup ${index+1}" placeholder="Driver"></td></tr>`).join('');
+  const backupRows=Array.from({length:backupCount},(_,index)=>{const left=backupValue('vto2',index,vto2[index]?.name||''),right=backupValue('vto4',index,vto4[index]?.name||'');return `<tr><td>${picklistVtoDriverCell('vto2',index,vto2[index],left)}</td><td>${picklistVtoDriverCell('vto4',index,vto4[index],right)}</td></tr>`;}).join('');
   const calloffs=openingPicklistCallOffRows(),drafts=Array.isArray(state.openingPicklistCalloffDrafts)?state.openingPicklistCalloffDrafts:[],filledDrafts=drafts.filter(row=>String(row?.name||row?.reason||'').trim()).length,calloffCount=Math.max(1,state.openingPicklistCalloffRows||6,calloffs.length+filledDrafts),calloffRows=Array.from({length:calloffCount},(_,index)=>{const row=calloffs[index],draftIndex=index-calloffs.length,draft=draftIndex>=0?(drafts[draftIndex]||{}):null;return `<tr><td><input ${row?`data-picklist-calloff-name="${esc(row.key)}"`:`data-picklist-calloff-draft="${draftIndex}" data-picklist-calloff-field="name"`} data-driver-name-input="true" value="${esc(row?.name||draft?.name||'')}" aria-label="Call off ${index+1}" placeholder="Driver"></td><td><input ${row?`data-picklist-calloff-reason="${esc(row.key)}"`:`data-picklist-calloff-draft="${draftIndex}" data-picklist-calloff-field="reason"`} value="${esc(row?.reason||draft?.reason||'')}" aria-label="Reason ${index+1}" placeholder="Reason"></td></tr>`;}).join('');
   const topicValues=state.openingPicklistTopics||[],lastTopic=Math.max(0,...topicValues.map((value,index)=>String(value||'').trim()?index+1:0)),topicCount=Math.max(1,state.openingPicklistTopicRows||4,lastTopic),topics=Array.from({length:topicCount},(_,index)=>`<tr><td colspan="2"><input data-picklist-topic="${index}" value="${esc(topicValues[index]||'')}" aria-label="Stand up topic ${index+1}" placeholder="Stand up topic"></td></tr>`).join('');
   return `<aside class="opening-picklist-right"><table class="picklist-side-table backup-table"><thead><tr><th colspan="2"><span>Back Ups</span>${controls('backup')}</th></tr><tr><th>VTO 2</th><th>VTO 4</th></tr></thead><tbody>${backupRows}</tbody></table><table class="picklist-side-table calloff-table"><thead><tr><th>CALL OFF</th><th><span>REASON</span>${controls('calloff')}</th></tr></thead><tbody>${calloffRows}</tbody></table><table class="picklist-side-table topics-table"><thead><tr><th colspan="2"><span>STAND UP TOPICS</span>${controls('topic')}</th></tr></thead><tbody>${topics}</tbody></table><section class="picklist-notes"><strong>NOTES</strong><textarea data-picklist-notes aria-label="Opening picklist notes" placeholder="Opening notes">${esc(state.openingPicklistNotes||'')}</textarea></section><label class="picklist-date"><span>DATE</span><input data-picklist-date value="${esc(openingPicklistDateText())}" inputmode="numeric" aria-label="Opening picklist date" placeholder="Month/Day/Year"></label></aside>`;
@@ -1506,13 +1513,27 @@ function driverKnownNamesHtml(name='') {
   return known.length?`<div class="driver-known-names"><span>Linked names</span><strong>${known.map(esc).join(' · ')}</strong></div>`:'';
 }
 
+const DESIGNATED_DISPATCHER_NAMES=['Alec Gonzalez','Gerardo Godinez','Javier Navarrete','Jennifer Ceja','Jose Lopez','Edwin Gomez'];
+function isDesignatedDispatcher(name='') {
+  const parts=(driverIdentityKey(name)||nameKey(name)).split(' ').filter(Boolean);
+  return DESIGNATED_DISPATCHER_NAMES.some(dispatcher=>nameKey(dispatcher).split(' ').filter(Boolean).every(part=>parts.includes(part)));
+}
+
 function teamPage() {
   const drivers=teamDriverRows(), contacts=state.driverContacts||[];
   const onRouteNames=new Set(filteredMorningRows().map(r=>nameKey(r.driver)).filter(Boolean));
-  return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar"><div class="toolbar-left"><select class="filter-select"><option>All status</option><option>Active</option><option>Leave</option></select><select class="filter-select"><option>All roles</option><option>Lead DA</option><option>Delivery Associate</option></select><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import Drivers CSV / Excel</button><button class="btn lime" data-action="add-delivery-associate">${ICONS.plus} Add Delivery Associate</button></div></div>
+  return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar team-toolbar"><div class="toolbar-left"><label class="team-name-search">${ICONS.search}<input type="search" data-team-search autocomplete="off" placeholder="Search driver names" aria-label="Search Drivers and Team by name"><button type="button" data-action="clear-team-search" aria-label="Clear driver search">×</button></label><span class="filter-note" data-team-search-count>${drivers.length} drivers</span><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import Drivers CSV / Excel</button><button class="btn lime" data-action="add-delivery-associate">${ICONS.plus} Add Delivery Associate</button></div></div>
   <div class="driver-workforce-import card"><div><strong>Driver & phone import</strong><span>Drop in an AssociateData CSV or Excel workbook (.xlsx). RelayOps finds the associate sheet, matches Name with Personal Phone, and keeps Position, Transporter ID, and Active status.</span></div><div><button class="btn small primary" data-action="driver-import">Choose CSV or Excel</button><button class="btn small" data-action="add-delivery-associate">Add one manually</button></div><small>Contacts are never embedded in the public website. Signed-in dispatchers share them only through the protected station workspace; signed-out use stays in this browser.</small></div>
   <div class="driver-message-readiness card"><div><strong>Future text reminder prep</strong><span>After the Morning Sheet is finalized, RelayOps can identify on-route drivers by the visible Morning Sheet names. Texting will need a secure SMS connector and driver opt-in before it sends anything.</span></div><div><b>${drivers.filter(d=>onRouteNames.has(nameKey(d.name))).length}</b><small>current team cards recognized on the Morning Sheet</small></div></div>
-  <div class="team-directory-layout"><section class="grid team-grid">${drivers.map(d=>{const whip=driverWhiparoundStats(d.name),stay=driverStayHomeStats(d.name),display=driverDisplayName(d.name);return `<article class="card entity-card driver-card ${whip.frequent?'whip-frequent-driver':''} ${stay.frequent?'stay-home-frequent-driver':''}" ${driverProfileAttrs(d.name)}><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(display)}</div><div class="driver-card-actions"><span class="status ${statusClass(d.status)}">${d.status}</span><button class="driver-note-button" data-action="open-driver-flags" data-driver-name="${esc(d.name)}" aria-label="Driver notes for ${esc(d.name)}" title="Driver notes">⚑${driverProfileFlags(d.name).length||''}</button><button class="driver-alias-button" data-action="open-driver-alias" data-driver-name="${esc(d.name)}" aria-label="Edit driver profile for ${esc(d.name)}" title="Nickname, known names, and preferred vans">Aa</button><button class="driver-delete-button" data-action="request-driver-removal" data-driver-key="${esc(nameKey(d.name))}" aria-label="Remove ${esc(d.name)}" title="Remove Delivery Associate">${ICONS.trash}</button></div></div><h3>${esc(d.name)}</h3>${display!==d.name?`<span class="driver-alias-preview">Nickname: ${esc(display)}</span>`:''}${driverKnownNamesHtml(d.name)}${driverPreferredVehiclesHtml(d.name)}<p>${esc(d.role)} · ${esc(d.id)}</p>${driverCapabilityButtonsHtml(d.name)}<div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div>${stay.count?`<div class="driver-stay-home-history ${stay.frequent?'frequent':''}"><b>${stay.count}</b><span><strong>Told to stay home · last 14 days</strong><small>${stay.recent.map(row=>formatShortOperationDate(row.date)).join(' · ')}${stay.total>stay.count?` · ${stay.total} all-time`:''}</small></span></div>`:''}${whip.missed?`<div class="driver-whiparound-flag ${whip.frequent?'frequent':''}">${ICONS.whiparound}<span><b>${whip.frequent?'Frequent Whiparound follow-up':'Whiparound follow-up'}</b><small>${whip.missed} missed form${whip.missed===1?'':'s'} across ${whip.missedDays} day${whip.missedDays===1?'':'s'}</small></span></div>`:''}<div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></article>`;}).join('')}</section><aside class="team-message-column">${morningMessageQueueHtml()}</aside></div>`;
+  <div class="team-directory-layout"><section class="grid team-grid">${drivers.map(d=>{const whip=driverWhiparoundStats(d.name),stay=driverStayHomeStats(d.name),display=driverDisplayName(d.name),dispatcher=isDesignatedDispatcher(d.name),searchValue=nameKey([d.name,display,...(driverProfileEntry(d.name)?.profile?.names||[])].join(' '));return `<article class="card entity-card driver-card ${dispatcher?'dispatcher-driver-card':''} ${whip.frequent?'whip-frequent-driver':''} ${stay.frequent?'stay-home-frequent-driver':''}" data-team-driver-name="${esc(searchValue)}" ${driverProfileAttrs(d.name)}><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(display)}</div><div class="driver-card-actions">${dispatcher?'<span class="dispatcher-badge">Dispatcher</span>':''}<span class="status ${statusClass(d.status)}">${d.status}</span><button class="driver-note-button" data-action="open-driver-flags" data-driver-name="${esc(d.name)}" aria-label="Driver notes for ${esc(d.name)}" title="Driver notes">⚑${driverProfileFlags(d.name).length||''}</button><button class="driver-alias-button" data-action="open-driver-alias" data-driver-name="${esc(d.name)}" aria-label="Edit driver profile for ${esc(d.name)}" title="Nickname, known names, and preferred vans">Aa</button><button class="driver-delete-button" data-action="request-driver-removal" data-driver-key="${esc(nameKey(d.name))}" aria-label="Remove ${esc(d.name)}" title="Remove Delivery Associate">${ICONS.trash}</button></div></div><h3>${esc(d.name)}</h3>${display!==d.name?`<span class="driver-alias-preview">Nickname: ${esc(display)}</span>`:''}${driverKnownNamesHtml(d.name)}${driverPreferredVehiclesHtml(d.name)}<p>${esc(d.role)} · ${esc(d.id)}</p>${driverCapabilityButtonsHtml(d.name)}<div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div>${stay.count?`<div class="driver-stay-home-history ${stay.frequent?'frequent':''}"><b>${stay.count}</b><span><strong>Told to stay home · last 14 days</strong><small>${stay.recent.map(row=>formatShortOperationDate(row.date)).join(' · ')}${stay.total>stay.count?` · ${stay.total} all-time`:''}</small></span></div>`:''}${whip.missed?`<div class="driver-whiparound-flag ${whip.frequent?'frequent':''}">${ICONS.whiparound}<span><b>${whip.frequent?'Frequent Whiparound follow-up':'Whiparound follow-up'}</b><small>${whip.missed} missed form${whip.missed===1?'':'s'} across ${whip.missedDays} day${whip.missedDays===1?'':'s'}</small></span></div>`:''}<div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></article>`;}).join('')}<div class="team-search-empty" data-team-search-empty hidden><strong>No driver found</strong><span>Try the legal name, nickname, or another linked name.</span></div></section><aside class="team-message-column">${morningMessageQueueHtml()}</aside></div>`;
+}
+
+function filterTeamDirectory(value='') {
+  const query=nameKey(value),cards=[...document.querySelectorAll?.('[data-team-driver-name]')||[]];let visible=0;
+  cards.forEach(card=>{const match=!query||String(card.dataset.teamDriverName||'').includes(query);card.hidden=!match;if(match)visible++;});
+  const count=document.querySelector?.('[data-team-search-count]');if(count)count.textContent=query?`${visible} match${visible===1?'':'es'}`:`${cards.length} drivers`;
+  const empty=document.querySelector?.('[data-team-search-empty]');if(empty)empty.hidden=visible!==0;
+  return visible;
 }
 
 function fleetPage() {
@@ -3248,28 +3269,42 @@ function enhanceDriverTextButtons() {
   });
 }
 function scheduleDriverMarkKey(name='') { return `${state.morningOperationDate}|${nameKey(name)}`; }
+function dailyRosterIdentityKeys(store={},name='') {
+  const prefix=`${state.morningOperationDate}|`,wanted=driverIdentityKey(name);
+  if(!wanted)return [];
+  return Object.entries(store||{}).filter(([key,value])=>{if(!key.startsWith(prefix))return false;const storedName=value&&typeof value==='object'&&value.name?value.name:key.slice(prefix.length);return driverIdentityKey(storedName)===wanted;}).map(([key])=>key);
+}
+function deleteDailyRosterIdentity(store={},name='',accept=()=>true) {
+  dailyRosterIdentityKeys(store,name).forEach(key=>{if(accept(store[key],key))delete store[key];});
+}
+function dailyRosterMark(name='') {
+  const key=dailyRosterIdentityKeys(state.scheduleDriverMarks,name)[0];return key?state.scheduleDriverMarks[key]:'';
+}
+function clearPicklistBackupDriver(name='') {
+  const wanted=driverIdentityKey(name);if(!wanted)return;
+  Object.entries(state.openingPicklistBackupOverrides||{}).forEach(([key,value])=>{if(driverIdentityKey(value)===wanted)delete state.openingPicklistBackupOverrides[key];});
+}
 function scheduleBackupLabel(role='') { const key=headerKey(role);return key.includes('deliveryassociate')?'VTO 4':'VTO 2'; }
 function automaticBackupLabel(role='') { const key=headerKey(role);return key.includes('rescue')?'VTO 2':key.includes('deliveryassociate')?'VTO 4':''; }
 function morningRosterDriverKeys() {
-  const keys=new Set();(state.morningRoutes||[]).filter(route=>route.dsp===state.dspCode&&route.route&&!String(route.route).startsWith('__blank_')).forEach(route=>morningDriverNames(route.driver).forEach(name=>keys.add(nameKey(name))));return keys;
+  const keys=new Set();(state.morningRoutes||[]).filter(route=>route.dsp===state.dspCode&&route.route&&!String(route.route).startsWith('__blank_')).forEach(route=>morningDriverNames(route.driver).forEach(name=>keys.add(driverIdentityKey(name))));return keys;
 }
 function automaticUnrosteredBackupRows() {
   const rostered=morningRosterDriverKeys();
   return currentScheduleEntries().filter(entry=>{
-    const key=scheduleDriverMarkKey(entry.name),label=automaticBackupLabel(entry.role);if(scheduleRoleGroup(entry.role)!=='driver'||!label||rostered.has(nameKey(entry.name)))return false;
-    if(state.scheduleDriverMarks?.[key]||state.scheduleStayHome?.[key]||state.scheduleReductions?.[key]||state.scheduleHelpers?.[key]||state.callOffDriverKeys?.[callOffStatusKey(entry.name)])return false;
+    const label=automaticBackupLabel(entry.role);if(scheduleRoleGroup(entry.role)!=='driver'||!label||rostered.has(driverIdentityKey(entry.name)))return false;
+    if(dailyRosterMark(entry.name)||dailyRosterIdentityKeys(state.scheduleStayHome,entry.name).length||dailyRosterIdentityKeys(state.scheduleReductions,entry.name).length||dailyRosterIdentityKeys(state.scheduleHelpers,entry.name).length||dailyRosterIdentityKeys(state.callOffDriverKeys,entry.name).length)return false;
     return true;
   }).map(entry=>({...entry,automatic:true,autoReason:'Not rostered for route',vto:automaticBackupLabel(entry.role)}));
 }
 function currentBackupDriverRows() {
-  const scheduled=currentScheduleEntries().filter(entry=>state.scheduleDriverMarks[scheduleDriverMarkKey(entry.name)]==='backup'),records=new Map(rosterStatusRows(state.scheduleBackupRecords,'Backup driver').map(entry=>[nameKey(entry.name),entry])),byName=new Map(scheduled.map(entry=>{const record=records.get(nameKey(entry.name))||{};return [nameKey(entry.name),{...entry,...record,name:record.name||entry.name}];}));
+  const scheduled=currentScheduleEntries().filter(entry=>dailyRosterMark(entry.name)==='backup'),records=new Map(rosterStatusRows(state.scheduleBackupRecords,'Backup driver').map(entry=>[driverIdentityKey(entry.name),entry])),byName=new Map(scheduled.map(entry=>{const identity=driverIdentityKey(entry.name),record=records.get(identity)||{};return [identity,{...entry,...record,name:record.name||entry.name}];}));
   records.forEach((entry,key)=>{if(!byName.has(key))byName.set(key,entry);});
-  automaticUnrosteredBackupRows().forEach(entry=>{if(!byName.has(nameKey(entry.name)))byName.set(nameKey(entry.name),entry);});
+  automaticUnrosteredBackupRows().forEach(entry=>{const identity=driverIdentityKey(entry.name);if(!byName.has(identity))byName.set(identity,entry);});
   return [...byName.values()].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
 }
 function rosterDriverUnavailable(name='') {
-  const key=scheduleDriverMarkKey(name);
-  return Boolean(state.scheduleStayHome?.[key]||state.scheduleReductions?.[key]||state.callOffDriverKeys?.[callOffStatusKey(name)]);
+  return Boolean(dailyRosterIdentityKeys(state.scheduleStayHome,name).length||dailyRosterIdentityKeys(state.scheduleReductions,name).length||dailyRosterIdentityKeys(state.callOffDriverKeys,name).length);
 }
 function rosterStatusRows(store={},fallbackRole='') {
   return Object.entries(store||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([,value])=>({...value,name:value.name,role:value.role||fallbackRole,start:value.start||'',end:value.end||'',route:value.route||''})).sort((a,b)=>a.name.localeCompare(b.name));
@@ -3289,7 +3324,7 @@ function rosterDestinationNameHtml(row={},destination='') {
 function scheduledShiftRowsHtml(rows=[],empty='No scheduled shifts found',options={}) {
   const status=options.status||'',destination=options.destination||status||(options.helperBox?'helper':options.backupBox?'backup':options.allowReduction?'called-off':'');
   return rows.length?rows.map(row=>{
-    const mark=state.scheduleDriverMarks[scheduleDriverMarkKey(row.name)]||'',vto=row.vto||scheduleBackupLabel(row.role),data=`data-roster-name="${esc(nameKey(row.name))}"`,stayStats=status==='stay-home'?driverStayHomeStats(row.name):null;
+    const mark=dailyRosterMark(row.name),vto=row.vto||scheduleBackupLabel(row.role),data=`data-roster-name="${esc(nameKey(row.name))}"`,stayStats=status==='stay-home'?driverStayHomeStats(row.name):null;
     let actions='';
     if(row.paycom&&isDriverHelperOnlyRole(row.role))actions=`<div class="paycom-driver-actions helper-only-actions"><button class="btn small stay-home-button" data-action="mark-paycom-stay-home" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">Told to stay home</button></div>`;
     else if(row.paycom)actions=`<div class="paycom-driver-actions"><button class="btn small ${mark==='backup'?'vto-button':''}" data-action="mark-paycom-backup" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">${mark==='backup'?esc(vto):'Mark backup'}</button><button class="btn small ${mark==='adhoc'?'lime':''}" data-action="mark-paycom-adhoc" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">${mark==='adhoc'?'Adhoc added':'Mark Adhoc'}</button>${canBecomeHelperRole(row.role)?`<button class="btn small helper-button" data-action="mark-paycom-helper" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">Helper</button>`:''}<button class="btn small stay-home-button" data-action="mark-paycom-stay-home" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">Told to stay home</button><button class="btn small reduction-button" data-action="add-roster-reduction" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}" data-driver-route="${esc(row.route||'')}">Add to Reductions</button></div>`;
@@ -3297,26 +3332,28 @@ function scheduledShiftRowsHtml(rows=[],empty='No scheduled shifts found',option
     else if(status)actions=`<div class="paycom-driver-actions"><button class="btn small" data-action="restore-roster-status" data-roster-status="${esc(status)}" data-driver-name="${esc(row.name)}">${status==='reduction'?'Restore original route':'Restore'}</button>${status==='reduction'?`<button class="btn small vto-button" data-action="move-reduction-to-backup" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}">Move to backup drivers · ${esc(vto)}</button>`:''}</div>`;
     else if(options.backupBox&&!row.automatic)actions=`<div class="paycom-driver-actions helper-only-actions"><button class="btn small" data-action="restore-roster-status" data-roster-status="backup" data-driver-name="${esc(row.name)}">Remove from backups</button></div>`;
     else if(options.allowReduction)actions=`<div class="paycom-driver-actions"><button class="btn small reduction-button" data-action="add-roster-reduction" data-driver-name="${esc(row.name)}" data-driver-role="${esc(row.role)}" data-driver-route="${esc(row.route||'')}">Add to Reductions</button></div>`;
-    return `<div class="scheduled-shift-row ${mark==='backup'||row.automatic?'backup-marked':mark==='adhoc'?'adhoc-marked':''}" ${data}><div>${rosterDestinationNameHtml(row,destination)}<span>${esc(row.role)}${row.automatic?' · Auto backup':''}</span>${stayStats?.count?`<small class="stay-home-fairness">${stayStats.count} time${stayStats.count===1?'':'s'} in the last 14 days</small>`:''}</div><b>${esc(row.start)}${row.end?` - ${esc(row.end)}`:''}</b>${row.route?`<em>${esc(row.route)}</em>`:''}${actions}</div>`;
+    return `<div class="scheduled-shift-row roster-destination-${esc(destination||'scheduled')} ${mark==='backup'||row.automatic?'backup-marked':mark==='adhoc'?'adhoc-marked':''}" ${data}><div>${rosterDestinationNameHtml(row,destination)}<span>${esc(row.role)}${row.automatic?' · Auto backup':''}</span>${stayStats?.count?`<small class="stay-home-fairness">${stayStats.count} time${stayStats.count===1?'':'s'} in the last 14 days</small>`:''}</div><b>${esc(row.start)}${row.end?` - ${esc(row.end)}`:''}</b>${row.route?`<em>${esc(row.route)}</em>`:''}${actions}</div>`;
   }).join(''):`<div class="scheduled-shift-empty">${empty}</div>`;
 }
 function adhocIdentityKey(name='') { return nameKey(name); }
 function legacyAdhocRoute(name='') { return `ADHOC-${nameKey(name).replace(/[^a-z0-9]+/g,'-').toUpperCase()}`; }
 function removeDriverAdhocRoute(name='') { const key=adhocIdentityKey(name),legacy=legacyAdhocRoute(name);state.morningRoutes=state.morningRoutes.filter(row=>row.adhocKey!==key&&row.route!==legacy); }
 function reconcileDailyRosterFlags(name='',keep='') {
-  const key=scheduleDriverMarkKey(name),callKey=callOffStatusKey(name);
-  if(keep!=='backup'){delete state.scheduleBackupRecords[key];if(state.scheduleDriverMarks[key]==='backup')delete state.scheduleDriverMarks[key];}
-  if(keep!=='adhoc'&&state.scheduleDriverMarks[key]==='adhoc'){delete state.scheduleDriverMarks[key];removeDriverAdhocRoute(name);}
-  if(keep!=='stay-home')delete state.scheduleStayHome[key];
-  if(keep!=='reduction')delete state.scheduleReductions[key];
-  if(keep!=='calloff')delete state.callOffDriverKeys[callKey];
-  if(keep!=='helper'&&state.scheduleHelpers[key]){
-    removeHelperFromMatchedDriver(name);delete state.scheduleHelpers[key];
-    state.morningRoutes=state.morningRoutes.filter(row=>!(row.helperAssignmentKey===key&&/helper/i.test(`${row.service||''} ${row.wave||''}`)));
+  clearPicklistBackupDriver(name);
+  const marks=dailyRosterIdentityKeys(state.scheduleDriverMarks,name).map(key=>state.scheduleDriverMarks[key]);
+  if(marks.includes('adhoc')&&keep!=='adhoc')removeDriverAdhocRoute(name);
+  deleteDailyRosterIdentity(state.scheduleDriverMarks,name);
+  deleteDailyRosterIdentity(state.scheduleBackupRecords,name);
+  deleteDailyRosterIdentity(state.scheduleStayHome,name);
+  deleteDailyRosterIdentity(state.scheduleReductions,name);
+  dailyRosterIdentityKeys(state.callOffDriverKeys,name).forEach(key=>{delete state.callOffDriverKeys[key];delete state.callOffReasons[key];});
+  if(keep!=='helper'&&dailyRosterIdentityKeys(state.scheduleHelpers,name).length){
+    const helperKeys=dailyRosterIdentityKeys(state.scheduleHelpers,name);removeHelperFromMatchedDriver(name);helperKeys.forEach(key=>delete state.scheduleHelpers[key]);
+    state.morningRoutes=state.morningRoutes.filter(row=>!(helperKeys.includes(row.helperAssignmentKey)&&/helper/i.test(`${row.service||''} ${row.wave||''}`)));
   }
 }
 function markPaycomBackup(name='',role='') {
-  const key=scheduleDriverMarkKey(name),current=state.scheduleDriverMarks[key];
+  const key=scheduleDriverMarkKey(name),current=dailyRosterMark(name);
   if(current!=='backup'){reconcileDailyRosterFlags(name,'backup');state.scheduleDriverMarks[key]='backup';state.scheduleBackupRecords[key]=rosterRecord(contactForMorningDriver(name)?.name||name,role);}
   else {delete state.scheduleDriverMarks[key];delete state.scheduleBackupRecords[key];}
   removeDriverAdhocRoute(name);persist();render();toast(state.scheduleDriverMarks[key]?`${name} marked ${scheduleBackupLabel(role)}`:`${name} backup mark cleared`);
@@ -3362,7 +3399,14 @@ function restoreReductionToOriginalRoute(name='') {
   reconcileDailyRosterFlags(exactName,'on-route');delete state.scheduleReductions[key];persist();render();toast(`${exactName} restored to original route ${routeCode}`);return true;
 }
 function restoreRosterStatus(name='',status='') {
-  const key=scheduleDriverMarkKey(name);if(status==='reduction')return restoreReductionToOriginalRoute(name);if(status==='stay-home')delete state.scheduleStayHome[key];if(status==='backup'){delete state.scheduleBackupRecords[key];delete state.scheduleDriverMarks[key];}persist();render();toast(`${name} returned to the PAYCOM list`);
+  const exactName=contactForMorningDriver(name)?.name||name,key=scheduleDriverMarkKey(exactName);if(status==='reduction')return restoreReductionToOriginalRoute(name);
+  if(status==='stay-home'||status==='backup'){
+    reconcileDailyRosterFlags(exactName,'paycom');
+    // Explicitly suppress the automatic unrostered-backup rule. Without this,
+    // Restore removed the old row and immediately recreated the same driver.
+    state.scheduleDriverMarks[key]='paycom';
+  }
+  persist();render();toast(`${exactName} returned to the PAYCOM list`);return true;
 }
 function moveReductionToBackup(name='',role='') {
   const key=scheduleDriverMarkKey(name),record=state.scheduleReductions[key]||rosterRecord(name,role);reconcileDailyRosterFlags(name,'backup');state.scheduleDriverMarks[key]='backup';state.scheduleBackupRecords[key]={...record,role:role||record.role||'Delivery Associate'};removeDriverAdhocRoute(name);persist();render();toast(`${record.name||name} moved to Backup drivers as ${scheduleBackupLabel(role||record.role)}`);
@@ -3376,7 +3420,7 @@ function moveRosterDriverToVto(name='',role='',label='VTO 2') {
   reconcileDailyRosterFlags(exactName,'backup');state.scheduleDriverMarks[key]='backup';state.scheduleBackupRecords[key]={...record,originalRole:role||record.role||'',vto:label};removeDriverAdhocRoute(exactName);persist();render();toast(`${exactName} moved to ${label}`);
 }
 function restoreCalledOffToPaycom(name='') {
-  const key=callOffStatusKey(name);delete state.callOffDriverKeys[key];delete state.callOffReasons[key];persist();render();toast(`${name} returned to the PAYCOM list`);
+  const exactName=contactForMorningDriver(name)?.name||name;reconcileDailyRosterFlags(exactName,'paycom');state.scheduleDriverMarks[scheduleDriverMarkKey(exactName)]='paycom';persist();render();toast(`${exactName} returned to the PAYCOM list`);
 }
 function applyRosterDestinationAction(target='') {
   const pending=state.pendingRosterDestination;if(!pending)return false;
@@ -3399,6 +3443,24 @@ function applyRosterDestinationAction(target='') {
     if(pending.destination==='vto2'||pending.destination==='vto4'||pending.destination==='backup')return restoreRosterStatus(pending.name,'backup');
   }
   render();return false;
+}
+function markRosterCalledOff(name='',role='') {
+  const exactName=contactForMorningDriver(name)?.name||name,key=callOffStatusKey(exactName);
+  reconcileDailyRosterFlags(exactName,'calloff');state.callOffDriverKeys[key]={...rosterRecord(exactName,role),name:exactName,route:'',at:new Date().toISOString()};state.callOffReasons[key]=state.callOffReasons[key]||'';
+  persist();render();toast(`${exactName} moved to Called off today`);return true;
+}
+function applyPicklistVtoAction(name='',role='',target='') {
+  const exactName=contactForMorningDriver(name)?.name||name;
+  if(!exactName)return false;
+  if(target==='return')return restoreRosterStatus(exactName,'backup');
+  if(target==='calloff')return markRosterCalledOff(exactName,role);
+  if(target==='reduction')return addRosterReduction(exactName,role);
+  if(target==='stay-home')return markPaycomStayHome(exactName,role);
+  if(target==='vto2')return moveRosterDriverToVto(exactName,role,'VTO 2');
+  if(target==='vto4')return moveRosterDriverToVto(exactName,role,'VTO 4');
+  if(target==='helper')return markPaycomHelper(exactName,role);
+  if(target==='adhoc')return markPaycomAdhoc(exactName,role);
+  return false;
 }
 function waveNameForTime(time='') { if(/^ad\s*hoc/i.test(String(time)))return 'ADHOC';const waves=morningWaveList().filter(wave=>!/^ad\s*hoc/i.test(String(wave)));const index=waves.indexOf(time);return index>=0?`WAVE ${index+1}`:'WAVE'; }
 function routeDriverRowsHtml(rows=[]) {
@@ -3694,6 +3756,7 @@ function bind() {
   });
   document.querySelectorAll('[data-rostering-paycom-search]').forEach(el=>el.addEventListener('input',()=>{const query=nameKey(el.value),panel=el.closest('.rostering-paycom'),category=state.rosteringPaycomCategory||'all';panel?.querySelectorAll('[data-rostering-paycom-name]').forEach(row=>{const matchesCategory=category==='all'||category==='rostered'&&row.dataset.rosteringPaycomStatus==='rostered'||category==='unrostered'&&row.dataset.rosteringPaycomStatus==='unrostered'||row.dataset.rosteringPaycomCategory===category;row.hidden=!matchesCategory||Boolean(query&&!String(row.dataset.rosteringPaycomName||'').includes(query));});}));
   document.querySelectorAll('[data-rostering-driver-note-search]').forEach(el=>el.addEventListener('input',()=>{const query=nameKey(el.value),panel=el.closest('.rostering-driver-notes');panel?.querySelectorAll('[data-rostering-driver-note-name]').forEach(row=>{row.hidden=Boolean(query&&!String(row.dataset.rosteringDriverNoteName||'').includes(query));});}));
+  document.querySelectorAll('[data-team-search]').forEach(el=>el.addEventListener('input',()=>filterTeamDirectory(el.value)));
   document.querySelectorAll('[data-roster-search]').forEach(el=>el.addEventListener('input',()=>{const query=nameKey(el.value),panel=el.closest('.scheduled-section');panel?.querySelectorAll('[data-roster-name]').forEach(row=>{row.hidden=Boolean(query&&!String(row.dataset.rosterName||'').includes(query));});}));
   document.querySelectorAll('[data-picklist-calloff-reason]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist call-off reason'));el.addEventListener('input',()=>{state.callOffReasons[el.dataset.picklistCalloffReason]=el.value;persist();});el.addEventListener('change',()=>commitSheetInputHistory(el));});
   document.querySelectorAll('[data-picklist-backup]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist backup'));el.addEventListener('input',()=>saveOpeningPicklistBackup(el.dataset.picklistBackup,el.value));el.addEventListener('change',()=>commitSheetInputHistory(el));});
@@ -4583,6 +4646,7 @@ function action(name,el) {
   if (name==='rostering-swap-trainer') return clearRosteringTrainerMatch(el.dataset.ridealongName||'');
   if (name==='open-roster-destination-actions') return openRosterDestinationActions(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.rosterDestination||'',el.dataset.driverRoute||'',el.dataset.driverStart||'',el.dataset.rosterAutomatic||'');
   if (name==='apply-roster-destination-action') return applyRosterDestinationAction(el.dataset.rosterTarget||'');
+  if (name==='picklist-vto-action') return applyPicklistVtoAction(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.vtoTarget||'');
   if (name==='open-route-swap') return openRosterSwap(el.dataset.route||'',el.dataset.driverName||'',el.dataset.swapMode||'swap',el.dataset.driverLabel||'');
   if (name==='apply-roster-swap') return applyRosterSwap();
   if (name==='leave-route-unassigned') return leaveRosterRouteUnassigned();
@@ -4599,6 +4663,7 @@ function action(name,el) {
   if (name==='add-roster-reduction') return addRosterReduction(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.driverRoute||'',el.dataset.driverStart||'');
   if (name==='move-reduction-to-backup') return moveReductionToBackup(el.dataset.driverName||'',el.dataset.driverRole||'');
   if (name==='restore-roster-status') return restoreRosterStatus(el.dataset.driverName||'',el.dataset.rosterStatus||'');
+  if (name==='clear-team-search') { const input=document.querySelector?.('[data-team-search]');if(input){input.value='';filterTeamDirectory('');input.focus?.();}return; }
   if (name==='toggle-picklist-edit') { state.editMode=!state.editMode;if(state.editMode)state.copyMode=false;render();return toast(state.editMode?'Picklist editing is on — double-click or select a cell':'Picklist edits saved'); }
   if (name==='resize-picklist-area') return resizeOpeningPicklistArea(el.dataset.area||'',el.dataset.delta||0);
   if (name==='request-delete-picklist-wave') return requestDeletePicklistWave(el.dataset.sectionKey||'');
