@@ -1,4 +1,4 @@
-const CACHE='relayops-fleet-wave-live-v20';
+const CACHE='relayops-fleet-wave-live-v21';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{

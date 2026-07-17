@@ -72,6 +72,7 @@ function run() {
     globalThis.__duplicateAdded=fillRosteringFromPaycom('',{silent:true});
     globalThis.__after={rostered:plan.assignments.filter(row=>row.associate).length,helpers:plan.assignments.filter(row=>row.associate==='John Helper').map(row=>plan.services.find(service=>service.id===row.serviceId)?.kind),mayaCount:rosteringStayHomeCount('Maya Collins'),ninaCount:rosteringStayHomeCount('Nina Patel'),evanCount:rosteringStayHomeCount('Evan Stone')};
     globalThis.__html=rosteringPage();
+    globalThis.__pageInfoRostering=pageInfo.rostering;
     state.rosteringPlans={};state.rosteringAutoMode='abc';const autoPlan=currentRosteringPlan();globalThis.__autoResult=autoRosterFromPaycom({silent:true});
     globalThis.__autoRows=autoPlan.assignments.filter(row=>row.source==='auto-roster').map(row=>row.associate);
     globalThis.__autoHelpers=autoPlan.assignments.filter(row=>row.source==='auto-helper').map(row=>row.associate);
@@ -121,6 +122,7 @@ function run() {
   assert(context.__after.helpers[0] === 'helper', 'Driver Helper shifts must land in the helper service group');
   assert(context.__after.ninaCount === 3 && context.__after.mayaCount === 2 && context.__after.evanCount === 1, 'Fairness rotation must count one, two, and three distinct stay-home days in the rolling seven-day window');
   assert(context.__html.includes('Rostering') && context.__html.includes('CONFIRMED SERVICES') && context.__html.includes('All Scheduled driver shifts'), 'Rostering page lost its confirmed-services or PAYCOM surfaces');
+  assert(context.__pageInfoRostering?.[0] === 'Rostering' && /unfilled shifts/i.test(context.__pageInfoRostering?.[1]||''), 'Rostering navigation must keep its own page title and dispatcher guidance instead of falling back to Today');
   assert(context.__html.includes('1× stay-home') && context.__html.includes('2× stay-home') && context.__html.includes('3× · prioritize hours') && context.__html.includes('level-3'), 'One-to-three stay-home events must render progressively stronger fairness flags');
   assert(context.__html.includes('Maya Collins') && context.__html.includes('John Helper') && context.__html.includes('Nina Patel'), 'PAYCOM drivers must remain visible in the roster or import panel');
   assert(context.__autoResult.drivers === 3 && context.__autoResult.helpers === 1 && context.__autoResult.mode === 'abc' && context.__autoRows.join(',') === 'Evan Stone,Maya Collins,Nina Patel', 'ABC Auto Roster must place eligible route drivers alphabetically');
