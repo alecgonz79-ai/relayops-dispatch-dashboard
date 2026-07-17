@@ -2198,6 +2198,35 @@ body .rivian-card:hover,body .rivian-card.expanded { border-color:#78acd1; box-s
 .paycom-head > div span { color:#668072; font-size:10px; }
 .paycom-head select { height:34px; max-width:190px; border:1px solid #bcd8c5; border-radius:9px; padding:0 9px; background:#fff; color:#294b35; font-weight:700; }
 .paycom-head-tools { display:flex; align-items:center; justify-content:flex-end; gap:7px; }
+.paycom-roster-card { min-width:0; }
+.paycom-inner-tabs { display:flex; width:100%; gap:7px; margin:3px 0 9px; padding:4px; border:1px solid #cfe2d4; border-radius:12px; background:#e7f2e9; }
+.paycom-inner-tab { flex:1; min-width:0; display:flex; align-items:center; justify-content:center; gap:8px; min-height:38px; border:1px solid transparent; border-radius:9px; background:transparent; color:#52695a; font:800 11px/1.2 inherit; cursor:pointer; transition:background .16s ease,border-color .16s ease,box-shadow .16s ease,color .16s ease; }
+.paycom-inner-tab:hover { background:rgba(255,255,255,.68); color:#244832; }
+.paycom-inner-tab.active { border-color:#bad4c1; background:#fff; color:#173e27; box-shadow:0 3px 10px rgba(33,91,50,.11); }
+.paycom-inner-tab b { min-width:25px; padding:3px 7px; border-radius:999px; background:#d5e6d9; color:#315c3c; font-size:9px; }
+.paycom-inner-tab.active b { background:#1f6940; color:#fff; }
+.paycom-inner-pane { min-width:0; }
+.scheduled-section.scroll-roster .paycom-tab-list { max-height:390px; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
+.marked-driver-row { margin:5px 0; padding:8px 8px 8px 10px; border:1px solid #dce5e8; border-left-width:4px; border-radius:9px; background:#fff; }
+.marked-driver-row:first-child { border-top:1px solid #dce5e8; }
+.marked-driver-row > em { max-width:160px; overflow:hidden; text-overflow:ellipsis; }
+.marked-driver-status { display:inline-flex; align-items:center; justify-content:center; min-width:76px; min-height:24px; padding:4px 8px; border-radius:999px; background:#eef3f5; color:#36505e!important; font-size:9px!important; text-align:center; }
+.marked-driver-route { border-left-color:#2a9b62; background:#f4fbf7; }
+.marked-driver-route .marked-driver-status { background:#d9f2e4; color:#17683e!important; }
+.marked-driver-vto2 { border-left-color:#42b96b; background:#f2fcf5; }
+.marked-driver-vto2 .marked-driver-status { background:#d7f4df; color:#17633a!important; }
+.marked-driver-vto4 { border-left-color:#f09a42; background:#fff8ef; }
+.marked-driver-vto4 .marked-driver-status { background:#ffe0b4; color:#7a3c00!important; }
+.marked-driver-reduction { border-left-color:#8d73aa; background:#faf7fd; }
+.marked-driver-reduction .marked-driver-status { background:#e9e0f4; color:#58476c!important; }
+.marked-driver-called-off { border-left-color:#e06b62; background:#fff5f4; }
+.marked-driver-called-off .marked-driver-status { background:#ffe0dd; color:#8c3730!important; }
+.marked-driver-stay-home { border-left-color:#e0b936; background:#fffbea; }
+.marked-driver-stay-home .marked-driver-status { background:#fff0a9; color:#6e5600!important; }
+.marked-driver-helper { border-left-color:#58a9cc; background:#f3fbff; }
+.marked-driver-helper .marked-driver-status { background:#d9f1fc; color:#1d5978!important; }
+.marked-driver-adhoc { border-left-color:#2d9dab; background:#f0fcfd; }
+.marked-driver-adhoc .marked-driver-status { background:#d5f2f4; color:#17616a!important; }
 .paycom-driver-actions { display:flex; justify-content:flex-end; gap:6px; }
 .scheduled-shift-row.backup-marked { border:1px solid #40ef79; border-radius:10px; padding:9px 8px; background:#baffc8; box-shadow:0 0 0 2px rgba(38,238,104,.12),0 5px 15px rgba(18,142,60,.12); }
 .scheduled-shift-row.adhoc-marked { border:1px solid #77bcea; border-radius:10px; padding:9px 8px; background:#ebf8ff; }
@@ -2459,6 +2488,9 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
   .route-swap-actions .reduction-button { grid-column:1/-1; }
   .paycom-head,.paycom-head-tools { align-items:stretch; flex-direction:column; }
   .paycom-head select { max-width:none; width:100%; }
+  .paycom-inner-tabs { position:sticky; top:0; z-index:3; }
+  .marked-driver-row { grid-template-columns:minmax(0,1fr) auto; }
+  .marked-driver-row > em { grid-column:1/-1; max-width:none; justify-self:start; }
   .paycom-driver-actions { justify-content:flex-start; flex-wrap:wrap; }
 }
 

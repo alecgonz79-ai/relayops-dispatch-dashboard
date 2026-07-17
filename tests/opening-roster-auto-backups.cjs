@@ -49,8 +49,53 @@ function testAutomaticVtoDestinations() {
   assert(context.__html.includes('roster-bottom-destination scroll-roster') && context.__html.includes('data-roster-destination="vto2"') && context.__html.includes('data-roster-destination="vto4"'), 'VTO destination boxes must stay scrollable and expose destination actions');
   assert(context.__html.includes('data-action="open-roster-destination-actions"'), 'Non-PAYCOM roster names must open the destination action popup');
   const paycom = context.__html.split('All Scheduled driver shifts (PAYCOM)')[1].split('scheduled-section called-off')[0];
-  assert(!paycom.includes('Unrostered Rescue') && !paycom.includes('Unrostered Associate') && paycom.includes('Midshift Support'), 'Automatic VTO drivers must leave PAYCOM while unclassified Midshift remains there');
+  assert(paycom.includes('Unrostered Rescue') && paycom.includes('Unrostered Associate') && paycom.includes('Midshift Support') && paycom.includes('Routed Rescue'), 'All Scheduled must retain every imported driver even after VTO or route placement');
+  assert(paycom.includes('data-paycom-tab="scheduled"') && paycom.includes('data-paycom-tab="marked"') && paycom.includes('All Scheduled') && paycom.includes('Marked Drivers'), 'PAYCOM must expose separate All Scheduled and Marked Drivers inner tabs');
   assert(!paycom.includes('roster-driver-action-trigger') || !paycom.match(/roster-driver-action-trigger[\s\S]{0,250}Midshift Support/), 'PAYCOM names must remain plain and must not open the destination popup');
+}
+
+function testMarkedDriversInnerTab() {
+  const context = appContext();
+  vm.runInContext(`
+    state.dspCode='LLOL';state.morningOperationDate='2026-07-16';state.scheduleFilter='all';state.openingRosterPaycomTab='marked';
+    state.morningRoutes=[
+      {routeUid:'route-main',dsp:'LLOL',driver:'Route Driver',route:'CX201',wave:'11:15 AM',service:'Standard Parcel'},
+      {routeUid:'route-adhoc',dsp:'LLOL',driver:'Adhoc Driver',route:'AX',wave:'Ad hoc',service:'Adhoc'}
+    ];
+    state.scheduleEntries=[
+      {date:'7/16/2026',name:'Route Driver',start:'10:30 AM',end:'7:00 PM',role:'Delivery Associate'},
+      {date:'7/16/2026',name:'Adhoc Driver',start:'10:30 AM',end:'7:00 PM',role:'Delivery Associate'},
+      {date:'7/16/2026',name:'Backup Rescue',start:'10:30 AM',end:'7:00 PM',role:'Rescue'},
+      {date:'7/16/2026',name:'Backup Associate',start:'10:30 AM',end:'7:00 PM',role:'Delivery Associate'},
+      {date:'7/16/2026',name:'Reduction Driver',start:'10:30 AM',end:'7:00 PM',role:'Delivery Associate'},
+      {date:'7/16/2026',name:'Calloff Driver',start:'10:30 AM',end:'7:00 PM',role:'Delivery Associate'},
+      {date:'7/16/2026',name:'Stay Home Driver',start:'10:30 AM',end:'7:00 PM',role:'Delivery Associate'},
+      {date:'7/16/2026',name:'Helper Driver',start:'10:30 AM',end:'7:00 PM',role:'Driver Helper'},
+      {date:'7/16/2026',name:'Plain Midshift',start:'12:00 PM',end:'8:30 PM',role:'Midshift'}
+    ];
+    state.scheduleDriverMarks={'2026-07-16|adhoc driver':'adhoc'};state.scheduleBackupRecords={};
+    state.scheduleStayHome={'2026-07-16|stay home driver':{name:'Stay Home Driver',role:'Delivery Associate'}};
+    state.scheduleReductions={'2026-07-16|reduction driver':{name:'Reduction Driver',role:'Delivery Associate',originalRoute:'CX299'}};
+    state.scheduleHelpers={};
+    state.callOffDriverKeys={'2026-07-16|calloff driver':{name:'Calloff Driver',role:'Delivery Associate',route:'CX288'}};state.callOffReasons={};
+    globalThis.__marked=openingRosterMarkedDrivers({
+      scheduled:currentScheduleEntries().filter(entry=>scheduleRoleGroup(entry.role)==='driver'),
+      onRoute:[{name:'Route Driver',route:'CX201',start:'11:15 AM'},{name:'Adhoc Driver',route:'AX',start:'Ad hoc'}],
+      backups:currentBackupDriverRows(),stayHome:rosterStatusRows(state.scheduleStayHome),reductions:rosterStatusRows(state.scheduleReductions),
+      calledOff:rosterStatusRows(state.callOffDriverKeys),helpers:helperRosterRows()
+    });
+    globalThis.__html=openingRosterScheduleHtml();
+    action('opening-paycom-tab',{dataset:{paycomTab:'scheduled'}});globalThis.__tab=state.openingRosterPaycomTab;globalThis.__saved=localStorage.getItem('relayops_opening_roster_paycom_tab');
+  `, context);
+  const statusByName = Object.fromEntries(context.__marked.map(row => [row.name, row.statusLabel]));
+  assert(statusByName['Route Driver'] === 'On Route' && statusByName['Adhoc Driver'] === 'Adhoc', 'Marked Drivers must identify route and Adhoc placements');
+  assert(statusByName['Backup Rescue'] === 'VTO 2' && statusByName['Backup Associate'] === 'VTO 4', 'Marked Drivers must distinguish VTO 2 and VTO 4');
+  assert(statusByName['Reduction Driver'] === 'Reduction' && statusByName['Calloff Driver'] === 'Called Off' && statusByName['Stay Home Driver'] === 'Told To Stay Home', 'Marked Drivers must show reduction, call-off, and stay-home destinations');
+  assert(statusByName['Helper Driver'] === 'Helper' && !statusByName['Plain Midshift'], 'Helper must appear while an unmarked scheduled shift stays out of Marked Drivers');
+  assert(context.__html.includes('data-paycom-pane="marked"') && context.__html.includes('aria-selected="true" data-action="opening-paycom-tab" data-paycom-tab="marked"'), 'Marked Drivers must render as the active accessible inner tab');
+  ['marked-driver-route','marked-driver-adhoc','marked-driver-vto2','marked-driver-vto4','marked-driver-reduction','marked-driver-called-off','marked-driver-stay-home','marked-driver-helper'].forEach(className=>assert(context.__html.includes(className), `${className} color status is missing`));
+  assert(!context.__html.includes('Plain Midshift'), 'Marked Drivers pane must omit unmarked scheduled shifts');
+  assert(context.__tab === 'scheduled' && context.__saved === 'scheduled', 'PAYCOM inner-tab selection must persist locally');
 }
 
 function testDestinationPopupAndManualOverride() {
@@ -167,6 +212,7 @@ function testPicklistAndConnectorSurface() {
 }
 
 testAutomaticVtoDestinations();
+testMarkedDriversInnerTab();
 testDestinationPopupAndManualOverride();
 testRestoreIsSingleDestinationAndPicklistActions();
 testAtomicVtoToRouteSwap();
