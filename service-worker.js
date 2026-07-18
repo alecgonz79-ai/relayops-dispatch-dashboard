@@ -1,4 +1,4 @@
-const CACHE='relayops-rostering-team-parking-v27';
+const CACHE='relayops-parking-spots-4-33-v28';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{

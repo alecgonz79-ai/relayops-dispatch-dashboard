@@ -187,9 +187,15 @@ function defaultVanParkingSlots() {
   topRight.forEach((value,i)=>slots.push({id:`north-right-${i+1}`,zone:'northRight',label:`North row ${i+1}`,value,kind:'spot'}));
   ['10(93%)','','','','39','','',''].forEach((value,i)=>slots.push({id:`street-${i+1}`,zone:'street',label:i===0?'Street charge':`Street upper spot ${i+1}`,value,kind:'street'}));
   Array.from({length:8}).forEach((_,i)=>slots.push({id:`street-lower-${i+1}`,zone:'streetLower',label:`Street lower spot ${i+1}`,value:'',kind:'street'}));
-  west.forEach((value,i)=>slots.push({id:`west-${String(i+1).padStart(2,'0')}`,zone:'west',label:`Left row ${i+1}`,value,kind:['4','50'].includes(value)?'crosswalk':'spot'}));
+  west.forEach((value,i)=>{
+    slots.push({id:`west-${String(i+1).padStart(2,'0')}`,zone:'west',label:`Left row ${i+1}`,value,kind:['4','50'].includes(value)?'crosswalk':'spot'});
+    if(i===3)slots.push({id:'west-missing-04',zone:'west',label:'Left row missing spot above #5',value:'',kind:'spot'});
+  });
   crosswalk.forEach((value,i)=>slots.push({id:`crosswalk-${String(i+1).padStart(2,'0')}`,zone:'crosswalk',label:`Crosswalk ${i+1}`,value,kind:'crosswalk'}));
-  east.forEach((value,i)=>slots.push({id:`east-${String(i+1).padStart(2,'0')}`,zone:'east',label:`Right row ${i+1}`,value,kind:i===3||value==='19'?'crosswalk':'spot'}));
+  east.forEach((value,i)=>{
+    slots.push({id:`east-${String(i+1).padStart(2,'0')}`,zone:'east',label:`Right row ${i+1}`,value,kind:i===3||value==='19'?'crosswalk':'spot'});
+    if(i===3)slots.push({id:'east-missing-33',zone:'east',label:'Right row missing spot above #32',value:'',kind:'spot'});
+  });
   gasVehicleIds.forEach((value,i)=>slots.push({id:`gas-${String(i+1).padStart(2,'0')}`,zone:'gas',label:`Gas spot ${i+1}`,value,kind:'spot'}));
   return slots;
 }
@@ -198,10 +204,9 @@ function loadVanParkingSlots() {
   try {
     const saved=JSON.parse(localStorage.getItem('relayops_van_parking')||'null');
     if(Array.isArray(saved)&&saved.length) {
-      const defaults=new Map(defaultVanParkingSlots().map(s=>[s.id,s]));
-      const merged=saved.map(slot=>({...defaults.get(slot.id),...slot})).filter(slot=>slot.id);
-      const seen=new Set(merged.map(slot=>slot.id));
-      defaultVanParkingSlots().forEach(slot=>{if(!seen.has(slot.id))merged.push(slot);});
+      const defaults=defaultVanParkingSlots(),savedById=new Map(saved.filter(slot=>slot?.id).map(slot=>[slot.id,slot])),defaultIds=new Set(defaults.map(slot=>slot.id));
+      const merged=defaults.map(slot=>({...slot,...savedById.get(slot.id)}));
+      saved.forEach(slot=>{if(slot?.id&&!defaultIds.has(slot.id))merged.push(slot);});
       return merged;
     }
   } catch {}
@@ -1684,11 +1689,16 @@ function parkingSpotNumber(zone='',index=0) {
   if(zone==='west'){
     const slots=parkingSlots('west'),slot=slots[index];
     if(!slot||slot.kind==='crosswalk')return '';
-    if(index<17)return index+1;
-    const crosswalksAfterSeventeen=slots.slice(17,index+1).filter(row=>row.kind==='crosswalk').length;
-    return 37+(index-17)-crosswalksAfterSeventeen;
+    const numberedRank=slots.slice(0,index+1).filter(row=>row.kind!=='crosswalk').length;
+    if(numberedRank<=17)return numberedRank;
+    return numberedRank<=21?numberedRank+19:'';
   }
-  if(zone==='east')return index<19?36-index:'';
+  if(zone==='east'){
+    const slots=parkingSlots('east'),slot=slots[index];
+    if(!slot||slot.kind==='crosswalk')return '';
+    const numberedRank=slots.slice(0,index+1).filter(row=>row.kind!=='crosswalk').length;
+    return numberedRank<=20?37-numberedRank:'';
+  }
   if(zone==='northRight')return 45-index;
   if(zone==='northLeft')return 50-index;
   return '';
