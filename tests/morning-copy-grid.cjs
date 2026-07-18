@@ -53,7 +53,7 @@ const checks = `
   if (!${JSON.stringify(css)}.includes('.sheets-row-audit') || !${JSON.stringify(css)}.includes('.sheets-row-audit.warn')) throw new Error('Sheets row audit styling missing');
   if (!${JSON.stringify(css)}.includes('.sheets-live-proof') || !${JSON.stringify(css)}.includes('grid-template-columns:repeat(6,minmax(0,1fr))')) throw new Error('Live Google proof styling missing');
   if (!${JSON.stringify(css)}.includes('.handoff-readiness') || !${JSON.stringify(css)}.includes('.handoff-readiness.copy-ready') || !${JSON.stringify(css)}.includes('.handoff-readiness-grid')) throw new Error('Morning handoff readiness styling missing');
-  if (!${JSON.stringify(css)}.includes('.morning-sheet-bridge') || !${JSON.stringify(css)}.includes('.bridge-route') || !${JSON.stringify(css)}.includes('.bridge-node') || !${JSON.stringify(css)}.includes('.bridge-send')) throw new Error('Filtered-waves Google bridge styling missing');
+  if (!${JSON.stringify(css)}.includes('.morning-workflow') || !${JSON.stringify(css)}.includes('.morning-workflow-grid') || !${JSON.stringify(css)}.includes('.morning-step') || !${JSON.stringify(css)}.includes('.morning-tool-group')) throw new Error('Ordered Morning Sheet workflow styling missing');
   if (!${JSON.stringify(css)}.includes('.wave-copy-group') || !${JSON.stringify(css)}.includes('.wave-copy-group .btn.small')) throw new Error('Wave block copy button styling missing');
   toast = () => {};
   state.page = 'morning';
@@ -62,9 +62,10 @@ const checks = `
   state.morningOperationDate = '2026-07-11';
   const html = morningSheetPage();
   if (!html.includes('Day of operation') || !html.includes('7/11/26 or 7.11.26') || !html.includes('DAYOFOPSPLAN + ROUTE_DJT6') || html.includes('Slack Import') || html.includes('id="morning-diagnostics"')) throw new Error('Morning setup should expose the real day-file flow without locked Slack or duplicate inline diagnostics');
-  const bridgeRequirements=['Filtered waves','Fixed Ops Log check','Dated Ops Log','Send filtered waves','Dry run happens before every send','Copy fallback'];
-  const missingBridgeRequirements=bridgeRequirements.filter(value=>!html.includes(value));
-  if (missingBridgeRequirements.length) throw new Error('Fixed OPS LOG 2026 handoff UI missing: '+missingBridgeRequirements.join(', '));
+  const workflowRequirements=['Morning setup','Upload day files','Assign safe vans','Add devices','Send Morning Sheet','Later: add RTS times','Import RTS times','Send RTS times','Copy fallback'];
+  const missingWorkflowRequirements=workflowRequirements.filter(value=>!html.includes(value));
+  if (missingWorkflowRequirements.length) throw new Error('Ordered Morning Sheet handoff UI missing: '+missingWorkflowRequirements.join(', '));
+  if(html.includes('Filtered waves')||html.includes('Fixed Ops Log check')||html.includes('Dated Ops Log'))throw new Error('Duplicate Google handoff proof boxes should not render on the Morning Sheet');
   if (!html.includes('data-copy-block="all"') || !html.includes('data-copy-block="setup"') || !html.includes('data-copy-block="counts"') || !html.includes('data-copy-block="rts"') || !html.includes('A–H') || !html.includes('P–Q') || !html.includes('U')) throw new Error('Copy mode should expose original A-V block shortcuts');
   if (!html.includes(MORNING_TEMPLATE_URL)) throw new Error('Google Sheets template link missing');
   action('open-morning-diagnostics',{});

@@ -503,7 +503,8 @@ const checks = `
   action('approve-fleet-refresh',{});
   if (state.fleetLastRefresh === 'Not refreshed yet' || state.modal || state.fleetRefreshPreview || !fleetPage().includes('All vehicles') || !fleetPage().includes('data-action="refresh-fleet"')) throw new Error('Approved fleet refresh did not update the board');
   const morningHtml = morningSheetPage();
-  if (!morningHtml.includes('Three easy steps') || !morningHtml.includes('Send to Sheet') || !morningHtml.includes('Exact merged template')) throw new Error('Quick start guide missing');
+  if (!morningHtml.includes('Morning setup') || !morningHtml.includes('Upload day files') || !morningHtml.includes('Send Morning Sheet') || !morningHtml.includes('Later: add RTS times')) throw new Error('Ordered Morning Sheet workflow missing');
+  if(morningHtml.includes('Three easy steps')||morningHtml.includes('Fixed Ops Log check')||morningHtml.includes('Dated Ops Log'))throw new Error('Morning Sheet still renders duplicate instructional boxes');
   if (morningHtml.includes('id="morning-diagnostics"') || morningHtml.includes('Slack Import') || !morningHtml.includes('DAYOFOPSPLAN + ROUTE_DJT6')) throw new Error('Morning page should show the real import flow without duplicate inline diagnostics or locked Slack');
   state.modal='morning-diagnostics';const diagnosticHtml=modal();state.modal=null;
   if (!diagnosticHtml.includes('Google Sheets structure proof') || !diagnosticHtml.includes('Every row numbered') || !diagnosticHtml.includes('Black divider columns') || !diagnosticHtml.includes('Exact formatting path')) throw new Error('Top diagnostics modal should show Google Sheets structure proof');
@@ -670,7 +671,7 @@ const checks = `
   state.editMode = true;
   state.copyMode = false;
   const editableHtml = morningSheetPage();
-  const editableRequirements=['contenteditable="true"','data-view-field="ev"','Press Enter to save','data-sheet-cell="true"','sheet-letters-row','sheet-row-num','PORTABLE','sheet-spacer-col','PLANNED RTS','Device and Portable Import','EV 1-58 Low → High','Randomize EVs','Assign Gas Vehicles','Assign Operational Vans',"Clear EV's",'Copy cells','Filtered waves','Fixed Ops Log check','Dated Ops Log','Send filtered waves','Copy fallback','Open paste box','Remove blank rows','Click and drag white cells'];
+  const editableRequirements=['contenteditable="true"','data-view-field="ev"','Press Enter to save','data-sheet-cell="true"','sheet-letters-row','sheet-row-num','PORTABLE','sheet-spacer-col','PLANNED RTS','Device and Portable Import','EV 1–58 low → high','Random EVs','Gas vehicles','Assign safe vans','Clear EVs','Copy cells','Morning setup','Send Morning Sheet','Copy fallback','Paste box','Remove blank rows','Click and drag white cells'];
   const missingEditableRequirements=editableRequirements.filter(value=>!editableHtml.includes(value));
   if(missingEditableRequirements.length) throw new Error('Editable sheet or JPEG control missing: '+missingEditableRequirements.join(', '));
   rivianFleet.push({name:'EV1',vin:'7FCEHEB79PN000001',battery:90,miles:140,operational:'Operational',active:'Active',source:'Amazon fleet list + FleetOS tracker',hasBattery:true,hasActive:true,hasOperational:true});

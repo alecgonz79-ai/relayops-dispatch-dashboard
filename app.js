@@ -360,6 +360,7 @@ let state = {
   morningSheetsLastReceipt: JSON.parse(localStorage.getItem('relayops_morning_sheets_last_receipt') || 'null'),
   morningSheetsLastDryRun: localStorage.getItem('relayops_morning_sheets_last_dry_run') || '',
   morningOperationDate: defaultOperationDate(),
+  morningWaveTimeOverrides: JSON.parse(localStorage.getItem('relayops_morning_wave_time_overrides') || 'null') || {},
   lastItineraryRts: JSON.parse(localStorage.getItem('relayops_last_itinerary_rts') || 'null') || {},
   fleetNameOverrides: JSON.parse(localStorage.getItem('relayops_fleet_name_overrides') || 'null') || {},
   fleetIssues: normalizeFleetIssuesStore(JSON.parse(localStorage.getItem('relayops_fleet_issues') || 'null') || {}),
@@ -867,7 +868,7 @@ function openingPicklistSections() {
   if(state.openingPicklistShowAdhoc)waves.push({key:'adhoc',label:state.openingPicklistLabels?.adhoc||"ADHOC'S",wave:'Ad hoc',rows:adhoc,capacity:state.fitMorningRows?Math.max(1,adhoc.length):15,hasTime:false,pad:''});
   return waves;
 }
-function openingPicklistTime(section={}) { return section.wave?`${String(section.wave).replace(/\s*[AP]M/i,'')} (${section.rows.length})`:''; }
+function openingPicklistTime(section={}) { return morningWaveTimeText({...section,label:coreMorningWaveLabel(section.key,section.label)}); }
 function routeEquipmentValue(row={}) { return [String(row.ev||'').trim(),String(row.helperBag||'').trim()].filter(Boolean).join(' / '); }
 function vehicleIssuePopoverHtml(route='',equipment='',issue=null) {
   const reported=issue?.type==='reported'?issue.reported:reportedFleetIssueForEquipmentId(equipment);if(!reported?.active?.length)return '';
@@ -1196,12 +1197,27 @@ function morningSheetPage() {
   const groups=morningSections(rows);
   const irregular=rows.filter(r=>r.plannedRtsIssue).length;
   const sheetMode=state.copyMode?'copy':'edit';
+  const connected=Boolean(state.morningSheetsEndpoint),receipt=state.morningSheetsLastReceipt;
+  const connectorStatus=connected?(receipt?.status==='confirmed'?'Google Sheet confirmed':'Google Sheet connected'):'Google Sheet needs setup';
   return `${contextBar(`<span class="status blue">Earliest waves first</span>`)}
-  <div class="morning-command card"><div><span class="eyebrow">LLOL OPENING OPERATIONS</span><h2>Build today’s morning sheet</h2><p>Start with the Amazon day files. Routes are matched by CX number and arranged earliest wave first.</p></div><label class="operation-date-picker"><span>Day of operation</span><input type="date" data-operation-date value="${esc(state.morningOperationDate)}"><small>Google tab: ${esc(operationDateTabNames(state.morningOperationDate).join(' or '))}</small></label><div class="morning-actions"><button class="btn primary easy-upload-button" data-action="import">${ICONS.upload} Upload DAYOFOPSPLAN + ROUTE_DJT6</button><button class="btn" data-action="itineraries-rts-import">${ICONS.calendar} Import RTS TIME (DA's Tab)</button></div></div>
-  <div class="quick-start" aria-label="Three easy steps"><div class="quick-step done"><b>1</b><span><strong>Upload day files</strong><small>DAYOFOPSPLAN + ROUTE_DJT6</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>2</b><span><strong>We match CX</strong><small>Wave + staging + pad</small></span></div><div class="quick-arrow">→</div><div class="quick-step"><b>3</b><span><strong>Send to Sheet</strong><small>Exact merged template</small></span></div></div>
-  ${morningSheetsBridgeHtml()}
-  <details class="morning-more-tools card" open><summary><span><strong>More morning tools</strong><small>Filters, editing, device matching, and safe vehicle assignment</small></span><b>Tools</b></summary><div class="morning-tools-filter-wrap"><div class="sheet-toolbar morning-daily-toolbar"><div class="sheet-filter"><label>Wave</label><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Staging</label><select data-morning-filter="staging"><option value="all">All locations</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="sheet-filter"><label>Pad</label><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></div><button class="btn small" data-action="clear-morning-filters">Clear</button><span class="filter-note">${ICONS.chevron} Earliest first</span><div class="morning-toolbar-spacer"></div><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Finish editing':'✎ Edit sheet'}</button><button class="btn small ${state.copyMode?'lime':''}" data-action="toggle-morning-copy">${state.copyMode?'✓ Exit copy mode':'Copy cells'}</button></div><div class="sheet-kpis"><span><strong>${rows.length}</strong> routes</span><span><strong>${rows.reduce((n,r)=>n+r.packages,0).toLocaleString()}</strong> packages</span><span><strong>${rows.reduce((n,r)=>n+r.stops,0).toLocaleString()}</strong> stops</span><span><strong>${irregular}</strong> RTS flags</span></div></div><div class="morning-more-actions"><button class="btn small primary" data-action="equipment-import" title="VAN/DEV/PORT Import">${ICONS.phone} Device and Portable Import</button><button class="btn small ${state.fitMorningRows?'lime':''}" data-action="toggle-fit-rows">${state.fitMorningRows?'✓ Fit to drivers':'Remove blank rows'}</button><button class="btn small danger-soft" data-action="clear-morning-evs">Clear EV's</button><button class="btn small" data-action="assign-operational-vans">✓ Assign Operational Vans</button><button class="btn small" data-action="assign-ev-low">EV 1-58 Low → High</button><button class="btn small" data-action="assign-ev-random">Randomize EVs</button><button class="btn small" data-action="assign-gas-vans">Assign Gas Vehicles</button><button class="btn small" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn small" data-action="open-sheets-helper">Open paste box</button></div></details>
-  <div class="sheet-history-toolbar"><button class="btn small" data-action="sheet-undo" ${state.sheetHistory?.past?.length?'':'disabled'}>↶ Undo</button><button class="btn small" data-action="sheet-redo" ${state.sheetHistory?.future?.length?'':'disabled'}>↷ Redo</button><button class="btn small" data-action="open-sheet-history">History</button><button class="btn small danger-soft" data-action="clear-morning-sheet">${ICONS.trash} Clear Morning Sheet</button></div>
+  <section class="morning-workflow card" aria-label="Build today's morning sheet">
+    <div class="morning-workflow-head"><div><span class="eyebrow">${esc(state.dspCode)} OPENING OPERATIONS</span><h2>Build today’s morning sheet</h2><p>Press the buttons from left to right. RelayOps matches every CX and keeps the earliest waves first.</p></div><label class="operation-date-picker"><span>Day of operation</span><input type="date" data-operation-date value="${esc(state.morningOperationDate)}"><small>Google tab: ${esc(operationDateTabNames(state.morningOperationDate).join(' or '))}</small></label><span class="morning-connector-pill ${connected?'ready':'needs-setup'}"><i></i>${esc(connectorStatus)}</span></div>
+    <div class="morning-workflow-section"><div class="morning-workflow-label"><b>Morning setup</b><span>Complete these four steps before stand-up.</span></div><div class="morning-workflow-grid">
+      <button class="morning-step primary-step" data-action="import"><b>1</b><span>${ICONS.upload}<strong>Upload day files</strong><small>DAYOFOPSPLAN + ROUTE_DJT6</small></span></button>
+      <button class="morning-step" data-action="assign-operational-vans"><b>2</b><span>${ICONS.van}<strong>Assign safe vans</strong><small>Active + operational only</small></span></button>
+      <button class="morning-step" data-action="equipment-import"><b>3</b><span>${ICONS.phone}<strong>Add devices</strong><small>Device and Portable Import</small></span></button>
+      <button class="morning-step send-step" data-action="sync-filtered-morning-to-sheets"><b>4</b><span>${ICONS.link}<strong>Send Morning Sheet</strong><small>${connected?'To today’s Google tab':'Connect Google Sheet first'}</small></span></button>
+    </div></div>
+    <div class="morning-later-row"><div class="morning-workflow-label"><b>Later: add RTS times</b><span>Use this after the Itineraries file is ready.</span></div><div class="morning-later-actions"><button class="btn" data-action="itineraries-rts-import"><b>5</b>${ICONS.calendar}<span>Import RTS times<small>Itineraries_DJT6</small></span></button><button class="btn rts-send-only" data-action="send-rts-to-sheets"><b>6</b>${ICONS.link}<span>Send RTS times<small>Updates Planned RTS only</small></span></button><a class="btn morning-open-sheet" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open Google Sheet ↗</a></div></div>
+  </section>
+  <details class="morning-more-tools card" open><summary><span><strong>More morning tools</strong><small>Optional filters, editing, van choices, and recovery</small></span><b>Hide</b></summary><div class="morning-tools-body">
+    <section class="morning-tool-group filter-group"><div class="morning-tool-heading"><span><strong>Find routes</strong><small>Show only the part of the sheet you need.</small></span><div class="morning-kpi-pills"><i><b>${rows.length}</b> routes</i><i><b>${rows.reduce((n,r)=>n+r.packages,0).toLocaleString()}</b> packages</i><i><b>${rows.reduce((n,r)=>n+r.stops,0).toLocaleString()}</b> stops</i><i class="${irregular?'warning':''}"><b>${irregular}</b> RTS flags</i></div></div><div class="morning-filter-form"><label><span>Wave</span><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></label><label><span>Staging</span><select data-morning-filter="staging"><option value="all">All staging locations</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></label><label><span>Pad</span><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></label><button class="btn subtle" data-action="clear-morning-filters">Clear filters</button><span class="morning-sort-note">${ICONS.chevron} Earliest wave first</span></div></section>
+    <div class="morning-tool-grid">
+      <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Work with the sheet</strong><small>Edit, select, or make the sheet compact.</small></span></div><div class="morning-tool-actions"><button class="btn ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Finish editing':'✎ Edit sheet'}</button><button class="btn ${state.copyMode?'lime':''}" data-action="toggle-morning-copy">${state.copyMode?'✓ Exit copy mode':'Copy cells'}</button><button class="btn ${state.fitMorningRows?'lime':''}" data-action="toggle-fit-rows">${state.fitMorningRows?'✓ Fit to drivers':'Remove blank rows'}</button></div></section>
+      <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Choose vans another way</strong><small>Optional alternatives to safe automatic assignment.</small></span></div><div class="morning-tool-actions morning-vehicle-actions"><button class="btn" data-action="assign-vans-by-parking">${ICONS.van} Parking order</button><button class="btn" data-action="assign-ev-low">EV 1–58 low → high</button><button class="btn" data-action="assign-ev-random">Random EVs</button><button class="btn" data-action="assign-gas-vans">Gas vehicles</button><button class="btn danger-soft" data-action="clear-morning-evs">Clear EVs</button></div></section>
+      <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Backup and recovery</strong><small>Use only when you need to undo or paste manually.</small></span></div><div class="morning-tool-actions"><button class="btn" data-action="sheet-undo" ${state.sheetHistory?.past?.length?'':'disabled'}>↶ Undo</button><button class="btn" data-action="sheet-redo" ${state.sheetHistory?.future?.length?'':'disabled'}>↷ Redo</button><button class="btn" data-action="open-sheet-history">History</button><button class="btn" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn" data-action="open-sheets-helper">Paste box</button><button class="btn danger-soft" data-action="clear-morning-sheet">${ICONS.trash} Clear Morning Sheet</button></div></section>
+    </div>
+  </div></details>
   ${state.copyMode?copyModeToolbar(groups):''}
   ${state.copyMode?`<div class="edit-help copy-help">Copy mode is on. Drag across cells exactly like Google Sheets, watch the blue highlight, then press ⌘C on Mac or Ctrl+C on Windows. Divider columns I and N split the original A–V Ops Log into setup, inspection, and operations blocks.</div>`:state.editMode?`<div class="edit-help">Editing is on. Columns A–V and every row are labeled like Google Sheets. Click and drag white cells to select a rectangle, press ⌘C to copy, or paste tabbed rows from Sheets to fill across/down.</div>`:''}
   <article class="card morning-board ${state.copyMode?'copy-board':state.editMode?'edit-board':'view-board'}"><div class="sheet-scroll"><table class="ops-sheet morning-template-sheet exact-ops-sheet ${state.copyMode?'copy-ops-sheet':''}"><thead>${sheetModeHeader(morningTemplateHeaders,sheetMode)}</thead><tbody>${groups.length?groups.map((section,sectionIndex)=>morningWaveGroup(section,sectionIndex)).join(''):`<tr><td colspan="23"><div class="empty-state"><h3>No routes match these filters</h3><p>Clear a filter or upload a new day-of-operations file.</p></div></td></tr>`}</tbody></table></div></article>
@@ -1211,6 +1227,38 @@ function morningSheetPage() {
 function morningConnectorGuide() {
   const connected=Boolean(state.morningSheetsEndpoint),tabs=operationDateTabNames(state.morningOperationDate);
   return `<details class="morning-connectors card"><summary><div><strong>Ops Log connector setup</strong><span>Google Sheets is ready through Apps Script. Slack stays locked until its secure connector is built.</span></div><b>Open</b></summary><div class="morning-connector-grid"><div><strong>1 · Slack / day file</strong><span>Locked for now. Use Amazon XLSX/CSV upload so no dispatcher expects an unfinished connection to work.</span><button class="btn small locked" disabled>Slack Import · locked</button></div><div><strong>2 · Cortex / Amazon Logistics</strong><span>Upload XLSX/CSV files. RelayOps reads them locally and filters ${esc(state.dspCode)} routes.</span><button class="btn small primary" data-action="import">Upload Amazon files</button></div><div><strong>3 · Google Sheets Ops Log</strong><span>${connected?`Connected. Sends only to ${esc(tabs.join(' or '))} using the original A:V layout.`:'Install the Apps Script once, save the /exec URL, then send to the selected operation-date tab.'}</span><button class="btn small lime" data-action="morning-sheets-connector">${connected?'Open Ops Log connector':'Connect Ops Log'}</button><a class="btn small" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open ops log</a></div></div><p>If the exact date tab is missing, RelayOps creates it by duplicating the blank OPS LOG 2026 template.</p></details>`;
+}
+
+const defaultMorningWaveTimes=['11:15 AM','11:20 AM','11:25 AM','11:40 AM','11:45 AM'];
+function morningWaveOverrideKey(label='') { return `${state.morningOperationDate}|${morningFixedSectionKey(label)}`; }
+function morningWaveTimeOverride(section={}) {
+  const key=morningWaveOverrideKey(section.label||'');
+  const value=state.morningWaveTimeOverrides?.[key];
+  return value&&typeof value==='object'?value:null;
+}
+function coreMorningWaveLabel(sectionKey='',fallback='') {
+  const match=String(sectionKey||'').match(/^wave-(\d+)$/i);
+  return match?`WAVE ${match[1]}`:fallback;
+}
+function saveMorningWaveTimeValue(label='',wave='',rawValue='') {
+  const key=morningWaveOverrideKey(label),value=String(rawValue||'').trim(),fallback=String(wave||'').trim();
+  state.morningWaveTimeOverrides=state.morningWaveTimeOverrides&&typeof state.morningWaveTimeOverrides==='object'?state.morningWaveTimeOverrides:{};
+  if(!value){delete state.morningWaveTimeOverrides[key];return {wave:fallback,count:null};}
+  const match=value.match(/^(.*?)(?:\s*\((\d+)\))?\s*$/),timeInput=String(match?.[1]||'').trim(),countText=match?.[2];
+  const nextWave=normalizedPicklistWave(timeInput,fallback)||fallback;
+  if(nextWave&&fallback&&nextWave!==fallback){
+    state.morningRoutes.filter(row=>row.dsp===state.dspCode&&row.wave===fallback&&!isExplicitHelperMorningRoute(row)&&!isExplicitAdhocMorningRoute(row)).forEach(row=>{row.wave=nextWave;});
+  }
+  state.morningWaveTimeOverrides[key]={time:nextWave||fallback,count:countText===undefined?null:Math.max(0,Number(countText)||0)};
+  return state.morningWaveTimeOverrides[key];
+}
+function morningBlankWaveAnchors() {
+  const existing=morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-5]$/i.test(section.label)).slice(0,5);
+  return Array.from({length:5},(_,index)=>{
+    const label=`WAVE ${index+1}`,section=existing[index]||{},override=morningWaveTimeOverride({label}),wave=override?.time||section.wave||defaultMorningWaveTimes[index];
+    const pad=section.rows?.[0]?.padOverride||section.rows?.[0]?.pad||['A','B','C','A','B'][index];
+    return {routeUid:`WAVE-ANCHOR-${state.morningOperationDate}-${index+1}`,dsp:state.dspCode,driver:'',route:`__blank_wave_${index+1}`,service:'Morning Sheet wave anchor',wave,staging:'',pad,padOverride:pad,ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true,_waveAnchor:true};
+  });
 }
 
 function morningSections(rows) {
@@ -1254,7 +1302,8 @@ function copyModeToolbar(groups=[]) {
 }
 function morningWaveTimeText(section) {
   const driverCount=(section.rows||[]).filter(row=>!row._blank&&String(row.driver||'').trim()&&!routeMissingPrimary(row)).length;
-  return section.wave?`${String(section.wave).replace(/\s*[AP]M/i,'')} (${driverCount})`:'';
+  const override=morningWaveTimeOverride(section),wave=override?.time||section.wave,count=override?.count===null||override?.count===undefined?driverCount:override.count;
+  return wave?`${String(wave).replace(/\s*[AP]M/i,'')} (${count})`:'';
 }
 function copyCellValue(row,field,waveLabel,pad) {
   if(field==='waveLabel')return waveLabel;
@@ -1308,7 +1357,7 @@ function morningWaveGroup(section,sectionIndex=0) {
   const padCell=`<td class="pad-label sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" rowspan="${padRows}" data-view-field="padOverride" data-view-wave="${esc(section.wave)}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="4" ${edit?`contenteditable="true" data-edit-wave="${esc(section.wave)}" data-edit-field="padOverride"`:''}`:''}><span>${esc(pad)}</span></td>`;
   const body=rows.map((r,i)=>`<tr class="ops-row ${r._blank?'blank-row':''} ${routeAssignmentVacant(r)?'route-vacancy-row':''} wave-section-${sectionIndex}" data-wave-section="${sectionIndex}"><th class="sheet-row-num">${rowBase+i}</th>${i===0?waveCell:''}${cell(r,'driver',routeDriverDisplayValue(r),1,'driver-name')}${cell(r,'route',r._blank?'':r.route,2,'route-id')}${cell(r,'staging',r.staging,3,'staging-code')}${i===0?padCell:''}${cell(r,'ev',routeEquipmentValue(r),5)}${cell(r,'deviceName',r.deviceName||'',6)}${cell(r,'portable',r.portable||'',7)}${divider(i,8)}${selectCell(r,'preDvic',9)}${selectCell(r,'preWhip',10)}${selectCell(r,'postDvic',11)}${selectCell(r,'postWhip',12)}${divider(i,13)}${selectCell(r,'rescued',14,'rescued-cell')}${cell(r,'stops',r.stops,15,'count-cell')}${cell(r,'packages',r.packages,16,'count-cell')}${cell(r,'packageReturns',r.packageReturns||'',17)}${cell(r,'endTime',r.endTime||'',18)}${cell(r,'rtsTime',r.rtsTime||'',19)}${cell(r,'plannedRts',r.plannedRts||'',20,'planned-rts-cell')}${cell(r,'clockOutTime',r.clockOutTime||'',21)}</tr>`).join('');
   const timeRowIndex=rowBase+rows.length-3;
-  const timeCells=sheetCopyFields.map((field,colIndex)=>colIndex===0?`<td class="wave-time-cell copy-sheet-cell" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="0"`:''}>${esc(waveTime)}</td>`:colIndex===4?'':`<td class="${sheetSpacerColumns.has(colIndex)?'sheet-spacer-col':field==='plannedRts'?'planned-rts-cell sheet-edit-cell copy-sheet-cell':'sheet-edit-cell copy-sheet-cell'}" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="${colIndex}"`:''}></td>`).join('');
+  const timeCells=sheetCopyFields.map((field,colIndex)=>colIndex===0?`<td class="wave-time-cell sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" data-view-field="waveTime" data-view-wave="${esc(section.wave||'')}" data-view-section="${esc(section.label||'')}" title="${edit?'Type the wave time and driver total, then press Enter':'Double-click to edit wave time and driver total'}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="0" ${edit?`contenteditable="true" data-edit-field="waveTime" data-edit-wave="${esc(section.wave||'')}" data-edit-section="${esc(section.label||'')}"`:''}`:''}>${esc(waveTime)}</td>`:colIndex===4?'':`<td class="${sheetSpacerColumns.has(colIndex)?'sheet-spacer-col':field==='plannedRts'?'planned-rts-cell sheet-edit-cell copy-sheet-cell':'sheet-edit-cell copy-sheet-cell'}" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="${colIndex}"`:''}></td>`).join('');
   const timeRow=section.hasTime?`<tr class="ops-row wave-time-row wave-section-${sectionIndex}" data-wave-section="${sectionIndex}"><th class="sheet-row-num">${rowBase+rows.length}</th>${timeCells}</tr>`:'';
   const separators=Array.from({length:section.separatorRows||0},(_,offset)=>{const sheetRow=rowBase+rows.length+(section.hasTime?1:0)+offset,rowIndex=sheetRow-3;return `<tr class="wave-separator wave-section-${sectionIndex}" data-wave-section="${sectionIndex}"><th class="sheet-row-num">${sheetRow}</th>${sheetCopyFields.map((field,colIndex)=>`<td class="${sheetSpacerColumns.has(colIndex)?'sheet-spacer-col':''}" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowIndex}" data-sheet-col="${colIndex}"`:''}></td>`).join('')}</tr>`;}).join('');
   return `${body}${timeRow}${separators}`;
@@ -2993,7 +3042,7 @@ function modal() {
   }
   if (state.modal === 'clear-operational-sheet' && state.pendingSheetClear) {
     const picklist=state.pendingSheetClear==='picklist',routeCount=picklist?openingPicklistSections().reduce((total,section)=>total+section.rows.length,0):(state.morningRoutes||[]).filter(route=>route.dsp===state.dspCode).length;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal confirm-clear-sheet-modal" role="dialog" aria-modal="true" aria-labelledby="clear-sheet-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">CONFIRM CLEAR</span><h2 id="clear-sheet-title">Clear ${picklist?'Opening Picklist':'Morning Sheet'}?</h2><p>${picklist?`${routeCount} visible Picklist route row${routeCount===1?'':'s'} will clear from both shared views. Helper/DSP-only Morning rows stay in place; Picklist notes, current-date backups, and call-offs reset.`:`All ${routeCount} current DSP route row${routeCount===1?'':'s'} will be removed. Other saved fleet, driver, and device data stays unchanged.`}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="private-contact-note danger"><b>Undo protection is on</b><span>This change will be placed in Sheet History so it can be immediately restored.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Keep current sheet</button><button class="btn danger" data-action="confirm-clear-operational-sheet">${ICONS.trash} Clear ${picklist?'Picklist':'Morning Sheet'}</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal confirm-clear-sheet-modal" role="dialog" aria-modal="true" aria-labelledby="clear-sheet-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">CONFIRM CLEAR</span><h2 id="clear-sheet-title">Clear ${picklist?'Opening Picklist':'Morning Sheet'}?</h2><p>${picklist?`${routeCount} visible Picklist route row${routeCount===1?'':'s'} will clear from both shared views. Helper/DSP-only Morning rows stay in place; Picklist notes, current-date backups, and call-offs reset.`:`All ${routeCount} current DSP route row${routeCount===1?'':'s'} will clear, while five blank Wave 1–5 sections and their wave times stay ready for the next import. Other saved fleet, driver, and device data stays unchanged.`}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="private-contact-note danger"><b>Undo protection is on</b><span>This change will be placed in Sheet History so it can be immediately restored.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Keep current sheet</button><button class="btn danger" data-action="confirm-clear-operational-sheet">${ICONS.trash} Clear ${picklist?'Picklist':'Morning Sheet'}</button></div></div></div></div>`;
   }
   if (state.modal === 'sheet-history') {
     const history=[...(state.sheetHistory?.past||[])].reverse();
@@ -3534,8 +3583,8 @@ function enhanceOpeningRoster() {
   document.querySelectorAll?.('.vto-button').forEach(button=>button.classList.add(button.textContent.includes('VTO 4')?'vto-4':'vto-2'));
 }
 function enhanceMorningParkingAssignment() {
-  if(state.page!=='morning')return;
-  document.querySelectorAll?.('.morning-more-actions').forEach(container=>{const button=document.createElement('button');button.className='btn small parking-assign-button';button.dataset.action='assign-vans-by-parking';button.innerHTML=`${ICONS.van} Assign vans by parking order`;container.prepend(button);});
+  // Parking-order assignment is rendered in the Morning Tools form so its
+  // location stays predictable on desktop and mobile.
 }
 function rosterSwapCandidates(currentName='') {
   const onRoute=new Set(filteredMorningRows().flatMap(row=>morningDriverNames(row.driver)).map(nameKey));
@@ -3606,10 +3655,10 @@ function startOpeningPicklistCellEdit(source) {
   target.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 function operationalSheetSnapshot() {
-  return JSON.parse(JSON.stringify({morningRoutes:state.morningRoutes||[],morningOperationDate:state.morningOperationDate,callOffDriverKeys:state.callOffDriverKeys||{},callOffReasons:state.callOffReasons||{},scheduleDriverMarks:state.scheduleDriverMarks||{},scheduleBackupRecords:state.scheduleBackupRecords||{},openingPicklistTopics:state.openingPicklistTopics||[],openingPicklistNotes:state.openingPicklistNotes||'',openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts||[],openingPicklistBackupOverrides:state.openingPicklistBackupOverrides||{},openingPicklistLabels:state.openingPicklistLabels||{}}));
+  return JSON.parse(JSON.stringify({morningRoutes:state.morningRoutes||[],morningOperationDate:state.morningOperationDate,morningWaveTimeOverrides:state.morningWaveTimeOverrides||{},fitMorningRows:state.fitMorningRows,callOffDriverKeys:state.callOffDriverKeys||{},callOffReasons:state.callOffReasons||{},scheduleDriverMarks:state.scheduleDriverMarks||{},scheduleBackupRecords:state.scheduleBackupRecords||{},openingPicklistTopics:state.openingPicklistTopics||[],openingPicklistNotes:state.openingPicklistNotes||'',openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts||[],openingPicklistBackupOverrides:state.openingPicklistBackupOverrides||{},openingPicklistLabels:state.openingPicklistLabels||{}}));
 }
 function restoreOperationalSheetSnapshot(snapshot={}) {
-  ['morningRoutes','morningOperationDate','callOffDriverKeys','callOffReasons','scheduleDriverMarks','scheduleBackupRecords','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels'].forEach(key=>{if(Object.prototype.hasOwnProperty.call(snapshot,key))state[key]=JSON.parse(JSON.stringify(snapshot[key]));});ensureMorningRouteUids();recalculateEquipmentReadiness();
+  ['morningRoutes','morningOperationDate','morningWaveTimeOverrides','fitMorningRows','callOffDriverKeys','callOffReasons','scheduleDriverMarks','scheduleBackupRecords','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels'].forEach(key=>{if(Object.prototype.hasOwnProperty.call(snapshot,key))state[key]=JSON.parse(JSON.stringify(snapshot[key]));});ensureMorningRouteUids();recalculateEquipmentReadiness();
 }
 function pushSheetHistory(label='Sheet change',scope='both',snapshot=null) { state.sheetHistory=state.sheetHistory&&Array.isArray(state.sheetHistory.past)?state.sheetHistory:{past:[],future:[]};state.sheetHistory.past.push({id:`history-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,label,scope,at:new Date().toISOString(),by:state.cloudUser||'Dispatcher',snapshot:snapshot?JSON.parse(JSON.stringify(snapshot)):operationalSheetSnapshot()});state.sheetHistory.past=state.sheetHistory.past.slice(-40);state.sheetHistory.future=[]; }
 const sheetInputHistoryDrafts=new WeakMap();
@@ -3619,10 +3668,15 @@ function undoSheetChange() { const item=state.sheetHistory?.past?.pop();if(!item
 function redoSheetChange() { const item=state.sheetHistory?.future?.pop();if(!item)return toast('Nothing to redo','error');state.sheetHistory.past=state.sheetHistory.past||[];state.sheetHistory.past.push({...item,snapshot:operationalSheetSnapshot()});restoreOperationalSheetSnapshot(item.snapshot);persist();render();toast(`Redid: ${item.label}`); }
 function requestClearOperationalSheet(scope='morning') { state.pendingSheetClear=scope==='picklist'?'picklist':'morning';state.modal='clear-operational-sheet';render(); }
 function confirmClearOperationalSheet() {
-  const scope=state.pendingSheetClear||'morning',datePrefix=`${state.morningOperationDate}|`;ensureMorningRouteUids();pushSheetHistory(scope==='picklist'?'Clear Opening Picklist':'Clear Morning Sheet',scope);
+  const scope=state.pendingSheetClear||'morning',datePrefix=`${state.morningOperationDate}|`,waveAnchors=scope==='morning'?morningBlankWaveAnchors():[];ensureMorningRouteUids();pushSheetHistory(scope==='picklist'?'Clear Opening Picklist':'Clear Morning Sheet',scope);
   if(scope==='picklist'){
     const visibleRouteUids=new Set(openingPicklistSections().flatMap(section=>section.rows).map(route=>route.routeUid).filter(Boolean));state.morningRoutes=(state.morningRoutes||[]).filter(route=>!visibleRouteUids.has(route.routeUid));
-  } else state.morningRoutes=(state.morningRoutes||[]).filter(route=>route.dsp!==state.dspCode);
+  } else {
+    state.morningRoutes=[...(state.morningRoutes||[]).filter(route=>route.dsp!==state.dspCode),...waveAnchors];
+    state.morningFilters={wave:'all',staging:'all',pad:'all'};
+    state.fitMorningRows=false;
+    waveAnchors.forEach((anchor,index)=>{state.morningWaveTimeOverrides[morningWaveOverrideKey(`WAVE ${index+1}`)]={time:anchor.wave,count:null};});
+  }
   if(scope==='picklist'){
     state.openingPicklistTopics=['','','',''];state.openingPicklistNotes='';state.openingPicklistCalloffRows=6;state.openingPicklistTopicRows=4;state.openingPicklistBackupRows=21;state.openingPicklistCalloffDrafts=[];state.openingPicklistBackupOverrides={};state.openingPicklistLabels={};
     state.callOffDriverKeys=Object.fromEntries(Object.entries(state.callOffDriverKeys||{}).filter(([key])=>!key.startsWith(datePrefix)));
@@ -3643,7 +3697,7 @@ function saveOpeningPicklistCell(el) {
   if(field==='padOverride'){pushSheetHistory(`Edit ${wave} pad`,'both');state.morningRoutes.filter(row=>row.dsp===state.dspCode&&row.wave===wave).forEach(row=>{row.padOverride=value.toUpperCase();});persist();return;}
   if(field==='waveTime'){
     pushSheetHistory(`Edit ${wave} time`,'both');
-    const next=normalizedPicklistWave(value,wave);if(next&&next!==wave)state.morningRoutes.filter(row=>row.dsp===state.dspCode&&row.wave===wave).forEach(row=>{row.wave=next;});persist();return;
+    saveMorningWaveTimeValue(coreMorningWaveLabel(sectionKey,sectionKey),wave,value);persist();return;
   }
   let index=Number(el.dataset.picklistRouteIndex),route=morningRouteByUid(el.dataset.picklistRouteUid)||(Number.isInteger(index)&&index>=0?state.morningRoutes[index]:null);
   if(!route&&value){route=createManualMorningRoute({route:'',wave:wave||'Ad hoc'});route.route='';route.service=sectionKey==='adhoc'?'Adhoc':'Manual opening edit';index=state.morningRoutes.indexOf(route);el.parentElement?.querySelectorAll('[data-picklist-route-index]').forEach(cell=>{cell.dataset.picklistRouteIndex=String(index);cell.dataset.picklistRouteUid=route.routeUid||'';});}
@@ -4184,11 +4238,11 @@ function handleEquipmentPaste(e) {
 }
 
 function startMorningCellEdit(source) {
-  const route=source.dataset.viewRoute||'',uid=source.dataset.viewUid||'', field=source.dataset.viewField||'', wave=source.dataset.viewWave||'';
+  const route=source.dataset.viewRoute||'',uid=source.dataset.viewUid||'', field=source.dataset.viewField||'', wave=source.dataset.viewWave||'',section=source.dataset.viewSection||'';
   if(!field)return;
   state.editMode=true;state.copyMode=false;
   render();
-  const target=[...document.querySelectorAll('.morning-template-sheet [data-edit-field]')].find(cell=>cell.dataset.editField===field&&(field==='padOverride'?cell.dataset.editWave===wave:uid?cell.dataset.editUid===uid:cell.dataset.editRoute===route));
+  const target=[...document.querySelectorAll('.morning-template-sheet [data-edit-field]')].find(cell=>cell.dataset.editField===field&&(field==='waveTime'?cell.dataset.editSection===section:field==='padOverride'?cell.dataset.editWave===wave:uid?cell.dataset.editUid===uid:cell.dataset.editRoute===route));
   if(!target)return;
   if(field==='driver'){const morningRoute=morningRouteByUid(uid)||state.morningRoutes.find(row=>row.route===route);if(morningRoute)target.textContent=driverDisplayValue(morningRoute.driver||'');}
   target.focus({preventScroll:true});
@@ -4202,6 +4256,11 @@ function startMorningCellEdit(source) {
 function saveMorningEditCell(el) {
   const value=el.textContent.trim(), field=el.dataset.editField;
   if(!field)return null;
+  if(field==='waveTime') {
+    pushSheetHistory(`Edit ${el.dataset.editSection||el.dataset.editWave||'wave'} time and total`,'both');
+    saveMorningWaveTimeValue(el.dataset.editSection||'',el.dataset.editWave||'',value);
+    persist();return null;
+  }
   if(el.dataset.editWave&&field==='padOverride') {
     pushSheetHistory(`Edit ${el.dataset.editWave} pad`,'morning');
     state.morningRoutes.filter(r=>r.wave===el.dataset.editWave).forEach(r=>r[field]=value.toUpperCase());
@@ -6556,7 +6615,7 @@ function morningSheetsConnectorPayload() {
     const separatorRows=[];
     for(let i=0;i<(section.separatorRows||0);i++){rows.push(['','','','','','','','','','','','','']);rowTypes.push('separator');separatorRows.push(index+3);index+=1;}
     const separatorRow=separatorRows[0]||null;
-    const driverCount=section.rows.filter(row=>!row._blank&&String(row.driver||'').trim()&&!routeMissingPrimary(row)).length,waveTime=section.hasTime?`${String(section.wave||'').replace(/\s*[AP]M/i,'')} (${driverCount})`:'';
+    const driverCount=section.rows.filter(row=>!row._blank&&String(row.driver||'').trim()&&!routeMissingPrimary(row)).length,waveTime=section.hasTime?morningWaveTimeText(section):'';
     sectionMeta.push({label:waveLabel,slotKey:morningFixedSectionKey(waveLabel),wave:section.wave||'',driverCount,waveTime,pad,sourceIndex,startRow,rowCount:display.length,timeRow,hasTimeRow:Boolean(section.hasTime),separatorRow,separatorRows,dsp:Boolean(section.dsp)});
   });
   const dateTabs=operationDateTabNames(state.morningOperationDate),sheetName=dateTabs[0]||MORNING_TEMPLATE_SHEET_NAME;
@@ -7631,6 +7690,7 @@ localStorage.setItem('relayops_opening_picklist_show_adhoc',String(state.opening
 localStorage.setItem('relayops_opening_picklist_calloff_drafts',JSON.stringify(state.openingPicklistCalloffDrafts||[]));
 localStorage.setItem('relayops_opening_picklist_backup_overrides',JSON.stringify(state.openingPicklistBackupOverrides||{}));
 localStorage.setItem('relayops_opening_picklist_labels',JSON.stringify(state.openingPicklistLabels||{}));
+localStorage.setItem('relayops_morning_wave_time_overrides',JSON.stringify(state.morningWaveTimeOverrides||{}));
 localStorage.setItem('relayops_schedule_helpers',JSON.stringify(state.scheduleHelpers||{}));
 localStorage.setItem('relayops_whiparound_inspections',JSON.stringify(state.whiparoundInspections||[]));
 localStorage.setItem('relayops_whiparound_roster_snapshots',JSON.stringify(state.whiparoundRosterSnapshots||{}));
@@ -7664,7 +7724,7 @@ function sharedWorkspaceState() {
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),
     messageQueueTemplate:state.messageQueueTemplate,messageQueueStatus:state.messageQueueStatus,coachingQueue:normalizeCoachingQueue(state.coachingQueue),coachingTemplate:state.coachingTemplate,
-    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringTrainingMatches:state.rosteringTrainingMatches,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleBackupRecords:state.scheduleBackupRecords,scheduleStayHome:state.scheduleStayHome,scheduleStayHomeHistory:state.scheduleStayHomeHistory,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,sheetHistory:state.sheetHistory,
+    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringTrainingMatches:state.rosteringTrainingMatches,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleBackupRecords:state.scheduleBackupRecords,scheduleStayHome:state.scheduleStayHome,scheduleStayHomeHistory:state.scheduleStayHomeHistory,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,morningWaveTimeOverrides:state.morningWaveTimeOverrides,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,sheetHistory:state.sheetHistory,
     whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
     inventoryItems:state.inventoryItems,inventoryLog:state.inventoryLog,
     morningSheetsEndpoint:state.morningSheetsEndpoint,slackReportRoomUrl:state.slackReportRoomUrl,chargerReports:normalizeChargerReports(state.chargerReports||[])
@@ -7678,14 +7738,14 @@ function persistentWorkspaceState() {
     vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,chargingStationChecked:state.chargingStationChecked,
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,
     equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
-    driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),scheduleStayHomeHistory:state.scheduleStayHomeHistory,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringTrainingMatches:state.rosteringTrainingMatches,
+    driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),scheduleStayHomeHistory:state.scheduleStayHomeHistory,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringTrainingMatches:state.rosteringTrainingMatches,morningWaveTimeOverrides:state.morningWaveTimeOverrides,
     whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
     inventoryItems:state.inventoryItems,inventoryLog:state.inventoryLog,coachingTemplate:state.coachingTemplate,
     morningSheetsEndpoint:state.morningSheetsEndpoint,slackReportRoomUrl:state.slackReportRoomUrl,chargerReports:normalizeChargerReports(state.chargerReports||[])
   };
 }
 function applySharedWorkspaceState(payload={}) {
-  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','messageQueueTemplate','messageQueueStatus','coachingQueue','coachingTemplate','scheduleEntries','scheduleImportName','rosteringDate','rosteringPlans','rosteringTrainingMatches','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleStayHomeHistory','scheduleReductions','scheduleHelpers','callOffReasons','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','messageQueueTemplate','messageQueueStatus','coachingQueue','coachingTemplate','scheduleEntries','scheduleImportName','rosteringDate','rosteringPlans','rosteringTrainingMatches','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleStayHomeHistory','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
   state.equipmentIssues=normalizeEquipmentIssuesStore(state.equipmentIssues||{});
@@ -7701,6 +7761,7 @@ function applySharedWorkspaceState(payload={}) {
   state.rosteringDate=String(state.rosteringDate||defaultOperationDate());state.rosteringPlans=state.rosteringPlans&&typeof state.rosteringPlans==='object'?state.rosteringPlans:{};
   state.scheduleBackupRecords=state.scheduleBackupRecords&&typeof state.scheduleBackupRecords==='object'?state.scheduleBackupRecords:{};
   state.callOffReasons=state.callOffReasons||{};
+  state.morningWaveTimeOverrides=state.morningWaveTimeOverrides&&typeof state.morningWaveTimeOverrides==='object'?state.morningWaveTimeOverrides:{};
   state.openingPicklistTopics=Array.isArray(state.openingPicklistTopics)?state.openingPicklistTopics:['','','',''];
   state.openingPicklistNotes=String(state.openingPicklistNotes||'');
   state.openingPicklistCalloffRows=Math.max(1,Number(state.openingPicklistCalloffRows)||6);
