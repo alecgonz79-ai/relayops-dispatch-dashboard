@@ -88,25 +88,9 @@ function operationDateTabNames(value='') {
   return [`${month}/${day}/${shortYear}`,`${month}.${day}.${shortYear}`];
 }
 
-const routesSeed = [
-  { route:'CX12', driver:'Maya Collins', id:'DA-1042', wave:'Wave 1 · 9:20', staging:'A-14', van:'EDV 224', device:'CAT-17', stops:186, packages:312, progress:74, delta:18, status:'Ahead', rescue:'—' },
-  { route:'CX18', driver:'Jordan Lee', id:'DA-1028', wave:'Wave 1 · 9:20', staging:'A-08', van:'CDV 118', device:'CAT-08', stops:174, packages:296, progress:61, delta:-7, status:'Watch', rescue:'Review 2:30' },
-  { route:'CX21', driver:'Andre Wilson', id:'DA-1061', wave:'Wave 1 · 9:20', staging:'A-03', van:'Prime 341', device:'CAT-22', stops:192, packages:338, progress:58, delta:-16, status:'At risk', rescue:'T. Price → 18' },
-  { route:'CX27', driver:'Sofia Ramirez', id:'DA-1037', wave:'Wave 2 · 9:40', staging:'B-11', van:'EDV 209', device:'CAT-11', stops:165, packages:281, progress:69, delta:11, status:'Ahead', rescue:'—' },
-  { route:'CX31', driver:'Ethan Brooks', id:'DA-1053', wave:'Wave 2 · 9:40', staging:'B-17', van:'CDV 104', device:'CAT-04', stops:181, packages:305, progress:64, delta:2, status:'On pace', rescue:'—' },
-  { route:'CX36', driver:'Nina Patel', id:'DA-1019', wave:'Wave 2 · 9:40', staging:'B-06', van:'Prime 327', device:'CAT-19', stops:169, packages:287, progress:51, delta:-12, status:'At risk', rescue:'M. Chen → 15' },
-  { route:'CX42', driver:'Marcus Chen', id:'DA-1070', wave:'Ad hoc · 10:05', staging:'C-02', van:'Rental 61', device:'CAT-26', stops:92, packages:154, progress:79, delta:24, status:'Ahead', rescue:'N. Patel → 15' },
-  { route:'CX44', driver:'Taylor Price', id:'DA-1066', wave:'Ad hoc · 10:05', staging:'C-04', van:'Rental 48', device:'CAT-29', stops:88, packages:149, progress:82, delta:28, status:'Ahead', rescue:'A. Wilson → 18' }
-];
-
-const team = [
-  ['Maya Collins','Lead DA','Fantastic Plus','96.8%','6 days'], ['Jordan Lee','Delivery Associate','Fantastic','94.1%','2 days'],
-  ['Andre Wilson','Delivery Associate','Fair','88.4%','Today'], ['Sofia Ramirez','Lead DA','Fantastic Plus','97.3%','9 days'],
-  ['Ethan Brooks','Delivery Associate','Great','92.7%','4 days'], ['Nina Patel','Delivery Associate','Great','91.2%','1 day'],
-  ['Marcus Chen','Rescue / DA','Fantastic','95.4%','12 days'], ['Taylor Price','Rescue / DA','Fantastic','95.9%','7 days'],
-  ['Kiara Owens','Delivery Associate','Great','91.8%','3 days']
-];
-
+// Legacy coaching fixtures remain available to the workflow engine for saved
+// records, but the UI only renders a fixture when that exact person exists in
+// the imported Drivers & Team directory.
 const COACHING_OPPORTUNITIES = Object.freeze([
   {id:'andre-wilson-following-distance',driver:'Andre Wilson',focus:'Following distance',source:'Netradyne · 2 events',due:'Due today',priority:'High'},
   {id:'nina-patel-contact-compliance',driver:'Nina Patel',focus:'Contact compliance',source:'Scorecard · 91.8%',due:'Due today',priority:'Medium'},
@@ -116,14 +100,6 @@ const COACHING_OPPORTUNITIES = Object.freeze([
   {id:'marcus-chen-recognition',driver:'Marcus Chen',focus:'Positive recognition',source:'Top rescue support',due:'Ready',priority:'Positive'}
 ]);
 const DEFAULT_COACHING_TEMPLATE = 'Hi {first}, dispatch would like to review {focus} with you. {notes} Please reply when you are ready to connect.';
-
-const fleet = [
-  ['EDV 224','Rivian EDV','Ready','Maya Collins','81%'], ['CDV 118','Ford Transit','Ready','Jordan Lee','Full'],
-  ['Prime 341','Ram ProMaster','Ready','Andre Wilson','3/4'], ['EDV 209','Rivian EDV','Ready','Sofia Ramirez','76%'],
-  ['CDV 104','Ford Transit','Ready','Ethan Brooks','Full'], ['Prime 327','Ram ProMaster','Watch','Nina Patel','1/2'],
-  ['Rental 61','Budget Transit','Ready','Marcus Chen','Full'], ['Rental 48','Enterprise Transit','Ready','Taylor Price','3/4'],
-  ['Prime 319','Ram ProMaster','Service','Unassigned','—']
-];
 
 const rivianFleet = [
   { name:'EDV-014816', vin:'7FCEHEB79PN014816', plate:'8HJK214', battery:63, miles:98, active:'Active', operational:'Operational', status:'Connected' },
@@ -337,8 +313,8 @@ let state = {
   page: localStorage.getItem('relayops_page') || 'dashboard',
   role: localStorage.getItem('relayops_role') || 'viewer',
   phase: Number(localStorage.getItem('relayops_phase') || 2),
-  routes: JSON.parse(localStorage.getItem('relayops_routes') || 'null') || routesSeed,
-  morningRoutes: JSON.parse(localStorage.getItem('relayops_morning') || 'null') || morningSeed,
+  routes: JSON.parse(localStorage.getItem('relayops_routes') || 'null') || [],
+  morningRoutes: JSON.parse(localStorage.getItem('relayops_morning') || 'null') || [],
   dspCode: localStorage.getItem('relayops_dsp') || 'LLOL',
   organizationName: localStorage.getItem('relayops_organization_name') || 'Legacy Logistics',
   stationCode: localStorage.getItem('relayops_station_code') || 'DJT6',
@@ -430,6 +406,8 @@ let state = {
   rosteringPaycomCategory: localStorage.getItem('relayops_rostering_paycom_category') || 'all',
   rosteringAutoMode: localStorage.getItem('relayops_rostering_auto_mode') === 'abc' ? 'abc' : 'random',
   pendingRosteringServiceDelete: null,
+  pendingRosteringSwap: null,
+  expandedDriverKey: '',
   callOffDriverKeys: JSON.parse(localStorage.getItem('relayops_call_off_driver_keys') || 'null') || {},
   scheduleDriverMarks: JSON.parse(localStorage.getItem('relayops_schedule_driver_marks') || 'null') || {},
   scheduleBackupRecords: JSON.parse(localStorage.getItem('relayops_schedule_backup_records') || 'null') || {},
@@ -699,11 +677,18 @@ function driverContactForName(name='') {
 }
 function teamDriverRows() {
   const removed=new Set(state.removedDriverKeys||[]);
-  const imported=(state.driverContacts||[]).filter(contact=>!team.some(d=>nameKey(d[0])===(contact.key||nameKey(contact.name))));
-  return [
-    ...team.map((d,i)=>({name:d[0],role:d[1],status:d[2],quality:d[3],coaching:d[4],id:`DA-${1019+i*7}`,phone:driverContactForName(d[0])?.phone||'',imported:false})),
-    ...imported.map((contact,i)=>({name:contact.name,role:contact.role||'Delivery Associate',status:String(contact.status||'').toUpperCase()==='ACTIVE'?'Active':'Imported',quality:'—',coaching:'—',id:contact.transporterId||`IMP-${String(i+1).padStart(3,'0')}`,phone:contact.phone||'',imported:true}))
-  ].filter(driver=>!removed.has(nameKey(driver.name)));
+  return (state.driverContacts||[]).map((contact,i)=>({
+    name:contact.name,
+    role:contact.role||'Delivery Associate',
+    status:String(contact.status||'').trim(),
+    quality:contact.quality||'—',
+    coaching:contact.coaching||'—',
+    id:contact.transporterId||`IMP-${String(i+1).padStart(3,'0')}`,
+    phone:contact.phone||'',
+    email:contact.email||'',
+    qualifications:contact.qualifications||'',
+    imported:true
+  })).filter(driver=>driver.name&&!removed.has(nameKey(driver.name))).sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
 }
 function requestDriverRemoval(key='') {
   const normalized=nameKey(key),driver=teamDriverRows().find(item=>nameKey(item.name)===normalized);
@@ -827,12 +812,13 @@ function phaseStrip() {
 }
 
 function dashboard() {
-  const atRisk = state.routes.filter(r=>r.status==='At risk').length;
+  const atRisk = state.routes.filter(r=>r.status==='At risk').length,driversOnDuty=new Set(state.routes.map(route=>firstDriverName(route.driver)).filter(name=>name&&!/^unassigned/i.test(name))).size,fleetTotal=rivianFleet.length,fleetReady=rivianFleet.filter(vehicle=>vehicle.active!=='Inactive'&&vehicle.operational!=='Grounded').length;
+  const attention=[...state.routes.filter(route=>route.status==='At risk').slice(0,2).map(route=>['red',`${route.route} needs route support`,[route.driver,route.rescue].filter(Boolean).join(' · '),'Now']),...rivianFleet.filter(vehicle=>vehicle.operational==='Grounded'||fleetIssueForVehicle(vehicle)).slice(0,2).map(vehicle=>['',`${fleetDisplayName(vehicle)} needs fleet review`,vehicle.operational==='Grounded'?'Grounded · do not assign':'Reported vehicle issue','Fleet'])].slice(0,3);
   return `${contextBar(`<button class="btn small ghost" data-action="phase-next">Advance shift phase ${ICONS.chevron}</button>`)}${phaseStrip()}
   <section class="grid kpi-grid">
     ${kpiCard('Routes launched',`${state.routes.length}<span style="font-size:13px;color:#7b877f"> / ${state.routes.length}</span>`,'<span class="trend-up">100% covered</span> · 2 rescues','roster','#e9f7df')}
-    ${kpiCard('Drivers on duty','12','8 routes · 2 rescue · 2 support','users','#e5efff')}
-    ${kpiCard('Fleet ready','24<span style="font-size:13px;color:#7b877f"> / 26</span>','<span class="trend-warn">2 need attention</span>','van','#fff2cf')}
+    ${kpiCard('Drivers on duty',driversOnDuty,`${state.routes.length} imported route${state.routes.length===1?'':'s'}`,'users','#e5efff')}
+    ${kpiCard('Fleet ready',`${fleetReady}<span style="font-size:13px;color:#7b877f"> / ${fleetTotal}</span>`,fleetTotal===fleetReady?'All imported vehicles ready':`<span class="trend-warn">${fleetTotal-fleetReady} need attention</span>`,'van','#fff2cf')}
     ${kpiCard('Routes at risk',atRisk,'2 rescue plans documented','live','#ffe7e2')}
   </section>
   <section class="grid dashboard-grid">
@@ -841,11 +827,7 @@ function dashboard() {
       ${routesTable(state.routes.slice(0,5),'Route health','Live operational position from Cortex inputs')}
     </div>
     <div class="grid">
-      <article class="card"><div class="card-head"><div class="card-title"><h2>Needs your attention</h2><p>Ordered by operational impact</p></div><span class="status risk">3 open</span></div><div class="alert-stack">
-        ${alertRow('red','Andre is 16 stops behind','Rescue handoff scheduled with Taylor','Now')}
-        ${alertRow('','Prime 327 DVIC follow-up','Tire pressure note from Nina','8m')}
-        ${alertRow('','CAT-31 not returned','Last assigned to Kiara Owens','1d')}
-      </div></article>
+      <article class="card"><div class="card-head"><div class="card-title"><h2>Needs your attention</h2><p>Ordered by operational impact</p></div><span class="status ${attention.length?'risk':''}">${attention.length} open</span></div><div class="alert-stack">${attention.length?attention.map(row=>alertRow(...row)).join(''):'<div class="empty-state"><h3>No imported exceptions</h3><p>Route and Fleet Health alerts will appear here after today’s files are loaded.</p></div>'}</div></article>
       <article class="card"><div class="card-head"><div class="card-title"><h2>Scorecard pulse</h2><p>Week 26 · team aggregate</p></div><span class="status">Fantastic</span></div><div class="page-summary"><div class="summary-line"><span>Delivery quality</span><strong>99.4%</strong></div><div class="summary-line"><span>Safety compliance</span><strong>98.1%</strong></div><div class="summary-line"><span>Customer delivery feedback</span><strong>95.7%</strong></div><div class="divider"></div><div class="callout"><strong>Three coaching opportunities</strong><p>Focus this week: DNR, following distance, and contact compliance.</p><button class="btn small lime" data-page="coaching">Review coaching</button></div></div></article>
     </div>
   </section>`;
@@ -977,8 +959,8 @@ function rosteringPaycomCategoryFor(entry={}) {
   const key=headerKey(entry.role);if(isRidealongRole(entry.role))return 'training';if(isDriverHelperOnlyRole(entry.role))return 'helper';if(key.includes('deliveryassociate'))return 'vto4';if(key.includes('rescue'))return 'vto2';if(key.includes('midshift'))return 'midshift';if(key.includes('modifiedduty'))return 'modified';return 'other';
 }
 function rosteringEntryEligibleForRoster(entry={}) {
-  if(scheduleRoleGroup(entry.role)!=='driver'||rosteringUnavailableToday(entry.name))return false;
-  return rosteringPaycomCategoryFor(entry)!=='vto2'||rosteringStayHomeCount(entry.name)>0;
+  const role=headerKey(entry.role);
+  return (role.includes('deliveryassociate')||role.includes('rescue'))&&!rosteringUnavailableToday(entry.name);
 }
 function rosteringOrderEntries(entries=[],mode=state.rosteringAutoMode,random=Math.random) {
   const rows=[...entries];if(mode==='abc')return rows.sort((a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})||waveMinutes(a.start)-waveMinutes(b.start));
@@ -1088,19 +1070,41 @@ function rosteringServiceHtml(service={},plan=currentRosteringPlan(),duplicates=
 }
 function rosteringUnrosteredBackupGroups(plan=currentRosteringPlan()) {
   const assigned=rosteringAssignedNameKeys(plan),seen=new Set(),groups={vto2:[],vto4:[],other:[]};
-  scheduleEntriesForDate(state.rosteringDate).filter(entry=>scheduleRoleGroup(entry.role)==='driver'&&!isDriverHelperOnlyRole(entry.role)&&!rosteringUnavailableToday(entry.name)&&!assigned.has(driverIdentityKey(entry.name))).forEach(entry=>{const identity=driverIdentityKey(entry.name);if(!identity||seen.has(identity))return;seen.add(identity);const category=rosteringPaycomCategoryFor(entry);groups[category==='vto2'?'vto2':category==='vto4'?'vto4':'other'].push(entry);});
+  scheduleEntriesForDate(state.rosteringDate).filter(entry=>!isDriverHelperOnlyRole(entry.role)&&!isRidealongRole(entry.role)&&!rosteringUnavailableToday(entry.name)&&!assigned.has(driverIdentityKey(entry.name))).forEach(entry=>{const identity=driverIdentityKey(entry.name);if(!identity||seen.has(identity))return;seen.add(identity);const category=rosteringPaycomCategoryFor(entry);groups[category==='vto2'?'vto2':category==='vto4'?'vto4':'other'].push(entry);});
   Object.values(groups).forEach(rows=>rows.sort((a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})));return groups;
+}
+function rosteringDriverActionButtons(entry={},isAssigned=false) {
+  const eligible=rosteringEntryEligibleForRoster(entry);
+  if(isAssigned)return '<button class="btn small" disabled>Rostered</button>';
+  if(!eligible)return '<button class="btn small" disabled>Other role</button>';
+  return `<span class="rostering-driver-actions"><button class="btn small primary" data-action="rostering-add-paycom-driver" data-driver-name="${esc(entry.name)}">Add to roster</button><button class="btn small" data-action="open-rostering-driver-swap" data-driver-name="${esc(entry.name)}">Swap with rostered driver</button></span>`;
 }
 function rosteringBackupBuilderHtml(plan=currentRosteringPlan()) {
   const groups=rosteringUnrosteredBackupGroups(plan),sections=[['vto2','VTO 2 · Rescue'],['vto4','VTO 4 · Delivery Associate'],['other','Other roles']];
-  return `<section class="rostering-backup-builder"><header><div><span class="eyebrow">UNROSTERED BACKUP LIST</span><h3>Drivers still available</h3></div><span><b>${Object.values(groups).reduce((sum,rows)=>sum+rows.length,0)}</b><button class="btn small" data-action="copy-rostering-backup-email">${ICONS.copy} Copy email text</button></span></header><div>${sections.map(([key,label])=>`<article><h4>${esc(label)} <b>${groups[key].length}</b></h4>${groups[key].length?groups[key].map(entry=>{const eligible=rosteringEntryEligibleForRoster(entry);return `<div ${driverProfileAttrs(entry.name)}><span><strong>${esc(driverDisplayName(entry.name))}</strong><small>${esc(entry.role)}${rosteringStayHomeCount(entry.name)?` · ${rosteringStayHomeCount(entry.name)}× stay-home`:''}</small></span><button class="btn small" data-action="rostering-add-paycom-driver" data-driver-name="${esc(entry.name)}" ${eligible?'':'disabled'}>${eligible?'Add to roster':'Keep as VTO 2'}</button></div>`;}).join(''):'<p>No drivers in this group.</p>'}</article>`).join('')}</div></section>`;
+  return `<section class="rostering-backup-builder"><header><div><span class="eyebrow">UNROSTERED BACKUP LIST</span><h3>Drivers still available</h3></div><span><b>${Object.values(groups).reduce((sum,rows)=>sum+rows.length,0)}</b><button class="btn small" data-action="copy-rostering-backup-email">${ICONS.copy} Copy email text</button></span></header><div>${sections.map(([key,label])=>`<article><h4>${esc(label)} <b>${groups[key].length}</b></h4>${groups[key].length?groups[key].map(entry=>`<div ${driverProfileAttrs(entry.name)}><span><strong>${esc(driverDisplayName(entry.name))}</strong><small>${esc(entry.role)}${rosteringStayHomeCount(entry.name)?` · ${rosteringStayHomeCount(entry.name)}× stay-home`:''}</small></span>${rosteringDriverActionButtons(entry,false)}</div>`).join(''):'<p>No drivers in this group.</p>'}</article>`).join('')}</div></section>`;
 }
 function rosteringBackupEmailText(plan=currentRosteringPlan()) { const groups=rosteringUnrosteredBackupGroups(plan),lines=[`RelayOps unrostered backup list · ${state.rosteringDate}`,'',`VTO 2 · Rescue (${groups.vto2.length})`,...groups.vto2.map(row=>`- ${driverDisplayName(row.name)} · ${row.role}`),'',`VTO 4 · Delivery Associate (${groups.vto4.length})`,...groups.vto4.map(row=>`- ${driverDisplayName(row.name)} · ${row.role}`),'',`Other roles (${groups.other.length})`,...groups.other.map(row=>`- ${driverDisplayName(row.name)} · ${row.role}`)];return lines.join('\n'); }
 async function copyRosteringBackupEmailText() { await copyText(rosteringBackupEmailText());toast('Grouped backup email text copied'); }
+function openRosteringDriverSwap(name='') {
+  const entry=scheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(name));
+  if(!entry||!rosteringEntryEligibleForRoster(entry))return toast('Choose an available Rescue or Delivery Associate shift','error');
+  const assignments=currentRosteringPlan().assignments.filter(row=>String(row.associate||'').trim());
+  if(!assignments.length)return toast('Roster at least one driver before using Swap','error');
+  state.pendingRosteringSwap={name:entry.name};state.modal='rostering-driver-swap';render();
+}
+function applyRosteringDriverSwap() {
+  const pending=state.pendingRosteringSwap,assignmentId=document.getElementById('rostering-swap-assignment')?.value||'',target=rosteringAssignment(assignmentId);
+  if(!pending||!target)return toast('Choose the rostered driver to swap','error');
+  const entry=scheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(pending.name));
+  if(!entry||!rosteringEntryEligibleForRoster(entry))return toast('That PAYCOM driver is no longer available','error');
+  const incoming=canonicalDriverName(contactForMorningDriver(entry.name)?.name||entry.name),displaced=target.associate;
+  if(driverIdentityKey(incoming)===driverIdentityKey(displaced))return toast('Choose a different rostered driver','error');
+  target.associate=incoming;target.role=entry.role||'';target.source='paycom-swap';touchRosteringPlan();state.pendingRosteringSwap=null;state.modal=null;persist();render();toast(`${incoming} replaced ${displaced} · ${displaced} is now unrostered`);
+}
 function rosteringPaycomHtml(plan=currentRosteringPlan()) {
-  const assigned=rosteringAssignedNameKeys(plan),seen=new Set(),entries=scheduleEntriesForDate(state.rosteringDate).filter(entry=>['driver','training'].includes(scheduleRoleGroup(entry.role))).filter(entry=>{const key=driverIdentityKey(entry.name);if(!key||seen.has(key))return false;seen.add(key);return true;}).sort((a,b)=>Number(assigned.has(driverIdentityKey(b.name)))-Number(assigned.has(driverIdentityKey(a.name)))||driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})),category=state.rosteringPaycomCategory||'all',categories=[['all','All'],['rostered','Rostered'],['unrostered','Unrostered'],['vto4','Delivery Associate'],['vto2','Rescue / VTO 2'],['midshift','Midshift'],['modified','Modified Duty'],['training','Training'],['helper','Helpers'],['other','Other']];
+  const assigned=rosteringAssignedNameKeys(plan),seen=new Set(),entries=scheduleEntriesForDate(state.rosteringDate).filter(entry=>{const key=driverIdentityKey(entry.name);if(!key||seen.has(key))return false;seen.add(key);return true;}).sort((a,b)=>Number(assigned.has(driverIdentityKey(b.name)))-Number(assigned.has(driverIdentityKey(a.name)))||driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})),category=state.rosteringPaycomCategory||'all',categories=[['all','All'],['rostered','Rostered'],['unrostered','Unrostered'],['vto4','Delivery Associate'],['vto2','Rescue / VTO 2'],['midshift','Midshift'],['modified','Modified Duty'],['training','Training'],['helper','Helpers'],['other','Other']];
   const categoryCount=key=>entries.filter(entry=>key==='all'||key==='rostered'&&assigned.has(driverIdentityKey(entry.name))||key==='unrostered'&&!assigned.has(driverIdentityKey(entry.name))||rosteringPaycomCategoryFor(entry)===key).length;
-  return `<section class="card rostering-paycom"><header><div><span class="eyebrow">PAYCOM</span><h2>All Scheduled driver shifts</h2><p>${state.scheduleImportName?`Source: ${esc(state.scheduleImportName)}`:'Import PAYCOM, then choose Random or ABC before Auto Roster.'}</p></div><div><button class="btn" data-action="schedule-import">${ICONS.upload} Import PAYCOM</button><button class="btn primary" data-action="rostering-auto-roster">Auto Roster scheduled drivers</button></div></header><div class="rostering-paycom-stats"><span><b>${entries.length}</b> scheduled shifts</span><span><b>${entries.filter(entry=>assigned.has(driverIdentityKey(entry.name))).length}</b> rostered</span><span><b>${entries.filter(entry=>rosteringStayHomeCount(entry.name)>0).length}</b> fairness flags</span></div><div class="rostering-paycom-categories" role="group" aria-label="Filter PAYCOM shifts">${categories.map(([key,label])=>`<button type="button" class="${category===key?'active':''}" data-action="rostering-paycom-category" data-rostering-category="${key}">${esc(label)} <b>${categoryCount(key)}</b></button>`).join('')}</div><label class="roster-search rostering-paycom-search">${ICONS.search||'⌕'}<input type="search" data-rostering-paycom-search placeholder="Search names or shift roles" aria-label="Search PAYCOM drivers"></label><div class="rostering-paycom-list">${entries.length?entries.map(entry=>{const isAssigned=assigned.has(driverIdentityKey(entry.name)),entryCategory=rosteringPaycomCategoryFor(entry),visible=category==='all'||category==='rostered'&&isAssigned||category==='unrostered'&&!isAssigned||category===entryCategory,eligible=rosteringEntryEligibleForRoster(entry),training=entryCategory==='training',haystack=nameKey(`${driverDisplayName(entry.name)} ${entry.role} ${entryCategory}`);return `<div data-rostering-paycom-name="${esc(haystack)}" data-rostering-paycom-category="${entryCategory}" data-rostering-paycom-status="${isAssigned?'rostered':'unrostered'}" class="${isAssigned?'assigned':'unassigned'}" ${visible?'':'hidden'} ${driverProfileAttrs(entry.name)}><span><strong>${esc(driverDisplayName(entry.name))}</strong><small>${esc(entry.role)} · ${esc(entry.start)}${entry.end?`–${esc(entry.end)}`:''}</small></span>${rosteringFairnessBadge(entry.name)}${driverFlagBadgeHtml(entry.name)}${training?`<button class="btn small" data-action="rostering-focus-training">Training box</button>`:`<button class="btn small" data-action="rostering-add-paycom-driver" data-driver-name="${esc(entry.name)}" ${isAssigned||!eligible?'disabled':''}>${isAssigned?'Rostered':eligible?'Add to roster':'VTO 2 backup'}</button>`}</div>`;}).join(''):'<div class="rostering-empty"><strong>No PAYCOM shifts for this date</strong><span>Import CSV, XLS, XLSX, PDF, image, or text.</span></div>'}</div>${rosteringBackupBuilderHtml(plan)}</section>`;
+  return `<section class="card rostering-paycom"><header><div><span class="eyebrow">PAYCOM</span><h2>All Scheduled driver shifts</h2><p>${state.scheduleImportName?`Source: ${esc(state.scheduleImportName)}`:'Import PAYCOM, then choose Random or ABC before Auto Roster.'}</p></div><div><button class="btn" data-action="schedule-import">${ICONS.upload} Import PAYCOM</button><button class="btn primary" data-action="rostering-auto-roster">Auto Roster scheduled drivers</button></div></header><div class="rostering-paycom-stats"><span><b>${entries.length}</b> scheduled shifts</span><span><b>${entries.filter(entry=>assigned.has(driverIdentityKey(entry.name))).length}</b> rostered</span><span><b>${entries.filter(entry=>rosteringStayHomeCount(entry.name)>0).length}</b> fairness flags</span></div><div class="rostering-paycom-categories" role="group" aria-label="Filter PAYCOM shifts">${categories.map(([key,label])=>`<button type="button" class="${category===key?'active':''}" data-action="rostering-paycom-category" data-rostering-category="${key}">${esc(label)} <b>${categoryCount(key)}</b></button>`).join('')}</div><label class="roster-search rostering-paycom-search">${ICONS.search||'⌕'}<input type="search" data-rostering-paycom-search placeholder="Search names or shift roles" aria-label="Search PAYCOM drivers"></label><div class="rostering-paycom-list">${entries.length?entries.map(entry=>{const isAssigned=assigned.has(driverIdentityKey(entry.name)),entryCategory=rosteringPaycomCategoryFor(entry),visible=category==='all'||category==='rostered'&&isAssigned||category==='unrostered'&&!isAssigned||category===entryCategory,training=entryCategory==='training',haystack=nameKey(`${driverDisplayName(entry.name)} ${entry.role} ${entryCategory}`);return `<div data-rostering-paycom-name="${esc(haystack)}" data-rostering-paycom-category="${entryCategory}" data-rostering-paycom-status="${isAssigned?'rostered':'unrostered'}" class="${isAssigned?'assigned':'unassigned'}" ${visible?'':'hidden'} ${driverProfileAttrs(entry.name)}><span><strong>${esc(driverDisplayName(entry.name))}</strong><small>${esc(entry.role)} · ${esc(entry.start)}${entry.end?`–${esc(entry.end)}`:''}</small></span>${rosteringFairnessBadge(entry.name)}${driverFlagBadgeHtml(entry.name)}${training?`<button class="btn small" data-action="rostering-focus-training">Training box</button>`:rosteringDriverActionButtons(entry,isAssigned)}</div>`;}).join(''):'<div class="rostering-empty"><strong>No PAYCOM shifts for this date</strong><span>Import CSV, XLS, XLSX, PDF, image, or text.</span></div>'}</div>${rosteringBackupBuilderHtml(plan)}</section>`;
 }
 function rosteringTrainingKey(name='') { return `${state.rosteringDate}|${driverIdentityKey(name)}`; }
 function rosteringTrainerUnavailable(name='') {
@@ -1571,13 +1575,20 @@ function isDesignatedDispatcher(name='') {
   return DESIGNATED_DISPATCHER_NAMES.some(dispatcher=>nameKey(dispatcher).split(' ').filter(Boolean).every(part=>parts.includes(part)));
 }
 
+function driverTeamCardHtml(d={}) {
+  const whip=driverWhiparoundStats(d.name),stay=driverStayHomeStats(d.name),display=driverDisplayName(d.name),dispatcher=isDesignatedDispatcher(d.name),identity=driverIdentityKey(d.name),expanded=state.expandedDriverKey===identity,profile=driverProfileEntry(d.name)?.profile||{},searchValue=nameKey([d.name,display,...(profile.names||[])].join(' ')),active=/^active$/i.test(String(d.status||'').trim());
+  const statusHtml=d.status&&!active?`<span class="status ${statusClass(d.status)}">${esc(d.status)}</span>`:'';
+  const details=[['Transporter ID',d.id||'—'],['Role',d.role||'—'],['Phone',d.phone||'Not imported'],['Email',d.email||'Not imported'],['Qualifications',d.qualifications||'Not imported']];
+  return `<article class="card entity-card driver-card ${expanded?'expanded':''} ${dispatcher?'dispatcher-driver-card':''} ${whip.frequent?'whip-frequent-driver':''} ${stay.frequent?'stay-home-frequent-driver':''}" data-team-driver-name="${esc(searchValue)}" data-driver-card-toggle="true" data-driver-name="${esc(d.name)}" role="button" tabindex="0" aria-expanded="${expanded?'true':'false'}" ${driverProfileAttrs(d.name)}><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(display)}</div><div class="driver-card-actions">${dispatcher?'<span class="dispatcher-badge">Dispatcher</span>':''}${statusHtml}<button class="driver-note-button" data-action="open-driver-flags" data-driver-name="${esc(d.name)}" aria-label="Driver notes for ${esc(d.name)}" title="Driver notes">⚑${driverProfileFlags(d.name).length||''}</button><button class="driver-alias-button" data-action="open-driver-alias" data-driver-name="${esc(d.name)}" aria-label="Edit driver profile for ${esc(d.name)}" title="Nickname, known names, and preferred vans">Aa</button><button class="driver-delete-button" data-action="request-driver-removal" data-driver-key="${esc(nameKey(d.name))}" aria-label="Remove ${esc(d.name)}" title="Remove Delivery Associate">${ICONS.trash}</button></div></div><h3>${esc(d.name)}</h3><p>${esc(d.role)} · ${esc(d.id)}</p><div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div><span class="driver-card-expand-cue">${expanded?'Hide details':'Click card for details'} <b>${expanded?'↑':'↓'}</b></span><div class="driver-card-expanded" aria-hidden="${expanded?'false':'true'}">${display!==d.name?`<span class="driver-alias-preview">Nickname: ${esc(display)}</span>`:''}${driverKnownNamesHtml(d.name)}${driverPreferredVehiclesHtml(d.name)}<div class="driver-detail-grid">${details.map(([label,value])=>`<span><small>${esc(label)}</small><strong>${esc(value)}</strong></span>`).join('')}</div>${driverCapabilityButtonsHtml(d.name)}${stay.count?`<div class="driver-stay-home-history ${stay.frequent?'frequent':''}"><b>${stay.count}</b><span><strong>Told to stay home · last 14 days</strong><small>${stay.recent.map(row=>formatShortOperationDate(row.date)).join(' · ')}${stay.total>stay.count?` · ${stay.total} all-time`:''}</small></span></div>`:''}${whip.missed?`<div class="driver-whiparound-flag ${whip.frequent?'frequent':''}">${ICONS.whiparound}<span><b>${whip.frequent?'Frequent Whiparound follow-up':'Whiparound follow-up'}</b><small>${whip.missed} missed form${whip.missed===1?'':'s'} across ${whip.missedDays} day${whip.missedDays===1?'':'s'}</small></span></div>`:''}<div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></div></article>`;
+}
+
 function teamPage() {
   const drivers=teamDriverRows(), contacts=state.driverContacts||[];
   const onRouteNames=new Set(filteredMorningRows().map(r=>nameKey(r.driver)).filter(Boolean));
   return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar team-toolbar"><div class="toolbar-left"><label class="team-name-search">${ICONS.search}<input type="search" data-team-search autocomplete="off" placeholder="Search driver names" aria-label="Search Drivers and Team by name"><button type="button" data-action="clear-team-search" aria-label="Clear driver search">×</button></label><span class="filter-note" data-team-search-count>${drivers.length} drivers</span><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import Drivers CSV / Excel</button><button class="btn lime" data-action="add-delivery-associate">${ICONS.plus} Add Delivery Associate</button></div></div>
   <div class="driver-workforce-import card"><div><strong>Driver & phone import</strong><span>Drop in an AssociateData CSV or Excel workbook (.xlsx). RelayOps finds the associate sheet, matches Name with Personal Phone, and keeps Position, Transporter ID, and Active status.</span></div><div><button class="btn small primary" data-action="driver-import">Choose CSV or Excel</button><button class="btn small" data-action="add-delivery-associate">Add one manually</button></div><small>Contacts are never embedded in the public website. Signed-in dispatchers share them only through the protected station workspace; signed-out use stays in this browser.</small></div>
   <div class="driver-message-readiness card"><div><strong>Future text reminder prep</strong><span>After the Morning Sheet is finalized, RelayOps can identify on-route drivers by the visible Morning Sheet names. Texting will need a secure SMS connector and driver opt-in before it sends anything.</span></div><div><b>${drivers.filter(d=>onRouteNames.has(nameKey(d.name))).length}</b><small>current team cards recognized on the Morning Sheet</small></div></div>
-  <div class="team-directory-layout"><section class="grid team-grid">${drivers.map(d=>{const whip=driverWhiparoundStats(d.name),stay=driverStayHomeStats(d.name),display=driverDisplayName(d.name),dispatcher=isDesignatedDispatcher(d.name),searchValue=nameKey([d.name,display,...(driverProfileEntry(d.name)?.profile?.names||[])].join(' '));return `<article class="card entity-card driver-card ${dispatcher?'dispatcher-driver-card':''} ${whip.frequent?'whip-frequent-driver':''} ${stay.frequent?'stay-home-frequent-driver':''}" data-team-driver-name="${esc(searchValue)}" ${driverProfileAttrs(d.name)}><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(display)}</div><div class="driver-card-actions">${dispatcher?'<span class="dispatcher-badge">Dispatcher</span>':''}<span class="status ${statusClass(d.status)}">${d.status}</span><button class="driver-note-button" data-action="open-driver-flags" data-driver-name="${esc(d.name)}" aria-label="Driver notes for ${esc(d.name)}" title="Driver notes">⚑${driverProfileFlags(d.name).length||''}</button><button class="driver-alias-button" data-action="open-driver-alias" data-driver-name="${esc(d.name)}" aria-label="Edit driver profile for ${esc(d.name)}" title="Nickname, known names, and preferred vans">Aa</button><button class="driver-delete-button" data-action="request-driver-removal" data-driver-key="${esc(nameKey(d.name))}" aria-label="Remove ${esc(d.name)}" title="Remove Delivery Associate">${ICONS.trash}</button></div></div><h3>${esc(d.name)}</h3>${display!==d.name?`<span class="driver-alias-preview">Nickname: ${esc(display)}</span>`:''}${driverKnownNamesHtml(d.name)}${driverPreferredVehiclesHtml(d.name)}<p>${esc(d.role)} · ${esc(d.id)}</p>${driverCapabilityButtonsHtml(d.name)}<div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div>${stay.count?`<div class="driver-stay-home-history ${stay.frequent?'frequent':''}"><b>${stay.count}</b><span><strong>Told to stay home · last 14 days</strong><small>${stay.recent.map(row=>formatShortOperationDate(row.date)).join(' · ')}${stay.total>stay.count?` · ${stay.total} all-time`:''}</small></span></div>`:''}${whip.missed?`<div class="driver-whiparound-flag ${whip.frequent?'frequent':''}">${ICONS.whiparound}<span><b>${whip.frequent?'Frequent Whiparound follow-up':'Whiparound follow-up'}</b><small>${whip.missed} missed form${whip.missed===1?'':'s'} across ${whip.missedDays} day${whip.missedDays===1?'':'s'}</small></span></div>`:''}<div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></article>`;}).join('')}<div class="team-search-empty" data-team-search-empty hidden><strong>No driver found</strong><span>Try the legal name, nickname, or another linked name.</span></div></section><aside class="team-message-column">${morningMessageQueueHtml()}</aside></div>`;
+  <div class="team-directory-layout"><section class="grid team-grid">${drivers.map(driverTeamCardHtml).join('')}<div class="team-search-empty" data-team-search-empty hidden><strong>No driver found</strong><span>Try the legal name, nickname, or another linked name.</span></div></section><aside class="team-message-column">${morningMessageQueueHtml()}</aside></div>`;
 }
 
 function filterTeamDirectory(value='') {
@@ -1670,7 +1681,13 @@ function parkingChargerButton(key,label='Charger',spotNumber='') {
   return `<span class="parking-charger-control"><button type="button" class="parking-charger-toggle charger-${status}" data-parking-charger="${esc(key)}" title="${esc(label)}: click for green, red, or clear">${spotNumber!==''?`<small class="parking-spot-number">#${esc(spotNumber)}</small>`:''}<i></i><span>${text}</span></button><button type="button" class="charger-report-trigger" data-action="report-charging-station" data-charger-key="${esc(key)}" title="Report charging station at ${esc(location)}" aria-label="Report charging station at ${esc(location)}">!${reports?`<small>${reports}</small>`:''}</button></span>`;
 }
 function parkingSpotNumber(zone='',index=0) {
-  if(zone==='west')return index<17?index+1:index+20;
+  if(zone==='west'){
+    const slots=parkingSlots('west'),slot=slots[index];
+    if(!slot||slot.kind==='crosswalk')return '';
+    if(index<17)return index+1;
+    const crosswalksAfterSeventeen=slots.slice(17,index+1).filter(row=>row.kind==='crosswalk').length;
+    return 37+(index-17)-crosswalksAfterSeventeen;
+  }
   if(zone==='east')return index<19?36-index:'';
   if(zone==='northRight')return 45-index;
   if(zone==='northLeft')return 50-index;
@@ -2605,7 +2622,8 @@ function performancePage() {
 }
 
 function driverPerformanceTable() {
-  return `<article class="card table-card"><div class="card-head"><div class="card-title"><h2>Driver performance</h2><p>Scorecard signals with coaching status</p></div><button class="btn small" data-action="export-menu">${ICONS.download} Export</button></div><div class="table-wrap"><table><thead><tr><th>Driver</th><th>Tier</th><th>Quality</th><th>Safety</th><th>CED</th><th>Coaching</th></tr></thead><tbody>${team.slice(0,8).map((d,i)=>`<tr><td><div class="driver-cell"><div class="driver-avatar">${initials(d[0])}</div><strong>${d[0]}</strong></div></td><td><span class="status ${statusClass(d[2])}">${d[2]}</span></td><td>${d[3]}</td><td>${[100,98,91,100,97,94,99,100][i]}%</td><td>${[96,94,89,98,93,92,97,96][i]}%</td><td><span class="status ${i===2||i===5?'warn':''}">${i===2||i===5?'Due':'Current'}</span></td></tr>`).join('')}</tbody></table></div></article>`;
+  const drivers=teamDriverRows();
+  return `<article class="card table-card"><div class="card-head"><div class="card-title"><h2>Driver performance</h2><p>Scorecard signals with coaching status</p></div><button class="btn small" data-action="export-menu">${ICONS.download} Export</button></div><div class="table-wrap"><table><thead><tr><th>Driver</th><th>Role</th><th>Quality</th><th>Coaching</th></tr></thead><tbody>${drivers.length?drivers.map(driver=>`<tr><td><div class="driver-cell"><div class="driver-avatar">${initials(driver.name)}</div><strong>${esc(driverDisplayName(driver.name))}</strong></div></td><td>${esc(driver.role)}</td><td>${esc(driver.quality)}</td><td>${esc(driver.coaching)}</td></tr>`).join(''):'<tr><td colspan="4">Import Drivers & Team to populate this report.</td></tr>'}</tbody></table></div></article>`;
 }
 
 function normalizeCoachingQueue(raw=[]) {
@@ -2634,8 +2652,9 @@ function coachingMessage(op,record={}) {
 }
 function coachingPage() {
   state.coachingQueue=normalizeCoachingQueue(state.coachingQueue);
+  const directory=new Set(teamDriverRows().map(driver=>driverIdentityKey(driver.name))),opportunities=COACHING_OPPORTUNITIES.filter(op=>directory.has(driverIdentityKey(op.driver)));
   const queued=state.coachingQueue.length,reviewed=state.coachingQueue.filter(record=>['reviewed','ready-manual','sent-manual'].includes(record.status)).length,sent=state.coachingQueue.filter(record=>record.status==='sent-manual').length;
-  const rows=COACHING_OPPORTUNITIES.map(op=>{const record=coachingRecord(op.id),status=coachingStatus(record);return `<tr><td><div class="driver-cell"><div class="driver-avatar">${initials(op.driver)}</div><strong>${esc(op.driver)}</strong></div></td><td><strong>${esc(record?.focus||op.focus)}</strong></td><td>${esc(op.source)}</td><td><span class="status ${op.priority==='High'?'risk':op.priority==='Medium'?'warn':''}">${esc(op.priority)}</span></td><td><span class="status ${status.className}">${esc(status.label)}</span></td><td><button class="btn small" data-action="coach" data-coaching-id="${esc(op.id)}" data-driver="${esc(op.driver)}">${record?'Review':'Add & review'}</button></td></tr>`;}).join('');
+  const rows=opportunities.length?opportunities.map(op=>{const record=coachingRecord(op.id),status=coachingStatus(record);return `<tr><td><div class="driver-cell"><div class="driver-avatar">${initials(op.driver)}</div><strong>${esc(op.driver)}</strong></div></td><td><strong>${esc(record?.focus||op.focus)}</strong></td><td>${esc(op.source)}</td><td><span class="status ${op.priority==='High'?'risk':op.priority==='Medium'?'warn':''}">${esc(op.priority)}</span></td><td><span class="status ${status.className}">${esc(status.label)}</span></td><td><button class="btn small" data-action="coach" data-coaching-id="${esc(op.id)}" data-driver="${esc(op.driver)}">${record?'Review':'Add & review'}</button></td></tr>`;}).join(''):'<tr><td colspan="6">No imported Drivers & Team profiles have coaching items yet.</td></tr>';
   return `${contextBar()}<section class="coaching-summary" aria-label="Coaching status"><article><span>In queue</span><strong>${queued}</strong></article><article><span>Reviewed</span><strong>${reviewed}</strong></article><article><span>Dispatcher-confirmed sent</span><strong>${sent}</strong></article></section><div class="toolbar coaching-toolbar"><div class="toolbar-left"><button class="btn lime" data-action="coach-all">${ICONS.coach} Add due items to review</button><span class="coaching-send-note">Automatic external sending is not connected.</span></div><button class="btn" data-action="template">Manage message template</button></div><article class="card table-card"><div class="card-head"><div class="card-title"><h2>Coaching queue</h2><p>Add → review → copy message → dispatcher confirms sent</p></div><span class="status ${queued?'warn':'neutral'}">${queued} queued</span></div><div class="table-wrap"><table><thead><tr><th>Driver</th><th>Focus</th><th>Source</th><th>Priority</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></article><div class="coaching-honesty card"><b>Manual send safeguard</b><span>RelayOps can prepare and copy a reviewed message. It never claims a text was delivered until a dispatcher marks it sent after using the dispatch phone.</span></div>`;
 }
 
@@ -2991,6 +3010,10 @@ function modal() {
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal route-detail-modal" role="dialog" aria-modal="true" aria-labelledby="route-detail-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">ROUTE DETAILS</span><h2 id="route-detail-title">${esc(route.route)}</h2><p>${esc(route.id||'')} · current dispatcher view</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="route-detail-grid">${fields.map(([label,value])=>`<div><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join('')}</div><div class="modal-actions"><button class="btn" data-action="copy-route-summary" data-route="${esc(route.route)}">${ICONS.copy} Copy summary</button><button class="btn primary" data-action="close-modal">Done</button></div></div></div></div>`;
   }
   if (!state.modal) return '';
+  if (state.modal === 'rostering-driver-swap' && state.pendingRosteringSwap) {
+    const pending=state.pendingRosteringSwap,assignments=currentRosteringPlan().assignments.filter(row=>String(row.associate||'').trim());
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal rostering-swap-modal" role="dialog" aria-modal="true" aria-labelledby="rostering-driver-swap-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">ROSTER SWAP</span><h2 id="rostering-driver-swap-title">Add ${esc(driverDisplayName(pending.name))}</h2><p>Choose who comes off the roster. The confirmed shift, time, route, and service block stay in place.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="rostering-swap-field"><span>Swap with rostered driver</span><select id="rostering-swap-assignment"><option value="">Choose a rostered driver…</option>${assignments.map(row=>{const service=rosteringService(row.serviceId);return `<option value="${esc(row.id)}">${esc(driverDisplayName(row.associate))} · ${esc(row.start)} · ${esc(service?.name||'Roster')}</option>`;}).join('')}</select></label><div class="private-contact-note"><b>One-for-one replacement</b><span>${esc(driverDisplayName(pending.name))} takes the selected confirmed position. The selected driver returns to the PAYCOM unrostered list without creating a duplicate.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-rostering-driver-swap">Confirm swap</button></div></div></div></div>`;
+  }
   if (state.modal === 'delete-rostering-service' && state.pendingRosteringServiceDelete) {
     const pending=state.pendingRosteringServiceDelete;
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal remove-driver-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-roster-block-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">CONFIRM ROSTER CHANGE</span><h2 id="delete-roster-block-title">Delete this roster block?</h2><p>${esc(pending.name)}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="remove-driver-warning">${ICONS.alert}<div><b>${pending.confirmed} confirmed position${pending.confirmed===1?'':'s'} will be removed</b><span>${pending.rostered} rostered name${pending.rostered===1?'':'s'} and every row in this service block will be deleted. Other service blocks stay unchanged.</span></div></div><div class="modal-actions"><button class="btn" data-action="close-modal">Keep roster block</button><button class="btn danger" data-action="confirm-delete-rostering-service">${ICONS.trash} Delete roster block</button></div></div></div></div>`;
@@ -3854,6 +3877,11 @@ function bind() {
   document.querySelectorAll('[data-action="open-morning-vehicle-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();openMorningVehicleIssue(el.dataset.route||'',el.dataset.equipment||'');}));
   document.querySelectorAll('[data-action="acknowledge-morning-vehicle-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();acknowledgeMorningVehicleIssue();}));
   document.querySelectorAll('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
+  document.querySelectorAll('[data-driver-card-toggle]').forEach(card=>{
+    const toggle=()=>action('toggle-driver-card',card);
+    card.addEventListener('click',event=>{if(event.target.closest('button,a,input,select,textarea,[data-action]'))return;toggle();});
+    card.addEventListener('keydown',event=>{if(event.target!==card||!['Enter',' '].includes(event.key))return;event.preventDefault();toggle();});
+  });
   document.querySelectorAll('[data-driver-profile-name]').forEach(el=>{el.addEventListener('mouseenter',()=>showDriverProfilePopover(el));el.addEventListener('mouseleave',closeDriverProfilePopover);el.addEventListener('pointerleave',closeDriverProfilePopover);el.addEventListener('focusin',()=>showDriverProfilePopover(el));el.addEventListener('focusout',closeDriverProfilePopover);});
   const aChatInput=document.querySelector?.('[data-achat-input]');
   if(aChatInput)aChatInput.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAChatMessage();}});
@@ -4652,7 +4680,7 @@ function markCoachingSent() {
   persist();render();toast('Marked sent by dispatcher confirmation');
 }
 function queueDueCoaching() {
-  const due=COACHING_OPPORTUNITIES.filter(item=>/^Due/i.test(item.due)),before=normalizeCoachingQueue(state.coachingQueue).length;
+  const directory=new Set(teamDriverRows().map(driver=>driverIdentityKey(driver.name))),due=COACHING_OPPORTUNITIES.filter(item=>/^Due/i.test(item.due)&&directory.has(driverIdentityKey(item.driver))),before=normalizeCoachingQueue(state.coachingQueue).length;
   due.forEach(item=>ensureCoachingRecord(item.id));const added=state.coachingQueue.length-before;persist();render();toast(added?`${added} due coaching item${added===1?'':'s'} added for review`:'All due coaching is already in the review queue');
 }
 function saveCoachingTemplate() {
@@ -4748,7 +4776,7 @@ function action(name,el) {
   if (name==='copy-open-charger-slack') return copyChargerReportAndOpenSlack();
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.fleetRefreshPreview=null;return render(); }
+  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=importAcceptForPurpose(state.importPurpose);return fileInput.click(); }
   if (name==='schedule-import') { state.scheduleImportDestination=state.page==='rostering'?'rostering':'roster';state.importPurpose='schedule';fileInput.accept='.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf';return fileInput.click(); }
   if (name==='rostering-import-screenshot') { state.importPurpose='rostering-screenshot';fileInput.accept=importAcceptForPurpose('rostering-screenshot');return fileInput.click(); }
@@ -4767,7 +4795,10 @@ function action(name,el) {
   if (name==='confirm-delete-rostering-service') return confirmDeleteRosteringService();
   if (name==='rostering-fill-paycom') return fillRosteringFromPaycom();
   if (name==='rostering-fill-paycom-service') return fillRosteringFromPaycom(el.dataset.serviceId||'');
-  if (name==='rostering-add-paycom-driver') { const entry=scheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(el.dataset.driverName||''));if(!entry)return toast('PAYCOM driver was not found for this date','error');if(!rosteringEntryEligibleForRoster(entry))return toast(rosteringPaycomCategoryFor(entry)==='vto2'?'Rescue / VTO 2 stays in backups until the driver has a Told To Stay Home history flag':'This driver is not eligible for today’s roster','error');const added=addPaycomEntryToRostering(entry);if(!added)return toast('This driver is already on the roster','error');persist();render();return toast(`${entry.name} added to the roster`); }
+  if (name==='rostering-add-paycom-driver') { const entry=scheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(el.dataset.driverName||''));if(!entry)return toast('PAYCOM driver was not found for this date','error');if(!rosteringEntryEligibleForRoster(entry))return toast('This shift is not an available driver route shift','error');const added=addPaycomEntryToRostering(entry);if(!added)return toast('This driver is already on the roster','error');persist();render();return toast(`${entry.name} added to the roster`); }
+  if (name==='open-rostering-driver-swap') return openRosteringDriverSwap(el.dataset.driverName||'');
+  if (name==='apply-rostering-driver-swap') return applyRosteringDriverSwap();
+  if (name==='toggle-driver-card') { const key=driverIdentityKey(el.dataset.driverName||'');state.expandedDriverKey=state.expandedDriverKey===key?'':key;return render(); }
   if (name==='rostering-use-trainer-suggestion') return assignRosteringTrainer(el.dataset.ridealongName||'',el.dataset.trainerName||'');
   if (name==='rostering-swap-trainer') return clearRosteringTrainerMatch(el.dataset.ridealongName||'');
   if (name==='open-roster-destination-actions') return openRosterDestinationActions(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.rosterDestination||'',el.dataset.driverRoute||'',el.dataset.driverStart||'',el.dataset.rosterAutomatic||'');
@@ -5963,11 +5994,11 @@ function applyImport() {
     const candidates=morningImportCandidates(f);
     const excluded=f.rows.length-candidates.length;
     state.morningRoutes=candidates.map(({row:r,route},i)=>{
-      const known=morningSeed.find(x=>normalizedImportRouteCode(x.route)===route), detail=f.routeDetails?.[route];
-      const packages=Number(r[ix.packages])||known?.packages||0, zones=Number(r[ix.zones])||known?.zones||0;
+      const detail=f.routeDetails?.[route];
+      const packages=Number(r[ix.packages])||0, zones=Number(r[ix.zones])||0;
       const importedStops=Number(r[ix.stops]);
-      const wave=normalizeMorningWaveTime(r[ix.wave])||'Wave pending', plannedRts=detail?.plannedRts||known?.plannedRts||'', duration=Number(r[ix.duration])||known?.duration||0;
-      return {dsp:ix.dsp>=0?String(r[ix.dsp]).trim().toUpperCase():state.dspCode,driver:firstDriverName(detail?.driver||(ix.driver>=0&&r[ix.driver])||known?.driver||'Unassigned driver'),route,service:(ix.service>=0&&r[ix.service])||known?.service||'Standard Parcel',wave,staging:r[ix.staging]||'—',duration,zones,packages,commercial:Number(r[ix.commercial])||known?.commercial||0,stops:detail?.stops!==null&&detail?.stops!==undefined?detail.stops:(Number.isFinite(importedStops)&&importedStops?importedStops:known?.stops||Math.round(135+zones*2.2)),eta:known?.eta||'—',bags:known?.bags||Math.max(1,Math.round(packages/13)),overflow:known?.overflow||Math.max(0,Math.round(packages/24)),parking:known?.parking||'',ev:known?.ev||'',deviceName:known?.deviceName||'',portable:known?.portable||'',preDvic:Boolean(known?.preDvic),preWhip:Boolean(known?.preWhip),postDvic:Boolean(known?.postDvic),postWhip:Boolean(known?.postWhip),rescued:Boolean(known?.rescued),packageReturns:known?.packageReturns||'',endTime:known?.endTime||'',rtsTime:known?.rtsTime||'',plannedRts,plannedRtsIssue:isIrregularPlannedRts(plannedRts,wave,duration),clockOutTime:known?.clockOutTime||'',checkedIn:Boolean(known?.checkedIn),vanReady:Boolean(known?.vanReady),deviceReady:Boolean(known?.deviceReady),portableReady:Boolean(known?.portableReady),loadReady:false};
+      const wave=normalizeMorningWaveTime(r[ix.wave])||'Wave pending', plannedRts=detail?.plannedRts||'', duration=Number(r[ix.duration])||0;
+      return {dsp:ix.dsp>=0?String(r[ix.dsp]).trim().toUpperCase():state.dspCode,driver:firstDriverName(detail?.driver||(ix.driver>=0&&r[ix.driver])||'Unassigned driver'),route,service:(ix.service>=0&&r[ix.service])||'Standard Parcel',wave,staging:r[ix.staging]||'—',duration,zones,packages,commercial:Number(r[ix.commercial])||0,stops:detail?.stops!==null&&detail?.stops!==undefined?detail.stops:(Number.isFinite(importedStops)?importedStops:0),eta:'—',bags:Math.max(1,Math.round(packages/13)),overflow:Math.max(0,Math.round(packages/24)),parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts,plannedRtsIssue:isIrregularPlannedRts(plannedRts,wave,duration),clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
     }).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||routeCompare(a.route,b.route)||a.staging.localeCompare(b.staging,undefined,{numeric:true}));
     state.routes=state.morningRoutes.map((r,i)=>({route:r.route,driver:r.driver,id:`DA-${1100+i}`,wave:r.wave,staging:r.staging,van:'Unassigned',device:'Unassigned',stops:r.stops,packages:r.packages,progress:0,delta:0,status:r.driver==='Unassigned driver'?'Needs review':'Assigned',rescue:'—'}));
     const importedWaves=[...new Set(state.morningRoutes.filter(row=>!isExplicitAdhocMorningRoute(row)&&!isExplicitHelperMorningRoute(row)).map(row=>row.wave).filter(Boolean))];state.openingPicklistWaveSlots=Math.min(5,importedWaves.length);state.openingPicklistShowAdhoc=true;
@@ -7633,7 +7664,7 @@ function printOpeningPicklistOnePage() {
   if(sheet&&frame){const width=Math.max(1,sheet.scrollWidth||sheet.offsetWidth||1014),height=Math.max(1,sheet.scrollHeight||sheet.offsetHeight||2100),targetWidth=1000,targetHeight=1530,scale=Math.min(1,targetWidth/width,targetHeight/height)*.985,scaledWidth=Math.min(targetWidth,Math.ceil(width*scale)),scaledHeight=Math.min(targetHeight,Math.ceil(height*scale));document.documentElement?.style?.setProperty?.('--picklist-print-scale',String(scale));document.documentElement?.style?.setProperty?.('--picklist-print-height',`${scaledHeight}px`);document.documentElement?.style?.setProperty?.('--picklist-print-width',`${scaledWidth}px`);document.body?.classList?.add?.('printing-picklist');}
   const cleanup=()=>{document.body?.classList?.remove?.('printing-picklist');document.documentElement?.style?.removeProperty?.('--picklist-print-scale');document.documentElement?.style?.removeProperty?.('--picklist-print-height');document.documentElement?.style?.removeProperty?.('--picklist-print-width');window.removeEventListener?.('afterprint',cleanup);};window.addEventListener?.('afterprint',cleanup,{once:true});window.print();setTimeout(cleanup,1500);
 }
-function downloadTemplate(){const h=['DSP','Driver','Route Code','Service Type','Wave','Staging Location','Route Duration','Num Zones','Num Packages','Num Commercial Pkgs','Stops'];const a=['LLOL','Maya Collins','CX249','Standard Parcel Electric','11:15 AM','STG.V.1','420','21','332','12','188'];const b=['OTHER','Other DSP Driver','ZZ101','Standard Parcel','11:10 AM','STG.A.1','390','19','301','11','172'];downloadBlob(`${h.join(',')}\r\n${a.join(',')}\r\n${b.join(',')}\r\n`,'text/csv','day-of-operations-import-template.csv');toast('Day-of-operations template downloaded');}
+function downloadTemplate(){const h=['DSP','Driver','Route Code','Service Type','Wave','Staging Location','Route Duration','Num Zones','Num Packages','Num Commercial Pkgs','Stops'];const a=['LLOL','','CX249','Standard Parcel Electric','11:15 AM','STG.V.1','420','21','332','12','188'];const b=['OTHER','','ZZ101','Standard Parcel','11:10 AM','STG.A.1','390','19','301','11','172'];downloadBlob(`${h.join(',')}\r\n${a.join(',')}\r\n${b.join(',')}\r\n`,'text/csv','day-of-operations-import-template.csv');toast('Day-of-operations template downloaded');}
 function downloadEquipmentTemplate(){
   const h=['EV/VAN','DEVICE','PORTABLE'];
   const rows=[

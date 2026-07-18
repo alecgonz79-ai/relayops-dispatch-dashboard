@@ -57,6 +57,7 @@ const checks = `
   if (!${JSON.stringify(css)}.includes('.wave-copy-group') || !${JSON.stringify(css)}.includes('.wave-copy-group .btn.small')) throw new Error('Wave block copy button styling missing');
   toast = () => {};
   state.page = 'morning';
+  state.morningRoutes = morningSeed.map(row => ({...row}));
   state.copyMode = true;
   state.editMode = false;
   state.morningOperationDate = '2026-07-11';

@@ -67,7 +67,7 @@ function testVisiblePageInventory() {
   const criticalPages = new Set(['dashboard', 'morning', 'roster', 'rostering', 'live', 'team', 'fleet', 'parking', 'inbox', 'reports', 'admin']);
   const handled = new Set([...source.matchAll(/name==='([^']+)'/g)].map(match => match[1]));
   const inventory = {};
-  vm.runInContext("state.role='admin'; state.morningOperationDate='2026-07-14';", context);
+  vm.runInContext("state.role='admin'; state.morningOperationDate='2026-07-14'; state.driverContacts=[{name:'Andre Wilson',key:'andre wilson'}]; state.morningRoutes=[{dsp:'LLOL',route:'CX101',routeUid:'fixture-route',driver:'Andre Wilson',wave:'11:15 AM',staging:'STG.V.1',service:'Standard Parcel'}];", context);
   for (const page of pages) {
     vm.runInContext(`state.page=${JSON.stringify(page)}; globalThis.__pageHtml=topbar()+pageContent();`, context);
     const html = context.__pageHtml;

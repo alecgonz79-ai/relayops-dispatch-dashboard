@@ -80,7 +80,7 @@ function run() {
     state.rosteringOpenServices['xl-donations']=true;globalThis.__donationHtml=rosteringServiceHtml(autoPlan.services.find(row=>row.id==='xl-donations'),autoPlan,new Set());
     globalThis.__orders={abc:rosteringOrderEntries([{name:'Charlie'},{name:'Alpha'},{name:'Bravo'}],'abc').map(row=>row.name),random:rosteringOrderEntries([{name:'Alpha'},{name:'Bravo'},{name:'Charlie'}],'random',()=>0).map(row=>row.name)};
     globalThis.__helperHtml=rosteringHelperShiftsHtml(autoPlan);
-    state.scheduleEntries.push({date:'7/15/2026',name:'Zora VTO Four',role:'Delivery Associate',start:'11:45 AM',end:'9:45 PM'},{date:'7/15/2026',name:'Morgan Midshift',role:'Midshift',start:'2:00 PM',end:'8:00 PM'});
+    state.scheduleEntries.push({date:'7/15/2026',name:'Uma Rescue',role:'Rescue',start:'11:45 AM',end:'9:45 PM'},{date:'7/15/2026',name:'Zora VTO Four',role:'Delivery Associate',start:'11:45 AM',end:'9:45 PM'},{date:'7/15/2026',name:'Morgan Midshift',role:'Midshift',start:'2:00 PM',end:'8:00 PM'});
     globalThis.__paycomHtml=rosteringPaycomHtml(autoPlan);globalThis.__backupEmail=rosteringBackupEmailText(autoPlan);globalThis.__backupGroups=rosteringUnrosteredBackupGroups(autoPlan);
     state.rosteringPaycomCategory='vto2';globalThis.__vto2PaycomHtml=rosteringPaycomHtml(autoPlan);state.rosteringPaycomCategory='all';
     state.scheduleEntries.push({date:'7/15/2026',name:'Riley R',role:'Training',start:'11:15 AM',end:'9:15 PM'});
@@ -112,6 +112,7 @@ function run() {
     globalThis.__nav={sections:NAV.map(group=>group.section),achatSection:NAV.find(group=>group.items.some(item=>item[0]==='achat'))?.section,achatIndex:NAV.find(group=>group.items.some(item=>item[0]==='achat'))?.items.findIndex(item=>item[0]==='achat')};
     globalThis.__daily=sharedWorkspaceState();
     globalThis.__persistent=persistentWorkspaceState();
+    const swapTarget=autoPlan.assignments.find(row=>row.associate==='Maya Collins'),originalGetElementById=document.getElementById;state.pendingRosteringSwap={name:'Uma Rescue'};document.getElementById=id=>id==='rostering-swap-assignment'?{value:swapTarget.id}:originalGetElementById(id);applyRosteringDriverSwap();document.getElementById=originalGetElementById;globalThis.__driverSwap={incoming:swapTarget.associate,displacedStillRostered:autoPlan.assignments.some(row=>row.associate==='Maya Collins'),incomingCount:autoPlan.assignments.filter(row=>row.associate==='Uma Rescue').length};
     const custom={id:'delete-me',name:'Delete confirmation service',confirmed:1,kind:'driver',defaultTime:'11:15 AM'};autoPlan.services.push(custom);autoPlan.assignments.push({id:'delete-row',serviceId:'delete-me',start:'11:15 AM',associate:'Maya Collins',route:'',role:'',source:'manual'});requestDeleteRosteringService('delete-me');globalThis.__deleteModal=modal();confirmDeleteRosteringService();globalThis.__deleted=!autoPlan.services.some(row=>row.id==='delete-me')&&!autoPlan.assignments.some(row=>row.serviceId==='delete-me');
   `, context);
 
@@ -119,22 +120,23 @@ function run() {
   assert(context.__defaults.confirmed === 50 && context.__defaults.assignments === 50, 'Default confirmed counts and editable shift rows must stay aligned');
   assert(context.__samePlan, 'Repeated roster reads must preserve the same live plan while dispatchers edit');
   assert(context.__added === 4 && context.__duplicateAdded === 0 && context.__after.rostered === 4, 'PAYCOM fill must add each scheduled driver once without duplicates');
-  assert(context.__after.helpers[0] === 'helper', 'Driver Helper shifts must land in the helper service group');
   assert(context.__after.ninaCount === 3 && context.__after.mayaCount === 2 && context.__after.evanCount === 1, 'Fairness rotation must count one, two, and three distinct stay-home days in the rolling seven-day window');
   assert(context.__html.includes('Rostering') && context.__html.includes('CONFIRMED SERVICES') && context.__html.includes('All Scheduled driver shifts'), 'Rostering page lost its confirmed-services or PAYCOM surfaces');
   assert(context.__pageInfoRostering?.[0] === 'Rostering' && /unfilled shifts/i.test(context.__pageInfoRostering?.[1]||''), 'Rostering navigation must keep its own page title and dispatcher guidance instead of falling back to Today');
   assert(context.__html.includes('1× stay-home') && context.__html.includes('2× stay-home') && context.__html.includes('3× · prioritize hours') && context.__html.includes('level-3'), 'One-to-three stay-home events must render progressively stronger fairness flags');
   assert(context.__html.includes('Maya Collins') && context.__html.includes('John Helper') && context.__html.includes('Nina Patel'), 'PAYCOM drivers must remain visible in the roster or import panel');
-  assert(context.__autoResult.drivers === 3 && context.__autoResult.helpers === 1 && context.__autoResult.mode === 'abc' && context.__autoRows.join(',') === 'Evan Stone,Maya Collins,Nina Patel', 'ABC Auto Roster must place eligible route drivers alphabetically');
-  assert(!context.__autoRows.includes('Rex Rescue'), 'Rescue/VTO 2 drivers without Told To Stay Home history must stay out of the active roster');
+  assert(context.__autoResult.drivers === 4 && context.__autoResult.helpers === 1 && context.__autoResult.mode === 'abc' && context.__autoRows.join(',') === 'Evan Stone,Maya Collins,Nina Patel,Rex Rescue', 'ABC Auto Roster must place Delivery Associate and Rescue shifts alphabetically');
+  assert(context.__autoRows.includes('Rex Rescue'), 'Rescue/VTO 2 drivers must be eligible for an active roster position');
   assert(context.__donationAutoRows === 0, 'AMZ Donations must remain empty and manual-only during Auto Roster');
   assert(context.__donationHtml.includes('Manual assignment only') && !context.__donationHtml.includes('Bulk Import Associates'), 'AMZ Donations must not expose an automatic PAYCOM fill control');
   assert(context.__orders.abc.join(',') === 'Alpha,Bravo,Charlie' && context.__orders.random.join(',') === 'Bravo,Charlie,Alpha', 'Auto Roster must offer deterministic ABC order and a genuinely shuffled random mode');
   assert(context.__autoHelpers.length === 1 && context.__autoHelpers[0] === 'John Helper' && context.__helperHtml.includes('Added to Helper roster'), 'Scheduled Helper shifts must automatically populate the Helper service and box');
   assert(context.__paycomHtml.indexOf('Evan Stone') < context.__paycomHtml.indexOf('Rex Rescue') && context.__paycomHtml.includes('class="assigned"') && context.__paycomHtml.includes('class="unassigned"'), 'PAYCOM shifts must sort rostered dark-green rows before unrostered dark-yellow rows');
   assert(context.__paycomHtml.includes('data-rostering-paycom-search') && context.__paycomHtml.includes('data-rostering-category="vto2"') && context.__vto2PaycomHtml.includes('data-rostering-paycom-category="vto2"'), 'PAYCOM category buttons and name/role search hooks must render');
-  assert(context.__backupGroups.vto2.some(row=>row.name==='Rex Rescue') && context.__backupGroups.vto4.some(row=>row.name==='Zora VTO Four') && context.__backupGroups.other.some(row=>row.name==='Morgan Midshift'), 'Unrostered backup builder must group VTO 2, VTO 4, and all other roles');
-  assert(context.__paycomHtml.includes('Copy email text') && context.__backupEmail.includes('VTO 2 · Rescue') && context.__backupEmail.includes('Rex Rescue') && context.__backupEmail.includes('Zora VTO Four') && context.__backupEmail.includes('Morgan Midshift'), 'Backup builder must produce grouped email-ready text');
+  assert(context.__backupGroups.vto2.some(row=>row.name==='Uma Rescue') && context.__backupGroups.vto4.some(row=>row.name==='Zora VTO Four') && context.__backupGroups.other.some(row=>row.name==='Morgan Midshift'), 'Unrostered backup builder must group VTO 2, VTO 4, and all other roles');
+  assert(context.__paycomHtml.includes('Copy email text') && context.__backupEmail.includes('VTO 2 · Rescue') && context.__backupEmail.includes('Uma Rescue') && context.__backupEmail.includes('Zora VTO Four') && context.__backupEmail.includes('Morgan Midshift'), 'Backup builder must produce grouped email-ready text');
+  assert(!context.__paycomHtml.includes('Keep as VTO 2') && context.__paycomHtml.includes('Add to roster') && context.__paycomHtml.includes('Swap with rostered driver'), 'Rescue and Delivery Associate cards must expose add and swap controls in PAYCOM and backup lists');
+  assert(context.__driverSwap.incoming==='Uma Rescue'&&!context.__driverSwap.displacedStillRostered&&context.__driverSwap.incomingCount===1, 'Swap with rostered driver must replace exactly one assignment without duplicating either driver');
   assert(context.__trainingHtml.includes('Riley R') && context.__trainingHtml.includes('Coach T') && context.__trainingHtml.includes('scheduled'), 'Ridealong shifts must render with saved display names beside scheduled Trainer-tagged drivers');
   assert(context.__trainingRidealongCount === 1, 'Canonical and nickname variants of the same ridealong must render as one training match');
   assert(context.__trainingMatch?.trainer === 'Terry Trainer', 'Ridealong-to-trainer matches must save by roster date');

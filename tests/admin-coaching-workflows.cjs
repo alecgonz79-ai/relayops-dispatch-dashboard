@@ -13,6 +13,11 @@ function harness(){
 function testCoachingWorkflow(){
   const {context,storage}=harness();
   vm.runInContext(`
+    state.driverContacts=[
+      {name:'Andre Wilson',key:'andre wilson'},
+      {name:'Nina Patel',key:'nina patel'},
+      {name:'Jordan Lee',key:'jordan lee'}
+    ];
     state.coachingQueue=[];queueDueCoaching();
     globalThis.__queued=state.coachingQueue.map(item=>({...item}));
     globalThis.__shared=sharedWorkspaceState();

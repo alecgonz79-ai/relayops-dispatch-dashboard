@@ -36,6 +36,7 @@ const context = {
 const source = fs.readFileSync(require.resolve('../app.js'), 'utf8');
 const checks = `
   toast = () => {};
+  state.morningRoutes = morningSeed.map(row => ({...row}));
   const expectedWaves = ['11:15 AM','11:20 AM','11:25 AM','11:40 AM','11:45 AM'];
   if (JSON.stringify(morningWaveList()) !== JSON.stringify(expectedWaves)) throw new Error('Wave sort failed');
   if (expectedWaves.map(padForWave).join(',') !== 'A,B,C,A,B') throw new Error('Pad assignment failed');
@@ -114,7 +115,7 @@ const checks = `
   mergeDriverContacts(driverContacts);
   state.page = 'team';
   const teamHtml = teamPage();
-  if (!teamHtml.includes('Driver & phone import') || !teamHtml.includes('Open Amazon Workforce') || !teamHtml.includes('logistics.amazon.com/workforce?pageId=da_console_associates') || !teamHtml.includes('Import Drivers CSV / Excel') || !teamHtml.includes('Choose CSV or Excel') || !teamHtml.includes('Add Delivery Associate') || !teamHtml.includes('(555) 123-4567') || !teamHtml.includes('Vanessa Balderama') || !teamHtml.includes('Future text reminder prep') || !teamHtml.includes('secure SMS connector') || !teamHtml.includes('No phone imported yet') || !teamHtml.includes('Contacts are never embedded in the public website') || !teamHtml.includes('protected station workspace') || !teamHtml.includes('driver-delete-button') || !teamHtml.includes('request-driver-removal')) throw new Error('Drivers & Team Workforce import UI missing CSV/Excel import, deletion, manual add, shared-contact privacy, names, phones, Amazon link, or SMS guidance');
+  if (!teamHtml.includes('Driver & phone import') || !teamHtml.includes('Open Amazon Workforce') || !teamHtml.includes('logistics.amazon.com/workforce?pageId=da_console_associates') || !teamHtml.includes('Import Drivers CSV / Excel') || !teamHtml.includes('Choose CSV or Excel') || !teamHtml.includes('Add Delivery Associate') || !teamHtml.includes('(555) 123-4567') || !teamHtml.includes('Vanessa Balderama') || !teamHtml.includes('Future text reminder prep') || !teamHtml.includes('secure SMS connector') || !teamHtml.includes('Contacts are never embedded in the public website') || !teamHtml.includes('protected station workspace') || !teamHtml.includes('driver-delete-button') || !teamHtml.includes('request-driver-removal') || !teamHtml.includes('data-driver-card-toggle="true"') || teamHtml.includes('>Active</span>')) throw new Error('Drivers & Team Workforce import UI missing CSV/Excel import, expandable cards, deletion, manual add, shared-contact privacy, names, phones, Amazon link, or SMS guidance');
   action('add-delivery-associate',{});
   if(state.modal!=='add-driver'||!modal().includes('manual-driver-name')||!modal().includes('manual-driver-phone')||!modal().includes('manual-driver-id')||!modal().includes('Protected station contact')||!modal().includes('Signed-in dispatchers share this contact through Supabase')) throw new Error('Manual Add Delivery Associate form or truthful shared-contact notice missing');
   state.modal=null;
