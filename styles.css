@@ -2764,6 +2764,20 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 }
 
 @media screen and (max-width:760px) {
+  body.mobile-sidebar-open { overflow:hidden; }
+  body .sidebar {
+    top:0; bottom:auto; height:100dvh; max-height:100dvh; overflow:hidden;
+    padding-top:max(16px,env(safe-area-inset-top));
+    padding-bottom:max(16px,calc(env(safe-area-inset-bottom) + 16px));
+    overscroll-behavior:contain; touch-action:pan-y;
+  }
+  body .sidebar .brand,body .sidebar .station-pill { flex:0 0 auto; }
+  body .sidebar nav {
+    flex:1 1 auto; min-height:0; overflow-x:hidden; overflow-y:auto;
+    padding-right:3px; padding-bottom:28px; -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain; touch-action:pan-y; scrollbar-width:thin;
+  }
+  body .sidebar .side-bottom { flex:0 0 auto; margin-top:0; padding-top:8px; }
   body .app-shell,body .main { width:100%; max-width:100%; }
   body .topbar {
     height:auto; min-height:116px; padding:9px 12px 10px; display:grid;

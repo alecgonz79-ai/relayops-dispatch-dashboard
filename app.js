@@ -811,11 +811,11 @@ function topbarLegacy() {
   const [title,sub] = pageInfo[state.page] || pageInfo.dashboard;
   const fleetClean=state.page==='fleet';
   if(PARKING_ONLY_VIEW)return `<header class="topbar fleet-parking-topbar">
-    <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu">${ICONS.menu}</button><div class="page-heading"><h1>Van Parking</h1><p>Read-only parking map, battery levels, and charger status for the fleet team</p></div></div>
+    <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">${ICONS.menu}</button><div class="page-heading"><h1>Van Parking</h1><p>Read-only parking map, battery levels, and charger status for the fleet team</p></div></div>
     <div class="top-actions"><button class="btn cloud-status-button ${esc(state.cloudStatus)}" data-action="cloud-account"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting…':state.cloudStatus==='offline'?'Offline · saved here':state.cloudStatus==='signed-out'?'Dispatcher sign in':'Cloud setup'}</span></button><button class="btn ghost share-link-btn" data-action="copy-fleet-parking-link">${ICONS.link}<span class="hide-mobile">Copy fleet link</span></button></div>
   </header>`;
   return `<header class="topbar">
-    <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu">${ICONS.menu}</button><div class="page-heading"><h1>${title}</h1><p>${sub}</p></div></div>
+    <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">${ICONS.menu}</button><div class="page-heading"><h1>${title}</h1><p>${sub}</p></div></div>
     <div class="top-actions">${fleetClean?'':globalSearchHtml()}${state.page==='morning'?'<button class="btn info-top-button" data-action="open-morning-diagnostics" title="Setup & diagnostics"><span>ℹ</span><span class="hide-mobile">Setup & diagnostics</span></button>':''}<button class="btn cloud-status-button ${esc(state.cloudStatus)}" data-action="cloud-account"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting…':state.cloudStatus==='offline'?'Offline · saved here':state.cloudStatus==='signed-out'?'Dispatcher sign in':'Cloud setup'}</span></button><button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button>${notificationButtonHtml()}${state.page==='morning'?`<button class="icon-button connector-settings-icon" data-action="morning-sheets-connector" aria-label="Google Sheets connector settings" title="Google Sheets connector settings">${ICONS.settings||'⚙'}</button>`:''}${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
   </header>`;
 }
@@ -4911,7 +4911,16 @@ function go(page) {
   if (PARKING_ONLY_VIEW && page!=='parking') return toast('Fleet team link only opens Van Parking','error');
   if (page==='admin'&&state.role!=='admin') return toast('Owner permission required','error');
   cancelDeferredRenders();
+  document.body?.classList?.remove('mobile-sidebar-open');
   state.page=page; state.search=''; state.modal=null;if(page==='rostering')syncRosteringHelperShifts(currentRosteringPlan());persist(); render();if(page==='admin')refreshCloudMembers();window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function toggleMobileSidebar() {
+  const sidebar=document.getElementById('sidebar');if(!sidebar)return;
+  const open=sidebar.classList.toggle('open');
+  document.body?.classList?.toggle('mobile-sidebar-open',open);
+  const trigger=document.querySelector?.('[data-action="menu"]');trigger?.setAttribute?.('aria-expanded',String(open));
+  if(open){const nav=sidebar.querySelector?.('nav');if(nav)nav.scrollTop=Math.max(0,nav.scrollTop);}
 }
 
 function saveOrganizationSettings() {
@@ -4943,7 +4952,7 @@ function action(name,el) {
     const allowed=new Set(['menu','copy-parking-list','copy-fleet-parking-link','cloud-account','cloud-sign-in','cloud-sign-out','close-modal']);
     if(!allowed.has(name))return toast('Fleet team view is read-only and limited to Van Parking','error');
   }
-  if (name==='menu') return document.getElementById('sidebar').classList.toggle('open');
+  if (name==='menu') return toggleMobileSidebar();
   if (name==='opening-paycom-tab') { state.openingRosterPaycomTab=el.dataset.paycomTab==='marked'?'marked':'scheduled';localStorage.setItem('relayops_opening_roster_paycom_tab',state.openingRosterPaycomTab);return render(); }
   if (name==='clear-global-search') { state.search='';render();setTimeout(()=>document.getElementById('global-search')?.focus(),0);return; }
   if (name==='open-global-search-result') {
