@@ -47,6 +47,8 @@ const NAV = [
 const DISPATCHER_SHARE_URL = 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/';
 const DISPATCHER_SHARE_TEXT = `LLOL Dispatch Opening Operations\n${DISPATCHER_SHARE_URL}`;
 const DISPATCHER_SHARE_NOTE = 'Use this exact full link. GitHub Pages will show 404 if the account name is shortened or changed, like AG79.github.io.';
+const FLEET_PARKING_SHARE_URL = `${DISPATCHER_SHARE_URL}?view=parking`;
+const FLEET_PARKING_SHARE_TEXT = `LLOL Van Parking Map\n${FLEET_PARKING_SHARE_URL}`;
 const AMAZON_FLEET_PORTAL_URL = 'https://logistics.amazon.com/fleet-management/#vehicles';
 const AMAZON_WORKFORCE_ASSOCIATES_URL = 'https://logistics.amazon.com/workforce?pageId=da_console_associates&station=DJT6&companyId=ab7228f0-51de-4c53-98f3-7d3c3da46724&tabId=da-console-associates-tab';
 const FLEETOS_PORTAL_URL = 'https://business.rivian.com/vehicles/tracker';
@@ -64,6 +66,8 @@ const PERFORMANCE_TRAINING_URL = 'https://cdfda-performance.pplx.app/#/';
 const AMAZON_SCHEDULING_URL = 'https://logistics.amazon.com/scheduling?serviceAreaId=f0c05ae0-b2c0-462c-8ee0-f72f5ab653ec';
 const LOW_BATTERY_SECTION_THRESHOLD = 80;
 const DISPATCH_BATTERY_BLOCK_THRESHOLD = 40;
+const initialUrlParams = (()=>{if(typeof URLSearchParams!=='function')return {get:()=>''};try{return new URLSearchParams(location.search||'');}catch{return new URLSearchParams('');}})();
+const PARKING_ONLY_VIEW = ['parking','van-parking','fleet-parking'].includes(String(initialUrlParams.get('view')||initialUrlParams.get('tab')||'').toLowerCase());
 const DEFAULT_ROSTERING_SERVICES = Object.freeze([
   {id:'xl-donations',name:'Standard Parcel - Extra Large Van - AMZ Donations - Default as station - 10 Hours',confirmed:2,kind:'driver',defaultTime:'11:15 AM'},
   {id:'rivian-helper-route',name:'Standard Parcel Electric - Rivian MEDIUM with Helper - Default as station - 10 Hours',confirmed:4,kind:'driver',defaultTime:'11:15 AM'},
@@ -315,7 +319,7 @@ function normalizeChargerReports(raw=[]) {
 }
 
 let state = {
-  page: localStorage.getItem('relayops_page') || 'dashboard',
+  page: PARKING_ONLY_VIEW ? 'parking' : (localStorage.getItem('relayops_page') || 'dashboard'),
   role: localStorage.getItem('relayops_role') || 'viewer',
   phase: Number(localStorage.getItem('relayops_phase') || 2),
   routes: JSON.parse(localStorage.getItem('relayops_routes') || 'null') || [],
@@ -408,10 +412,12 @@ let state = {
   rosteringPlans: JSON.parse(localStorage.getItem('relayops_rostering_plans') || 'null') || {},
   rosteringOpenServices: JSON.parse(localStorage.getItem('relayops_rostering_open_services') || 'null') || {'rivian-medium':true},
   rosteringTrainingMatches: JSON.parse(localStorage.getItem('relayops_rostering_training_matches') || 'null') || {},
+  rosteringManualTraining: JSON.parse(localStorage.getItem('relayops_rostering_manual_training') || 'null') || {},
   rosteringPaycomCategory: localStorage.getItem('relayops_rostering_paycom_category') || 'all',
   rosteringAutoMode: localStorage.getItem('relayops_rostering_auto_mode') === 'abc' ? 'abc' : 'random',
   pendingRosteringServiceDelete: null,
   pendingRosteringSwap: null,
+  pendingRosteringTrainingAdd: null,
   expandedDriverKey: '',
   callOffDriverKeys: JSON.parse(localStorage.getItem('relayops_call_off_driver_keys') || 'null') || {},
   scheduleDriverMarks: JSON.parse(localStorage.getItem('relayops_schedule_driver_marks') || 'null') || {},
@@ -743,12 +749,22 @@ function globalSearchResults(query=state.search) {
   });
   return results;
 }
-function globalSearchHtml() {
+function globalSearchResultsPanelHtml() {
   const results=globalSearchResults(),query=String(state.search||'').trim();
-  return `<div class="global-search-shell"><label class="search">${ICONS.search}<input id="global-search" autocomplete="off" aria-label="Search drivers, routes, and vehicles" placeholder="Search driver, route, van…" value="${esc(state.search)}" /></label>${query.length>=2?`<div class="global-search-results" role="listbox" aria-label="Search results">${results.length?results.map(result=>`<button type="button" role="option" data-action="open-global-search-result" data-search-page="${esc(result.page)}" data-search-value="${esc(result.searchValue)}"><span>${esc(result.type)}</span><strong>${esc(result.title)}</strong><small>${esc(result.detail||'Open in RelayOps')}</small></button>`).join(''):`<div class="global-search-empty"><strong>No match found</strong><span>Try a driver name, CX route, EV number, VIN, or plate.</span></div>`}<button type="button" class="global-search-clear" data-action="clear-global-search">Clear search</button></div>`:''}</div>`;
+  if(query.length<2)return '';
+  return `<div class="global-search-results" role="listbox" aria-label="Search results">${results.length?results.map(result=>`<button type="button" role="option" data-action="open-global-search-result" data-search-page="${esc(result.page)}" data-search-value="${esc(result.searchValue)}"><span>${esc(result.type)}</span><strong>${esc(result.title)}</strong><small>${esc(result.detail||'Open in RelayOps')}</small></button>`).join(''):`<div class="global-search-empty"><strong>No match found</strong><span>Try a driver name, CX route, EV number, VIN, or plate.</span></div>`}<button type="button" class="global-search-clear" data-action="clear-global-search">Clear search</button></div>`;
+}
+function globalSearchHtml() {
+  return `<div class="global-search-shell"><label class="search">${ICONS.search}<input id="global-search" autocomplete="off" aria-label="Search drivers, routes, and vehicles" placeholder="Search driver, route, van…" value="${esc(state.search)}" /></label><div id="global-search-results-anchor">${globalSearchResultsPanelHtml()}</div></div>`;
 }
 
 function sidebar() {
+  if(PARKING_ONLY_VIEW)return `<aside class="sidebar fleet-parking-sidebar" id="sidebar">
+    <div class="brand"><div class="brand-mark"></div><div class="brand-copy"><div class="brand-name">RelayOps</div><div class="brand-sub">Fleet view</div></div></div>
+    <div class="station-pill"><div class="station-icon">${esc(state.stationCode.slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(state.stationCode.toUpperCase())} · Van Parking</span></div>${ICONS.chevron}</div>
+    <nav><div class="side-section"><div class="side-label">Shared With Fleet</div><button class="nav-item active" aria-label="Van Parking">${ICONS.parking}<span>Van Parking</span></button></div></nav>
+    <div class="side-bottom"><div class="user-card"><div class="avatar">FT</div><div class="user-copy"><strong>Fleet team view</strong><span>Parking map only</span></div><div class="role-tag">VIEW</div></div></div>
+  </aside>`;
   return `<aside class="sidebar" id="sidebar">
     <div class="brand"><div class="brand-mark"></div><div class="brand-copy"><div class="brand-name">RelayOps</div><div class="brand-sub">Dispatch command</div></div></div>
     <div class="station-pill"><div class="station-icon">${esc(state.stationCode.slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(state.stationCode.toUpperCase())} · Los Angeles</span></div>${ICONS.chevron}</div>
@@ -794,6 +810,10 @@ function notificationButtonHtml() {
 function topbarLegacy() {
   const [title,sub] = pageInfo[state.page] || pageInfo.dashboard;
   const fleetClean=state.page==='fleet';
+  if(PARKING_ONLY_VIEW)return `<header class="topbar fleet-parking-topbar">
+    <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu">${ICONS.menu}</button><div class="page-heading"><h1>Van Parking</h1><p>Read-only parking map, battery levels, and charger status for the fleet team</p></div></div>
+    <div class="top-actions"><button class="btn cloud-status-button ${esc(state.cloudStatus)}" data-action="cloud-account"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting…':state.cloudStatus==='offline'?'Offline · saved here':state.cloudStatus==='signed-out'?'Dispatcher sign in':'Cloud setup'}</span></button><button class="btn ghost share-link-btn" data-action="copy-fleet-parking-link">${ICONS.link}<span class="hide-mobile">Copy fleet link</span></button></div>
+  </header>`;
   return `<header class="topbar">
     <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu">${ICONS.menu}</button><div class="page-heading"><h1>${title}</h1><p>${sub}</p></div></div>
     <div class="top-actions">${fleetClean?'':globalSearchHtml()}${state.page==='morning'?'<button class="btn info-top-button" data-action="open-morning-diagnostics" title="Setup & diagnostics"><span>ℹ</span><span class="hide-mobile">Setup & diagnostics</span></button>':''}<button class="btn cloud-status-button ${esc(state.cloudStatus)}" data-action="cloud-account"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting…':state.cloudStatus==='offline'?'Offline · saved here':state.cloudStatus==='signed-out'?'Dispatcher sign in':'Cloud setup'}</span></button><button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button>${notificationButtonHtml()}${state.page==='morning'?`<button class="icon-button connector-settings-icon" data-action="morning-sheets-connector" aria-label="Google Sheets connector settings" title="Google Sheets connector settings">${ICONS.settings||'⚙'}</button>`:''}${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
@@ -951,8 +971,11 @@ function rosteringFairnessBadge(name='') {
   const level=Math.min(3,count),label=count>=3?`${count}× · prioritize hours`:`${count}× stay-home`;
   return `<span class="rostering-fairness level-${level}" title="Told to stay home ${count} time${count===1?'':'s'} in the last 7 days">${esc(label)}</span>`;
 }
+function rosteringPaycomFairnessBadge(name='') {
+  return rosteringStayHomeCount(name)?rosteringFairnessBadge(name):'';
+}
 function rosteringRolePriority(role='') {
-  const key=headerKey(role);if(key.includes('deliveryassociate'))return 0;if(key.includes('rescue'))return 1;if(key.includes('midshift'))return 2;if(key.includes('modifiedduty'))return 3;return 4;
+  const key=headerKey(role);if(key.includes('modifiedduty'))return 3;if(key.includes('deliveryassociate'))return 0;if(key.includes('rescue'))return 1;if(key.includes('midshift'))return 2;return 4;
 }
 function rosteringUnavailableToday(name='') {
   const key=`${state.rosteringDate}|${nameKey(name)}`;
@@ -962,11 +985,11 @@ function rosteringPriorityEntries(entries=[]) {
   return [...entries].sort((a,b)=>rosteringStayHomeCount(b.name)-rosteringStayHomeCount(a.name)||rosteringRolePriority(a.role)-rosteringRolePriority(b.role)||waveMinutes(a.start)-waveMinutes(b.start)||String(a.name||'').localeCompare(String(b.name||'')));
 }
 function rosteringPaycomCategoryFor(entry={}) {
-  const key=headerKey(entry.role);if(isRidealongRole(entry.role))return 'training';if(isDriverHelperOnlyRole(entry.role))return 'helper';if(key.includes('deliveryassociate'))return 'vto4';if(key.includes('rescue'))return 'vto2';if(key.includes('midshift'))return 'midshift';if(key.includes('modifiedduty'))return 'modified';return 'other';
+  const key=headerKey(entry.role);if(isRidealongRole(entry.role))return 'training';if(isDriverHelperOnlyRole(entry.role))return 'helper';if(key.includes('modifiedduty'))return 'modified';if(key.includes('deliveryassociate'))return 'vto4';if(key.includes('rescue'))return 'vto2';if(key.includes('midshift'))return 'midshift';return 'other';
 }
 function rosteringEntryEligibleForRoster(entry={}) {
   const role=headerKey(entry.role);
-  return (role.includes('deliveryassociate')||role.includes('rescue'))&&!rosteringUnavailableToday(entry.name);
+  return !role.includes('modifiedduty')&&(role.includes('deliveryassociate')||role.includes('rescue'))&&!rosteringUnavailableToday(entry.name);
 }
 function rosteringOrderEntries(entries=[],mode=state.rosteringAutoMode,random=Math.random) {
   const rows=[...entries];if(mode==='abc')return rows.sort((a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})||waveMinutes(a.start)-waveMinutes(b.start));
@@ -1090,7 +1113,27 @@ function rosteringBackupBuilderHtml(plan=currentRosteringPlan()) {
   return `<section class="rostering-backup-builder"><header><div><span class="eyebrow">UNROSTERED BACKUP LIST</span><h3>Drivers still available</h3></div><span><b>${Object.values(groups).reduce((sum,rows)=>sum+rows.length,0)}</b><button class="btn small" data-action="copy-rostering-backup-email">${ICONS.copy} Copy email text</button></span></header><div>${sections.map(([key,label])=>`<article><h4>${esc(label)} <b>${groups[key].length}</b></h4>${groups[key].length?groups[key].map(entry=>`<div ${driverProfileAttrs(entry.name)}><span><strong>${esc(driverDisplayName(entry.name))}</strong><small>${esc(entry.role)}${rosteringStayHomeCount(entry.name)?` · ${rosteringStayHomeCount(entry.name)}× stay-home`:''}</small></span>${rosteringDriverActionButtons(entry,false)}</div>`).join(''):'<p>No drivers in this group.</p>'}</article>`).join('')}</div></section>`;
 }
 function rosteringBackupEmailText(plan=currentRosteringPlan()) { const groups=rosteringUnrosteredBackupGroups(plan),lines=[`RelayOps unrostered backup list · ${state.rosteringDate}`,'',`VTO 2 · Rescue (${groups.vto2.length})`,...groups.vto2.map(row=>`- ${driverDisplayName(row.name)} · ${row.role}`),'',`VTO 4 · Delivery Associate (${groups.vto4.length})`,...groups.vto4.map(row=>`- ${driverDisplayName(row.name)} · ${row.role}`),'',`Other roles (${groups.other.length})`,...groups.other.map(row=>`- ${driverDisplayName(row.name)} · ${row.role}`)];return lines.join('\n'); }
-async function copyRosteringBackupEmailText() { await copyText(rosteringBackupEmailText());toast('Grouped backup email text copied'); }
+async function copyRosteringBackupEmailText() { const ok=await writeClipboardText(rosteringBackupEmailText());toast(ok?'Grouped backup email text copied':'Clipboard access was blocked',ok?'success':'error'); }
+function rosteringDispatchAssignments() {
+  const result={opener1:'',opener2:'',fleet:'',mid:'',closer1:'',closer2:''};let midFallback='';
+  scheduleEntriesForDate(state.rosteringDate).forEach(entry=>{const key=headerKey(entry.role),name=driverDisplayName(entry.name);if(!name)return;if(key.includes('firstopeningdispatch'))result.opener1||=name;else if(key.includes('secondopeningdispatch'))result.opener2||=name;else if(key.includes('fleetcoordinator'))result.fleet||=name;else if((key.includes('mid')||key.includes('midshift'))&&key.includes('dispatch'))result.mid||=name;else if(key==='mid'||key==='midshift')midFallback||=name;else if(key.includes('secondcloser')||key.includes('secondclosingdispatch'))result.closer2||=name;else if(key.includes('closingdispatch')||key.includes('firstcloser')||key.includes('firstclosingdispatch'))result.closer1||=name;});
+  result.mid||=midFallback;
+  return result;
+}
+function rosteringEmailHelperRows(plan=currentRosteringPlan()) {
+  const services=new Map((plan.services||[]).map(service=>[service.id,service]));
+  return plan.assignments.filter(row=>row.associate&&services.get(row.serviceId)?.kind==='helper').map(row=>{const helper=driverDisplayName(row.associate),lead=String(row.route||'').trim();return lead&&!/^(?:no route generated|support|helper)$/i.test(lead)?`${lead} > ${helper}`:helper;});
+}
+function rosteringAllocatedCounts(plan=currentRosteringPlan()) {
+  const services=new Map((plan.services||[]).map(service=>[service.id,service]));
+  let rivian=0,helper=0;plan.assignments.forEach(row=>{if(!row.associate)return;const service=services.get(row.serviceId);if(service?.kind==='helper')helper++;else if(service?.id!=='xl-donations')rivian++;});
+  return {rivian,helper,total:rivian+helper};
+}
+function rosteringEmailTemplateText(plan=currentRosteringPlan()) {
+  const dispatch=rosteringDispatchAssignments(),helpers=rosteringEmailHelperRows(plan),groups=rosteringUnrosteredBackupGroups(plan),counts=rosteringAllocatedCounts(plan),line='---------------------------------------------------',names=rows=>rows.map(row=>driverDisplayName(row.name)).join('\n')||'';
+  return [`**Opener:** *1st* ${dispatch.opener1||''} /*2nd* ${dispatch.opener2||''}       **Fleet:** ${dispatch.fleet||''}`,'',`**Mid:** ${dispatch.mid||''}`,'',`**1 st Closer:** *${dispatch.closer1||''}*  **2nd Closer***: ${dispatch.closer2||''}*`,'',line,'**Helpers:**',helpers.join('\n'),line,'','**Back Ups:** ','','**VTO (2)**',names(groups.vto2),'','**VTO (4)**',names(groups.vto4),'',line,'**Allocated:**','',`***${counts.rivian} RIV***`,`***${counts.helper} HELPER***`,`***${counts.total} Total***`].join('\n');
+}
+async function copyRosteringEmailTemplateText() { const ok=await writeClipboardText(rosteringEmailTemplateText());toast(ok?'Roster email template copied':'Clipboard access was blocked',ok?'success':'error'); }
 function openRosteringDriverSwap(name='') {
   const entry=scheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(name));
   if(!entry||!rosteringEntryEligibleForRoster(entry))return toast('Choose an available Rescue or Delivery Associate shift','error');
@@ -1110,33 +1153,60 @@ function applyRosteringDriverSwap() {
 function rosteringPaycomHtml(plan=currentRosteringPlan()) {
   const assigned=rosteringAssignedNameKeys(plan),seen=new Set(),entries=scheduleEntriesForDate(state.rosteringDate).filter(entry=>{const key=driverIdentityKey(entry.name);if(!key||seen.has(key))return false;seen.add(key);return true;}).sort((a,b)=>Number(assigned.has(driverIdentityKey(b.name)))-Number(assigned.has(driverIdentityKey(a.name)))||driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})),category=state.rosteringPaycomCategory||'all',categories=[['all','All'],['rostered','Rostered'],['unrostered','Unrostered'],['vto4','Delivery Associate'],['vto2','Rescue / VTO 2'],['midshift','Midshift'],['modified','Modified Duty'],['training','Training'],['helper','Helpers'],['other','Other']];
   const categoryCount=key=>entries.filter(entry=>key==='all'||key==='rostered'&&assigned.has(driverIdentityKey(entry.name))||key==='unrostered'&&!assigned.has(driverIdentityKey(entry.name))||rosteringPaycomCategoryFor(entry)===key).length;
-  return `<section class="card rostering-paycom"><header><div><span class="eyebrow">PAYCOM</span><h2>All Scheduled driver shifts</h2><p>${state.scheduleImportName?`Source: ${esc(state.scheduleImportName)}`:'Import PAYCOM, then choose Random or ABC before Auto Roster.'}</p></div><div><button class="btn" data-action="schedule-import">${ICONS.upload} Import PAYCOM</button><button class="btn primary" data-action="rostering-auto-roster">Auto Roster scheduled drivers</button></div></header><div class="rostering-paycom-stats"><span><b>${entries.length}</b> scheduled shifts</span><span><b>${entries.filter(entry=>assigned.has(driverIdentityKey(entry.name))).length}</b> rostered</span><span><b>${entries.filter(entry=>rosteringStayHomeCount(entry.name)>0).length}</b> fairness flags</span></div><div class="rostering-paycom-categories" role="group" aria-label="Filter PAYCOM shifts">${categories.map(([key,label])=>`<button type="button" class="${category===key?'active':''}" data-action="rostering-paycom-category" data-rostering-category="${key}">${esc(label)} <b>${categoryCount(key)}</b></button>`).join('')}</div><label class="roster-search rostering-paycom-search">${ICONS.search||'⌕'}<input type="search" data-rostering-paycom-search placeholder="Search names or shift roles" aria-label="Search PAYCOM drivers"></label><div class="rostering-paycom-list">${entries.length?entries.map(entry=>{const isAssigned=assigned.has(driverIdentityKey(entry.name)),entryCategory=rosteringPaycomCategoryFor(entry),visible=category==='all'||category==='rostered'&&isAssigned||category==='unrostered'&&!isAssigned||category===entryCategory,training=entryCategory==='training',haystack=nameKey(`${driverDisplayName(entry.name)} ${entry.role} ${entryCategory}`);return `<div data-rostering-paycom-name="${esc(haystack)}" data-rostering-paycom-category="${entryCategory}" data-rostering-paycom-status="${isAssigned?'rostered':'unrostered'}" class="${isAssigned?'assigned':'unassigned'}" ${visible?'':'hidden'} ${driverProfileAttrs(entry.name)}><span><strong>${esc(driverDisplayName(entry.name))}</strong><small>${esc(entry.role)} · ${esc(entry.start)}${entry.end?`–${esc(entry.end)}`:''}</small></span>${rosteringFairnessBadge(entry.name)}${driverFlagBadgeHtml(entry.name)}${training?`<button class="btn small" data-action="rostering-focus-training">Training box</button>`:rosteringDriverActionButtons(entry,isAssigned)}</div>`;}).join(''):'<div class="rostering-empty"><strong>No PAYCOM shifts for this date</strong><span>Import CSV, XLS, XLSX, PDF, image, or text.</span></div>'}</div>${rosteringBackupBuilderHtml(plan)}</section>`;
+  return `<section class="card rostering-paycom"><header><div><span class="eyebrow">PAYCOM</span><h2>All Scheduled driver shifts</h2><p>${state.scheduleImportName?`Source: ${esc(state.scheduleImportName)}`:'Import PAYCOM, then choose Random or ABC before Auto Roster.'}</p></div><div><button class="btn" data-action="schedule-import">${ICONS.upload} Import PAYCOM</button><button class="btn primary" data-action="rostering-auto-roster">Auto Roster scheduled drivers</button></div></header><div class="rostering-paycom-stats"><span><b>${entries.length}</b> scheduled shifts</span><span><b>${entries.filter(entry=>assigned.has(driverIdentityKey(entry.name))).length}</b> rostered</span><span><b>${entries.filter(entry=>rosteringStayHomeCount(entry.name)>0).length}</b> fairness flags</span></div><div class="rostering-paycom-categories" role="group" aria-label="Filter PAYCOM shifts">${categories.map(([key,label])=>`<button type="button" class="${category===key?'active':''}" data-action="rostering-paycom-category" data-rostering-category="${key}">${esc(label)} <b>${categoryCount(key)}</b></button>`).join('')}</div><label class="roster-search rostering-paycom-search">${ICONS.search||'⌕'}<input type="search" data-rostering-paycom-search placeholder="Search names or shift roles" aria-label="Search PAYCOM drivers"></label><div class="rostering-paycom-list">${entries.length?entries.map(entry=>{const isAssigned=assigned.has(driverIdentityKey(entry.name)),entryCategory=rosteringPaycomCategoryFor(entry),visible=category==='all'||category==='rostered'&&isAssigned||category==='unrostered'&&!isAssigned||category===entryCategory,training=entryCategory==='training',haystack=nameKey(`${driverDisplayName(entry.name)} ${entry.role} ${entryCategory}`);return `<div data-rostering-paycom-name="${esc(haystack)}" data-rostering-paycom-category="${entryCategory}" data-rostering-paycom-status="${isAssigned?'rostered':'unrostered'}" class="${isAssigned?'assigned':'unassigned'}" ${visible?'':'hidden'} ${driverProfileAttrs(entry.name)}><span><strong>${esc(driverDisplayName(entry.name))}</strong><small>${esc(entry.role)} · ${esc(entry.start)}${entry.end?`–${esc(entry.end)}`:''}</small></span>${rosteringPaycomFairnessBadge(entry.name)}${driverFlagBadgeHtml(entry.name)}${training?`<button class="btn small" data-action="rostering-focus-training">Training box</button>`:rosteringDriverActionButtons(entry,isAssigned)}</div>`;}).join(''):'<div class="rostering-empty"><strong>No PAYCOM shifts for this date</strong><span>Import CSV, XLS, XLSX, PDF, image, or text.</span></div>'}</div>${rosteringBackupBuilderHtml(plan)}</section>`;
 }
 function rosteringTrainingKey(name='') { return `${state.rosteringDate}|${driverIdentityKey(name)}`; }
+function rosteringManualTrainingKey(name='',kind='ridealong') { return `${state.rosteringDate}|${kind==='trainer'?'trainer':'ridealong'}|${driverIdentityKey(name)}`; }
+function rosteringManualTrainingRows(kind='') {
+  return Object.entries(state.rosteringManualTraining||{}).filter(([key,row])=>key.startsWith(`${state.rosteringDate}|`)&&(!kind||row.kind===kind)).map(([key,row])=>({...row,key,name:canonicalDriverName(row.name||''),manual:true,date:row.date||state.rosteringDate,role:row.kind==='trainer'?'Manual Trainer':'Manual Ridealong'})).filter(row=>row.name);
+}
+function rosteringRidealongEntries() {
+  const scheduled=[...new Map(scheduleEntriesForDate(state.rosteringDate).filter(entry=>isRidealongRole(entry.role)).map(entry=>[driverIdentityKey(entry.name),{...entry,manual:false}])).values()];
+  const byIdentity=new Map(scheduled.map(entry=>[driverIdentityKey(entry.name),entry]));
+  rosteringManualTrainingRows('ridealong').forEach(row=>{const key=driverIdentityKey(row.name);if(key&&!byIdentity.has(key))byIdentity.set(key,row);});
+  return [...byIdentity.values()].sort((a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'}));
+}
 function rosteringTrainerUnavailable(name='') {
   const keys=new Set([nameKey(name),driverIdentityKey(name)].filter(Boolean));
   return [...keys].some(key=>{const dailyKey=`${state.rosteringDate}|${key}`;return Boolean(state.scheduleStayHome?.[dailyKey]||state.scheduleReductions?.[dailyKey]||state.callOffDriverKeys?.[dailyKey]);});
 }
 function rosteringTrainerCandidates() {
   const scheduled=new Set(scheduleEntriesForDate(state.rosteringDate).map(entry=>driverIdentityKey(entry.name)));
-  return teamDriverRows().filter(driver=>driverHasCapability(driver.name,'trainer')&&!rosteringTrainerUnavailable(driver.name)).sort((a,b)=>Number(scheduled.has(driverIdentityKey(b.name)))-Number(scheduled.has(driverIdentityKey(a.name)))||rosteringStayHomeCount(a.name)-rosteringStayHomeCount(b.name)||a.name.localeCompare(b.name));
+  const rows=[...teamDriverRows().filter(driver=>driverHasCapability(driver.name,'trainer')).map(driver=>({name:driver.name,manual:false})),...rosteringManualTrainingRows('trainer')];
+  const byIdentity=new Map();rows.forEach(row=>{const name=canonicalDriverName(row.name),key=driverIdentityKey(name);if(key&&!rosteringTrainerUnavailable(name)&&!byIdentity.has(key))byIdentity.set(key,{...row,name});});
+  return [...byIdentity.values()].sort((a,b)=>Number(scheduled.has(driverIdentityKey(b.name)))-Number(scheduled.has(driverIdentityKey(a.name)))||Number(b.manual)-Number(a.manual)||rosteringStayHomeCount(a.name)-rosteringStayHomeCount(b.name)||a.name.localeCompare(b.name));
 }
 function assignRosteringTrainer(ridealong='',trainer='') {
-  const ridealongKey=driverIdentityKey(ridealong),entry=scheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===ridealongKey&&isRidealongRole(row.role));if(!entry)return toast('Ridealong shift was not found for this date','error');
-  if(trainer&&!driverHasCapability(trainer,'trainer'))return toast('Mark this driver as Trainer on Drivers & Team first','error');
+  const ridealongKey=driverIdentityKey(ridealong),entry=rosteringRidealongEntries().find(row=>driverIdentityKey(row.name)===ridealongKey);if(!entry)return toast('Ridealong shift was not found for this date','error');
+  if(trainer&&!rosteringTrainerCandidates().some(row=>driverIdentityKey(row.name)===driverIdentityKey(trainer)))return toast('Add this driver as a manual trainer or mark Trainer on Drivers & Team first','error');
   if(trainer&&driverIdentityKey(trainer)===driverIdentityKey(entry.name))return toast('A ridealong driver cannot be assigned as their own trainer','error');
   if(trainer&&rosteringTrainerUnavailable(trainer))return toast('That trainer is unavailable for this date','error');
   const key=rosteringTrainingKey(entry.name);if(trainer)state.rosteringTrainingMatches[key]={ridealong:entry.name,trainer:canonicalDriverName(trainer),date:state.rosteringDate,at:new Date().toISOString()};else delete state.rosteringTrainingMatches[key];persist();render();toast(trainer?`${entry.name} matched with trainer ${trainer}`:`Trainer match cleared for ${entry.name}`);
 }
 function clearRosteringTrainerMatch(ridealong='') { const key=rosteringTrainingKey(ridealong),record=state.rosteringTrainingMatches[key];if(!record)return;delete state.rosteringTrainingMatches[key];persist();render();toast(`${record.ridealong||ridealong} is ready for a trainer swap`); }
+function openRosteringTrainingAdd(kind='ridealong') { state.pendingRosteringTrainingAdd={kind:kind==='trainer'?'trainer':'ridealong'};state.modal='rostering-training-add';render(); }
+function saveRosteringTrainingAdd() {
+  const kind=document.getElementById('rostering-training-kind')?.value==='trainer'?'trainer':'ridealong',raw=String(document.getElementById('rostering-training-name')?.value||'').replace(/\s+/g,' ').trim();
+  const name=canonicalDriverName(raw);if(!name)return toast('Enter a driver name for training','error');
+  const key=rosteringManualTrainingKey(name,kind);state.rosteringManualTraining[key]={date:state.rosteringDate,kind,name,at:new Date().toISOString()};state.pendingRosteringTrainingAdd=null;state.modal=null;persist();render();toast(`${driverDisplayName(name)} added as ${kind==='trainer'?'a trainer':'a ridealong'}`);
+}
+function removeRosteringManualTraining(key='') {
+  const row=state.rosteringManualTraining?.[key];if(!row)return;
+  delete state.rosteringManualTraining[key];if(row.kind==='ridealong')delete state.rosteringTrainingMatches[rosteringTrainingKey(row.name)];
+  persist();render();toast(`${driverDisplayName(row.name)} removed from manual training`);
+}
 function rosteringTrainingHtml() {
-  const ridealongs=[...new Map(scheduleEntriesForDate(state.rosteringDate).filter(entry=>isRidealongRole(entry.role)).map(entry=>[driverIdentityKey(entry.name),entry])).values()],trainers=rosteringTrainerCandidates(),scheduled=new Set(scheduleEntriesForDate(state.rosteringDate).map(entry=>driverIdentityKey(entry.name)));
-  return `<section class="card rostering-training" id="rostering-training-box"><header><div><span class="eyebrow">RIDEALONGS / TRAINING</span><h2>Training matches</h2><p>Every PAYCOM ridealong stays on its own row. Trainers scheduled today are suggested first.</p></div><b>${ridealongs.length}</b></header><div class="rostering-training-list">${ridealongs.length?ridealongs.map(entry=>{const key=rosteringTrainingKey(entry.name),saved=state.rosteringTrainingMatches[key]?.trainer||'',eligible=trainers.filter(driver=>driverIdentityKey(driver.name)!==driverIdentityKey(entry.name)),matched=eligible.find(driver=>driverIdentityKey(driver.name)===driverIdentityKey(saved))?.name||'',suggested=eligible.find(driver=>scheduled.has(driverIdentityKey(driver.name)))?.name||eligible[0]?.name||'',stale=Boolean(saved&&!matched);return `<article><div><strong>${esc(driverDisplayName(entry.name))}</strong><span>${esc(entry.role)} · ${esc(entry.start)}${entry.end?`–${esc(entry.end)}`:''}</span></div><label><span>Trainer</span><select data-rostering-training-match="${esc(entry.name)}"><option value="">Choose trainer…</option>${eligible.map(driver=>`<option value="${esc(driver.name)}" ${driverIdentityKey(matched)===driverIdentityKey(driver.name)?'selected':''}>${esc(driverDisplayName(driver.name))}${scheduled.has(driverIdentityKey(driver.name))?' · scheduled':''}</option>`).join('')}</select></label>${matched?`<span class="rostering-trainer-match"><em>✓ ${esc(driverDisplayName(matched))}</em><button class="btn small" data-action="rostering-swap-trainer" data-ridealong-name="${esc(entry.name)}">Swap Trainer</button></span>`:suggested?`<button class="btn small" data-action="rostering-use-trainer-suggestion" data-ridealong-name="${esc(entry.name)}" data-trainer-name="${esc(suggested)}">${stale?'Rematch':'Use'} ${esc(driverDisplayName(suggested))}</button>`:`<em class="needs-trainer">${stale?'Saved trainer unavailable':'Mark a driver as Trainer'}</em>`}</article>`;}).join(''):'<div class="rostering-empty"><strong>No ridealong shifts found</strong><span>Import PAYCOM. Roles containing Ridealong, Training, Trainee, or New Hire will appear automatically.</span></div>'}</div><footer><span>${trainers.length} Trainer${trainers.length===1?'':'s'} available</span><small>Trainer and Helper Driver tags are managed on Drivers & Team.</small></footer></section>`;
+  const ridealongs=rosteringRidealongEntries(),trainers=rosteringTrainerCandidates(),scheduled=new Set(scheduleEntriesForDate(state.rosteringDate).map(entry=>driverIdentityKey(entry.name))),manualTrainers=rosteringManualTrainingRows('trainer');
+  return `<section class="card rostering-training" id="rostering-training-box"><header><div><span class="eyebrow">RIDEALONGS / TRAINING</span><h2>Training matches</h2><p>Every PAYCOM or manual ridealong stays on its own row. Trainers scheduled today are suggested first.</p></div><div class="rostering-training-head-actions"><button class="btn small" data-action="open-rostering-training-add" data-training-kind="ridealong">+ Ridealong</button><button class="btn small" data-action="open-rostering-training-add" data-training-kind="trainer">+ Trainer</button><b>${ridealongs.length}</b></div></header><div class="rostering-training-list">${ridealongs.length?ridealongs.map(entry=>{const key=rosteringTrainingKey(entry.name),saved=state.rosteringTrainingMatches[key]?.trainer||'',eligible=trainers.filter(driver=>driverIdentityKey(driver.name)!==driverIdentityKey(entry.name)),matched=eligible.find(driver=>driverIdentityKey(driver.name)===driverIdentityKey(saved))?.name||'',suggested=eligible.find(driver=>scheduled.has(driverIdentityKey(driver.name)))?.name||eligible[0]?.name||'',stale=Boolean(saved&&!matched);return `<article class="${entry.manual?'manual-training-row':''}"><div><strong>${esc(driverDisplayName(entry.name))}</strong><span>${entry.manual?'Manual ridealong':esc(entry.role)}${entry.start?` · ${esc(entry.start)}`:''}${entry.end?`–${esc(entry.end)}`:''}</span></div><label><span>Trainer</span><select data-rostering-training-match="${esc(entry.name)}"><option value="">Choose trainer…</option>${eligible.map(driver=>`<option value="${esc(driver.name)}" ${driverIdentityKey(matched)===driverIdentityKey(driver.name)?'selected':''}>${esc(driverDisplayName(driver.name))}${scheduled.has(driverIdentityKey(driver.name))?' · scheduled':driver.manual?' · manual':''}</option>`).join('')}</select></label>${matched?`<span class="rostering-trainer-match"><em>✓ ${esc(driverDisplayName(matched))}</em><button class="btn small" data-action="rostering-swap-trainer" data-ridealong-name="${esc(entry.name)}">Swap Trainer</button>${entry.manual?`<button class="btn small ghost" data-action="remove-rostering-manual-training" data-manual-training-key="${esc(entry.key)}">Remove</button>`:''}</span>`:suggested?`<span class="rostering-trainer-match"><button class="btn small" data-action="rostering-use-trainer-suggestion" data-ridealong-name="${esc(entry.name)}" data-trainer-name="${esc(suggested)}">${stale?'Rematch':'Use'} ${esc(driverDisplayName(suggested))}</button>${entry.manual?`<button class="btn small ghost" data-action="remove-rostering-manual-training" data-manual-training-key="${esc(entry.key)}">Remove</button>`:''}</span>`:`<span class="rostering-trainer-match"><em class="needs-trainer">${stale?'Saved trainer unavailable':'Add a trainer'}</em>${entry.manual?`<button class="btn small ghost" data-action="remove-rostering-manual-training" data-manual-training-key="${esc(entry.key)}">Remove</button>`:''}</span>`}</article>`;}).join(''):'<div class="rostering-empty"><strong>No ridealong shifts found</strong><span>Import PAYCOM or use + Ridealong to add one manually.</span></div>'}</div>${manualTrainers.length?`<div class="rostering-manual-trainers"><strong>Manual trainers</strong>${manualTrainers.map(row=>`<span>${esc(driverDisplayName(row.name))}<button data-action="remove-rostering-manual-training" data-manual-training-key="${esc(row.key)}" aria-label="Remove ${esc(row.name)}">×</button></span>`).join('')}</div>`:''}<footer><span>${trainers.length} Trainer${trainers.length===1?'':'s'} available</span><small>Trainer and Helper Driver tags are managed on Drivers & Team. Use + Trainer for one-day ridealong coverage.</small></footer></section>`;
 }
 function rosteringDriverNotesHtml() {
   const scheduled=[...new Map(scheduleEntriesForDate(state.rosteringDate).filter(entry=>scheduleRoleGroup(entry.role)==='driver').map(entry=>[driverIdentityKey(entry.name),canonicalDriverName(entry.name)])).values()].sort((a,b)=>driverDisplayName(a).localeCompare(driverDisplayName(b),undefined,{sensitivity:'base'}));
   const flagged=scheduled.filter(name=>driverProfileFlags(name).length).length;
   return `<section class="card rostering-driver-notes"><header><div><span class="eyebrow">DRIVER NOTES</span><h2>Scheduled driver flags</h2><p>Alphabetical PAYCOM list · click any driver to update shared notes.</p></div><b>${flagged}</b></header><label class="roster-search rostering-driver-note-search">${ICONS.search||'⌕'}<input type="search" data-rostering-driver-note-search placeholder="Search driver flags" aria-label="Search driver flags"></label><div class="rostering-driver-note-list">${scheduled.length?scheduled.map(name=>`<div data-rostering-driver-note-name="${esc(nameKey(`${driverDisplayName(name)} ${driverFlagSummary(name).join(' ')}`))}">${driverFlagsCardHtml(name)}</div>`).join(''):'<div class="rostering-empty"><strong>No scheduled drivers</strong><span>Import PAYCOM to build this list.</span></div>'}</div></section>`;
+}
+function rosteringEmailHandoffHtml(plan=currentRosteringPlan()) {
+  const text=rosteringEmailTemplateText(plan),counts=rosteringAllocatedCounts(plan);
+  return `<section class="card rostering-email-handoff"><header><div><span class="eyebrow">EMAIL HANDOFF</span><h2>Unrostered shifts template</h2><p>Copy this into the route-total email after reviewing names and counts.</p></div><button class="btn small primary" data-action="copy-rostering-email-template">${ICONS.copy} Copy text</button></header><textarea readonly aria-label="Formatted unrostered shifts email template">${esc(text)}</textarea><footer><span>${counts.rivian} RIV · ${counts.helper} Helper · ${counts.total} total allocated</span><small>Backups come from unrostered PAYCOM shifts.</small></footer></section>`;
 }
 function rosteringHelperShiftsHtml(plan=currentRosteringPlan()) {
   const helpers=scheduleEntriesForDate(state.rosteringDate).filter(entry=>isDriverHelperOnlyRole(entry.role)),assigned=rosteringAssignedNameKeys(plan);
@@ -1144,7 +1214,7 @@ function rosteringHelperShiftsHtml(plan=currentRosteringPlan()) {
 }
 function rosteringPage() {
   const plan=currentRosteringPlan();syncRosteringHelperShifts(plan);const duplicates=rosteringDuplicateNameKeys(plan),confirmed=plan.services.reduce((sum,service)=>sum+service.confirmed,0),rostered=plan.assignments.filter(row=>row.associate).length,missing=Math.max(0,confirmed-rostered),flagged=new Set(plan.assignments.filter(row=>row.associate&&rosteringStayHomeCount(row.associate)>0).map(row=>nameKey(row.associate))).size;
-  return `${contextBar(`<span class="status ${missing?'warn':'blue'}">${missing?`${missing} open positions`:'Roster complete'}</span>`)}<section class="rostering-command card"><div><span class="eyebrow">DISPATCH SCHEDULING</span><h1>Rostering</h1><p>Build confirmed services, catch unfilled shifts, and rotate hours fairly.</p></div><label><span>Roster date</span><input type="date" data-rostering-date value="${esc(state.rosteringDate)}"></label><label><span>Auto roster order</span><select data-rostering-auto-mode><option value="random" ${state.rosteringAutoMode==='random'?'selected':''}>Random (default)</option><option value="abc" ${state.rosteringAutoMode==='abc'?'selected':''}>ABC</option></select></label><div class="rostering-command-actions"><a class="btn" href="${AMAZON_SCHEDULING_URL}&date=${encodeURIComponent(state.rosteringDate)}&navMenuVariant=external" target="_blank" rel="noopener">Open Amazon Scheduling</a><button class="btn" data-action="rostering-import-screenshot">${ICONS.upload} Import roster screenshot</button><button class="btn auto-roster-button" data-action="rostering-auto-roster">Auto Roster · ${state.rosteringAutoMode==='abc'?'ABC':'Random'}</button><button class="btn primary" data-action="rostering-add-service">+ Add service</button></div></section><section class="rostering-kpis"><article><span>Confirmed</span><strong>${confirmed}</strong><small>service positions</small></article><article><span>Rostered</span><strong>${rostered}</strong><small>associates added</small></article><article class="${missing?'warn':''}"><span>Missing</span><strong>${missing}</strong><small>shifts need drivers</small></article><article class="fair"><span>Fairness flags</span><strong>${flagged}</strong><small>stay-home history</small></article></section>${rosteringHelperShiftsHtml(plan)}<section class="rostering-board"><div class="rostering-board-title"><div><span class="eyebrow">CONFIRMED SERVICES</span><h2>Service roster</h2></div><span>${plan.importName?`Screenshot: ${esc(plan.importName)}`:plan.updatedAt?`Saved ${esc(new Date(plan.updatedAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}))}`:'Ready to customize'}</span></div>${plan.services.map(service=>rosteringServiceHtml(service,plan,duplicates)).join('')}</section><div class="rostering-lower-grid">${rosteringPaycomHtml(plan)}<div class="rostering-training-stack">${rosteringTrainingHtml()}${rosteringDriverNotesHtml()}</div></div>`;
+  return `${contextBar(`<span class="status ${missing?'warn':'blue'}">${missing?`${missing} open positions`:'Roster complete'}</span>`)}<section class="rostering-command card"><div><span class="eyebrow">DISPATCH SCHEDULING</span><h1>Rostering</h1><p>Build confirmed services, catch unfilled shifts, and rotate hours fairly.</p></div><label><span>Roster date</span><input type="date" data-rostering-date value="${esc(state.rosteringDate)}"></label><label><span>Auto roster order</span><select data-rostering-auto-mode><option value="random" ${state.rosteringAutoMode==='random'?'selected':''}>Random (default)</option><option value="abc" ${state.rosteringAutoMode==='abc'?'selected':''}>ABC</option></select></label><div class="rostering-command-actions"><a class="btn" href="${AMAZON_SCHEDULING_URL}&date=${encodeURIComponent(state.rosteringDate)}&navMenuVariant=external" target="_blank" rel="noopener">Open Amazon Scheduling</a><button class="btn" data-action="rostering-import-screenshot">${ICONS.upload} Import roster screenshot</button><button class="btn auto-roster-button" data-action="rostering-auto-roster">Auto Roster · ${state.rosteringAutoMode==='abc'?'ABC':'Random'}</button><button class="btn primary" data-action="rostering-add-service">+ Add service</button></div></section><section class="rostering-kpis"><article><span>Confirmed</span><strong>${confirmed}</strong><small>service positions</small></article><article><span>Rostered</span><strong>${rostered}</strong><small>associates added</small></article><article class="${missing?'warn':''}"><span>Missing</span><strong>${missing}</strong><small>shifts need drivers</small></article><article class="fair"><span>Fairness flags</span><strong>${flagged}</strong><small>stay-home history</small></article></section>${rosteringHelperShiftsHtml(plan)}<section class="rostering-board"><div class="rostering-board-title"><div><span class="eyebrow">CONFIRMED SERVICES</span><h2>Service roster</h2></div><span>${plan.importName?`Screenshot: ${esc(plan.importName)}`:plan.updatedAt?`Saved ${esc(new Date(plan.updatedAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}))}`:'Ready to customize'}</span></div>${plan.services.map(service=>rosteringServiceHtml(service,plan,duplicates)).join('')}</section><div class="rostering-lower-grid">${rosteringPaycomHtml(plan)}<div class="rostering-training-stack">${rosteringTrainingHtml()}${rosteringDriverNotesHtml()}${rosteringEmailHandoffHtml(plan)}</div></div>`;
 }
 
 function waveMinutes(value='') {
@@ -1692,7 +1762,8 @@ function applyParkingBatteryTone(input,value) {
 }
 function parkingChargerButton(key,label='Charger',spotNumber='') {
   const status=state.parkingChargerStatus[key]||'unknown',text=status==='green'?'CHG':status==='red'?'FAULT':'SET',reports=(state.chargerReports||[]).filter(report=>report.chargerKey===key).length,location=spotNumber!==''?`spot #${spotNumber}`:label;
-  return `<span class="parking-charger-control"><button type="button" class="parking-charger-toggle charger-${status}" data-parking-charger="${esc(key)}" title="${esc(label)}: click for green, red, or clear">${spotNumber!==''?`<small class="parking-spot-number">#${esc(spotNumber)}</small>`:''}<i></i><span>${text}</span></button><button type="button" class="charger-report-trigger" data-action="report-charging-station" data-charger-key="${esc(key)}" title="Report charging station at ${esc(location)}" aria-label="Report charging station at ${esc(location)}">!${reports?`<small>${reports}</small>`:''}</button></span>`;
+  const disabled=PARKING_ONLY_VIEW?' disabled aria-disabled="true"':'';
+  return `<span class="parking-charger-control"><button type="button" class="parking-charger-toggle charger-${status}" data-parking-charger="${esc(key)}" title="${esc(label)}${PARKING_ONLY_VIEW?': status only':': click for green, red, or clear'}"${disabled}>${spotNumber!==''?`<small class="parking-spot-number">#${esc(spotNumber)}</small>`:''}<i></i><span>${text}</span></button>${PARKING_ONLY_VIEW?'':`<button type="button" class="charger-report-trigger" data-action="report-charging-station" data-charger-key="${esc(key)}" title="Report charging station at ${esc(location)}" aria-label="Report charging station at ${esc(location)}">!${reports?`<small>${reports}</small>`:''}</button>`}</span>`;
 }
 function parkingSpotNumber(zone='',index=0) {
   if(zone==='west'){
@@ -1736,7 +1807,10 @@ function parkingSlotInput(slot) {
   const status=battery!==''?`${esc(battery)}%`:blocked?'BLOCK':charging?'CHG':'';
   const upperIndex=['northLeft','northRight'].includes(slot.zone)?parkingSlots(slot.zone).findIndex(item=>item.id===slot.id):-1;
   const upperCharger=upperIndex>=0?parkingChargerButton(`upper-${slot.id}`,`${slot.label} charger`,parkingSpotNumber(slot.zone,upperIndex)):'';
-  return `<div class="parking-slot parking-slot-row zone-${esc(slot.zone)}${tone}${selected}${blocked?' blocked':''}${charging?' charging':''}${hasVehicle?' has-vehicle':''}${slot.zone==='gas'?' gas-vehicle':' ev-vehicle'}" title="${esc(slot.label)}"><label class="parking-van-cell" data-parking-select="${esc(slot.id)}"><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}" data-parking-id="${esc(slot.id)}" value="${esc(slot.value||'')}" placeholder="${slot.kind==='street'?'STREET':''}">${!showBatteryBox&&status?`<em>${status}</em>`:''}</label>${showBatteryBox?`<label class="parking-battery-mini battery-${batteryTone}" title="Battery % for ${esc(slot.value||slot.label)}"><input aria-label="Battery percent for ${esc(slot.value||slot.label)}" data-parking-battery="${esc(slot.id)}" type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="--"></label>`:''}${upperCharger}</div>`;
+  const selectAttr=PARKING_ONLY_VIEW?'':` data-parking-select="${esc(slot.id)}"`;
+  const vanInputAttrs=PARKING_ONLY_VIEW?' readonly tabindex="-1"':` data-parking-id="${esc(slot.id)}"`;
+  const batteryInputAttrs=PARKING_ONLY_VIEW?' readonly tabindex="-1"':` data-parking-battery="${esc(slot.id)}"`;
+  return `<div class="parking-slot parking-slot-row zone-${esc(slot.zone)}${tone}${selected}${blocked?' blocked':''}${charging?' charging':''}${hasVehicle?' has-vehicle':''}${slot.zone==='gas'?' gas-vehicle':' ev-vehicle'}" title="${esc(slot.label)}"><label class="parking-van-cell"${selectAttr}><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}"${vanInputAttrs} value="${esc(slot.value||'')}" placeholder="${slot.kind==='street'?'STREET':''}">${!showBatteryBox&&status?`<em>${status}</em>`:''}</label>${showBatteryBox?`<label class="parking-battery-mini battery-${batteryTone}" title="Battery % for ${esc(slot.value||slot.label)}"><input aria-label="Battery percent for ${esc(slot.value||slot.label)}"${batteryInputAttrs} type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="--"></label>`:''}${upperCharger}</div>`;
 }
 function parkingStack(zone,title,subtitle='') {
   return `<section class="parking-stack ${zone}"><div class="parking-stack-title"><strong>${esc(title)}</strong>${subtitle?`<small>${esc(subtitle)}</small>`:''}</div>${parkingSlots(zone).map(parkingSlotInput).join('')}</section>`;
@@ -1757,6 +1831,7 @@ function selectedParkingSlot() {
   return (state.vanParking||[]).find(s=>s.id===state.selectedParkingId) || (state.vanParking||[]).find(s=>String(s.value||'').trim()) || (state.vanParking||[])[0];
 }
 function parkingBatteryEditor() {
+  if(PARKING_ONLY_VIEW)return '';
   const slot=selectedParkingSlot();
   if(!slot)return '';
   const battery=parkingBatteryForSlot(slot);
@@ -1764,29 +1839,37 @@ function parkingBatteryEditor() {
   return `<div class="parking-selected-card"><div><span class="eyebrow">Selected van</span><strong>${esc(slot.value||'Empty spot')}</strong><small>${esc(slot.label)} · ${esc(slot.zone)}</small></div><label>Battery %<input data-parking-battery="${esc(slot.id)}" type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="Type %"></label><label>Spot type<select data-parking-kind="${esc(slot.id)}">${kinds.map(k=>`<option value="${k}" ${slot.kind===k?'selected':''}>${k}</option>`).join('')}</select></label><div class="parking-selected-actions"><button class="btn small" data-action="clear-selected-parking">Clear selected</button><button class="btn small ghost" data-action="remove-selected-parking">Remove temp spot</button></div></div>`;
 }
 function parkingModeControls() {
+  if(PARKING_ONLY_VIEW)return '';
   const modes=[['auto','Auto','Reset to base layout'],['assisted','Assisted','Edit vans + battery'],['manual','Manual','Add/remove custom spots']];
   return `<div class="parking-mode-controls">${modes.map(([mode,label,detail])=>`<button class="${state.parkingMode===mode?'active':''}" data-action="set-parking-mode" data-mode="${mode}"><b>${esc(label)}</b><span>${esc(detail)}</span></button>`).join('')}<button class="add-temp-spot" data-action="add-parking-spot">${ICONS.plus} Add temp spot</button></div>`;
 }
 function vanParkingSectionLegacy() {
   const stats=vanParkingStats();
-  return `<article class="van-parking-card" id="van-parking"><div class="van-parking-head"><div><span class="eyebrow">Van Parking</span><h2>Parking Map</h2><p>Closing dispatcher updates this at night. Morning dispatcher uses it to keep each wave parked together and avoid drivers hunting for vans.</p></div><div class="parking-head-actions"><span class="parking-updated">Updated ${esc(state.vanParkingUpdated||'today')}</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking list</button><button class="btn small ghost" data-action="reset-parking">Reset mockup</button></div></div>${parkingModeControls()}<div class="parking-helper-grid park-easy-stats"><div><strong>${stats.filled}</strong><span>occupied / assigned</span></div><div><strong>${stats.overflow}</strong><span>overflow + crosswalk spots</span></div><div><strong>Click a van</strong><span>Type EV number, battery %, or spot type.</span></div></div><div class="parking-import-row"><div class="parking-drop" id="parking-drop" tabindex="0"><b>Drop parking list here</b><span>CSV, XLSX, TXT, or a copied Google Sheets export. One EV per row works best.</span><button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Choose file</button></div>${parkingBatteryEditor()}<div class="parking-paste-box"><label for="parking-paste-text">Paste parking list</label><textarea id="parking-paste-text" placeholder="57&#10;2&#10;1&#10;4&#10;...">${esc(state.vanParkingPasteText)}</textarea><button class="btn small" data-action="parse-parking-paste">Fill parking spots</button></div></div><div class="parking-lot park-easy-map"><div class="parking-map-toolbar"><div><strong>Overhead lot view</strong><span>Click any stall to edit the van and battery</span></div><div class="parking-map-legend"><span><i class="ready"></i>Standard stall</span><span><i class="cross"></i>Crosswalk / overflow</span><span><i class="charge"></i>Charging</span></div></div><div class="parking-map-grid"><div class="parking-empty-grid"><span class="lot-entry">ENTRY</span><span class="lane-arrow arrow-east">→</span><span class="lane-arrow arrow-north">↑</span><small>DRIVE LANE</small></div><div class="parking-top-block"><div class="parking-lane"></div>${parkingStack('northLeft','', '')}<div class="parking-lane skinny"><span class="lane-arrow">↕</span></div>${parkingStack('northRight','', '')}<div class="parking-lane"></div></div><div class="parking-street-zone">${parkingStreetRows()}</div><div class="parking-main-block"><div class="parking-lane vertical"><span class="lane-arrow">↓</span></div>${parkingStack('west','', '')}<div class="parking-crosswalk"><div class="tent-icon">⛺</div><strong>TENT</strong>${parkingStack('crosswalk','', '')}</div>${parkingStack('east','', '')}<div class="parking-lane vertical"><span class="lane-arrow">↑</span></div></div><div class="parking-side-area"><div class="parking-date-box"><strong>MAP UPDATED</strong><span>${esc(state.vanParkingUpdated||'')}</span></div><div class="lot-exit"><span>EXIT</span><b>→</b></div></div></div></div></article>`;
+  const headActions=`<span class="parking-updated">Updated ${esc(state.vanParkingUpdated||'today')}</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking list</button>${PARKING_ONLY_VIEW?'':`<button class="btn small ghost" data-action="reset-parking">Reset mockup</button>`}`;
+  const editTools=PARKING_ONLY_VIEW?'':`<div class="parking-import-row"><div class="parking-drop" id="parking-drop" tabindex="0"><b>Drop parking list here</b><span>CSV, XLSX, TXT, or a copied Google Sheets export. One EV per row works best.</span><button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Choose file</button></div>${parkingBatteryEditor()}<div class="parking-paste-box"><label for="parking-paste-text">Paste parking list</label><textarea id="parking-paste-text" placeholder="57&#10;2&#10;1&#10;4&#10;...">${esc(state.vanParkingPasteText)}</textarea><button class="btn small" data-action="parse-parking-paste">Fill parking spots</button></div></div>`;
+  const helperText=PARKING_ONLY_VIEW?'<strong>View only</strong><span>Parking and battery data for fleet team.</span>':'<strong>Click a van</strong><span>Type EV number, battery %, or spot type.</span>';
+  const mapHint=PARKING_ONLY_VIEW?'Fleet team view: arrangement, battery, and charger status':'Click any stall to edit the van and battery';
+  return `<article class="van-parking-card ${PARKING_ONLY_VIEW?'parking-view-only':''}" id="van-parking"><div class="van-parking-head"><div><span class="eyebrow">Van Parking</span><h2>Parking Map</h2><p>Closing dispatcher updates this at night. Morning dispatcher uses it to keep each wave parked together and avoid drivers hunting for vans.</p></div><div class="parking-head-actions">${headActions}</div></div>${parkingModeControls()}<div class="parking-helper-grid park-easy-stats"><div><strong>${stats.filled}</strong><span>occupied / assigned</span></div><div><strong>${stats.overflow}</strong><span>overflow + crosswalk spots</span></div><div>${helperText}</div></div>${editTools}<div class="parking-lot park-easy-map"><div class="parking-map-toolbar"><div><strong>Overhead lot view</strong><span>${mapHint}</span></div><div class="parking-map-legend"><span><i class="ready"></i>Standard stall</span><span><i class="cross"></i>Crosswalk / overflow</span><span><i class="charge"></i>Charging</span></div></div><div class="parking-map-grid"><div class="parking-empty-grid"><span class="lot-entry">ENTRY</span><span class="lane-arrow arrow-east">→</span><span class="lane-arrow arrow-north">↑</span><small>DRIVE LANE</small></div><div class="parking-top-block"><div class="parking-lane"></div>${parkingStack('northLeft','', '')}<div class="parking-lane skinny"><span class="lane-arrow">↕</span></div>${parkingStack('northRight','', '')}<div class="parking-lane"></div></div><div class="parking-street-zone">${parkingStreetRows()}</div><div class="parking-main-block"><div class="parking-lane vertical"><span class="lane-arrow">↓</span></div>${parkingStack('west','', '')}<div class="parking-crosswalk"><div class="tent-icon">TENT</div><strong>TENT</strong>${parkingStack('crosswalk','', '')}</div>${parkingStack('east','', '')}<div class="parking-lane vertical"><span class="lane-arrow">↑</span></div></div><div class="parking-side-area"><div class="parking-date-box"><strong>MAP UPDATED</strong><span>${esc(state.vanParkingUpdated||'')}</span></div><div class="lot-exit"><span>EXIT</span><b>→</b></div></div></div></div></article>`;
 }
 function parkingDateInputValue() { const value=String(state.vanParkingUpdated||'');if(/^\d{4}-\d{2}-\d{2}$/.test(value))return value;const m=value.match(/(\d{1,2})\/(\d{1,2})/);return m?`${new Date().getFullYear()}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`:defaultOperationDate(); }
 function chargingCheckDateInputValue() { const value=String(state.chargingStationChecked||'');return /^\d{4}-\d{2}-\d{2}$/.test(value)?value:''; }
 function parkingGasArea() { return `<section class="parking-gas-area"><div><strong>Gas vehicle parking</strong><span>${parkingSlots('gas').filter(slot=>slot.value).length} tracked spots</span></div><div class="parking-gas-grid">${parkingSlots('gas').map(parkingSlotInput).join('')}</div></section>`; }
 
 function vanParkingSection() {
-  return vanParkingSectionLegacy()
+  const withChargers=vanParkingSectionLegacy()
+    .replace(/<div class="parking-crosswalk">[\s\S]*?(?=<section class="parking-stack east">)/,parkingChargerColumn())
+    .replace(/<div class="lot-exit"><span>EXIT<\/span><b>→<\/b><\/div>/,`<div class="lot-exit"><span>EXIT</span><b>→</b></div>${parkingGasArea()}`);
+  if(PARKING_ONLY_VIEW)return withChargers;
+  return withChargers
     .replace(/<span class="parking-updated">Updated [\s\S]*?<\/span>/,`<label class="parking-updated parking-date-edit"><span>Last edit</span><input type="date" data-parking-date value="${esc(parkingDateInputValue())}"></label>`)
     .replace(/<div class="parking-empty-grid">[\s\S]*?<\/div><div class="parking-top-block">/,`<div class="parking-empty-grid parking-notes-area"><label><span>Add notes</span><textarea data-parking-notes placeholder="Charging issues, blocked lanes, keys, or closing notes…">${esc(state.parkingNotes||'')}</textarea></label></div><div class="parking-top-block">`)
-    .replace(/<div class="parking-crosswalk">[\s\S]*?(?=<section class="parking-stack east">)/,parkingChargerColumn())
-    .replace(/<div class="parking-date-box"><strong>MAP UPDATED<\/strong><span>[\s\S]*?<\/span><\/div>/,`<div class="parking-date-cluster"><div class="parking-date-box"><strong>MAP UPDATED</strong><input type="date" data-parking-date value="${esc(parkingDateInputValue())}"></div><div class="parking-date-box charging-check-date"><strong>CHARGING STATION CHECK</strong><input type="date" data-charging-check-date value="${esc(chargingCheckDateInputValue())}"></div></div>`)
-    .replace(/<div class="lot-exit"><span>EXIT<\/span><b>→<\/b><\/div>/,`<div class="lot-exit"><span>EXIT</span><b>→</b></div>${parkingGasArea()}`);
+    .replace(/<div class="parking-date-box"><strong>MAP UPDATED<\/strong><span>[\s\S]*?<\/span><\/div>/,`<div class="parking-date-cluster"><div class="parking-date-box"><strong>MAP UPDATED</strong><input type="date" data-parking-date value="${esc(parkingDateInputValue())}"></div><div class="parking-date-box charging-check-date"><strong>CHARGING STATION CHECK</strong><input type="date" data-charging-check-date value="${esc(chargingCheckDateInputValue())}"></div></div>`);
 }
 
 function vanParkingPage() {
   const issueCount=Object.values(state.parkingChargerStatus||{}).filter(status=>status==='red').length;
-  return `${contextBar(`<button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Import parking</button><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button><button class="btn small ${issueCount?'danger':''}" data-action="report-charging-station">⚡ Report charging station${issueCount?` · ${issueCount} fault${issueCount===1?'':'s'}`:''}</button>`)}${vanParkingSection()}`;
+  const actions=PARKING_ONLY_VIEW?`<span class="status neutral">Fleet team view</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button>`:`<button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Import parking</button><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button><button class="btn small lime" data-action="copy-fleet-parking-link">${ICONS.link} Copy fleet team link</button><button class="btn small ${issueCount?'danger':''}" data-action="report-charging-station">⚡ Report charging station${issueCount?` · ${issueCount} fault${issueCount===1?'':'s'}`:''}</button>`;
+  return `${contextBar(actions)}${vanParkingSection()}`;
 }
 
 function fleetSourceNote() {
@@ -2908,7 +2991,7 @@ function adminPage() {
   if(state.role!=='admin')return `<article class="card empty-state"><div class="empty-icon">${ICONS.alert}</div><h3>Owner access required</h3><p>This area is protected by database membership policy and is not visible to dispatcher accounts.</p></article>`;
   const cloudConfigured=Boolean(window.RelayOpsCloud?.configured),signedIn=Boolean(window.RelayOpsCloud?.session),sheetReady=Boolean(state.morningSheetsEndpoint);
   const policyRows=ROLE_POLICY_MATRIX.map(row=>`<tr><td><strong>${esc(row.capability)}</strong></td><td>${permissionMark(row.owner)}</td><td>${permissionMark(row.ops_manager)}</td><td>${permissionMark(row.dispatcher)}</td><td>${permissionMark(row.fleet_lead)}</td><td>${permissionMark(row.viewer)}</td></tr>`).join('');
-  return `${contextBar('<span class="status">Owner access</span>')}<section class="admin-layout"><div class="admin-main"><article class="card settings-section"><h2>Organization</h2><p>These shared labels appear throughout RelayOps for every dispatcher.</p><div class="field-grid"><div class="field"><label for="admin-dsp-name">DSP name</label><input id="admin-dsp-name" value="${esc(state.organizationName)}"></div><div class="field"><label for="admin-station-code">Station code</label><input id="admin-station-code" value="${esc(state.stationCode)}" maxlength="12"></div><div class="field"><label>Timezone</label><input value="America/Los_Angeles" readonly></div><div class="field"><label>Operating day starts</label><input value="06:00" readonly></div></div><div class="modal-actions"><button class="btn primary" data-action="save-organization">Save organization</button></div></article><article class="card table-card admin-members-card"><div class="card-head"><div class="card-title"><h2>Member access</h2><p>Role and active status are saved to Supabase and enforced by row-level security.</p></div>${signedIn?`<button class="btn small" data-action="invite">${ICONS.plus} Invite user</button>`:`<button class="btn small" data-action="cloud-account">Sign in</button>`}</div><div class="table-wrap"><table><thead><tr><th>Member</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${adminMemberRows()}</tbody></table></div></article><article class="card table-card"><div class="card-head"><div class="card-title"><h2>Fixed role policy</h2><p>This is a read-only policy summary, not a set of pretend switches.</p></div><span class="status neutral">Database enforced</span></div><div class="table-wrap"><table class="permissions-table fixed-policy-table"><thead><tr><th>Capability</th><th>Owner</th><th>Ops manager</th><th>Dispatcher</th><th>Fleet lead</th><th>Viewer</th></tr></thead><tbody>${policyRows}</tbody></table></div></article></div><aside class="admin-side"><article class="card settings-section"><h2>Connections</h2><p>RelayOps clearly separates working handoffs from unavailable integrations.</p><div class="connection"><div class="connection-logo">amz</div><div class="connection-copy"><strong>Amazon Logistics</strong><span>Manual XLSX/CSV import is available</span></div><span class="status">File import ready</span></div><div class="connection"><div class="connection-logo" style="background:#287247">GS</div><div class="connection-copy"><strong>Google Sheets</strong><span>${sheetReady?'Saved connector endpoint':'Connector endpoint not configured'}</span></div><span class="status ${sheetReady?'':'warn'}">${sheetReady?'Ready':'Setup required'}</span></div><div class="connection unavailable-connection"><div class="connection-logo" style="background:#6d7480">ADP</div><div class="connection-copy"><strong>ADP Workforce</strong><span>No supported connector is installed</span></div><span class="status neutral" aria-disabled="true">Not available</span></div><button class="btn" style="width:100%;margin-top:5px" data-action="import">Open Amazon file import</button></article><article class="card settings-section"><h2>Dispatcher access link</h2><p>Send this full HTTPS link. Authorized cloud users see the shared workspace after sign-in.</p><div class="callout"><strong>Live shared dashboard</strong><p><a href="${DISPATCHER_SHARE_URL}" target="_blank" rel="noopener">${DISPATCHER_SHARE_URL}</a></p><p class="share-note">${DISPATCHER_SHARE_NOTE}</p><button class="btn small lime" data-action="share-dispatcher-link">${ICONS.copy} Copy clickable link</button></div><div class="callout"><strong>Cloud status</strong><p>${!cloudConfigured?'Supabase is not configured in this build.':signedIn?'Owner session verified.':'Supabase is configured; sign in to manage members.'}</p><button class="btn small" data-action="cloud-account">${signedIn?'View account':'Sign in'}</button></div></article><article class="card settings-section admin-security-note"><h2>Security boundary</h2><p>Owner membership updates are accepted only when Supabase RLS verifies an active owner in this organization. Owner accounts cannot be changed from this screen.</p></article></aside></section>`;
+  return `${contextBar('<span class="status">Owner access</span>')}<section class="admin-layout"><div class="admin-main"><article class="card settings-section"><h2>Organization</h2><p>These shared labels appear throughout RelayOps for every dispatcher.</p><div class="field-grid"><div class="field"><label for="admin-dsp-name">DSP name</label><input id="admin-dsp-name" value="${esc(state.organizationName)}"></div><div class="field"><label for="admin-station-code">Station code</label><input id="admin-station-code" value="${esc(state.stationCode)}" maxlength="12"></div><div class="field"><label>Timezone</label><input value="America/Los_Angeles" readonly></div><div class="field"><label>Operating day starts</label><input value="06:00" readonly></div></div><div class="modal-actions"><button class="btn primary" data-action="save-organization">Save organization</button></div></article><article class="card table-card admin-members-card"><div class="card-head"><div class="card-title"><h2>Member access</h2><p>Role and active status are saved to Supabase and enforced by row-level security.</p></div>${signedIn?`<button class="btn small" data-action="invite">${ICONS.plus} Invite user</button>`:`<button class="btn small" data-action="cloud-account">Sign in</button>`}</div><div class="table-wrap"><table><thead><tr><th>Member</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${adminMemberRows()}</tbody></table></div></article><article class="card table-card"><div class="card-head"><div class="card-title"><h2>Fixed role policy</h2><p>This is a read-only policy summary, not a set of pretend switches.</p></div><span class="status neutral">Database enforced</span></div><div class="table-wrap"><table class="permissions-table fixed-policy-table"><thead><tr><th>Capability</th><th>Owner</th><th>Ops manager</th><th>Dispatcher</th><th>Fleet lead</th><th>Viewer</th></tr></thead><tbody>${policyRows}</tbody></table></div></article></div><aside class="admin-side"><article class="card settings-section"><h2>Connections</h2><p>RelayOps clearly separates working handoffs from unavailable integrations.</p><div class="connection"><div class="connection-logo">amz</div><div class="connection-copy"><strong>Amazon Logistics</strong><span>Manual XLSX/CSV import is available</span></div><span class="status">File import ready</span></div><div class="connection"><div class="connection-logo" style="background:#287247">GS</div><div class="connection-copy"><strong>Google Sheets</strong><span>${sheetReady?'Saved connector endpoint':'Connector endpoint not configured'}</span></div><span class="status ${sheetReady?'':'warn'}">${sheetReady?'Ready':'Setup required'}</span></div><div class="connection unavailable-connection"><div class="connection-logo" style="background:#6d7480">ADP</div><div class="connection-copy"><strong>ADP Workforce</strong><span>No supported connector is installed</span></div><span class="status neutral" aria-disabled="true">Not available</span></div><button class="btn" style="width:100%;margin-top:5px" data-action="import">Open Amazon file import</button></article><article class="card settings-section"><h2>Dispatcher access link</h2><p>Send this full HTTPS link. Authorized cloud users see the shared workspace after sign-in.</p><div class="callout"><strong>Live shared dashboard</strong><p><a href="${DISPATCHER_SHARE_URL}" target="_blank" rel="noopener">${DISPATCHER_SHARE_URL}</a></p><p class="share-note">${DISPATCHER_SHARE_NOTE}</p><button class="btn small lime" data-action="share-dispatcher-link">${ICONS.copy} Copy clickable link</button></div><div class="callout"><strong>Fleet team parking link</strong><p><a href="${FLEET_PARKING_SHARE_URL}" target="_blank" rel="noopener">${FLEET_PARKING_SHARE_URL}</a></p><p class="share-note">Opens a Van Parking-only view with map arrangement, battery percentages, and charger status.</p><button class="btn small lime" data-action="copy-fleet-parking-link">${ICONS.copy} Copy fleet team link</button></div><div class="callout"><strong>Cloud status</strong><p>${!cloudConfigured?'Supabase is not configured in this build.':signedIn?'Owner session verified.':'Supabase is configured; sign in to manage members.'}</p><button class="btn small" data-action="cloud-account">${signedIn?'View account':'Sign in'}</button></div></article><article class="card settings-section admin-security-note"><h2>Security boundary</h2><p>Owner membership updates are accepted only when Supabase RLS verifies an active owner in this organization. Owner accounts cannot be changed from this screen.</p></article></aside></section>`;
 }
 
 function importPreviewStats() {
@@ -3032,6 +3115,10 @@ function modal() {
   if (state.modal === 'rostering-driver-swap' && state.pendingRosteringSwap) {
     const pending=state.pendingRosteringSwap,assignments=currentRosteringPlan().assignments.filter(row=>String(row.associate||'').trim());
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal rostering-swap-modal" role="dialog" aria-modal="true" aria-labelledby="rostering-driver-swap-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">ROSTER SWAP</span><h2 id="rostering-driver-swap-title">Add ${esc(driverDisplayName(pending.name))}</h2><p>Choose who comes off the roster. The confirmed shift, time, route, and service block stay in place.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="rostering-swap-field"><span>Swap with rostered driver</span><select id="rostering-swap-assignment"><option value="">Choose a rostered driver…</option>${assignments.map(row=>{const service=rosteringService(row.serviceId);return `<option value="${esc(row.id)}">${esc(driverDisplayName(row.associate))} · ${esc(row.start)} · ${esc(service?.name||'Roster')}</option>`;}).join('')}</select></label><div class="private-contact-note"><b>One-for-one replacement</b><span>${esc(driverDisplayName(pending.name))} takes the selected confirmed position. The selected driver returns to the PAYCOM unrostered list without creating a duplicate.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-rostering-driver-swap">Confirm swap</button></div></div></div></div>`;
+  }
+  if (state.modal === 'rostering-training-add') {
+    const kind=state.pendingRosteringTrainingAdd?.kind==='trainer'?'trainer':'ridealong';
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal rostering-training-modal" role="dialog" aria-modal="true" aria-labelledby="rostering-training-add-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">TRAINING MATCHES</span><h2 id="rostering-training-add-title">Add training driver</h2><p>Add a one-day trainer or a driver who needs a ridealong for ${esc(state.rosteringDate)}.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="rostering-training-form"><label><span>Training role</span><select id="rostering-training-kind"><option value="ridealong" ${kind==='ridealong'?'selected':''}>Ridealong driver</option><option value="trainer" ${kind==='trainer'?'selected':''}>Trainer</option></select></label><label><span>Driver name</span><input id="rostering-training-name" data-driver-name-input="true" placeholder="Exact driver name" autocomplete="off" autofocus></label></div><div class="private-contact-note"><b>Manual training list</b><span>Manual ridealongs appear as match rows. Manual trainers appear in the trainer picker without changing their permanent Drivers & Team tags.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="save-rostering-training-add">Add to training</button></div></div></div></div>`;
   }
   if (state.modal === 'delete-rostering-service' && state.pendingRosteringServiceDelete) {
     const pending=state.pendingRosteringServiceDelete;
@@ -3384,7 +3471,7 @@ function clearPicklistBackupDriver(name='') {
   Object.entries(state.openingPicklistBackupOverrides||{}).forEach(([key,value])=>{if(driverIdentityKey(value)===wanted)delete state.openingPicklistBackupOverrides[key];});
 }
 function scheduleBackupLabel(role='') { const key=headerKey(role);return key.includes('deliveryassociate')?'VTO 4':'VTO 2'; }
-function automaticBackupLabel(role='') { const key=headerKey(role);return key.includes('rescue')?'VTO 2':key.includes('deliveryassociate')?'VTO 4':''; }
+function automaticBackupLabel(role='') { const key=headerKey(role);return key.includes('modifiedduty')?'':key.includes('rescue')?'VTO 2':key.includes('deliveryassociate')?'VTO 4':''; }
 function morningRosterDriverKeys() {
   const keys=new Set();(state.morningRoutes||[]).filter(route=>route.dsp===state.dspCode&&route.route&&!String(route.route).startsWith('__blank_')).forEach(route=>morningDriverNames(route.driver).forEach(name=>keys.add(driverIdentityKey(name))));return keys;
 }
@@ -3574,6 +3661,8 @@ function filteredScheduledDrivers(rows=[]) {
   const filter=state.scheduleFilter;if(filter==='all')return rows;
   if(filter==='on-route')return rows.filter(row=>row.route==='On morning sheet');
   if(filter==='not-rostered')return rows.filter(row=>row.route==='Not rostered for route');
+  if(filter==='modifiedduty')return rows.filter(row=>headerKey(row.role).includes('modifiedduty'));
+  if(filter==='rescue'||filter==='deliveryassociate')return rows.filter(row=>!headerKey(row.role).includes('modifiedduty')&&headerKey(row.role).includes(filter));
   return rows.filter(row=>headerKey(row.role).includes(filter));
 }
 function openingRosterMarkedDrivers({scheduled=[],onRoute=[],backups=[],stayHome=[],reductions=[],calledOff=[],helpers=[]}={}) {
@@ -3766,7 +3855,7 @@ function renameOpeningPicklistCalloff(key='',name='') {
 }
 function updateOpeningPicklistCalloffDraft(index,field,value) {
   state.openingPicklistCalloffDrafts=Array.isArray(state.openingPicklistCalloffDrafts)?state.openingPicklistCalloffDrafts:[];
-  state.openingPicklistCalloffDrafts[index]={...(state.openingPicklistCalloffDrafts[index]||{}),[field]:value};persist();
+  state.openingPicklistCalloffDrafts[index]={...(state.openingPicklistCalloffDrafts[index]||{}),[field]:value};persistSoon();
 }
 function commitOpeningPicklistCalloffDraft(index) {
   const draft=state.openingPicklistCalloffDrafts?.[index],name=String(draft?.name||'').trim();if(!name)return;
@@ -3779,7 +3868,7 @@ function saveOpeningPicklistDate(value='') {
 }
 function saveOpeningPicklistBackup(key='',value='') {
   state.openingPicklistBackupOverrides=state.openingPicklistBackupOverrides&&typeof state.openingPicklistBackupOverrides==='object'?state.openingPicklistBackupOverrides:{};
-  state.openingPicklistBackupOverrides[key]=String(value||'').trim();persist();
+  state.openingPicklistBackupOverrides[key]=String(value||'').trim();persistSoon();
 }
 function resizeOpeningPicklistArea(area='',delta=0) {
   const change=Math.sign(Number(delta)||0);if(!change)return;
@@ -3852,12 +3941,82 @@ function handleSheetHistoryKeyboard(event) {
   if(String(event.key).toLowerCase()==='y'){event.preventDefault();return redoSheetChange();}
 }
 
+function debounce(fn,delay=160) {
+  let timer=null;
+  const debounced=(...args)=>{
+    clearTimeout(timer);
+    timer=setTimeout(()=>fn(...args),delay);
+  };
+  debounced.cancel=()=>{clearTimeout(timer);timer=null;};
+  return debounced;
+}
+function frameThrottle(fn) {
+  let scheduled=false,lastArgs=[];
+  return (...args)=>{
+    lastArgs=args;
+    if(scheduled)return;
+    scheduled=true;
+    const run=()=>{scheduled=false;fn(...lastArgs);};
+    if(window?.requestAnimationFrame)window.requestAnimationFrame(run);
+    else setTimeout(run,16);
+  };
+}
+const persistSoon=debounce(()=>persist(),320);
+function restoreInputFocus(selector,position) {
+  const input=document.querySelector?.(selector);
+  if(!input)return;
+  input.focus?.();
+  if(Number.isFinite(position)&&input.setSelectionRange){
+    const next=Math.min(position,String(input.value||'').length);
+    try{input.setSelectionRange(next,next);}catch(error){}
+  }
+}
+function bindActionControls(root=document) {
+  root.querySelectorAll?.('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
+}
+function updateGlobalSearchResults() {
+  const anchor=document.getElementById?.('global-search-results-anchor');
+  if(!anchor)return;
+  anchor.innerHTML=globalSearchResultsPanelHtml();
+  bindActionControls(anchor);
+}
+const updateFleetSearchSoon=debounce((value,position)=>{
+  state.fleetSearch=value;
+  persist();
+  render();
+  restoreInputFocus('[data-fleet-search]',position);
+},220);
+const updateFleetExpectedSoon=debounce((value,position)=>{
+  state.fleetExpectedCount=Math.max(0,Number(value)||0);
+  persist();
+  render();
+  restoreInputFocus('[data-fleet-expected]',position);
+},260);
+function cancelDeferredRenders() {
+  updateFleetSearchSoon.cancel?.();
+  updateFleetExpectedSoon.cancel?.();
+}
+const filterRosteringPaycomSoon=frameThrottle(el=>{
+  const query=nameKey(el.value),panel=el.closest('.rostering-paycom'),category=state.rosteringPaycomCategory||'all';
+  panel?.querySelectorAll('[data-rostering-paycom-name]').forEach(row=>{const matchesCategory=category==='all'||category==='rostered'&&row.dataset.rosteringPaycomStatus==='rostered'||category==='unrostered'&&row.dataset.rosteringPaycomStatus==='unrostered'||row.dataset.rosteringPaycomCategory===category;row.hidden=!matchesCategory||Boolean(query&&!String(row.dataset.rosteringPaycomName||'').includes(query));});
+});
+const filterRosteringDriverNotesSoon=frameThrottle(el=>{
+  const query=nameKey(el.value),panel=el.closest('.rostering-driver-notes');
+  panel?.querySelectorAll('[data-rostering-driver-note-name]').forEach(row=>{row.hidden=Boolean(query&&!String(row.dataset.rosteringDriverNoteName||'').includes(query));});
+});
+const filterTeamDirectorySoon=frameThrottle(value=>filterTeamDirectory(value));
+const filterScheduledRosterSoon=frameThrottle(el=>{
+  const query=nameKey(el.value),panel=el.closest('.scheduled-section');
+  panel?.querySelectorAll('[data-roster-name]').forEach(row=>{row.hidden=Boolean(query&&!String(row.dataset.rosterName||'').includes(query));});
+});
+
 function render() {
   const previouslyOpen=modalWasOpen;
+  if(PARKING_ONLY_VIEW)state.page='parking';
   if(state.modal&&!previouslyOpen)modalReturnFocus=captureModalReturnFocus();
   closeDriverProfilePopover();
   closeDriverSuggestions();
-  app.innerHTML = `<div class="app-shell">${sidebar()}<main class="main">${topbar()}<div class="content">${pageContent()}</div></main></div>${modal()}<div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>`;
+  app.innerHTML = `<div class="app-shell ${PARKING_ONLY_VIEW?'parking-only-shell':''}">${sidebar()}<main class="main">${topbar()}<div class="content">${pageContent()}</div></main></div>${modal()}<div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>`;
   enhanceDriverTextButtons();
   enhanceDriverStayHomeControls();
   enhanceOpeningRoster();
@@ -3906,7 +4065,7 @@ function bind() {
   document.querySelectorAll('[data-action="mark-fleet-issue-fixed"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();markFleetIssueFixed(el.dataset.issueKey||'',el.dataset.issueId||'');}));
   document.querySelectorAll('[data-action="open-morning-vehicle-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();openMorningVehicleIssue(el.dataset.route||'',el.dataset.equipment||'');}));
   document.querySelectorAll('[data-action="acknowledge-morning-vehicle-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();acknowledgeMorningVehicleIssue();}));
-  document.querySelectorAll('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
+  bindActionControls(document);
   document.querySelectorAll('[data-driver-card-toggle]').forEach(card=>{
     const toggle=()=>action('toggle-driver-card',card);
     card.addEventListener('click',event=>{if(event.target.closest('button,a,input,select,textarea,[data-action]'))return;toggle();});
@@ -3932,20 +4091,20 @@ function bind() {
     el.addEventListener('input',updateChargerReportPreview);
     el.addEventListener('change',updateChargerReportPreview);
   });
-  document.querySelectorAll('[data-rostering-paycom-search]').forEach(el=>el.addEventListener('input',()=>{const query=nameKey(el.value),panel=el.closest('.rostering-paycom'),category=state.rosteringPaycomCategory||'all';panel?.querySelectorAll('[data-rostering-paycom-name]').forEach(row=>{const matchesCategory=category==='all'||category==='rostered'&&row.dataset.rosteringPaycomStatus==='rostered'||category==='unrostered'&&row.dataset.rosteringPaycomStatus==='unrostered'||row.dataset.rosteringPaycomCategory===category;row.hidden=!matchesCategory||Boolean(query&&!String(row.dataset.rosteringPaycomName||'').includes(query));});}));
-  document.querySelectorAll('[data-rostering-driver-note-search]').forEach(el=>el.addEventListener('input',()=>{const query=nameKey(el.value),panel=el.closest('.rostering-driver-notes');panel?.querySelectorAll('[data-rostering-driver-note-name]').forEach(row=>{row.hidden=Boolean(query&&!String(row.dataset.rosteringDriverNoteName||'').includes(query));});}));
-  document.querySelectorAll('[data-team-search]').forEach(el=>el.addEventListener('input',()=>filterTeamDirectory(el.value)));
-  document.querySelectorAll('[data-roster-search]').forEach(el=>el.addEventListener('input',()=>{const query=nameKey(el.value),panel=el.closest('.scheduled-section');panel?.querySelectorAll('[data-roster-name]').forEach(row=>{row.hidden=Boolean(query&&!String(row.dataset.rosterName||'').includes(query));});}));
-  document.querySelectorAll('[data-picklist-calloff-reason]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist call-off reason'));el.addEventListener('input',()=>{state.callOffReasons[el.dataset.picklistCalloffReason]=el.value;persist();});el.addEventListener('change',()=>commitSheetInputHistory(el));});
-  document.querySelectorAll('[data-picklist-backup]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist backup'));el.addEventListener('input',()=>saveOpeningPicklistBackup(el.dataset.picklistBackup,el.value));el.addEventListener('change',()=>commitSheetInputHistory(el));});
+  document.querySelectorAll('[data-rostering-paycom-search]').forEach(el=>el.addEventListener('input',()=>filterRosteringPaycomSoon(el)));
+  document.querySelectorAll('[data-rostering-driver-note-search]').forEach(el=>el.addEventListener('input',()=>filterRosteringDriverNotesSoon(el)));
+  document.querySelectorAll('[data-team-search]').forEach(el=>el.addEventListener('input',()=>filterTeamDirectorySoon(el.value)));
+  document.querySelectorAll('[data-roster-search]').forEach(el=>el.addEventListener('input',()=>filterScheduledRosterSoon(el)));
+  document.querySelectorAll('[data-picklist-calloff-reason]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist call-off reason'));el.addEventListener('input',()=>{state.callOffReasons[el.dataset.picklistCalloffReason]=el.value;persistSoon();});el.addEventListener('change',()=>{commitSheetInputHistory(el);persist();});});
+  document.querySelectorAll('[data-picklist-backup]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist backup'));el.addEventListener('input',()=>saveOpeningPicklistBackup(el.dataset.picklistBackup,el.value));el.addEventListener('change',()=>{commitSheetInputHistory(el);persist();});});
   document.querySelectorAll('[data-picklist-calloff-name]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Rename Picklist call off'));el.addEventListener('change',()=>{commitSheetInputHistory(el);renameOpeningPicklistCalloff(el.dataset.picklistCalloffName,el.value);});});
   document.querySelectorAll('[data-picklist-calloff-draft]').forEach(el=>{
     el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist call off'));
     el.addEventListener('input',()=>updateOpeningPicklistCalloffDraft(Number(el.dataset.picklistCalloffDraft),el.dataset.picklistCalloffField,el.value));
-    el.addEventListener('change',()=>{commitSheetInputHistory(el);if(el.dataset.picklistCalloffField==='name')commitOpeningPicklistCalloffDraft(Number(el.dataset.picklistCalloffDraft));});
+    el.addEventListener('change',()=>{commitSheetInputHistory(el);if(el.dataset.picklistCalloffField==='name')commitOpeningPicklistCalloffDraft(Number(el.dataset.picklistCalloffDraft));else persist();});
   });
-  document.querySelectorAll('[data-picklist-topic]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist stand-up topic'));el.addEventListener('input',()=>{const index=Number(el.dataset.picklistTopic);state.openingPicklistTopics=Array.isArray(state.openingPicklistTopics)?state.openingPicklistTopics:['','','',''];state.openingPicklistTopics[index]=el.value;persist();});el.addEventListener('change',()=>commitSheetInputHistory(el));});
-  document.querySelectorAll('[data-picklist-notes]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist notes'));el.addEventListener('input',()=>{state.openingPicklistNotes=el.value;persist();});el.addEventListener('change',()=>commitSheetInputHistory(el));});
+  document.querySelectorAll('[data-picklist-topic]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist stand-up topic'));el.addEventListener('input',()=>{const index=Number(el.dataset.picklistTopic);state.openingPicklistTopics=Array.isArray(state.openingPicklistTopics)?state.openingPicklistTopics:['','','',''];state.openingPicklistTopics[index]=el.value;persistSoon();});el.addEventListener('change',()=>{commitSheetInputHistory(el);persist();});});
+  document.querySelectorAll('[data-picklist-notes]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist notes'));el.addEventListener('input',()=>{state.openingPicklistNotes=el.value;persistSoon();});el.addEventListener('change',()=>{commitSheetInputHistory(el);persist();});});
   document.querySelectorAll('[data-picklist-date]').forEach(el=>el.addEventListener('change',()=>saveOpeningPicklistDate(el.value)));
   document.querySelectorAll('[data-picklist-view]').forEach(el=>el.addEventListener('dblclick',event=>{if(!state.editMode){event.preventDefault();startOpeningPicklistCellEdit(el);}}));
   document.querySelectorAll('[data-picklist-edit]').forEach(el=>{
@@ -3973,14 +4132,15 @@ function bind() {
   document.querySelectorAll('[data-fleet-filter]').forEach(el=>el.addEventListener('change',()=>{state.fleetFilter=el.value;persist();render();}));
   document.querySelectorAll('[data-inventory-filter]').forEach(el=>el.addEventListener('change',()=>{state.inventoryFilter=el.value;persist();render();}));
   document.querySelectorAll('[data-fleet-view]').forEach(el=>el.addEventListener('change',()=>{state.fleetView=el.value;persist();render();}));
-  document.querySelectorAll('[data-fleet-search]').forEach(el=>el.addEventListener('input',()=>{state.fleetSearch=el.value;persist();render();const s=document.querySelector('[data-fleet-search]');if(s){s.focus();s.setSelectionRange(state.fleetSearch.length,state.fleetSearch.length);}}));
-  document.querySelectorAll('[data-fleet-expected]').forEach(el=>el.addEventListener('input',()=>{state.fleetExpectedCount=Math.max(0,Number(el.value)||0);persist();render();const s=document.querySelector('[data-fleet-expected]');if(s){s.focus();s.setSelectionRange(s.value.length,s.value.length);}}));
+  document.querySelectorAll('[data-fleet-search]').forEach(el=>{el.addEventListener('input',()=>{const pos=el.selectionStart??String(el.value||'').length;state.fleetSearch=el.value;updateFleetSearchSoon(el.value,pos);});el.addEventListener('change',()=>{state.fleetSearch=el.value;persist();});});
+  document.querySelectorAll('[data-fleet-expected]').forEach(el=>{el.addEventListener('input',()=>{const pos=el.selectionStart??String(el.value||'').length;state.fleetExpectedCount=Math.max(0,Number(el.value)||0);updateFleetExpectedSoon(el.value,pos);});el.addEventListener('change',()=>{state.fleetExpectedCount=Math.max(0,Number(el.value)||0);persist();});});
   document.querySelectorAll('[data-parking-select]').forEach(el=>el.addEventListener('click',e=>{if(e.target?.matches?.('[data-parking-id]'))return;selectParkingSlot(el.dataset.parkingSelect);}));
   document.querySelectorAll('[data-parking-id]').forEach(el=>{
     el.addEventListener('focus',()=>selectParkingSlot(el.dataset.parkingId,false));
     el.addEventListener('input',()=>{updateParkingSlot(el.dataset.parkingId,el.value,false);syncParkingSlotVisual(el);});
+    el.addEventListener('change',()=>persist());
   });
-  document.querySelectorAll('[data-parking-battery]').forEach(el=>el.addEventListener('input',()=>{updateParkingBattery(el.dataset.parkingBattery,el.value);applyParkingBatteryTone(el,el.value);}));
+  document.querySelectorAll('[data-parking-battery]').forEach(el=>{el.addEventListener('input',()=>{updateParkingBattery(el.dataset.parkingBattery,el.value);applyParkingBatteryTone(el,el.value);});el.addEventListener('change',()=>persist());});
   document.querySelectorAll('[data-parking-charger]').forEach(el=>el.addEventListener('click',()=>toggleParkingCharger(el.dataset.parkingCharger)));
   document.querySelectorAll('[data-parking-date]').forEach(el=>el.addEventListener('change',()=>{state.vanParkingUpdated=el.value||defaultOperationDate();persist();render();toast('Parking map date updated');}));
   document.querySelectorAll('[data-charging-check-date]').forEach(el=>el.addEventListener('change',()=>{state.chargingStationChecked=el.value||'';persist();render();toast('Charging station check date updated');}));
@@ -3992,6 +4152,7 @@ function bind() {
       if(el.value!==clean)el.value=clean;
       updateDeviceSheetCell(el.dataset.deviceSheetId,el.dataset.deviceSheetField,clean);
     });
+    el.addEventListener('change',()=>persist());
     el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();moveDeviceEntryDown(el);}});
   });
   document.querySelectorAll('[data-device-custom-field]').forEach(el=>{
@@ -4000,6 +4161,7 @@ function bind() {
       if(el.value!==clean)el.value=clean;
       updateCustomDeviceRow(el.dataset.deviceCustomUid,field,clean);
     });
+    el.addEventListener('change',()=>persist());
     el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();moveDeviceEntryDown(el);}});
   });
   document.querySelectorAll('.morning-template-sheet [data-edit-field]').forEach(el=>{
@@ -4033,7 +4195,7 @@ function bind() {
   }
   document.querySelectorAll('[data-check-field]').forEach(el=>el.addEventListener('change',()=>{let route=state.morningRoutes.find(r=>r.route===el.dataset.checkRoute);if(!route&&el.checked)route=createManualMorningRoute({wave:el.dataset.checkWave||'Manual'});if(route){route[el.dataset.checkField]=el.checked;persist();}}));
   const search = document.getElementById('global-search');
-  if (search) search.addEventListener('input',e=>{state.search=e.target.value;const pos=e.target.selectionStart;render();const s=document.getElementById('global-search');s?.focus();s?.setSelectionRange(pos,pos);});
+  if (search) search.addEventListener('input',e=>{state.search=e.target.value;updateGlobalSearchResults();});
   const dz=document.getElementById('drop-zone');
   if (dz) {
     ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
@@ -4098,21 +4260,25 @@ async function importEquipmentFromClipboard() {
 }
 
 function readParkingFiles(files) {
+  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   state.importPurpose='parking';
   return readFiles(files);
 }
 
 function updateParkingSlot(id,value,rerender=true) {
+  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const slot=(state.vanParking||[]).find(s=>s.id===id);
   if(!slot)return;
   slot.value=String(value||'').trim().toUpperCase();
   state.selectedParkingId=id;
   state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
-  persist();
+  if(rerender)persist();
+  else persistSoon();
   if(rerender)render();
 }
 
 function selectParkingSlot(id,rerender=true) {
+  if(PARKING_ONLY_VIEW)return;
   if(!id)return;
   state.selectedParkingId=id;
   persist();
@@ -4120,13 +4286,15 @@ function selectParkingSlot(id,rerender=true) {
 }
 
 function updateParkingBattery(id,value) {
+  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const clean=String(value||'').replace(/[^\d]/g,'').slice(0,3);
   const n=clean===''?'':Math.max(0,Math.min(100,Number(clean)));
   state.vanParkingBatteries={...(state.vanParkingBatteries||{}),[id]:n};
   state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
-  persist();
+  persistSoon();
 }
 function toggleParkingCharger(key='') {
+  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   if(!key)return;const current=state.parkingChargerStatus[key]||'unknown',next=current==='unknown'?'green':current==='green'?'red':'unknown';
   state.parkingChargerStatus={...(state.parkingChargerStatus||{}),[key]:next};state.vanParkingUpdated=defaultOperationDate();persist();render();toast(next==='green'?'Charger marked working / charging':next==='red'?'Charger marked issue':'Charger status cleared',next==='red'?'error':'success');
 }
@@ -4136,6 +4304,7 @@ function parkingChargerReportSpot(key='') {
   return {spot:'',chargePort:''};
 }
 function openChargerReport(key='') {
+  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const issueKey=key||Object.entries(state.parkingChargerStatus||{}).find(([,status])=>status==='red')?.[0]||'',location=parkingChargerReportSpot(issueKey),previous=[...(state.chargerReports||[])].reverse().find(report=>report.chargerKey===issueKey);
   state.pendingChargerReport={key:issueKey,company:'LLOL',chargePort:location.chargePort||previous?.chargePort||'',parkingSpot:location.spot||previous?.parkingSpot||'',stationId:previous?.stationId||'',lights:'',color:'',vanPlugged:'',display:'',replugged:'',restored:'',otherVan:'',testResult:'',concern:''};state.modal='charger-report';render();
 }
@@ -4176,6 +4345,7 @@ async function copyChargerReportOnly() {
 }
 
 function updateParkingKind(id,kind='spot') {
+  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const slot=(state.vanParking||[]).find(s=>s.id===id);
   if(!slot)return;
   slot.kind=kind;
@@ -4185,6 +4355,7 @@ function updateParkingKind(id,kind='spot') {
 }
 
 function addParkingSpot() {
+  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const id=`manual-${Date.now().toString().slice(-6)}`;
   const slot={id,zone:'crosswalk',label:`Manual spot ${parkingSlots('crosswalk').length+1}`,value:'',kind:'crosswalk',manual:true};
   state.vanParking=[...(state.vanParking||[]),slot];
@@ -4196,6 +4367,7 @@ function addParkingSpot() {
 }
 
 function removeSelectedParkingSpot() {
+  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const slot=selectedParkingSlot();
   if(!slot)return toast('No parking spot selected','error');
   if(!slot.manual) {
@@ -4215,6 +4387,7 @@ function removeSelectedParkingSpot() {
 }
 
 function setParkingMode(mode='manual') {
+  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   state.parkingMode=mode;
   if(mode==='auto') {
     state.vanParking=defaultVanParkingSlots();
@@ -4244,6 +4417,7 @@ function parkingImportValuesFromText(text='') {
 }
 
 function applyParkingText(text='') {
+  if(PARKING_ONLY_VIEW)return 0;
   const values=parkingImportValuesFromText(text);
   if(!values.length) return 0;
   const editable=(state.vanParking||[]).filter(slot=>!['street'].includes(slot.kind)||String(slot.value||'').trim());
@@ -4254,6 +4428,7 @@ function applyParkingText(text='') {
 }
 
 function parseParkingPasteAction() {
+  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const count=applyParkingText(state.vanParkingPasteText);
   render();
   toast(count?`${count} parking spot${count===1?'':'s'} filled`:'No EV parking values found — paste one EV number per row',count?'success':'error');
@@ -4270,6 +4445,7 @@ async function copyParkingList() {
 }
 
 function resetVanParking() {
+  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   state.vanParking=defaultVanParkingSlots();
   state.vanParkingUpdated='7/6';
   state.vanParkingPasteText='';
@@ -4637,6 +4813,11 @@ async function shareDispatcherLink() {
   toast(ok?'Clickable dispatcher link copied — paste it into GroupMe, Slack, text, or email':'Clipboard access was blocked — copy the full https:// link from Admin control',ok?'':'error');
   return ok;
 }
+async function shareFleetParkingLink() {
+  const ok=await writeClipboardText(FLEET_PARKING_SHARE_TEXT);
+  toast(ok?'Fleet team Van Parking link copied':'Clipboard access was blocked — copy the fleet link from Van Parking',ok?'success':'error');
+  return ok;
+}
 async function cloudSignIn() {
   const email=String(document.getElementById('cloud-signin-email')?.value||'').trim().toLowerCase();
   if(!/^\S+@\S+\.\S+$/.test(email))return toast('Enter a complete dispatcher email','error');
@@ -4719,7 +4900,9 @@ function saveCoachingTemplate() {
 }
 
 function go(page) {
+  if (PARKING_ONLY_VIEW && page!=='parking') return toast('Fleet team link only opens Van Parking','error');
   if (page==='admin'&&state.role!=='admin') return toast('Owner permission required','error');
+  cancelDeferredRenders();
   state.page=page; state.search=''; state.modal=null;if(page==='rostering')syncRosteringHelperShifts(currentRosteringPlan());persist(); render();if(page==='admin')refreshCloudMembers();window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -4748,6 +4931,10 @@ function importAcceptForPurpose(purpose='morning') {
 }
 
 function action(name,el) {
+  if(PARKING_ONLY_VIEW) {
+    const allowed=new Set(['menu','copy-parking-list','copy-fleet-parking-link','cloud-account','cloud-sign-in','cloud-sign-out','close-modal']);
+    if(!allowed.has(name))return toast('Fleet team view is read-only and limited to Van Parking','error');
+  }
   if (name==='menu') return document.getElementById('sidebar').classList.toggle('open');
   if (name==='opening-paycom-tab') { state.openingRosterPaycomTab=el.dataset.paycomTab==='marked'?'marked':'scheduled';localStorage.setItem('relayops_opening_roster_paycom_tab',state.openingRosterPaycomTab);return render(); }
   if (name==='clear-global-search') { state.search='';render();setTimeout(()=>document.getElementById('global-search')?.focus(),0);return; }
@@ -4807,7 +4994,7 @@ function action(name,el) {
   if (name==='copy-open-charger-slack') return copyChargerReportAndOpenSlack();
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.fleetRefreshPreview=null;return render(); }
+  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=importAcceptForPurpose(state.importPurpose);return fileInput.click(); }
   if (name==='schedule-import') { state.scheduleImportDestination=state.page==='rostering'?'rostering':'roster';state.importPurpose='schedule';fileInput.accept='.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf';return fileInput.click(); }
   if (name==='rostering-import-screenshot') { state.importPurpose='rostering-screenshot';fileInput.accept=importAcceptForPurpose('rostering-screenshot');return fileInput.click(); }
@@ -4815,6 +5002,7 @@ function action(name,el) {
   if (name==='rostering-paycom-category') { state.rosteringPaycomCategory=el.dataset.rosteringCategory||'all';persist();return render(); }
   if (name==='rostering-focus-training') { document.getElementById('rostering-training-box')?.scrollIntoView?.({behavior:'smooth',block:'center'});return; }
   if (name==='copy-rostering-backup-email') return copyRosteringBackupEmailText();
+  if (name==='copy-rostering-email-template') return copyRosteringEmailTemplateText();
   if (name==='rostering-toggle-service') { const id=el.dataset.serviceId||'';state.rosteringOpenServices[id]=!state.rosteringOpenServices[id];persist();return render(); }
   if (name==='rostering-add-service') return addRosteringService();
   if (name==='rostering-adjust-confirmed') return adjustRosteringConfirmed(el.dataset.serviceId||'',Number(el.dataset.delta)||0);
@@ -4829,6 +5017,9 @@ function action(name,el) {
   if (name==='rostering-add-paycom-driver') { const entry=scheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(el.dataset.driverName||''));if(!entry)return toast('PAYCOM driver was not found for this date','error');if(!rosteringEntryEligibleForRoster(entry))return toast('This shift is not an available driver route shift','error');const added=addPaycomEntryToRostering(entry);if(!added)return toast('This driver is already on the roster','error');persist();render();return toast(`${entry.name} added to the roster`); }
   if (name==='open-rostering-driver-swap') return openRosteringDriverSwap(el.dataset.driverName||'');
   if (name==='apply-rostering-driver-swap') return applyRosteringDriverSwap();
+  if (name==='open-rostering-training-add') return openRosteringTrainingAdd(el.dataset.trainingKind||'ridealong');
+  if (name==='save-rostering-training-add') return saveRosteringTrainingAdd();
+  if (name==='remove-rostering-manual-training') return removeRosteringManualTraining(el.dataset.manualTrainingKey||'');
   if (name==='toggle-driver-card') { const key=driverIdentityKey(el.dataset.driverName||'');state.expandedDriverKey=state.expandedDriverKey===key?'':key;return render(); }
   if (name==='rostering-use-trainer-suggestion') return assignRosteringTrainer(el.dataset.ridealongName||'',el.dataset.trainerName||'');
   if (name==='rostering-swap-trainer') return clearRosteringTrainerMatch(el.dataset.ridealongName||'');
@@ -4868,6 +5059,7 @@ function action(name,el) {
   if (name==='clear-picklist') return requestClearOperationalSheet('picklist');
   if (name==='confirm-clear-operational-sheet') return confirmClearOperationalSheet();
   if (name==='share-dispatcher-link') return shareDispatcherLink();
+  if (name==='copy-fleet-parking-link') return shareFleetParkingLink();
   if (name==='cloud-account') { state.modal='cloud-account';return render(); }
   if (name==='cloud-sign-in') return cloudSignIn();
   if (name==='cloud-sign-out') return cloudSignOut();
@@ -4906,7 +5098,7 @@ function action(name,el) {
   if (name==='equipment-template-csv') return downloadEquipmentTemplate();
   if (name==='fleet-template-csv') return downloadFleetTemplate();
   if (name==='clear-morning-filters') { state.morningFilters={wave:'all',staging:'all',pad:'all'};render();return; }
-  if (name==='clear-fleet-search') { state.fleetSearch='';state.fleetFilter='all';persist();render();return toast('Showing every EV again'); }
+  if (name==='clear-fleet-search') { cancelDeferredRenders();state.fleetSearch='';state.fleetFilter='all';persist();render();return toast('Showing every EV again'); }
   if (name==='fleet-filter-quick') { state.fleetFilter=el.dataset.filter||'all';state.fleetSearch='';persist();render();return toast(`Fleet filtered: ${state.fleetFilter.replace('-',' ')}`); }
   if (name==='set-fleet-view') { state.fleetView=el.dataset.view||'tiny';persist();render();return toast(`Fleet view: ${fleetViewLabel()}`); }
   if (name==='reset-fleet-demo') return resetFleetDemo();
@@ -5424,7 +5616,7 @@ function scheduleRoleGroup(role='') {
 }
 function isDriverHelperOnlyRole(role='') { const key=headerKey(role);return key==='driverhelper'||key==='helper'; }
 function isRidealongRole(role='') { return scheduleRoleGroup(role)==='training'; }
-function canBecomeHelperRole(role='') { const key=headerKey(role);return key.includes('rescue')||key.includes('deliveryassociate'); }
+function canBecomeHelperRole(role='') { const key=headerKey(role);return !key.includes('modifiedduty')&&(key.includes('rescue')||key.includes('deliveryassociate')); }
 function scheduleHelperKey(name='') { return `${state.morningOperationDate}|${nameKey(name)}`; }
 function helperRosterRows() {
   const automatic=currentScheduleEntries().filter(entry=>isDriverHelperOnlyRole(entry.role)).map(entry=>({...entry,automatic:true}));
@@ -6088,7 +6280,7 @@ function updateDeviceSheetCell(id,field,value) {
   const details={...deviceSheetDetails()},current={...(details[key]||{device:'',portable:''})};
   current[field]=clean;details[key]=current;
   state.equipmentImport={name:'Device and Portable Sheet',details};
-  persist();
+  persistSoon();
 }
 function addDeviceSheetRow(section='') {
   if(!['ev','gas','helper'].includes(section))return;
@@ -6109,7 +6301,7 @@ function updateCustomDeviceRow(uid,field,value) {
   if(field==='label'&&oldKey&&oldKey!==newKey)delete details[oldKey];
   if(newKey)details[newKey]={device:row.device||'',portable:row.portable||''};
   state.equipmentImport={name:'Device and Portable Sheet',details};
-  persist();
+  persistSoon();
 }
 function moveDeviceEntryDown(el) {
   const row=el?.closest?.('tr'),table=el?.closest?.('table');if(!row||!table)return el?.blur?.();
@@ -7714,6 +7906,7 @@ localStorage.setItem('relayops_achat_messages',JSON.stringify(state.aChatMessage
 localStorage.setItem('relayops_driver_name_aliases',JSON.stringify(state.driverNameAliases||{}));
 localStorage.setItem('relayops_driver_profiles',JSON.stringify(normalizeDriverProfiles(state.driverProfiles||{})));
 localStorage.setItem('relayops_rostering_training_matches',JSON.stringify(state.rosteringTrainingMatches||{}));
+localStorage.setItem('relayops_rostering_manual_training',JSON.stringify(state.rosteringManualTraining||{}));
 localStorage.setItem('relayops_equipment_issues',JSON.stringify(normalizeEquipmentIssuesStore(state.equipmentIssues||{})));
 localStorage.setItem('relayops_sheet_history',JSON.stringify({past:(state.sheetHistory?.past||[]).slice(-40),future:(state.sheetHistory?.future||[]).slice(-40)}));
 localStorage.setItem('relayops_slack_report_room_url',state.slackReportRoomUrl||'https://app.slack.com/client');
@@ -7786,7 +7979,7 @@ function sharedWorkspaceState() {
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),
     messageQueueTemplate:state.messageQueueTemplate,messageQueueStatus:state.messageQueueStatus,coachingQueue:normalizeCoachingQueue(state.coachingQueue),coachingTemplate:state.coachingTemplate,
-    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringTrainingMatches:state.rosteringTrainingMatches,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleBackupRecords:state.scheduleBackupRecords,scheduleStayHome:state.scheduleStayHome,scheduleStayHomeHistory:state.scheduleStayHomeHistory,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,morningWaveTimeOverrides:state.morningWaveTimeOverrides,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,sheetHistory:state.sheetHistory,
+    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleBackupRecords:state.scheduleBackupRecords,scheduleStayHome:state.scheduleStayHome,scheduleStayHomeHistory:state.scheduleStayHomeHistory,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,morningWaveTimeOverrides:state.morningWaveTimeOverrides,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,sheetHistory:state.sheetHistory,
     whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
     inventoryItems:state.inventoryItems,inventoryLog:state.inventoryLog,
     morningSheetsEndpoint:state.morningSheetsEndpoint,slackReportRoomUrl:state.slackReportRoomUrl,chargerReports:normalizeChargerReports(state.chargerReports||[])
@@ -7800,14 +7993,14 @@ function persistentWorkspaceState() {
     vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,chargingStationChecked:state.chargingStationChecked,
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,
     equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
-    driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),scheduleStayHomeHistory:state.scheduleStayHomeHistory,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringTrainingMatches:state.rosteringTrainingMatches,morningWaveTimeOverrides:state.morningWaveTimeOverrides,
+    driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),scheduleStayHomeHistory:state.scheduleStayHomeHistory,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,morningWaveTimeOverrides:state.morningWaveTimeOverrides,
     whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
     inventoryItems:state.inventoryItems,inventoryLog:state.inventoryLog,coachingTemplate:state.coachingTemplate,
     morningSheetsEndpoint:state.morningSheetsEndpoint,slackReportRoomUrl:state.slackReportRoomUrl,chargerReports:normalizeChargerReports(state.chargerReports||[])
   };
 }
 function applySharedWorkspaceState(payload={}) {
-  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','messageQueueTemplate','messageQueueStatus','coachingQueue','coachingTemplate','scheduleEntries','scheduleImportName','rosteringDate','rosteringPlans','rosteringTrainingMatches','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleStayHomeHistory','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','messageQueueTemplate','messageQueueStatus','coachingQueue','coachingTemplate','scheduleEntries','scheduleImportName','rosteringDate','rosteringPlans','rosteringTrainingMatches','rosteringManualTraining','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleStayHomeHistory','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
   state.equipmentIssues=normalizeEquipmentIssuesStore(state.equipmentIssues||{});
@@ -7815,6 +8008,7 @@ function applySharedWorkspaceState(payload={}) {
   state.driverNameAliases=state.driverNameAliases&&typeof state.driverNameAliases==='object'?state.driverNameAliases:{};
   state.driverProfiles=normalizeDriverProfiles(state.driverProfiles||{});(state.driverContacts||[]).forEach(contact=>ensureDriverProfile(contact));
   state.rosteringTrainingMatches=state.rosteringTrainingMatches&&typeof state.rosteringTrainingMatches==='object'?state.rosteringTrainingMatches:{};
+  state.rosteringManualTraining=state.rosteringManualTraining&&typeof state.rosteringManualTraining==='object'?state.rosteringManualTraining:{};
   state.slackReportRoomUrl=String(state.slackReportRoomUrl||'https://app.slack.com/client');
   state.chargerReports=normalizeChargerReports(state.chargerReports||[]);
   state.coachingQueue=normalizeCoachingQueue(state.coachingQueue);state.coachingTemplate=String(state.coachingTemplate||DEFAULT_COACHING_TEMPLATE);
@@ -7840,13 +8034,14 @@ function applySharedWorkspaceState(payload={}) {
   persist();render();
 }
 function applyPersistentWorkspaceState(payload={}) {
-  const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringDate','rosteringPlans','rosteringTrainingMatches','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
+  const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringDate','rosteringPlans','rosteringTrainingMatches','rosteringManualTraining','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
   state.equipmentIssues=normalizeEquipmentIssuesStore(state.equipmentIssues||{});
   state.driverNameAliases=state.driverNameAliases&&typeof state.driverNameAliases==='object'?state.driverNameAliases:{};
   state.driverProfiles=normalizeDriverProfiles(state.driverProfiles||{});(state.driverContacts||[]).forEach(contact=>ensureDriverProfile(contact));
   state.rosteringTrainingMatches=state.rosteringTrainingMatches&&typeof state.rosteringTrainingMatches==='object'?state.rosteringTrainingMatches:{};
+  state.rosteringManualTraining=state.rosteringManualTraining&&typeof state.rosteringManualTraining==='object'?state.rosteringManualTraining:{};
   state.slackReportRoomUrl=String(state.slackReportRoomUrl||'https://app.slack.com/client');
   state.chargerReports=normalizeChargerReports(state.chargerReports||[]);
   state.coachingTemplate=String(state.coachingTemplate||DEFAULT_COACHING_TEMPLATE);

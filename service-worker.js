@@ -1,4 +1,4 @@
-const CACHE='relayops-picklist-pad-stay-home-v31';
+const CACHE='relayops-van-parking-share-v32';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{
