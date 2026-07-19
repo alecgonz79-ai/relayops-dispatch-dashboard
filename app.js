@@ -1342,25 +1342,33 @@ function morningBlankWaveAnchors() {
 }
 
 function morningSections(rows) {
-  const regular=rows.filter(r=>isCxMorningRoute(r)||(!isExplicitHelperMorningRoute(r)&&!isExplicitAdhocMorningRoute(r))),waveGroups=[...new Set(regular.map(r=>r.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).map(w=>({label:'',wave:w,rows:regular.filter(r=>r.wave===w)}));
-  const sections=waveGroups.slice(0,5).map((g,i)=>({...g,label:`WAVE ${i+1}`,routeCapacity:13,hasTime:true,separatorRows:i===4?2:1}));
+  const regular=rows.filter(r=>isCxMorningRoute(r)||(!isExplicitHelperMorningRoute(r)&&!isExplicitAdhocMorningRoute(r)));
+  const importedWaves=[...new Set(regular.map(r=>r.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).slice(0,5);
+  const sectionWaves=[...importedWaves],usedWaves=new Set(sectionWaves);
+  while(sectionWaves.length<5){
+    const index=sectionWaves.length,label=`WAVE ${index+1}`,override=morningWaveTimeOverride({label});
+    const candidates=[override?.time,defaultMorningWaveTimes[index],...defaultMorningWaveTimes].filter(Boolean);
+    const wave=candidates.find(value=>!usedWaves.has(value))||override?.time||defaultMorningWaveTimes[index]||`Wave ${index+1}`;
+    sectionWaves.push(wave);usedWaves.add(wave);
+  }
+  const sections=sectionWaves.map((wave,i)=>({label:`WAVE ${i+1}`,wave,rows:regular.filter(r=>r.wave===wave),pad:['A','B','C','A','B'][i],routeCapacity:13,hasTime:true,separatorRows:i===4?2:1}));
   const used=new Set(sections.flatMap(s=>s.rows.map(r=>r.route)));
   const adHoc=rows.filter(r=>!used.has(r.route)&&isExplicitAdhocMorningRoute(r));
   const helpers=rows.filter(r=>!used.has(r.route)&&isExplicitHelperMorningRoute(r)&&!adHoc.some(x=>x.route===r.route));
   sections.push({label:"ADHOC's",wave:'',rows:adHoc,routeCapacity:15,hasTime:false,separatorRows:1});
   sections.push({label:'HELPERS',wave:'',rows:helpers,routeCapacity:15,hasTime:false,separatorRows:1});
   sections.push({label:'DSP',wave:'',rows:[],routeCapacity:6,hasTime:false,separatorRows:0,dsp:true});
-  if(state.fitMorningRows) return sections.filter(s=>s.rows.length||s.dsp);
+  if(state.fitMorningRows) return sections.filter(s=>s.hasTime||s.rows.length||s.dsp);
   return sections.filter(s=>s.rows.length||s.label.startsWith('WAVE')||s.dsp||state.morningFilters.wave==='all');
 }
 
 function blankMorningRow(section,index) {
-  return {dsp:state.dspCode,driver:'',route:`__blank_${section.label}_${index}`,service:'',wave:section.wave,staging:'',pad:section.rows[0]?.pad||'',padOverride:section.rows[0]?.padOverride||'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true};
+  return {dsp:state.dspCode,driver:'',route:`__blank_${section.label}_${index}`,service:'',wave:section.wave,staging:'',pad:section.rows[0]?.pad||section.pad||'',padOverride:section.rows[0]?.padOverride||section.pad||'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true};
 }
 
 function morningDisplayRows(section) {
   const rows=[...section.rows];
-  const target=state.fitMorningRows?Math.max(rows.length,section.dsp?1:0):section.routeCapacity;
+  const target=state.fitMorningRows?Math.max(rows.length,section.hasTime||section.dsp?1:0):section.routeCapacity;
   while(rows.length<target) rows.push(blankMorningRow(section,rows.length));
   return rows;
 }
@@ -1400,7 +1408,7 @@ function copyCellValue(row,field,waveLabel,pad) {
 function morningCopyRowsForSections(sections=morningSections(filteredMorningRows())) {
   const rows=[];
   sections.forEach(section=>{
-    const display=morningDisplayRows(section), pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
+    const display=morningDisplayRows(section), pad=section.rows[0]?.padOverride||section.rows[0]?.pad||section.pad||'';
     const waveLabel=section.dsp?'DSP':section.label;
     display.forEach((r,i)=>rows.push({section,row:r,values:sheetCopyFields.map(field=>copyCellValue(r,field,i===0?waveLabel:'',i===0?pad:''))}));
     if(section.hasTime) rows.push({section,row:null,time:true,values:sheetCopyFields.map((field,i)=>i===0?morningWaveTimeText(section):'')});
@@ -1425,7 +1433,7 @@ function morningWaveGroup(section,sectionIndex=0) {
   const edit=state.editMode;
   const prior=morningSections(filteredMorningRows()).slice(0,sectionIndex);
   const rowBase=prior.reduce((n,s)=>n+morningDisplayRows(s).length+(s.hasTime?1:0)+(s.separatorRows||0),3);
-  const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
+  const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||section.pad||'';
   const waveTitle=section.dsp?'DSP':section.label;
   const waveTime=morningWaveTimeText(section);
   const attrs=(r,field,rowIndex,colIndex,extra='')=>interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}" ${edit?`contenteditable="true" data-edit-route="${esc(r?.route||'')}" data-edit-uid="${esc(r?.routeUid||'')}" data-edit-field="${field}" data-edit-wave="${esc(r?.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''} ${extra}`:'';
@@ -6747,7 +6755,7 @@ function clipboardTr(cells='',type='route') {
 function morningSheetClipboardHtml(sections=morningSections(filteredMorningRows())) {
   const body=sections.map(section=>{
     const display=morningDisplayRows(section), waveLabel=section.dsp?'DSP':section.label;
-    const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
+    const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||section.pad||'';
     const padSpan=display.length+(section.hasTime?1:0);
     const rows=display.map((r,i)=>clipboardTr(sheetCopyFields.map((field,col)=>{
       if(col===0)return i===0?clipboardTd(waveLabel,col,'wave',`rowspan="${display.length}"`):'';
@@ -6855,7 +6863,7 @@ function morningSheetsConnectorPayload() {
   const visibleRows=filteredMorningRows(),sections=fixedMorningSections(visibleRows),rows=[],rowTypes=[],sectionMeta=[],writeMode=morningFiltersAreActive()?'partial-update':'full-replace';
   let index=0;
   sections.forEach(section=>{
-    const display=morningDisplayRows(section), pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
+    const display=morningDisplayRows(section), pad=section.rows[0]?.padOverride||section.rows[0]?.pad||section.pad||'';
     const sourceIndex=index,startRow=index+3;
     const waveLabel=section.dsp?'DSP':section.label;
     display.forEach((r,i)=>{
@@ -7842,7 +7850,7 @@ function exportMorningTemplateSheet(){
   const body=sections.map(section=>{
     const rows=morningDisplayRows(section);
     const waveText=section.dsp?'DSP':section.label;
-    const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||'';
+    const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||section.pad||'';
     const padSpan=rows.length+(section.hasTime?1:0);
     const data=rows.map((r,i)=>`<tr>${sheetCopyFields.map((field,col)=>{if(col===0)return i===0?cell(waveText,section.dsp?'wave dsp':'wave',`rowspan="${rows.length}"`):'';if(col===4)return i===0?cell(pad,'pad',`rowspan="${padSpan}"`):'';const value=copyCellValue(r,field,'',pad);return cell(value,sheetSpacerColumns.has(col)?'spacer':col===20?'planned':col===1?'driver':'cell');}).join('')}</tr>`).join('');
     const time=section.hasTime?`<tr>${sheetCopyFields.map((field,col)=>col===4?'':cell(col===0?morningWaveTimeText(section):'',col===0?'waveTime':sheetSpacerColumns.has(col)?'spacer':col===20?'planned':'cell')).join('')}</tr>`:'';
