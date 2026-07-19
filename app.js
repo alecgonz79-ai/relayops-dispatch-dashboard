@@ -870,8 +870,9 @@ function openingPicklistSectionHtml(section={},sectionIndex=0) {
   const rows=[...section.rows];while(rows.length<section.capacity)rows.push(null);
   const cell=(row,index,field,value,cls='')=>{const equipment=field==='ev'?String(row?.ev||value||''):String(value||''),vehicleIssue=field==='ev'?vehicleIssueForEquipmentId(equipment):null,equipmentType=field==='deviceName'?'device':field==='portable'?'portable':'',equipmentIssue=equipmentType?equipmentIssueFor(equipmentType,equipment):null,issueClass=vehicleIssue?.type==='grounded'?'grounded-van-cell':vehicleIssue?.type==='battery'?'low-battery-van-cell':vehicleIssue?.type==='reported'?'reported-van-cell':equipmentIssue?'reported-equipment-cell':'',vacant=field==='driver'&&routeAssignmentVacant(row),vacancyLabel=vacant?(routeMissingPrimary(row)?(String(row?.driver||'').trim()?'DRIVER NEEDED':'UNASSIGNED DRIVER'):'HELPER NEEDED'):'';return `<td class="picklist-data-cell ${cls} ${issueClass} ${vacant?'route-vacancy-driver-cell':''}" ${vacant?`data-vacancy-label="${esc(vacancyLabel)}"`:''} ${field==='driver'&&row?driverProfileAttrs(row.driver):''} ${openingPicklistCellAttrs(section,sectionIndex,row,index,field)}>${equipmentIssue?`<button type="button" class="equipment-issue-trigger active" data-action="open-equipment-issue" data-equipment-type="${equipmentType}" data-equipment-id="${esc(equipment)}">⚠</button>`:''}${esc(value||'')}${vehicleIssuePopoverHtml(row?.route||'',equipment,vehicleIssue)}${equipmentIssuePopoverHtml(equipmentType,equipment)}</td>`;};
   const pending=state.pendingPicklistWaveDelete?.key===section.key;
-  const body=rows.map((row,index)=>`<tr class="${routeAssignmentVacant(row)?'route-vacancy-row':''}">${index===0?`<td class="picklist-wave-label picklist-data-cell" rowspan="${section.capacity}" data-picklist-meta="label" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'waveLabel')}><button type="button" class="picklist-wave-delete" data-action="request-delete-picklist-wave" data-section-key="${esc(section.key)}" aria-label="Delete ${esc(section.label)}" contenteditable="false">${ICONS.trash}</button><span>${esc(section.label)}</span></td>`:''}${cell(row,index,'driver',routeDriverDisplayValue(row),'picklist-driver')}${cell(row,index,'route',row?.route||'')}${cell(row,index,'staging',row?.staging||'')}${index===0?`<td class="picklist-pad picklist-data-cell" rowspan="${section.capacity}" data-picklist-meta="pad" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'padOverride')}><span>${esc(section.pad||'')}</span></td>`:''}${cell(row,index,'ev',row?routeEquipmentValue(row):'')}${cell(row,index,'deviceName',row?.deviceName||'')}${cell(row,index,'portable',row?.portable||'')}</tr>`).join('');
-  const time=section.hasTime?`<tr class="picklist-wave-time"><td class="picklist-data-cell" data-picklist-meta="waveTime" ${openingPicklistCellAttrs(section,sectionIndex,null,section.capacity,'waveTime')}>${esc(openingPicklistTime(section))}</td><td colspan="3"></td><td></td><td></td><td></td><td></td></tr>`:'';
+  const padSpan=section.capacity+(section.hasTime?1:0);
+  const body=rows.map((row,index)=>`<tr class="${routeAssignmentVacant(row)?'route-vacancy-row':''}">${index===0?`<td class="picklist-wave-label picklist-data-cell" rowspan="${section.capacity}" data-picklist-meta="label" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'waveLabel')}><button type="button" class="picklist-wave-delete" data-action="request-delete-picklist-wave" data-section-key="${esc(section.key)}" aria-label="Delete ${esc(section.label)}" contenteditable="false">${ICONS.trash}</button><span>${esc(section.label)}</span></td>`:''}${cell(row,index,'driver',routeDriverDisplayValue(row),'picklist-driver')}${cell(row,index,'route',row?.route||'')}${cell(row,index,'staging',row?.staging||'')}${index===0?`<td class="picklist-pad picklist-data-cell" rowspan="${padSpan}" data-picklist-meta="pad" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'padOverride')}><span>${esc(section.pad||'')}</span></td>`:''}${cell(row,index,'ev',row?routeEquipmentValue(row):'')}${cell(row,index,'deviceName',row?.deviceName||'')}${cell(row,index,'portable',row?.portable||'')}</tr>`).join('');
+  const time=section.hasTime?`<tr class="picklist-wave-time"><td class="picklist-data-cell" data-picklist-meta="waveTime" ${openingPicklistCellAttrs(section,sectionIndex,null,section.capacity,'waveTime')}>${esc(openingPicklistTime(section))}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`:'';
   return `<tbody class="picklist-section ${section.hasTime?'wave':'adhoc'} ${pending?'delete-pending':''}">${body}${time}<tr class="picklist-black-divider"><td colspan="8"></td></tr></tbody>`;
 }
 function openingPicklistBackupRows() {
@@ -1563,6 +1564,14 @@ function stayHomeWindowEntries(days=14) {
 function driverStayHomeStats(name='',days=14) {
   const identity=value=>nameKey(contactForMorningDriver(value)?.name||value),key=identity(name),recent=stayHomeWindowEntries(days).filter(row=>identity(row.name)===key).sort((a,b)=>b.date.localeCompare(a.date)),all=stayHomeHistoryEntries().filter(row=>identity(row.name)===key);
   return {count:recent.length,total:all.length,recent,frequent:recent.length>=2,lastDate:recent[0]?.date||all.sort((a,b)=>b.date.localeCompare(a.date))[0]?.date||''};
+}
+function removeDriverStayHomeMark(name='') {
+  const identity=value=>nameKey(contactForMorningDriver(value)?.name||value),driverKey=identity(name),stats=driverStayHomeStats(name,3650),target=stats.recent[0];
+  if(!driverKey||!target)return toast('No Told To Stay Home mark was found for this driver','error');
+  const removeMatching=(records={})=>Object.keys(records||{}).forEach(key=>{const record=records[key]||{},recordName=record.name||key.split('|').slice(1).join('|'),recordDate=record.date||key.split('|')[0];if(identity(recordName)===driverKey&&recordDate===target.date)delete records[key];});
+  removeMatching(state.scheduleStayHome);
+  removeMatching(state.scheduleStayHomeHistory);
+  persist();render();toast(`Removed the ${formatShortOperationDate(target.date)} Told To Stay Home mark for ${driverDisplayName(name)}`);
 }
 function formatShortOperationDate(value='') { const [year,month,day]=String(value).split('-').map(Number);return year&&month&&day?`${month}/${day}`:value; }
 function driverCapabilityButtonsHtml(name='') {
@@ -3850,6 +3859,7 @@ function render() {
   closeDriverSuggestions();
   app.innerHTML = `<div class="app-shell">${sidebar()}<main class="main">${topbar()}<div class="content">${pageContent()}</div></main></div>${modal()}<div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>`;
   enhanceDriverTextButtons();
+  enhanceDriverStayHomeControls();
   enhanceOpeningRoster();
   enhanceMorningParkingAssignment();
   enhanceItineraryRtsModal();
@@ -3868,6 +3878,16 @@ function enhanceItineraryRtsModal() {
   if(progress[1])progress[1].textContent='Find return time';if(progress[2])progress[2].textContent='Fill Planned RTS only';
   const auto=dialog.querySelector('.auto-match');if(auto){auto.querySelector('strong').textContent='RTS-only safety check:';const spans=auto.querySelectorAll('span');['✓ Match by CX Route code','✓ Read Planned return to station','✓ Leave all other cells unchanged'].forEach((text,i)=>{if(spans[i])spans[i].textContent=text;});}
   const apply=dialog.querySelector('[data-action="apply-import"]');if(apply&&state.importedFile)apply.textContent='Fill Planned RTS only →';
+}
+
+function enhanceDriverStayHomeControls() {
+  document.querySelectorAll?.('.driver-card[data-driver-name]').forEach(card=>{
+    const history=card.querySelector('.driver-stay-home-history');
+    if(!history||history.querySelector('[data-action="remove-driver-stay-home"]'))return;
+    const button=document.createElement('button');
+    button.type='button';button.className='driver-stay-home-remove';button.dataset.action='remove-driver-stay-home';button.dataset.driverName=card.dataset.driverName||'';button.title='Remove the most recent Told To Stay Home mark';button.textContent='Remove latest';
+    history.append(button);
+  });
 }
 
 function bind() {
@@ -4777,6 +4797,7 @@ function action(name,el) {
   if (name==='save-manual-driver') return saveManualDriver();
   if (name==='request-driver-removal') return requestDriverRemoval(el.dataset.driverKey||'');
   if (name==='confirm-driver-removal') return confirmDriverRemoval();
+  if (name==='remove-driver-stay-home') return removeDriverStayHomeMark(el.dataset.driverName||'');
   if (name==='toggle-driver-capability') return toggleDriverCapability(el.dataset.driverName||'',el.dataset.capability||'');
   if (name==='open-driver-flags') return openDriverFlags(el.dataset.driverName||'');
   if (name==='save-driver-flags') return saveDriverFlags();
