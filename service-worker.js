@@ -1,4 +1,4 @@
-const CACHE='relayops-morning-control-colors-v29';
+const CACHE='relayops-paycom-shift-filters-v30';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{
