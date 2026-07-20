@@ -491,6 +491,8 @@ let state = {
   cloudUser: '',
   cloudPresence: [],
   cloudAccessError: '',
+  cloudSigninError: '',
+  cloudSigninCooldownUntil: Number(localStorage.getItem('relayops_cloud_signin_cooldown_until') || 0),
   cloudSigninPrompted: false,
   cloudMembers: [],
   pendingMemberEdit: null,
@@ -3246,7 +3248,8 @@ function modal() {
   }
   if (state.modal === 'cloud-account') {
     const configured=Boolean(window.RelayOpsCloud?.configured),signedIn=Boolean(window.RelayOpsCloud?.session);
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal cloud-account-modal" role="dialog" aria-modal="true" aria-labelledby="cloud-account-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">SHARED RELAYOPS</span><h2 id="cloud-account-title">${!configured?'Connect the shared workspace':signedIn?'Dispatcher account':'Sign in to RelayOps'}</h2><p>${!configured?'Owner setup is required once. After setup, every authorized dispatcher uses the same live operational data.':signedIn?`Signed in as ${esc(state.cloudUser||'authorized dispatcher')}. ${state.cloudAccessError?esc(state.cloudAccessError):'Changes synchronize with your station in real time.'}`:'Sign in once on this device. After that, edits and imports load from the same live station workspace.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${!configured?`<div class="cloud-setup-steps"><span><b>1</b>Create the RelayOps Supabase project</span><span><b>2</b>Run <code>supabase/schema.sql</code></span><span><b>3</b>Add project URL, anon key, organization ID, and station ID to <code>supabase/config.js</code></span></div><div class="private-contact-note"><b>Security requirement</b><span>Use only the public anon key here. Never add the Supabase service-role key, Amazon password, FleetOS password, or portal cookies.</span></div>`:signedIn?`<div class="cloud-account-summary ${state.cloudAccessError?'has-error':''}"><span><b>${state.cloudAccessError?'!':'✓'}</b>${state.cloudAccessError?'Owner invitation required':'Authenticated'}</span><span><b>${state.cloudAccessError?'!':'✓'}</b>${state.cloudAccessError?'Ask the owner to add this email in Admin control':'Station access checked by database policies'}</span><span><b>${state.cloudAccessError?'!':'✓'}</b>${state.cloudAccessError?'Local data will not replace the shared workspace':'Realtime workspace updates enabled'}</span></div>`:`<label class="cloud-email-field"><span>Dispatcher email</span><input id="cloud-signin-email" type="email" autocomplete="email" placeholder="dispatcher@company.com"></label><div class="private-contact-note"><b>Passwordless sign-in</b><span>The secure email link identifies the dispatcher. The owner must invite the same email once before it can open station data.</span></div>`}<div class="modal-actions"><button class="btn" data-action="close-modal">Close</button>${configured?(signedIn?'<button class="btn danger" data-action="cloud-sign-out">Sign out</button>':'<button class="btn primary" data-action="cloud-sign-in">Send sign-in link</button>'):''}</div></div></div></div>`;
+    const signinCooling=state.cloudSigninCooldownUntil>Date.now();
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal cloud-account-modal" role="dialog" aria-modal="true" aria-labelledby="cloud-account-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">SHARED RELAYOPS</span><h2 id="cloud-account-title">${!configured?'Connect the shared workspace':signedIn?'Dispatcher account':'Sign in to RelayOps'}</h2><p>${!configured?'Owner setup is required once. After setup, every authorized dispatcher uses the same live operational data.':signedIn?`Signed in as ${esc(state.cloudUser||'authorized dispatcher')}. ${state.cloudAccessError?esc(state.cloudAccessError):'Changes synchronize with your station in real time.'}`:'Sign in once on this device. After that, edits and imports load from the same live station workspace.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${!configured?`<div class="cloud-setup-steps"><span><b>1</b>Create the RelayOps Supabase project</span><span><b>2</b>Run <code>supabase/schema.sql</code></span><span><b>3</b>Add project URL, anon key, organization ID, and station ID to <code>supabase/config.js</code></span></div><div class="private-contact-note"><b>Security requirement</b><span>Use only the public anon key here. Never add the Supabase service-role key, Amazon password, FleetOS password, or portal cookies.</span></div>`:signedIn?`<div class="cloud-account-summary ${state.cloudAccessError?'has-error':''}"><span><b>${state.cloudAccessError?'!':'✓'}</b>${state.cloudAccessError?'Owner invitation required':'Authenticated'}</span><span><b>${state.cloudAccessError?'!':'✓'}</b>${state.cloudAccessError?'Ask the owner to add this email in Admin control':'Station access checked by database policies'}</span><span><b>${state.cloudAccessError?'!':'✓'}</b>${state.cloudAccessError?'Local data will not replace the shared workspace':'Realtime workspace updates enabled'}</span></div>`:`<label class="cloud-email-field"><span>Dispatcher email</span><input id="cloud-signin-email" type="email" autocomplete="email" placeholder="dispatcher@company.com"></label>${state.cloudSigninError?`<div class="private-contact-note danger cloud-signin-recovery"><b>Use the invitation already sent</b><span>${esc(state.cloudSigninError)}</span><span>Check Inbox, Spam, and Promotions for the newest RelayOps or Supabase invitation. Opening it completes sign-in and this device stays signed in.</span></div>`:`<div class="private-contact-note"><b>Passwordless sign-in</b><span>The secure email link identifies the dispatcher. The owner must invite the same email once before it can open station data.</span></div>`}`}<div class="modal-actions"><button class="btn" data-action="close-modal">Close</button>${configured?(signedIn?'<button class="btn danger" data-action="cloud-sign-out">Sign out</button>':`<button class="btn primary" data-action="cloud-sign-in" ${signinCooling?'disabled':''}>${signinCooling?'Check your email first':'Send one sign-in link'}</button>`):''}</div></div></div></div>`;
   }
   if (state.modal === 'member-access' && state.pendingMemberEdit) {
     const member=state.pendingMemberEdit;
@@ -5068,11 +5071,26 @@ async function shareFleetParkingLink() {
 async function cloudSignIn() {
   const email=String(document.getElementById('cloud-signin-email')?.value||'').trim().toLowerCase();
   if(!/^\S+@\S+\.\S+$/.test(email))return toast('Enter a complete dispatcher email','error');
+  if(state.cloudSigninCooldownUntil>Date.now())return toast('A secure email was just requested. Open the newest invitation in your inbox before requesting another.','error');
   const button=document.querySelector('[data-action="cloud-sign-in"]');
   if(button){button.disabled=true;button.textContent='Sending secure link…';}
-  try{await window.RelayOpsCloud.signIn(email);toast(`Secure sign-in link sent to ${email}`);}
-  catch(error){toast(`Could not send sign-in link: ${error.message||'check cloud setup'}`,'error');}
-  finally{if(button){button.disabled=false;button.textContent='Send sign-in link';}}
+  try{
+    await window.RelayOpsCloud.signIn(email);
+    state.cloudSigninError='';
+    state.cloudSigninCooldownUntil=Date.now()+60000;
+    localStorage.setItem('relayops_cloud_signin_cooldown_until',String(state.cloudSigninCooldownUntil));
+    render();
+    toast(`One secure link was sent to ${email}. Open the newest email; do not request another link.`);
+    setTimeout(()=>{if(state.cloudSigninCooldownUntil<=Date.now()){state.cloudSigninCooldownUntil=0;localStorage.removeItem('relayops_cloud_signin_cooldown_until');if(state.modal==='cloud-account')render();}},61000);
+  }catch(error){
+    state.cloudSigninError=error.message||'Check the shared sign-in setup.';
+    if(error.code==='email_rate_limit'){
+      state.cloudSigninCooldownUntil=Date.now()+60000;
+      localStorage.setItem('relayops_cloud_signin_cooldown_until',String(state.cloudSigninCooldownUntil));
+    }
+    render();
+    toast(state.cloudSigninError,'error');
+  }
 }
 async function cloudSignOut() {
   try{await window.RelayOpsCloud.signOut();state.modal=null;state.cloudStatus='signed-out';state.cloudUser='';state.role='viewer';localStorage.setItem('relayops_role','viewer');render();toast('Signed out · local cache remains on this device');}
@@ -8372,7 +8390,7 @@ window.RelayOpsApp={sharedState:sharedWorkspaceState,persistentState:persistentW
 window.RelayOpsCloud?.on?.(event=>{
   if(event.type==='offline'){state.cloudStatus='offline';render();}
   if(event.type==='reconnecting'){state.cloudStatus='connecting';render();}
-  if(event.type==='auth'){state.cloudStatus=event.session?'connecting':'signed-out';state.cloudUser=event.session?.user?.email||'';state.cloudAccessError='';if(!event.session){state.role='viewer';if(!state.cloudSigninPrompted){state.cloudSigninPrompted=true;state.modal='cloud-account';}}render();if(event.session)setTimeout(()=>refreshCloudMembers(),0);}
+  if(event.type==='auth'){state.cloudStatus=event.session?'connecting':'signed-out';state.cloudUser=event.session?.user?.email||'';state.cloudAccessError='';if(event.session){state.cloudSigninError='';state.cloudSigninCooldownUntil=0;localStorage.removeItem('relayops_cloud_signin_cooldown_until');}if(!event.session){state.role='viewer';if(!state.cloudSigninPrompted){state.cloudSigninPrompted=true;state.modal='cloud-account';}}render();if(event.session)setTimeout(()=>refreshCloudMembers(),0);}
   if(event.type==='access-granted'){state.cloudAccessError='';}
   if(event.type==='access-denied'){state.cloudStatus='access-denied';state.cloudAccessError=`${event.email||'This email'} is signed in but has not been invited to this station.`;state.modal='cloud-account';render();}
   if(event.type==='workspace-empty'){state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';render();toast('Shared workspace is not initialized for this day yet','error');}

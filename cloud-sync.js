@@ -180,6 +180,11 @@
   }
   function readableAuthError(error){
     const message=String(error?.message||error||'').trim();
+    if(/email rate limit exceeded|rate limit.*email|too many.*email/i.test(message)){
+      const friendly=new Error('Supabase has reached its two-email hourly limit. Open the newest RelayOps invitation already in your inbox, or wait up to one hour before requesting one more link.');
+      friendly.code='email_rate_limit';
+      return friendly;
+    }
     if(/load failed|failed to fetch|fetch failed|network request failed|networkerror|network error/i.test(message)){
       return new Error('Shared sign-in service is unreachable. The owner needs to restore the Supabase project, then try again.');
     }

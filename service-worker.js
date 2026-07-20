@@ -1,4 +1,4 @@
-const CACHE='relayops-owner-admin-v41';
+const CACHE='relayops-email-recovery-v42';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{
