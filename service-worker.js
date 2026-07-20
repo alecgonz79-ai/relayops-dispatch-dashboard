@@ -1,4 +1,4 @@
-const CACHE='relayops-rostering-five-wave-v38';
+const CACHE='relayops-auth-recovery-v39';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{

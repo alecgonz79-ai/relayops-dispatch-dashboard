@@ -164,6 +164,24 @@
     if(!configured||!window.supabase?.createClient)return null;
     return window.supabase.createClient(config.supabaseUrl,config.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   }
+  function authRedirectUrl(){
+    const configuredRedirect=String(config.authRedirectUrl||'').trim();
+    try{
+      const redirect=new URL(configuredRedirect||location.href,location.href);
+      redirect.hash='';
+      if(!configuredRedirect)redirect.search='';
+      return redirect.href;
+    }catch{
+      return String(location.href||'').split(/[?#]/)[0];
+    }
+  }
+  function readableAuthError(error){
+    const message=String(error?.message||error||'').trim();
+    if(/load failed|failed to fetch|fetch failed|network request failed|networkerror|network error/i.test(message)){
+      return new Error('Shared sign-in service is unreachable. The owner needs to restore the Supabase project, then try again.');
+    }
+    return error instanceof Error?error:new Error(message||'Unable to send the secure sign-in link');
+  }
   async function init(){
     client=createClient();
     if(!client){notify({type:'offline',reason:'not-configured'});return {configured:false};}
@@ -175,8 +193,10 @@
   function operationDate(){return window.RelayOpsApp?.operationDate?.()||new Date().toISOString().slice(0,10);}
   async function signIn(email){
     if(!client)throw new Error('Cloud is not configured');
-    const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:location.href.split('#')[0]}});if(error)throw error;
-    notify({type:'magic-link-sent',email});
+    try{
+      const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:authRedirectUrl()}});if(error)throw error;
+      notify({type:'magic-link-sent',email});
+    }catch(error){throw readableAuthError(error);}
   }
   async function signOut(){if(client)await client.auth.signOut();}
   async function accessToken(){
@@ -261,7 +281,7 @@
   }
   async function inviteMember({email,displayName='',role='dispatcher'}){
     if(!client||!session)throw new Error('Sign in first');
-    const {data,error}=await client.functions.invoke('invite-user',{body:{email,displayName,role,organizationId:config.organizationId,stationId:config.stationId,redirectTo:location.href.split('#')[0]}});
+    const {data,error}=await client.functions.invoke('invite-user',{body:{email,displayName,role,organizationId:config.organizationId,stationId:config.stationId,redirectTo:authRedirectUrl()}});
     if(error)throw error;notify({type:'member-invited',member:data});return data;
   }
   async function updateMemberAccess({userId,role,active}){

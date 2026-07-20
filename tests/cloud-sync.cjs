@@ -2,13 +2,13 @@ const fs=require('fs');
 const vm=require('vm');
 
 const events=[],rpcCalls=[],applied=[],memberUpdates=[],savedPayload={morningRoutes:[{route:'CX100'}]},persistentPayload={fleetIssues:{EV1:{active:[],history:[]}}};
-let authCallback=null,postgresCallback=null;
+let authCallback=null,postgresCallback=null,signInRequest=null;
 const row={payload:{morningRoutes:[{route:'CX200'}]},revision:4,updated_at:'2026-07-11T12:00:00Z',updated_by:'user-2'};
 const client={
   auth:{
     getSession:async()=>({data:{session:{user:{id:'user-1',email:'owner@example.com'}}}}),
     onAuthStateChange:callback=>{authCallback=callback;return{data:{subscription:{unsubscribe(){}}}};},
-    signInWithOtp:async()=>({error:null}),signOut:async()=>({error:null})
+    signInWithOtp:async request=>{signInRequest=request;return{error:null};},signOut:async()=>({error:null})
   },
   from(table){let updatePayload=null;const filters=[];return{
     update(payload){updatePayload=payload;return this;},select(){return this;},eq(field,value){filters.push({op:'eq',field,value});return this;},neq(field,value){filters.push({op:'neq',field,value});return this;},
@@ -22,7 +22,7 @@ const client={
 };
 const context={
   console,setTimeout,clearTimeout,
-  location:{href:'https://example.test/'},
+  location:{href:'https://example.test/?v=cache-bust#temporary'},
   window:{
     RELAYOPS_CLOUD_CONFIG:{supabaseUrl:'https://relayops.supabase.co',supabaseAnonKey:'public-anon',organizationId:'org-1',stationId:'station-1'},
     supabase:{createClient:()=>client},
@@ -47,6 +47,7 @@ cloud.on(event=>events.push(event));
   if(applied.length!==4||applied[3].kind!=='daily'||applied[3].payload.morningRoutes[0].route!=='CX300'||cloud.revision!==6||!events.some(event=>event.type==='remote-update'))throw new Error('Realtime dispatcher update failed');
   await cloud.signIn('dispatcher@example.com');
   if(!events.some(event=>event.type==='magic-link-sent'))throw new Error('Passwordless sign-in event missing');
+  if(signInRequest?.options?.emailRedirectTo!=='https://example.test/')throw new Error(`Passwordless redirect must drop cache/query fragments, received ${signInRequest?.options?.emailRedirectTo}`);
   const updated=await cloud.updateMemberAccess({userId:'user-2',role:'fleet_lead',active:false});
   if(updated.role!=='fleet_lead'||updated.active!==false||memberUpdates.length!==1||memberUpdates[0].table!=='memberships'||!memberUpdates[0].filters.some(filter=>filter.op==='neq'&&filter.field==='role'&&filter.value==='owner'))throw new Error('RLS-backed member role/active update failed');
   if(!events.some(event=>event.type==='member-updated'))throw new Error('Member access update event missing');

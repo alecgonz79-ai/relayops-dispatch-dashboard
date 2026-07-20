@@ -5041,8 +5041,11 @@ async function shareFleetParkingLink() {
 async function cloudSignIn() {
   const email=String(document.getElementById('cloud-signin-email')?.value||'').trim().toLowerCase();
   if(!/^\S+@\S+\.\S+$/.test(email))return toast('Enter a complete dispatcher email','error');
+  const button=document.querySelector('[data-action="cloud-sign-in"]');
+  if(button){button.disabled=true;button.textContent='Sending secure link…';}
   try{await window.RelayOpsCloud.signIn(email);toast(`Secure sign-in link sent to ${email}`);}
   catch(error){toast(`Could not send sign-in link: ${error.message||'check cloud setup'}`,'error');}
+  finally{if(button){button.disabled=false;button.textContent='Send sign-in link';}}
 }
 async function cloudSignOut() {
   try{await window.RelayOpsCloud.signOut();state.modal=null;state.cloudStatus='signed-out';state.cloudUser='';state.role='viewer';localStorage.setItem('relayops_role','viewer');render();toast('Signed out · local cache remains on this device');}
