@@ -459,6 +459,8 @@ let state = {
   pendingRosterSwap: null,
   pendingRosterDestination: null,
   pendingVtoRouteSwap: null,
+  pendingRouteTrainer: null,
+  pendingRouteVtoSwap: null,
   removedDriverKeys: JSON.parse(localStorage.getItem('relayops_removed_driver_keys') || 'null') || [],
   pendingDriverRemoval: null,
   cloudStatus: window.RelayOpsCloud?.configured?'connecting':'setup-required',
@@ -3223,6 +3225,14 @@ function modal() {
     if(destination!=='reduction'&&destination!=='route')actions.push(button('reduction','Move to Reductions','reduction-button'));
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal roster-destination-modal" role="dialog" aria-modal="true" aria-labelledby="roster-destination-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">OPENING ROSTER ACTIONS</span><h2 id="roster-destination-title">${esc(pending.name)}</h2><p>${esc(pending.role||'Scheduled driver')} · ${esc(destination.replace(/-/g,' ')||'roster destination')}${pending.route?` · ${esc(pending.route)}`:''}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${pending.automatic?`<div class="private-contact-note"><b>Automatic backup</b><span>This ${automaticBackupLabel(pending.role)} assignment comes from a scheduled ${esc(pending.role)} shift that is not on the Morning Sheet. Choose a different destination to override it.</span></div>`:''}<div class="roster-destination-actions">${actions.join('')}</div><div class="modal-actions"><button class="btn" data-action="close-modal">Done</button></div></div></div></div>`;
   }
+  if (state.modal === 'route-trainer' && state.pendingRouteTrainer) {
+    const pending=state.pendingRouteTrainer,route=morningRouteByUid(pending.routeUid),candidates=routeTrainerCandidates(route),size=Math.min(10,Math.max(4,candidates.length));
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal route-trainer-modal" role="dialog" aria-modal="true" aria-labelledby="route-trainer-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">ROUTE TRAINER</span><h2 id="route-trainer-title">Add a trainer to ${esc(route?.route||'this route')}</h2><p>The route keeps its CX, staging, pad, van, counts, and Planned RTS. The trainer appears beside the driver everywhere.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="route-trainer-picker"><span>Trainer</span><select id="route-trainer-name" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.name)}" ${index===0?'selected':''}>${esc(driverDisplayName(row.name))}${row.trainer?' · Trainer':''}${row.role?` · ${esc(row.role)}`:''}</option>`).join('')}</select></label><label class="driver-alias-field"><span>Short display name <small>optional</small></span><input id="route-trainer-display" placeholder="${esc(candidates[0]?suggestedDriverAlias(candidates[0].name):'First L.')}" maxlength="28"><small>The exact Drivers & Team identity stays linked for Whiparound, texting, and history.</small></label>${candidates.length?'':`<div class="private-contact-note danger"><b>No available Drivers & Team names</b><span>Import the driver or add them in Drivers & Team, then try again.</span></div>`}<div class="private-contact-note"><b>One shared assignment</b><span>RelayOps removes the selected trainer from VTO, Reductions, Called Off, Told To Stay Home, or Helper boxes before adding them to this route.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-route-trainer" ${candidates.length?'':'disabled'}>Add trainer</button></div></div></div></div>`;
+  }
+  if (state.modal === 'route-vto-swap' && state.pendingRouteVtoSwap) {
+    const pending=state.pendingRouteVtoSwap,route=morningRouteByUid(pending.routeUid),backups=currentBackupDriverRows(),size=Math.min(10,Math.max(4,backups.length));
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal route-vto-swap-modal" role="dialog" aria-modal="true" aria-labelledby="route-vto-swap-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">VTO → ROUTE</span><h2 id="route-vto-swap-title">Put a VTO driver on ${esc(route?.route||'this route')}</h2><p>${esc(pending.driverName||'Current driver')} moves to their correct VTO box. The chosen backup takes the same route position.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="route-vto-picker"><span>VTO driver</span><select id="route-vto-driver" size="${size}">${backups.map((row,index)=>`<option value="${esc(row.name)}" ${index===0?'selected':''}>${esc(driverDisplayName(row.name))} · ${esc(row.vto||scheduleBackupLabel(row.role))}</option>`).join('')}</select></label>${backups.length?'':`<div class="private-contact-note danger"><b>No VTO drivers available</b><span>Mark a scheduled driver VTO 2 or VTO 4 first.</span></div>`}<div class="private-contact-note"><b>No duplicates</b><span>The incoming driver is removed from every backup/status box. The outgoing driver is placed exactly once in VTO 2 or VTO 4 from their PAYCOM role.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-route-vto-swap" ${backups.length?'':'disabled'}>Confirm VTO swap</button></div></div></div></div>`;
+  }
   if (state.modal === 'vto-route-swap' && state.pendingVtoRouteSwap) {
     const pending=state.pendingVtoRouteSwap,candidates=vtoRouteSwapCandidates(pending.name),size=Math.min(10,Math.max(4,candidates.length));
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal vto-route-swap-modal" role="dialog" aria-modal="true" aria-labelledby="vto-route-swap-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">VTO ROUTE SWAP</span><h2 id="vto-route-swap-title">Swap ${esc(pending.name)} to a route</h2><p>${esc(pending.vtoLabel||scheduleBackupLabel(pending.role))} · choose the route driver who will move into this VTO spot.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="vto-route-picker"><span>Driver currently on route</span><select id="vto-route-swap-target" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.routeUid)}" ${index===0?'selected':''}>${esc(row.driver)} · ${esc(row.route)} · ${esc(waveNameForTime(row.wave))} ${esc(row.wave)}</option>`).join('')}</select></label>${candidates.length?'':`<div class="private-contact-note"><b>No eligible routes found</b><span>Fill the Morning Sheet with at least one assigned route before using this swap.</span></div>`}<div class="private-contact-note"><b>Safe one-step swap</b><span>${esc(pending.name)} takes the selected route. The current primary driver moves to VTO 2 or VTO 4 based on their scheduled PAYCOM role. Route, staging, pad, van, stop count, package count, Planned RTS, and any helper remain unchanged.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-vto-route-swap" ${candidates.length?'':'disabled'}>Confirm Swap To Route</button></div></div></div></div>`;
@@ -3372,7 +3382,7 @@ function protectRouteOperationalData(route={},change=()=>{}) {
   return result;
 }
 function morningRouteForDriver(routeCode='',driverName='') {
-  const matches=(state.morningRoutes||[]).filter(row=>row.route===routeCode&&!/helper/i.test(String(row.service||'')));
+  const matches=(state.morningRoutes||[]).filter(row=>row.route===routeCode&&!isDedicatedHelperMorningRoute(row));
   return matches.find(row=>rosterSwapDriverIndex(morningDriverNames(row.driver),driverName)>=0)||matches[0]||null;
 }
 function leaveMorningRouteUnassigned(route={},driverName='',reason='Driver removed') {
@@ -3784,6 +3794,95 @@ function leaveRosterRouteUnassigned() {
   state.pendingRosterSwap=null;state.modal=null;persist();render();toast(`${removed||'Driver'} removed · ${swap.route} is highlighted as unassigned`);
 }
 
+function routeContextDriverRole(name='') {
+  const scheduled=currentScheduleEntries().find(entry=>driverIdentityKey(entry.name)===driverIdentityKey(name));
+  const team=teamDriverRows().find(entry=>driverIdentityKey(entry.name)===driverIdentityKey(name));
+  return scheduled?.role||team?.role||'Delivery Associate';
+}
+function closeDriverRouteContextMenu() { document.getElementById?.('driver-route-context-menu')?.remove?.(); }
+function closeDriverRouteContextOnOutside(event) {
+  const menu=document.getElementById?.('driver-route-context-menu');
+  if(menu&&!menu.contains?.(event?.target))closeDriverRouteContextMenu();
+}
+function closeDriverRouteContextOnKey(event) { if(event?.key==='Escape')closeDriverRouteContextMenu(); }
+function closeDriverRouteContextOnScroll(event) {
+  const menu=document.getElementById?.('driver-route-context-menu');
+  if(menu&&!menu.contains?.(event?.target))closeDriverRouteContextMenu();
+}
+function driverRouteContextRoute(source) {
+  const uid=source?.dataset?.viewUid||source?.dataset?.picklistRouteUid||'';
+  if(uid)return morningRouteByUid(uid);
+  const code=source?.dataset?.viewRoute||'';
+  return (state.morningRoutes||[]).find(route=>route.route===code)||null;
+}
+function openDriverRouteContextMenu(event,source) {
+  const route=driverRouteContextRoute(source),people=morningDriverNames(route?.driver).filter(name=>name&&name!=='?');
+  if(!route||!route.routeUid||!people.length||route._blank||String(route.route||'').startsWith('__blank_'))return;
+  event?.preventDefault?.();event?.stopPropagation?.();closeDriverProfilePopover();closeDriverSuggestions();closeDriverRouteContextMenu();
+  const menu=document.createElement('div');menu.id='driver-route-context-menu';menu.className='driver-route-context-menu';menu.setAttribute('role','menu');menu.setAttribute('aria-label',`Route actions for ${route.route}`);
+  const personPicker=people.length>1?`<label><span>Choose name</span><select id="driver-route-context-person">${people.map(name=>`<option value="${esc(name)}">${esc(driverDisplayName(name))}</option>`).join('')}</select></label>`:`<input id="driver-route-context-person" type="hidden" value="${esc(people[0])}">`;
+  const button=(target,label,tone='',detail='')=>`<button type="button" class="${esc(tone)}" data-action="driver-route-context-action" data-route-target="${esc(target)}" data-route-uid="${esc(route.routeUid)}"><b>${esc(label)}</b>${detail?`<small>${esc(detail)}</small>`:''}</button>`;
+  menu.innerHTML=`<header><div><span>DRIVER ACTIONS</span><strong>${esc(route.route)} · ${esc(waveNameForTime(route.wave))}</strong></div><button type="button" class="driver-route-context-close" aria-label="Close route actions">×</button></header>${personPicker}<div class="driver-route-context-actions">${button('calloff','Call off & swap','calloff','Choose a scheduled replacement')}${button('swap-vto','Put VTO driver on route','swap','One-step VTO swap')}${button('reduction','Move to Reductions','reduction','Leave route visibly unassigned')}${button('vto2','Move to VTO 2','vto2','Rescue backup')}${button('vto4','Move to VTO 4','vto4','Delivery Associate backup')}${button('stay-home','Told To Stay Home','stay-home','Remove from route')}${button('trainer','Add a trainer','trainer','Driver + Trainer')}</div><footer>Route, staging, pad, van, counts, and Planned RTS stay in place.</footer>`;
+  document.body?.appendChild?.(menu);menu.querySelector?.('.driver-route-context-close')?.addEventListener?.('click',closeDriverRouteContextMenu);bindActionControls(menu);
+  const viewportWidth=window.innerWidth||document.documentElement?.clientWidth||1024,viewportHeight=window.innerHeight||document.documentElement?.clientHeight||768,width=Math.min(360,Math.max(286,menu.offsetWidth||330)),height=Math.min(viewportHeight-16,menu.offsetHeight||430),x=Number(event?.clientX)||source.getBoundingClientRect?.().left||8,y=Number(event?.clientY)||source.getBoundingClientRect?.().bottom||8;
+  menu.style.left=`${Math.max(8,Math.min(viewportWidth-width-8,x))}px`;menu.style.top=`${Math.max(8,Math.min(viewportHeight-height-8,y))}px`;
+  menu.querySelector?.('select,button')?.focus?.({preventScroll:true});
+}
+function routeTrainerCandidates(route={}) {
+  const onRoute=new Set((state.morningRoutes||[]).filter(row=>row!==route).flatMap(row=>morningDriverNames(row.driver)).map(driverIdentityKey));
+  const scheduleRoles=new Map(currentScheduleEntries().map(entry=>[driverIdentityKey(entry.name),entry.role||'']));
+  return teamDriverRows().filter(row=>!onRoute.has(driverIdentityKey(row.name))&&!morningDriverNames(route?.driver).some(name=>driverIdentityKey(name)===driverIdentityKey(row.name))).map(row=>({...row,role:scheduleRoles.get(driverIdentityKey(row.name))||row.role||'',trainer:driverHasCapability(row.name,'trainer')})).sort((a,b)=>Number(b.trainer)-Number(a.trainer)||driverDisplayName(a.name).localeCompare(driverDisplayName(b.name)));
+}
+function openRouteTrainer(routeUid='') {
+  const route=morningRouteByUid(routeUid);if(!route)return toast('That route is no longer available','error');
+  state.pendingRouteTrainer={routeUid};state.modal='route-trainer';render();return true;
+}
+function applyRouteTrainer() {
+  const pending=state.pendingRouteTrainer,route=morningRouteByUid(pending?.routeUid||''),selected=document.getElementById('route-trainer-name')?.value||'';if(!route||!selected)return toast('Choose an available trainer','error');
+  const exact=canonicalDriverName(selected),display=String(document.getElementById('route-trainer-display')?.value||'').replace(/[+|&]/g,' ').replace(/\s+/g,' ').trim();
+  if((state.morningRoutes||[]).some(row=>row!==route&&morningDriverNames(row.driver).some(name=>driverIdentityKey(name)===driverIdentityKey(exact))))return toast(`${driverDisplayName(exact)} is already assigned to another route`,'error');
+  if(display&&nameKey(display)!==nameKey(exact)){
+    const profile=ensureDriverProfile(driverContactForName(exact)||{name:exact}),collision=driverIdentityCollision([display],profile?.key||'');if(collision)return toast(`“${display}” is already linked to ${collision.profile.canonical}`,'error');
+    if(profile){profile.profile.nickname=display;profile.profile.updatedAt=new Date().toISOString();}state.driverNameAliases[nameKey(exact)]={canonical:exact,display,aliases:profile?.profile?.names||[exact]};
+  }
+  reconcileDailyRosterFlags(exact,'on-route');const people=morningDriverNames(route.driver);if(!people.some(name=>driverIdentityKey(name)===driverIdentityKey(exact)))people.push(exact);
+  protectRouteOperationalData(route,()=>{route.driver=people.join(' + ');route.trainerNames=[...new Set([...(route.trainerNames||[]),exact])];});
+  state.pendingRouteTrainer=null;state.modal=null;persist();render();toast(`${driverDisplayName(exact)} added as trainer on ${route.route}`);return true;
+}
+function moveRouteDriverToVto(routeUid='',name='',label='VTO 2') {
+  const route=morningRouteByUid(routeUid);if(!route)return toast('That route is no longer available','error');
+  const result=leaveMorningRouteUnassigned(route,name,`${label} reassignment`),exact=canonicalDriverName(result?.removed||name),role=routeContextDriverRole(exact),backup=setRosterBackupState(exact,role,label),key=scheduleDriverMarkKey(exact);
+  state.scheduleBackupRecords[key]={...(state.scheduleBackupRecords[key]||{}),originalRoute:route.route,routeUid:route.routeUid};persist();render();toast(`${backup.name} moved to ${backup.vto} · ${route.route} is highlighted for reassignment`);return true;
+}
+function moveRouteDriverToStayHome(routeUid='',name='') {
+  const route=morningRouteByUid(routeUid);if(!route)return toast('That route is no longer available','error');
+  const result=leaveMorningRouteUnassigned(route,name,'Told to stay home'),exact=canonicalDriverName(result?.removed||name);return markPaycomStayHome(exact,routeContextDriverRole(exact));
+}
+function openRouteVtoSwap(routeUid='',driverName='') {
+  const route=morningRouteByUid(routeUid);if(!route)return toast('That route is no longer available','error');
+  if(!currentBackupDriverRows().length)return toast('No VTO 2 or VTO 4 drivers are available','error');
+  state.pendingRouteVtoSwap={routeUid,driverName:canonicalDriverName(driverName)};state.modal='route-vto-swap';render();return true;
+}
+function applyRouteVtoSwap() {
+  const pending=state.pendingRouteVtoSwap,route=morningRouteByUid(pending?.routeUid||''),incomingRaw=document.getElementById('route-vto-driver')?.value||'';if(!route||!incomingRaw)return toast('Choose a VTO driver','error');
+  const people=morningDriverNames(route.driver),index=rosterSwapDriverIndex(people,pending.driverName),incoming=canonicalDriverName(incomingRaw);if(index<0)return toast('The selected driver is no longer on this route','error');
+  if(people.some(name=>driverIdentityKey(name)===driverIdentityKey(incoming)))return toast('That VTO driver is already on this route','error');
+  const outgoing=canonicalDriverName(people[index]),outgoingRole=routeContextDriverRole(outgoing),outgoingVto=scheduleBackupLabel(outgoingRole);
+  reconcileDailyRosterFlags(incoming,'on-route');const applied=protectRouteOperationalData(route,()=>{people[index]=incoming;route.driver=people.join(' + ');if(index===0)clearRouteAssignmentVacancy(route);else {delete route.missingHelper;delete route.vacatedHelper;}return true;});if(!applied)return toast('The VTO route swap could not be completed','error');
+  setRosterBackupState(outgoing,outgoingRole,outgoingVto);state.pendingRouteVtoSwap=null;state.modal=null;persist();render();toast(`${driverDisplayName(incoming)} took ${route.route} · ${driverDisplayName(outgoing)} moved to ${outgoingVto}`);return true;
+}
+function applyDriverRouteContextAction(target='',el=null) {
+  const menu=el?.closest?.('#driver-route-context-menu')||document.getElementById?.('driver-route-context-menu'),routeUid=el?.dataset?.routeUid||'',name=menu?.querySelector?.('#driver-route-context-person')?.value||'',route=morningRouteByUid(routeUid);closeDriverRouteContextMenu();if(!route||!name)return toast('That driver assignment is no longer available','error');
+  const role=routeContextDriverRole(name);
+  if(target==='calloff')return openRosterSwap(route.route,name,'calloff',driverDisplayName(name));
+  if(target==='swap-vto')return openRouteVtoSwap(routeUid,name);
+  if(target==='reduction')return addRosterReduction(name,role,route.route,route.wave);
+  if(target==='vto2'||target==='vto4')return moveRouteDriverToVto(routeUid,name,target==='vto2'?'VTO 2':'VTO 4');
+  if(target==='stay-home')return moveRouteDriverToStayHome(routeUid,name);
+  if(target==='trainer')return openRouteTrainer(routeUid);
+  return false;
+}
+
 function startOpeningPicklistCellEdit(source) {
   const key=source.dataset.picklistCell;if(!key)return;
   state.editMode=true;state.copyMode=false;render();
@@ -4023,6 +4122,7 @@ function render() {
   if(PARKING_ONLY_VIEW)state.page='parking';
   if(state.modal&&!previouslyOpen)modalReturnFocus=captureModalReturnFocus();
   closeDriverProfilePopover();
+  closeDriverRouteContextMenu();
   closeDriverSuggestions();
   app.innerHTML = `<div class="app-shell ${PARKING_ONLY_VIEW?'parking-only-shell':''}">${sidebar()}<main class="main">${topbar()}<div class="content">${pageContent()}</div></main></div>${modal()}<div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>`;
   enhanceDriverTextButtons();
@@ -4066,6 +4166,10 @@ function bind() {
   document.removeEventListener?.('copy',handleSheetSelectionCopy);
   document.removeEventListener?.('keydown',handleModalKeydown);
   document.removeEventListener?.('keydown',handleSheetHistoryKeyboard);
+  document.removeEventListener?.('pointerdown',closeDriverRouteContextOnOutside);
+  document.removeEventListener?.('keydown',closeDriverRouteContextOnKey);
+  window.removeEventListener?.('resize',closeDriverRouteContextMenu);
+  window.removeEventListener?.('scroll',closeDriverRouteContextOnScroll,true);
   if(state.modal)document.addEventListener?.('keydown',handleModalKeydown);
   else document.addEventListener?.('keydown',handleSheetHistoryKeyboard);
   document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>go(el.dataset.page)));
@@ -4080,6 +4184,11 @@ function bind() {
     card.addEventListener('keydown',event=>{if(event.target!==card||!['Enter',' '].includes(event.key))return;event.preventDefault();toggle();});
   });
   document.querySelectorAll('[data-driver-profile-name]').forEach(el=>{el.addEventListener('mouseenter',()=>showDriverProfilePopover(el));el.addEventListener('mouseleave',closeDriverProfilePopover);el.addEventListener('pointerleave',closeDriverProfilePopover);el.addEventListener('focusin',()=>showDriverProfilePopover(el));el.addEventListener('focusout',closeDriverProfilePopover);});
+  document.querySelectorAll('.morning-template-sheet [data-view-field="driver"], .opening-picklist-main [data-picklist-field="driver"]').forEach(el=>el.addEventListener('contextmenu',event=>openDriverRouteContextMenu(event,el)));
+  document.addEventListener?.('pointerdown',closeDriverRouteContextOnOutside);
+  document.addEventListener?.('keydown',closeDriverRouteContextOnKey);
+  window.addEventListener?.('resize',closeDriverRouteContextMenu);
+  window.addEventListener?.('scroll',closeDriverRouteContextOnScroll,true);
   const aChatInput=document.querySelector?.('[data-achat-input]');
   if(aChatInput)aChatInput.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAChatMessage();}});
   const aChatStream=document.querySelector?.('[data-achat-stream]');if(aChatStream)aChatStream.scrollTop=aChatStream.scrollHeight;
@@ -5011,7 +5120,7 @@ function action(name,el) {
   if (name==='copy-open-charger-slack') return copyChargerReportAndOpenSlack();
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.fleetRefreshPreview=null;return render(); }
+  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingRouteTrainer=null;state.pendingRouteVtoSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=importAcceptForPurpose(state.importPurpose);return fileInput.click(); }
   if (name==='schedule-import') { state.scheduleImportDestination=state.page==='rostering'?'rostering':'roster';state.importPurpose='schedule';fileInput.accept='.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf';return fileInput.click(); }
   if (name==='rostering-import-screenshot') { state.importPurpose='rostering-screenshot';fileInput.accept=importAcceptForPurpose('rostering-screenshot');return fileInput.click(); }
@@ -5041,6 +5150,9 @@ function action(name,el) {
   if (name==='rostering-use-trainer-suggestion') return assignRosteringTrainer(el.dataset.ridealongName||'',el.dataset.trainerName||'');
   if (name==='rostering-swap-trainer') return clearRosteringTrainerMatch(el.dataset.ridealongName||'');
   if (name==='open-roster-destination-actions') return openRosterDestinationActions(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.rosterDestination||'',el.dataset.driverRoute||'',el.dataset.driverStart||'',el.dataset.rosterAutomatic||'');
+  if (name==='driver-route-context-action') return applyDriverRouteContextAction(el.dataset.routeTarget||'',el);
+  if (name==='apply-route-trainer') return applyRouteTrainer();
+  if (name==='apply-route-vto-swap') return applyRouteVtoSwap();
   if (name==='apply-roster-destination-action') return applyRosterDestinationAction(el.dataset.rosterTarget||'');
   if (name==='picklist-vto-action') return applyPicklistVtoAction(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.vtoTarget||'');
   if (name==='open-vto-route-swap') return openVtoRouteSwap(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.vtoLabel||'');
