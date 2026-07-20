@@ -24,7 +24,7 @@ vm.runInNewContext(fs.readFileSync('cloud-sync.js','utf8'),context,{filename:'cl
   let message='';
   try{await cloud.signIn('dispatcher@example.com');}catch(error){message=error.message;}
   if(request?.options?.emailRedirectTo!=='https://dashboard.example.test/relayops/?date=2026-07-20')throw new Error(`Configured dashboard redirect did not preserve the shared operation date: ${request?.options?.emailRedirectTo}`);
-  if(!/restore the Supabase project/i.test(message))throw new Error(`Network auth failure was not translated into an actionable message: ${message}`);
+  if(!/shared cloud service is unreachable/i.test(message))throw new Error(`Network auth failure was not translated into an actionable message: ${message}`);
   authFailure=new Error('email rate limit exceeded');
   let limited=null;
   try{await cloud.signIn('owner@example.com');}catch(error){limited=error;}
