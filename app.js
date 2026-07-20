@@ -85,6 +85,16 @@ function defaultOperationDate() {
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
+function requestedOperationDate() {
+  const requested=String(initialUrlParams.get('date')||'').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(requested)?requested:defaultOperationDate();
+}
+function sharedDashboardUrl(view='') {
+  const url=new URL(DISPATCHER_SHARE_URL);
+  url.searchParams.set('date',state?.morningOperationDate||requestedOperationDate());
+  if(view)url.searchParams.set('view',view);
+  return url.href;
+}
 function operationDateTabNames(value='') {
   const parts=String(value||'').split('-').map(Number);
   if(parts.length!==3||parts.some(n=>!n))return [];
@@ -344,7 +354,10 @@ let state = {
   morningSheetsLastError: localStorage.getItem('relayops_morning_sheets_last_error') || '',
   morningSheetsLastReceipt: JSON.parse(localStorage.getItem('relayops_morning_sheets_last_receipt') || 'null'),
   morningSheetsLastDryRun: localStorage.getItem('relayops_morning_sheets_last_dry_run') || '',
-  morningOperationDate: localStorage.getItem('relayops_morning_operation_date') || defaultOperationDate(),
+  // A shared link always opens today's operation unless an explicit ?date=
+  // is present. Never let an old device-local date silently select a stale
+  // cloud snapshot for another dispatcher.
+  morningOperationDate: requestedOperationDate(),
   morningWaveTimeOverrides: JSON.parse(localStorage.getItem('relayops_morning_wave_time_overrides') || 'null') || {},
   lastItineraryRts: JSON.parse(localStorage.getItem('relayops_last_itinerary_rts') || 'null') || {},
   fleetNameOverrides: JSON.parse(localStorage.getItem('relayops_fleet_name_overrides') || 'null') || {},
@@ -468,6 +481,8 @@ let state = {
   cloudStatus: window.RelayOpsCloud?.configured?'connecting':'setup-required',
   cloudUser: '',
   cloudPresence: [],
+  cloudAccessError: '',
+  cloudSigninPrompted: false,
   cloudMembers: [],
   pendingMemberEdit: null,
   pendingChargerReport: null,
@@ -829,7 +844,7 @@ function topbar() {
 }
 
 function contextBar(extra='') {
-  const synced=state.cloudStatus==='synced',label=synced?`Shared workspace${state.cloudUser?` · ${state.cloudUser}`:''}`:state.cloudStatus==='offline'?'Offline · edits saved and will sync automatically':state.cloudStatus==='signed-out'?'Local cache · sign in to share':state.cloudStatus==='connecting'?'Connecting shared workspace…':'Local cache · cloud setup required';
+  const synced=state.cloudStatus==='synced',label=synced?`Shared workspace${state.cloudUser?` · ${state.cloudUser}`:''}`:state.cloudStatus==='access-denied'?'Access required · ask the owner to invite this email':state.cloudStatus==='workspace-empty'?'Shared day is waiting for an owner to start it':state.cloudStatus==='offline'?'Offline · edits saved and will sync automatically':state.cloudStatus==='signed-out'?'Sign in required · local changes are not shared':state.cloudStatus==='connecting'?'Connecting shared workspace…':'Local cache · cloud setup required';
   return `<div class="context-bar"><div class="date-nav"><div class="date-chip">${ICONS.calendar}${fmtDate()}</div>${extra}</div><div class="sync-state ${synced?'cloud-live':''}"><i class="live-dot"></i>${esc(label)}</div></div>`;
 }
 
@@ -3221,7 +3236,7 @@ function modal() {
   }
   if (state.modal === 'cloud-account') {
     const configured=Boolean(window.RelayOpsCloud?.configured),signedIn=Boolean(window.RelayOpsCloud?.session);
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal cloud-account-modal" role="dialog" aria-modal="true" aria-labelledby="cloud-account-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">SHARED RELAYOPS</span><h2 id="cloud-account-title">${!configured?'Connect the shared workspace':signedIn?'Dispatcher account':'Sign in to RelayOps'}</h2><p>${!configured?'Owner setup is required once. After setup, every authorized dispatcher uses the same live operational data.':signedIn?`Signed in as ${esc(state.cloudUser||'authorized dispatcher')}. Changes synchronize with your station in real time.`:'Enter your authorized dispatcher email. RelayOps will send a secure sign-in link.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${!configured?`<div class="cloud-setup-steps"><span><b>1</b>Create the RelayOps Supabase project</span><span><b>2</b>Run <code>supabase/schema.sql</code></span><span><b>3</b>Add project URL, anon key, organization ID, and station ID to <code>supabase/config.js</code></span></div><div class="private-contact-note"><b>Security requirement</b><span>Use only the public anon key here. Never add the Supabase service-role key, Amazon password, FleetOS password, or portal cookies.</span></div>`:signedIn?`<div class="cloud-account-summary"><span><b>✓</b>Authenticated</span><span><b>✓</b>Station access checked by database policies</span><span><b>✓</b>Realtime workspace updates enabled</span></div>`:`<label class="cloud-email-field"><span>Dispatcher email</span><input id="cloud-signin-email" type="email" autocomplete="email" placeholder="dispatcher@company.com"></label><div class="private-contact-note"><b>Passwordless sign-in</b><span>The secure email link identifies the dispatcher. Database roles decide what they can view or edit.</span></div>`}<div class="modal-actions"><button class="btn" data-action="close-modal">Close</button>${configured?(signedIn?'<button class="btn danger" data-action="cloud-sign-out">Sign out</button>':'<button class="btn primary" data-action="cloud-sign-in">Send sign-in link</button>'):''}</div></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal cloud-account-modal" role="dialog" aria-modal="true" aria-labelledby="cloud-account-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">SHARED RELAYOPS</span><h2 id="cloud-account-title">${!configured?'Connect the shared workspace':signedIn?'Dispatcher account':'Sign in to RelayOps'}</h2><p>${!configured?'Owner setup is required once. After setup, every authorized dispatcher uses the same live operational data.':signedIn?`Signed in as ${esc(state.cloudUser||'authorized dispatcher')}. ${state.cloudAccessError?esc(state.cloudAccessError):'Changes synchronize with your station in real time.'}`:'Sign in once on this device. After that, edits and imports load from the same live station workspace.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${!configured?`<div class="cloud-setup-steps"><span><b>1</b>Create the RelayOps Supabase project</span><span><b>2</b>Run <code>supabase/schema.sql</code></span><span><b>3</b>Add project URL, anon key, organization ID, and station ID to <code>supabase/config.js</code></span></div><div class="private-contact-note"><b>Security requirement</b><span>Use only the public anon key here. Never add the Supabase service-role key, Amazon password, FleetOS password, or portal cookies.</span></div>`:signedIn?`<div class="cloud-account-summary ${state.cloudAccessError?'has-error':''}"><span><b>${state.cloudAccessError?'!':'✓'}</b>${state.cloudAccessError?'Owner invitation required':'Authenticated'}</span><span><b>${state.cloudAccessError?'!':'✓'}</b>${state.cloudAccessError?'Ask the owner to add this email in Admin control':'Station access checked by database policies'}</span><span><b>${state.cloudAccessError?'!':'✓'}</b>${state.cloudAccessError?'Local data will not replace the shared workspace':'Realtime workspace updates enabled'}</span></div>`:`<label class="cloud-email-field"><span>Dispatcher email</span><input id="cloud-signin-email" type="email" autocomplete="email" placeholder="dispatcher@company.com"></label><div class="private-contact-note"><b>Passwordless sign-in</b><span>The secure email link identifies the dispatcher. The owner must invite the same email once before it can open station data.</span></div>`}<div class="modal-actions"><button class="btn" data-action="close-modal">Close</button>${configured?(signedIn?'<button class="btn danger" data-action="cloud-sign-out">Sign out</button>':'<button class="btn primary" data-action="cloud-sign-in">Send sign-in link</button>'):''}</div></div></div></div>`;
   }
   if (state.modal === 'member-access' && state.pendingMemberEdit) {
     const member=state.pendingMemberEdit;
@@ -4008,6 +4023,7 @@ function commitOpeningPicklistCalloffDraft(index) {
 }
 function loadSharedOperationDate(date='',message='') {
   state.morningOperationDate=date||defaultOperationDate();state.morningSheetsLastReceipt=null;localStorage.setItem('relayops_morning_operation_date',state.morningOperationDate);render();if(message)toast(message);
+  try{const url=new URL(location.href);url.searchParams.set('date',state.morningOperationDate);history.replaceState(null,'',url.href);}catch{}
   if(window.RelayOpsCloud?.session){state.cloudStatus='connecting';window.RelayOpsCloud.load?.().catch(error=>{state.cloudStatus='error';render();toast(`Could not load ${state.morningOperationDate}: ${error?.message||'cloud sync error'}`,'error');});}
 }
 function saveOpeningPicklistDate(value='') {
@@ -5029,12 +5045,12 @@ function handleSheetPaste(e,el) {
 }
 
 async function shareDispatcherLink() {
-  const ok=await writeClipboardText(DISPATCHER_SHARE_TEXT);
-  toast(ok?'Clickable dispatcher link copied — paste it into GroupMe, Slack, text, or email':'Clipboard access was blocked — copy the full https:// link from Admin control',ok?'':'error');
+  const url=sharedDashboardUrl(),ok=await writeClipboardText(`LLOL Dispatch Opening Operations\n${url}`);
+  toast(ok?`Clickable link for ${state.morningOperationDate} copied — every signed-in dispatcher opens the same shared day`:'Clipboard access was blocked — copy the full https:// link from Admin control',ok?'':'error');
   return ok;
 }
 async function shareFleetParkingLink() {
-  const ok=await writeClipboardText(FLEET_PARKING_SHARE_TEXT);
+  const ok=await writeClipboardText(`LLOL Van Parking Map\n${sharedDashboardUrl('parking')}`);
   toast(ok?'Fleet team Van Parking link copied':'Clipboard access was blocked — copy the fleet link from Van Parking',ok?'success':'error');
   return ok;
 }
@@ -8340,9 +8356,12 @@ window.RelayOpsApp={sharedState:sharedWorkspaceState,persistentState:persistentW
 window.RelayOpsCloud?.on?.(event=>{
   if(event.type==='offline'){state.cloudStatus='offline';render();}
   if(event.type==='reconnecting'){state.cloudStatus='connecting';render();}
-  if(event.type==='auth'){state.cloudStatus=event.session?'connecting':'signed-out';state.cloudUser=event.session?.user?.email||'';if(!event.session)state.role='viewer';render();if(event.session)setTimeout(()=>refreshCloudMembers(),0);}
+  if(event.type==='auth'){state.cloudStatus=event.session?'connecting':'signed-out';state.cloudUser=event.session?.user?.email||'';state.cloudAccessError='';if(!event.session){state.role='viewer';if(!state.cloudSigninPrompted){state.cloudSigninPrompted=true;state.modal='cloud-account';}}render();if(event.session)setTimeout(()=>refreshCloudMembers(),0);}
+  if(event.type==='access-granted'){state.cloudAccessError='';}
+  if(event.type==='access-denied'){state.cloudStatus='access-denied';state.cloudAccessError=`${event.email||'This email'} is signed in but has not been invited to this station.`;state.modal='cloud-account';render();}
+  if(event.type==='workspace-empty'){state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';render();toast('Shared workspace is not initialized for this day yet','error');}
   if(event.type==='presence'){state.cloudPresence=event.users||[];render();}
-  if(event.type==='loaded'||event.type==='saved'){state.cloudStatus='synced';render();}
+  if(event.type==='loaded'||event.type==='saved'){state.cloudStatus='synced';state.cloudAccessError='';render();}
   if(event.type==='remote-update'){state.cloudStatus='synced';render();toast('Another dispatcher updated today’s workspace');}
   if(event.type==='conflict')toast('A newer dispatcher update was loaded before saving','error');
   if(event.type==='error'){state.cloudStatus='error';render();toast(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}

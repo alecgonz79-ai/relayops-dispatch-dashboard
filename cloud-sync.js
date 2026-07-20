@@ -3,7 +3,7 @@
   const configured=Boolean(config.supabaseUrl&&config.supabaseAnonKey&&config.organizationId&&config.stationId&&!config.supabaseUrl.includes('YOUR_PROJECT'));
   const PERSISTENT_DATE='2000-01-01';
   const SYNC_META='__relayopsSync';
-  let client=null,session=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,saveTimer=null,applying=false,basePayload={},basePersistentPayload={};
+  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,saveTimer=null,applying=false,basePayload={},basePersistentPayload={};
   const listeners=new Set();
   const notify=event=>listeners.forEach(fn=>{try{fn(event);}catch(error){console.error(error);}});
   const queueKey=()=>`relayops_cloud_queue:${config.stationId||'local'}:${operationDate()}`;
@@ -157,7 +157,7 @@
   function queueSnapshot(payload,action='workspace.offline',persistentPayload){
     const existing=pendingSnapshot(),now=new Date().toISOString(),dailyBase=existing?.basePayload||basePayload||{},persistentBase=existing?.basePersistentPayload||basePersistentPayload||{};
     const prepared=preparePayload(payload||{},dailyBase,existing?.payload||null,now),preparedPersistent=preparePayload(persistentPayload===undefined?(window.RelayOpsApp?.persistentState?.()||{}):persistentPayload,persistentBase,existing?.persistentPayload||null,now);
-    const record=writePending({payload:prepared,persistentPayload:preparedPersistent,basePayload:clone(dailyBase),basePersistentPayload:clone(persistentBase),action,queuedAt:existing?.queuedAt||now,updatedAt:now});
+    const record=writePending({payload:prepared,persistentPayload:preparedPersistent,basePayload:clone(dailyBase),basePersistentPayload:clone(persistentBase),action,shared:true,userId:session?.user?.id||'',queuedAt:existing?.queuedAt||now,updatedAt:now});
     notify({type:'queued',action});return record;
   }
   function createClient(){
@@ -170,6 +170,9 @@
       const redirect=new URL(configuredRedirect||location.href,location.href);
       redirect.hash='';
       if(!configuredRedirect)redirect.search='';
+      redirect.searchParams.set('date',operationDate());
+      const view=new URL(location.href,location.href).searchParams.get('view');
+      if(view)redirect.searchParams.set('view',view);
       return redirect.href;
     }catch{
       return String(location.href||'').split(/[?#]/)[0];
@@ -186,7 +189,7 @@
     client=createClient();
     if(!client){notify({type:'offline',reason:'not-configured'});return {configured:false};}
     const result=await client.auth.getSession();session=result.data.session;
-    client.auth.onAuthStateChange((_event,next)=>{session=next;notify({type:'auth',session});if(session)load();});
+    client.auth.onAuthStateChange((_event,next)=>{session=next;if(!session)membership=null;notify({type:'auth',session});if(session)load().catch(error=>notify({type:'error',error}));});
     if(session)await load();else notify({type:'auth',session:null});
     return {configured:true,session};
   }
@@ -207,14 +210,38 @@
     return session?.access_token||'';
   }
   function workspaceContext(){return {organizationId:config.organizationId||'',stationId:config.stationId||''};}
+  async function currentMembership({refresh=false}={}){
+    if(!client||!session)return null;
+    if(membership&&!refresh)return membership;
+    const {data,error}=await client.from('memberships').select('user_id,role,display_name,active').eq('organization_id',config.organizationId).eq('user_id',session.user.id).eq('active',true).maybeSingle();
+    if(error)throw error;
+    membership=data||null;
+    if(membership&&!['owner','ops_manager'].includes(membership.role)){
+      const station=await client.from('station_memberships').select('station_id').eq('station_id',config.stationId).eq('user_id',session.user.id).maybeSingle();
+      if(station.error)throw station.error;
+      if(!station.data)membership=null;
+    }
+    if(!membership)notify({type:'access-denied',email:session.user.email||''});
+    else notify({type:'access-granted',membership});
+    return membership;
+  }
+  function canWrite(){return Boolean(membership&&membership.active&&membership.role!=='viewer');}
+  function canInitialize(){return Boolean(membership&&membership.active&&['owner','ops_manager'].includes(membership.role));}
   async function load(){
     if(!client||!session)return null;
     clearTimeout(saveTimer);saveTimer=null;
+    const access=await currentMembership({refresh:true});
+    if(!access)return null;
     const date=operationDate();
     const query=date=>client.from('workspace_snapshots').select('payload,revision,updated_at,updated_by').eq('station_id',config.stationId).eq('operation_date',date).maybeSingle();
     const [dailyResult,persistentResult]=await Promise.all([query(date),query(PERSISTENT_DATE)]);
     if(dailyResult.error)throw dailyResult.error;if(persistentResult.error)throw persistentResult.error;
-    const data=dailyResult.data,persistent=persistentResult.data,pending=pendingSnapshot(),dailyRemote=data?.payload||{},persistentRemote=persistent?.payload||{};
+    const data=dailyResult.data,persistent=persistentResult.data,dailyRemote=data?.payload||{},persistentRemote=persistent?.payload||{};
+    let pending=pendingSnapshot();
+    // Pre-cloud and signed-out browser queues are device-local caches, not
+    // authoritative shared edits. Never merge one dispatcher's stale cache
+    // into the station workspace after sign-in.
+    if(pending&&(!pending.shared||pending.userId!==session.user.id)){clearPending();pending=null;}
     revision=Number(data?.revision)||0;persistentRevision=Number(persistent?.revision)||0;
     const pendingPersistent=pending?.persistentPayload||(pending?.payload?window.RelayOpsApp?.persistentState?.()||{}:null);
     const dailyPayload=pending?.payload?reconcilePayload(dailyRemote,pending.payload,pending.basePayload||basePayload||{}):dailyRemote;
@@ -223,17 +250,20 @@
     applying=true;
     if(data||pending?.payload)window.RelayOpsApp?.applySharedState?.(dailyPayload);
     if(persistent||pendingPersistent)window.RelayOpsApp?.applyPersistentState?.(persistentPayload);
-    applying=false;notify({type:'loaded',revision,persistentRevision,updatedAt:data?.updated_at||persistent?.updated_at});
+    applying=false;notify({type:'loaded',revision,persistentRevision,updatedAt:data?.updated_at||persistent?.updated_at,operationDate:date});
     if(pending)writePending({...pending,payload:dailyPayload,persistentPayload,basePayload:clone(dailyRemote),basePersistentPayload:clone(persistentRemote),updatedAt:new Date().toISOString()});
-    if(!data||!persistent||pending?.payload)setTimeout(()=>save(!data||!persistent?'workspace.initialize':'workspace.offline-reconcile').catch(error=>notify({type:'error',error})),0);
+    if((!data||!persistent)&&!canInitialize())notify({type:'workspace-empty',operationDate:date,missingDaily:!data,missingPersistent:!persistent});
+    if(((!data||!persistent)&&canInitialize())||pending?.payload)setTimeout(()=>save(!data||!persistent?'workspace.initialize':'workspace.offline-reconcile').catch(error=>notify({type:'error',error})),0);
     subscribe(date);subscribePresence(date);return data;
   }
   async function save(action='workspace.save'){
     const currentPayload=window.RelayOpsApp?.sharedState?.();if(!currentPayload)return null;
     const currentPersistentPayload=window.RelayOpsApp?.persistentState?.()||{};
     if(applying)return null;
-    const queued=queueSnapshot(currentPayload,action,currentPersistentPayload),payload=queued.payload,persistentPayload=queued.persistentPayload;
     if(!client||!session){notify({type:'offline',reason:'not-connected'});return null;}
+    if(!membership)await currentMembership({refresh:true});
+    if(!canWrite())throw new Error('This account does not have permission to edit the shared workspace');
+    const queued=queueSnapshot(currentPayload,action,currentPersistentPayload),payload=queued.payload,persistentPayload=queued.persistentPayload;
     try{
       const daily=await client.rpc('save_workspace_snapshot',{target_station:config.stationId,target_date:operationDate(),expected_revision:revision,new_payload:payload,action_name:action});
       if(daily.error){if(String(daily.error.message||'').includes('revision_conflict')){notify({type:'conflict'});await load();return null;}throw daily.error;}
@@ -245,13 +275,15 @@
   }
   function schedule(action='workspace.autosave'){
     if(applying)return;
+    if(!session){notify({type:'offline',reason:'signed-out-local-only'});return;}
+    if(membership&&!canWrite())return;
     const payload=window.RelayOpsApp?.sharedState?.();if(payload)queueSnapshot(payload,action,window.RelayOpsApp?.persistentState?.()||{});
     clearTimeout(saveTimer);if(client&&session)saveTimer=setTimeout(()=>save(action).catch(error=>notify({type:'error',error})),180);
   }
   function subscribe(date){
     if(channel)client.removeChannel(channel);
-    channel=client.channel(`workspace:${config.stationId}:${date}`).on('postgres_changes',{event:'UPDATE',schema:'public',table:'workspace_snapshots',filter:`station_id=eq.${config.stationId}`},payload=>{
-      const row=payload.new,pending=pendingSnapshot();
+    channel=client.channel(`workspace:${config.stationId}:${date}`).on('postgres_changes',{event:'*',schema:'public',table:'workspace_snapshots',filter:`station_id=eq.${config.stationId}`},payload=>{
+      const row=payload.new,pending=pendingSnapshot();if(!row?.operation_date)return;
       if(row.operation_date===PERSISTENT_DATE){
         if(Number(row.revision)<=persistentRevision)return;
         const remote=row.payload||{},local=pending?.persistentPayload||null,next=local?reconcilePayload(remote,local,pending?.basePersistentPayload||basePersistentPayload||{}):remote;
@@ -300,5 +332,5 @@
     window.addEventListener('online',()=>{notify({type:'reconnecting'});if(session)load().catch(error=>notify({type:'error',error}));});
     window.addEventListener('offline',()=>notify({type:'offline',reason:'browser-offline'}));
   }
-  window.RelayOpsCloud={configured,init,signIn,signOut,accessToken,workspaceContext,load,save,schedule,members,inviteMember,updateMemberAccess,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{preparePayload,reconcilePayload,semanticKey,canonical}};
+  window.RelayOpsCloud={configured,init,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{preparePayload,reconcilePayload,semanticKey,canonical}};
 })();

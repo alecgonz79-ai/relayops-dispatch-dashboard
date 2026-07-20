@@ -38,7 +38,9 @@ from public.organizations o join public.stations s on s.organization_id=o.id;
 
 ## Dispatcher accounts
 
-Invite each dispatcher in Authentication → Users, then add their user UUID:
+The owner can now use **Admin control → Invite user**; the deployed `invite-user` Edge Function creates the Auth user, organization membership, and station membership together. The dispatcher opens that email link once on each device.
+
+For manual recovery, invite the dispatcher in Authentication → Users, then add their user UUID:
 
 ```sql
 insert into public.memberships(organization_id,user_id,role,display_name)
@@ -61,6 +63,8 @@ Allowed member roles are `ops_manager`, `dispatcher`, `fleet_lead`, and `viewer`
 - Coaching review queue and shared message template
 
 Each day is stored as a versioned station workspace. Writes use an expected revision, reload newer work on a conflict, publish realtime changes to open dispatcher sessions, and write an audit event.
+
+Shared links include `?date=YYYY-MM-DD`, so every dispatcher opens the same operational day. Signed-out browser data stays local and is never merged into the station workspace after another person signs in. The first owner or operations manager to open a new date initializes it; dispatchers cannot seed a missing day from an outdated local cache.
 
 ## Authenticated Fleet refresh
 

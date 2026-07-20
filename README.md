@@ -13,6 +13,8 @@ https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/
 Send the full `https://` URL so GroupMe, Slack, text messages, and email turn it into a clickable link.
 Do not shorten or swap the GitHub account name in the URL. For example, `https://AG79.github.io/...` will show GitHub's 404 page unless a GitHub account or organization named `AG79` owns and publishes the site.
 
+The dashboard's **Share link** button appends the selected operation date. Every dispatcher must open their secure email sign-in link once; after the owner invites that email, imports and edits use the same dated Supabase snapshot and update open screens in realtime.
+
 ## Local preview
 
 Serve this folder with any static web server, then open `index.html` through that server. The dashboard has no front-end build step.

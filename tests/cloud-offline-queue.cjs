@@ -6,7 +6,7 @@ const localStorage={getItem:key=>store.has(key)?store.get(key):null,setItem:(key
 let failSave=false;
 const client={
   auth:{getSession:async()=>({data:{session:{user:{id:'user-1',email:'dispatcher@example.com'}}}}),onAuthStateChange:()=>({}),signInWithOtp:async()=>({error:null}),signOut:async()=>({error:null})},
-  from(){return{select(){return this;},eq(){return this;},order(){return Promise.resolve({data:[],error:null});},maybeSingle:async()=>({data:{payload:{fleetIssues:{}},revision:2,updated_at:'2026-07-12T10:00:00Z'},error:null})};},
+  from(table){return{select(){return this;},eq(){return this;},order(){return Promise.resolve({data:[],error:null});},maybeSingle:async()=>({data:table==='memberships'?{user_id:'user-1',role:'dispatcher',active:true}:table==='station_memberships'?{station_id:'station'}:{payload:{fleetIssues:{}},revision:2,updated_at:'2026-07-12T10:00:00Z'},error:null})};},
   rpc:async()=>failSave?{data:null,error:{message:'network unavailable'}}:{data:{revision:3,updated_at:'2026-07-12T10:05:00Z'},error:null},
   functions:{invoke:async()=>({data:{},error:null})},
   channel(){return{on(){return this;},subscribe(){return this;},presenceState(){return{};},track:async()=>{}};},removeChannel(){}

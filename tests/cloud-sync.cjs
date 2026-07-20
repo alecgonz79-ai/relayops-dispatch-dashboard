@@ -13,7 +13,7 @@ const client={
   from(table){let updatePayload=null;const filters=[];return{
     update(payload){updatePayload=payload;return this;},select(){return this;},eq(field,value){filters.push({op:'eq',field,value});return this;},neq(field,value){filters.push({op:'neq',field,value});return this;},
     order(){return Promise.resolve({data:[],error:null});},
-    maybeSingle:async()=>{if(updatePayload){memberUpdates.push({table,payload:updatePayload,filters});return{data:{user_id:'user-2',role:updatePayload.role,display_name:'Dispatcher Two',active:updatePayload.active,created_at:'2026-07-01'},error:null};}return{data:row,error:null};}
+    maybeSingle:async()=>{if(updatePayload){memberUpdates.push({table,payload:updatePayload,filters});return{data:{user_id:'user-2',role:updatePayload.role,display_name:'Dispatcher Two',active:updatePayload.active,created_at:'2026-07-01'},error:null};}if(table==='memberships')return{data:{user_id:'user-1',role:'owner',display_name:'Owner',active:true},error:null};return{data:row,error:null};}
   };},
   rpc:async(name,args)=>{rpcCalls.push({name,args});return{data:{revision:5,updated_at:'2026-07-11T12:01:00Z'},error:null};},
   functions:{invoke:async()=>({data:{ok:true},error:null})},
@@ -21,7 +21,7 @@ const client={
   removeChannel(){}
 };
 const context={
-  console,setTimeout,clearTimeout,
+  console,setTimeout,clearTimeout,URL,
   location:{href:'https://example.test/?v=cache-bust#temporary'},
   window:{
     RELAYOPS_CLOUD_CONFIG:{supabaseUrl:'https://relayops.supabase.co',supabaseAnonKey:'public-anon',organizationId:'org-1',stationId:'station-1'},
@@ -47,7 +47,7 @@ cloud.on(event=>events.push(event));
   if(applied.length!==4||applied[3].kind!=='daily'||applied[3].payload.morningRoutes[0].route!=='CX300'||cloud.revision!==6||!events.some(event=>event.type==='remote-update'))throw new Error('Realtime dispatcher update failed');
   await cloud.signIn('dispatcher@example.com');
   if(!events.some(event=>event.type==='magic-link-sent'))throw new Error('Passwordless sign-in event missing');
-  if(signInRequest?.options?.emailRedirectTo!=='https://example.test/')throw new Error(`Passwordless redirect must drop cache/query fragments, received ${signInRequest?.options?.emailRedirectTo}`);
+  if(signInRequest?.options?.emailRedirectTo!=='https://example.test/?date=2026-07-11')throw new Error(`Passwordless redirect must preserve only the shared date, received ${signInRequest?.options?.emailRedirectTo}`);
   const updated=await cloud.updateMemberAccess({userId:'user-2',role:'fleet_lead',active:false});
   if(updated.role!=='fleet_lead'||updated.active!==false||memberUpdates.length!==1||memberUpdates[0].table!=='memberships'||!memberUpdates[0].filters.some(filter=>filter.op==='neq'&&filter.field==='role'&&filter.value==='owner'))throw new Error('RLS-backed member role/active update failed');
   if(!events.some(event=>event.type==='member-updated'))throw new Error('Member access update event missing');
