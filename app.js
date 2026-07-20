@@ -31,6 +31,16 @@ const ICONS = {
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>'
 };
 
+const ADMIN_OWNER_EMAIL = 'alecgonz79@gmail.com';
+const OWNER_ADMIN_ACTIONS = new Set(['invite','send-user-invite','edit-member-access','save-member-access','save-organization']);
+
+function authenticatedCloudEmail() {
+  return String(window.RelayOpsCloud?.session?.user?.email||state?.cloudUser||'').trim().toLowerCase();
+}
+function hasOwnerAdminAccess() {
+  return state?.role==='admin'&&authenticatedCloudEmail()===ADMIN_OWNER_EMAIL;
+}
+
 const NAV = [
   { section: 'Opening Operations', items: [
     ['dashboard','Today','dashboard'], ['morning','Morning sheet','calendar'], ['roster','Opening Picklist','roster'], ['rostering','Rostering','users'], ['live','Device and Portable Sheet','phone']
@@ -39,9 +49,8 @@ const NAV = [
     ['team','Drivers & team','users'], ['fleet','Fleet Health','battery'], ['parking','Van Parking','parking'], ['inbox','Whiparound','whiparound'], ['inventory','Inventory','box']
   ]},
   { section: 'Improve', items: [
-    ['performance','Performance','chart'], ['coaching','Coaching','coach','6'], ['reports','Reports & export','report'], ['achat','A-Chat','achat']
-  ]},
-  { section: 'Owner', admin: true, items: [['admin','Admin control','settings']] }
+    ['performance','Performance','chart'], ['coaching','Coaching','coach','6'], ['reports','Reports & export','report'], ['achat','A-Chat','achat'], ['admin','Admin access','settings','',true]
+  ]}
 ];
 
 const DISPATCHER_SHARE_URL = 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/';
@@ -787,8 +796,8 @@ function sidebar() {
   return `<aside class="sidebar" id="sidebar">
     <div class="brand"><div class="brand-mark"></div><div class="brand-copy"><div class="brand-name">RelayOps</div><div class="brand-sub">Dispatch command</div></div></div>
     <div class="station-pill"><div class="station-icon">${esc(state.stationCode.slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(state.stationCode.toUpperCase())} · Los Angeles</span></div>${ICONS.chevron}</div>
-    <nav>${NAV.filter(g => !g.admin || state.role === 'admin').map(group => `<div class="side-section"><div class="side-label">${group.section}</div>${group.items.map(([id,label,icon,count]) => `<button class="nav-item ${state.page===id?'active':''}" data-page="${id}" aria-label="${label}">${ICONS[icon]}<span>${label}</span>${count?`<b class="nav-count">${count}</b>`:''}</button>`).join('')}</div>`).join('')}</nav>
-    <div class="side-bottom"><div class="user-card"><div class="avatar">AG</div><div class="user-copy"><strong>Alex Gonzalez</strong><span>${state.role==='admin'?'Owner · Full access':'Opening dispatcher'}</span></div><div class="role-tag">${state.role==='admin'?'ADMIN':'OPS'}</div></div></div>
+    <nav>${NAV.map(group=>({...group,items:group.items.filter(item=>!item[4]||hasOwnerAdminAccess())})).filter(group=>group.items.length).map(group => `<div class="side-section"><div class="side-label">${group.section}</div>${group.items.map(([id,label,icon,count]) => `<button class="nav-item ${state.page===id?'active':''}" data-page="${id}" aria-label="${label}">${ICONS[icon]}<span>${label}</span>${count?`<b class="nav-count">${count}</b>`:''}</button>`).join('')}</div>`).join('')}</nav>
+    <div class="side-bottom"><div class="user-card"><div class="avatar">AG</div><div class="user-copy"><strong>Alex Gonzalez</strong><span>${hasOwnerAdminAccess()?'Owner · Full access':'Opening dispatcher'}</span></div><div class="role-tag">${hasOwnerAdminAccess()?'ADMIN':'OPS'}</div></div></div>
   </aside>`;
 }
 
@@ -799,7 +808,7 @@ const pageInfo = {
   fleet:['Fleet Health','Electric and gas vehicle status, battery, and operational health'], parking:['Van Parking','Interactive parking map for closing and morning dispatch'], performance:['Performance','Scorecard trends and driver-level focus areas'],
   coaching:['Coaching','Turn scorecard signals into consistent follow-through'], checklists:['Checklists','Repeatable opening, load-out, and closeout routines'],
   inbox:['Whiparound','Pre-trip and post-trip DVIR completion checker'], inventory:['Inventory','Devices, uniforms, supplies, and assignments'],
-  reports:['Reports & export','Google Sheets-ready operational data'], achat:['A-Chat','A small dispatcher helper for quick operational answers'], admin:['Admin control','People, permissions, connections, and audit history']
+  reports:['Reports & export','Google Sheets-ready operational data'], achat:['A-Chat','A small dispatcher helper for quick operational answers'], admin:['Admin access','People, permissions, connections, and audit history']
 };
 
 function operationalAlertGroups() {
@@ -3045,7 +3054,7 @@ function adminMemberRows() {
   return state.cloudMembers.map(member=>{const locked=member.role==='owner'||member.user_id===currentId;return `<tr><td><div class="admin-member-name"><strong>${esc(member.display_name||'Authorized member')}</strong><small>${member.user_id===currentId?'Current account':`User ${String(member.user_id||'').slice(0,8)}…`}</small></div></td><td><span class="role-chip ${esc(member.role)}">${esc(roleLabel(member.role))}</span></td><td><span class="status ${member.active?'':'risk'}">${member.active?'Active':'Inactive'}</span></td><td>${locked?'<span class="member-access-locked">Owner access locked</span>':`<button class="btn small" data-action="edit-member-access" data-member-id="${esc(member.user_id)}">Edit access</button>`}</td></tr>`;}).join('');
 }
 function adminPage() {
-  if(state.role!=='admin')return `<article class="card empty-state"><div class="empty-icon">${ICONS.alert}</div><h3>Owner access required</h3><p>This area is protected by database membership policy and is not visible to dispatcher accounts.</p></article>`;
+  if(!hasOwnerAdminAccess())return `<article class="card empty-state"><div class="empty-icon">${ICONS.alert}</div><h3>Owner access required</h3><p>Admin access is restricted to ${esc(ADMIN_OWNER_EMAIL)} and protected by the signed-in Supabase owner membership.</p></article>`;
   const cloudConfigured=Boolean(window.RelayOpsCloud?.configured),signedIn=Boolean(window.RelayOpsCloud?.session),sheetReady=Boolean(state.morningSheetsEndpoint);
   const policyRows=ROLE_POLICY_MATRIX.map(row=>`<tr><td><strong>${esc(row.capability)}</strong></td><td>${permissionMark(row.owner)}</td><td>${permissionMark(row.ops_manager)}</td><td>${permissionMark(row.dispatcher)}</td><td>${permissionMark(row.fleet_lead)}</td><td>${permissionMark(row.viewer)}</td></tr>`).join('');
   return `${contextBar('<span class="status">Owner access</span>')}<section class="admin-layout"><div class="admin-main"><article class="card settings-section"><h2>Organization</h2><p>These shared labels appear throughout RelayOps for every dispatcher.</p><div class="field-grid"><div class="field"><label for="admin-dsp-name">DSP name</label><input id="admin-dsp-name" value="${esc(state.organizationName)}"></div><div class="field"><label for="admin-station-code">Station code</label><input id="admin-station-code" value="${esc(state.stationCode)}" maxlength="12"></div><div class="field"><label>Timezone</label><input value="America/Los_Angeles" readonly></div><div class="field"><label>Operating day starts</label><input value="06:00" readonly></div></div><div class="modal-actions"><button class="btn primary" data-action="save-organization">Save organization</button></div></article><article class="card table-card admin-members-card"><div class="card-head"><div class="card-title"><h2>Member access</h2><p>Role and active status are saved to Supabase and enforced by row-level security.</p></div>${signedIn?`<button class="btn small" data-action="invite">${ICONS.plus} Invite user</button>`:`<button class="btn small" data-action="cloud-account">Sign in</button>`}</div><div class="table-wrap"><table><thead><tr><th>Member</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${adminMemberRows()}</tbody></table></div></article><article class="card table-card"><div class="card-head"><div class="card-title"><h2>Fixed role policy</h2><p>This is a read-only policy summary, not a set of pretend switches.</p></div><span class="status neutral">Database enforced</span></div><div class="table-wrap"><table class="permissions-table fixed-policy-table"><thead><tr><th>Capability</th><th>Owner</th><th>Ops manager</th><th>Dispatcher</th><th>Fleet lead</th><th>Viewer</th></tr></thead><tbody>${policyRows}</tbody></table></div></article></div><aside class="admin-side"><article class="card settings-section"><h2>Connections</h2><p>RelayOps clearly separates working handoffs from unavailable integrations.</p><div class="connection"><div class="connection-logo">amz</div><div class="connection-copy"><strong>Amazon Logistics</strong><span>Manual XLSX/CSV import is available</span></div><span class="status">File import ready</span></div><div class="connection"><div class="connection-logo" style="background:#287247">GS</div><div class="connection-copy"><strong>Google Sheets</strong><span>${sheetReady?'Saved connector endpoint':'Connector endpoint not configured'}</span></div><span class="status ${sheetReady?'':'warn'}">${sheetReady?'Ready':'Setup required'}</span></div><div class="connection unavailable-connection"><div class="connection-logo" style="background:#6d7480">ADP</div><div class="connection-copy"><strong>ADP Workforce</strong><span>No supported connector is installed</span></div><span class="status neutral" aria-disabled="true">Not available</span></div><button class="btn" style="width:100%;margin-top:5px" data-action="import">Open Amazon file import</button></article><article class="card settings-section"><h2>Dispatcher access link</h2><p>Send this full HTTPS link. Authorized cloud users see the shared workspace after sign-in.</p><div class="callout"><strong>Live shared dashboard</strong><p><a href="${DISPATCHER_SHARE_URL}" target="_blank" rel="noopener">${DISPATCHER_SHARE_URL}</a></p><p class="share-note">${DISPATCHER_SHARE_NOTE}</p><button class="btn small lime" data-action="share-dispatcher-link">${ICONS.copy} Copy clickable link</button></div><div class="callout"><strong>Fleet team parking link</strong><p><a href="${FLEET_PARKING_SHARE_URL}" target="_blank" rel="noopener">${FLEET_PARKING_SHARE_URL}</a></p><p class="share-note">Opens a Van Parking-only view with map arrangement, battery percentages, and charger status.</p><button class="btn small lime" data-action="copy-fleet-parking-link">${ICONS.copy} Copy fleet team link</button></div><div class="callout"><strong>Cloud status</strong><p>${!cloudConfigured?'Supabase is not configured in this build.':signedIn?'Owner session verified.':'Supabase is configured; sign in to manage members.'}</p><button class="btn small" data-action="cloud-account">${signedIn?'View account':'Sign in'}</button></div></article><article class="card settings-section admin-security-note"><h2>Security boundary</h2><p>Owner membership updates are accepted only when Supabase RLS verifies an active owner in this organization. Owner accounts cannot be changed from this screen.</p></article></aside></section>`;
@@ -3162,6 +3171,7 @@ function morningImportTemplateProofHtml(file=state.importedFile,payload=morningS
 }
 
 function modal() {
+  if(['invite-user','member-access'].includes(state.modal)&&!hasOwnerAdminAccess())return '';
   if (state.modal === 'route-details') {
     const route=(state.routes||[]).find(row=>row.route===state.pendingRouteCode);
     if(!route)return '';
@@ -4237,6 +4247,7 @@ function filterVtoRouteSwapOptions(input) {
 function render() {
   const previouslyOpen=modalWasOpen;
   if(PARKING_ONLY_VIEW)state.page='parking';
+  if(state.page==='admin'&&!hasOwnerAdminAccess())state.page='dashboard';
   if(state.modal&&!previouslyOpen)modalReturnFocus=captureModalReturnFocus();
   closeDriverProfilePopover();
   closeDriverRouteContextMenu();
@@ -5069,10 +5080,11 @@ async function cloudSignOut() {
 }
 async function refreshCloudMembers() {
   if(!window.RelayOpsCloud?.session)return [];
-  try{state.cloudMembers=await window.RelayOpsCloud.members();const current=state.cloudMembers.find(member=>member.user_id===window.RelayOpsCloud.session.user.id);if(current?.role)state.role=current.role==='owner'?'admin':current.role;render();return state.cloudMembers;}
+  try{state.cloudMembers=await window.RelayOpsCloud.members();const current=state.cloudMembers.find(member=>member.user_id===window.RelayOpsCloud.session.user.id);if(current?.role)state.role=current.role==='owner'&&authenticatedCloudEmail()===ADMIN_OWNER_EMAIL?'admin':current.role==='owner'?'dispatcher':current.role;render();return state.cloudMembers;}
   catch(error){console.warn('Could not load members',error);return[];}
 }
 async function sendUserInvite() {
+  if(!hasOwnerAdminAccess())return toast(`Admin access is restricted to ${ADMIN_OWNER_EMAIL}`,'error');
   const email=String(document.getElementById('invite-user-email')?.value||'').trim().toLowerCase(),displayName=String(document.getElementById('invite-user-name')?.value||'').trim(),role=String(document.getElementById('invite-user-role')?.value||'dispatcher');
   if(!/^\S+@\S+\.\S+$/.test(email))return toast('Enter a complete company email','error');
   try{await window.RelayOpsCloud.inviteMember({email,displayName,role});state.modal=null;await refreshCloudMembers();toast(`${displayName||email} invited as ${role.replace('_',' ')}`);}
@@ -5080,12 +5092,14 @@ async function sendUserInvite() {
 }
 
 function openMemberAccess(userId='') {
+  if(!hasOwnerAdminAccess())return toast(`Admin access is restricted to ${ADMIN_OWNER_EMAIL}`,'error');
   const member=(state.cloudMembers||[]).find(item=>item.user_id===userId);
   if(!member)return toast('Member record is no longer available — refresh Admin control','error');
   if(member.role==='owner'||member.user_id===window.RelayOpsCloud?.session?.user?.id)return toast('Owner access is locked for safety','error');
   state.pendingMemberEdit={...member};state.modal='member-access';render();
 }
 async function saveMemberAccess() {
+  if(!hasOwnerAdminAccess())return toast(`Admin access is restricted to ${ADMIN_OWNER_EMAIL}`,'error');
   const member=state.pendingMemberEdit,role=String(document.getElementById('member-access-role')?.value||''),active=String(document.getElementById('member-access-active')?.value||'true')==='true';
   if(!member)return toast('Choose a member first','error');
   if(!['ops_manager','dispatcher','fleet_lead','viewer'].includes(role))return toast('Choose a supported member role','error');
@@ -5140,7 +5154,7 @@ function saveCoachingTemplate() {
 
 function go(page) {
   if (PARKING_ONLY_VIEW && page!=='parking') return toast('Fleet team link only opens Van Parking','error');
-  if (page==='admin'&&state.role!=='admin') return toast('Owner permission required','error');
+  if (page==='admin'&&!hasOwnerAdminAccess()) return toast(`Admin access is restricted to ${ADMIN_OWNER_EMAIL}`,'error');
   cancelDeferredRenders();
   document.body?.classList?.remove('mobile-sidebar-open');
   state.page=page; state.search=''; state.modal=null;if(page==='rostering')syncRosteringHelperShifts(currentRosteringPlan());persist(); render();if(page==='admin')refreshCloudMembers();window.scrollTo({top:0,behavior:'smooth'});
@@ -5155,6 +5169,7 @@ function toggleMobileSidebar() {
 }
 
 function saveOrganizationSettings() {
+  if(!hasOwnerAdminAccess())return toast(`Admin access is restricted to ${ADMIN_OWNER_EMAIL}`,'error');
   const organizationName=document.getElementById('admin-dsp-name')?.value.trim();
   const stationCode=document.getElementById('admin-station-code')?.value.trim().toUpperCase();
   if(!organizationName)return toast('Enter a DSP name','error');
@@ -5183,6 +5198,7 @@ function action(name,el) {
     const allowed=new Set(['menu','copy-parking-list','copy-fleet-parking-link','cloud-account','cloud-sign-in','cloud-sign-out','close-modal']);
     if(!allowed.has(name))return toast('Fleet team view is read-only and limited to Van Parking','error');
   }
+  if(OWNER_ADMIN_ACTIONS.has(name)&&!hasOwnerAdminAccess())return toast(`Admin access is restricted to ${ADMIN_OWNER_EMAIL}`,'error');
   if (name==='menu') return toggleMobileSidebar();
   if (name==='opening-paycom-tab') { state.openingRosterPaycomTab=el.dataset.paycomTab==='marked'?'marked':'scheduled';localStorage.setItem('relayops_opening_roster_paycom_tab',state.openingRosterPaycomTab);return render(); }
   if (name==='clear-global-search') { state.search='';render();setTimeout(()=>document.getElementById('global-search')?.focus(),0);return; }

@@ -37,8 +37,8 @@ function testCoachingWorkflow(){
 function testAdminWorkflow(){
   const {context}=harness();
   vm.runInContext(`
-    state.role='admin';
-    window.RelayOpsCloud={configured:true,session:{user:{id:'owner-1'}},updateMemberAccess:async()=>({})};
+    state.role='admin';state.cloudUser='Alecgonz79@gmail.com';
+    window.RelayOpsCloud={configured:true,session:{user:{id:'owner-1',email:'Alecgonz79@gmail.com'}},updateMemberAccess:async()=>({})};
     state.cloudMembers=[
       {user_id:'owner-1',display_name:'Owner',role:'owner',active:true},
       {user_id:'dispatcher-2',display_name:'Dispatcher Two',role:'dispatcher',active:true}
@@ -50,6 +50,8 @@ function testAdminWorkflow(){
   assert(context.__admin.includes('ADP Workforce')&&context.__admin.includes('Not available')&&!context.__admin.includes('>Connect<'),'ADP must be shown as unavailable rather than clickable');
   assert(context.__admin.includes('Owner access locked')&&context.__admin.includes('data-action="edit-member-access"'),'Admin member rows must lock owners and allow editing non-owners');
   assert(context.__memberModal.includes('member-access-role')&&context.__memberModal.includes('member-access-active')&&context.__memberModal.includes('save-member-access'),'Member access modal must expose working role and active controls');
+  vm.runInContext("state.cloudUser='another-owner@example.com';window.RelayOpsCloud.session.user.email='another-owner@example.com';globalThis.__blockedAdmin=adminPage();globalThis.__blockedSidebar=sidebar();",context);
+  assert(context.__blockedAdmin.includes('Owner access required')&&!context.__blockedSidebar.includes('data-page="admin"'),'A generic admin role must not bypass the exact owner email gate');
 }
 
 function testCloudPolicyContracts(){

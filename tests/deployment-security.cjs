@@ -47,6 +47,9 @@ assert(/Sign in as an authorized dispatcher before authenticated Fleet refresh/.
 
 assert(/MORNING_SHEETS_DEFAULT_ENDPOINT\s*=\s*['"]['"]/.test(app), 'A writable Google Apps Script endpoint must not be hardcoded into the public dashboard');
 assert(/role:\s*localStorage\.getItem\(['"]relayops_role['"]\)\s*\|\|\s*['"]viewer['"]/.test(app), 'Fresh or signed-out browsers must not default to the admin UI role');
+assert(/ADMIN_OWNER_EMAIL\s*=\s*['"]alecgonz79@gmail\.com['"]/.test(app), 'Admin UI must be locked to the configured owner email');
+assert(/state\?\.role===['"]admin['"]&&authenticatedCloudEmail\(\)===ADMIN_OWNER_EMAIL/.test(app), 'Admin access must require both owner role and exact authenticated email');
+assert(/OWNER_ADMIN_ACTIONS\.has\(name\)&&!hasOwnerAdminAccess\(\)/.test(app), 'Admin mutations must use the same exact owner gate as the Admin page');
 assert(/handleModalKeydown/.test(app) && /event\.key\s*===\s*['"]Escape['"]/.test(app), 'Dialogs must support Escape and keyboard focus containment');
 assert(/id="toast-stack"[^>]*aria-live="polite"/.test(app), 'Status messages must be announced to assistive technology');
 

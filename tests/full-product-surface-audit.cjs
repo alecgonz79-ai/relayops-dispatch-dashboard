@@ -67,7 +67,7 @@ function testVisiblePageInventory() {
   const criticalPages = new Set(['dashboard', 'morning', 'roster', 'rostering', 'live', 'team', 'fleet', 'parking', 'inbox', 'reports', 'admin']);
   const handled = new Set([...source.matchAll(/name==='([^']+)'/g)].map(match => match[1]));
   const inventory = {};
-  vm.runInContext("state.role='admin'; state.morningOperationDate='2026-07-14'; state.driverContacts=[{name:'Andre Wilson',key:'andre wilson'}]; state.morningRoutes=[{dsp:'LLOL',route:'CX101',routeUid:'fixture-route',driver:'Andre Wilson',wave:'11:15 AM',staging:'STG.V.1',service:'Standard Parcel'}];", context);
+  vm.runInContext("state.role='admin'; state.cloudUser='Alecgonz79@gmail.com'; state.morningOperationDate='2026-07-14'; state.driverContacts=[{name:'Andre Wilson',key:'andre wilson'}]; state.morningRoutes=[{dsp:'LLOL',route:'CX101',routeUid:'fixture-route',driver:'Andre Wilson',wave:'11:15 AM',staging:'STG.V.1',service:'Standard Parcel'}];", context);
   for (const page of pages) {
     vm.runInContext(`state.page=${JSON.stringify(page)}; globalThis.__pageHtml=topbar()+pageContent();`, context);
     const html = context.__pageHtml;
@@ -96,7 +96,7 @@ function testVisiblePageInventory() {
   for (const page of pages) {
     assert(inventory[page].inertButtons.length === 0, `${page} added an unexpected inert control: ${inventory[page].inertButtons.join(', ')}`);
   }
-  vm.runInContext("state.role='admin';globalThis.__adminHtml=adminPage();", context);
+  vm.runInContext("state.role='admin';state.cloudUser='ALECGONZ79@GMAIL.COM';globalThis.__adminHtml=adminPage();", context);
   assert(context.__adminHtml.includes('Fixed role policy') && context.__adminHtml.includes('Database enforced'), 'Admin must show a truthful fixed role-policy matrix');
   assert(context.__adminHtml.includes('ADP Workforce') && context.__adminHtml.includes('Not available') && !context.__adminHtml.includes('>Connect<'), 'Unavailable ADP integration must not look clickable');
 
@@ -109,7 +109,7 @@ function testPermissionsAndImportChooserContracts() {
   const { context, fileInput } = harness();
   vm.runInContext(`
     state.role='viewer';state.page='dashboard';go('admin');globalThis.__viewerPage=state.page;globalThis.__viewerSide=sidebar();
-    state.role='admin';globalThis.__adminSide=sidebar();
+    state.role='admin';state.cloudUser='wrong-owner@example.com';globalThis.__wrongOwnerSide=sidebar();state.cloudUser='Alecgonz79@gmail.com';globalThis.__adminSide=sidebar();
     action('fleet-import-amazon',{});globalThis.__amazonAccept=fileInput.accept;
     action('fleet-import-fleetos',{});globalThis.__fleetosAccept=fileInput.accept;
     action('driver-import',{});globalThis.__driverAccept=fileInput.accept;
@@ -120,7 +120,8 @@ function testPermissionsAndImportChooserContracts() {
     action('fleet-import-amazon',{});state.importPurpose='morning';action('choose-file',{});globalThis.__morningAfterAmazonAccept=fileInput.accept;
   `, context);
   assert(context.__viewerPage === 'dashboard', 'Viewer must not navigate to Admin control');
-  assert(!context.__viewerSide.includes('data-page="admin"') && context.__adminSide.includes('data-page="admin"'), 'Admin navigation visibility must follow role');
+  assert(!context.__viewerSide.includes('data-page="admin"') && !context.__wrongOwnerSide.includes('data-page="admin"') && context.__adminSide.includes('data-page="admin"'), 'Admin navigation visibility must require both the admin role and exact owner email');
+  assert(context.__adminSide.indexOf('data-page="achat"') < context.__adminSide.indexOf('data-page="admin"'), 'Admin access must sit directly after A-Chat in the Improve section');
   assert(context.__amazonAccept.includes('.xlsx') && !context.__amazonAccept.includes('.csv'), 'Amazon Fleet chooser must stay XLSX-only');
   assert(context.__fleetosAccept.includes('.csv') && !context.__fleetosAccept.includes('.xlsx'), 'FleetOS chooser must stay CSV-only');
   assert(context.__driverAccept.includes('.csv') && context.__driverAccept.includes('.xlsx'), 'Driver chooser must accept CSV and XLSX');
@@ -134,6 +135,7 @@ function testPermissionsAndImportChooserContracts() {
 
 function testModalAndKeyboardInventory() {
   const { context, listeners } = harness();
+  vm.runInContext("state.role='admin';state.cloudUser='Alecgonz79@gmail.com';", context);
   const setups = {
     'cloud-account': '',
     'invite-user': '',

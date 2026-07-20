@@ -204,7 +204,7 @@ const checks = `
   openDriverText('maya collins');
   if(state.modal!=='text-driver'||!modal().includes('Text Maya Collins')||!modal().includes('Copy & open Google Messages')||!modal().includes('Open SMS app')||!modal().includes('review, and send')) throw new Error('Reviewed Google Messages driver text flow missing');
   state.modal=null;state.pendingDriverText=null;
-  state.organizationName='Legacy Logistics';state.stationCode='DJT6';state.role='admin';
+  state.organizationName='Legacy Logistics';state.stationCode='DJT6';state.role='admin';state.cloudUser='Alecgonz79@gmail.com';
   const adminHtml=adminPage();
   if(!adminHtml.includes('id="admin-dsp-name" value="Legacy Logistics"')||!adminHtml.includes('id="admin-station-code" value="DJT6"')||!adminHtml.includes('data-action="save-organization"')) throw new Error('Admin organization settings are not connected to saved workspace state');
   const sharedOrganization=sharedWorkspaceState();
