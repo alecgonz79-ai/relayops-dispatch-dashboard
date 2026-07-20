@@ -1035,7 +1035,7 @@ function addPaycomEntryToRostering(entry={},onlyServiceId='') {
 function fillRosteringFromPaycom(serviceId='',options={}) {
   const entries=scheduleEntriesForDate(state.rosteringDate).filter(rosteringEntryEligibleForRoster);if(!entries.length){if(!options.silent)toast('No eligible PAYCOM drivers are available for this roster date','error');return 0;}
   let added=0;entries.forEach(entry=>{if(addPaycomEntryToRostering(entry,serviceId))added++;});
-  if(!options.silent){persist();render();toast(added?`${added} PAYCOM driver${added===1?'':'s'} added to the roster`:'Every matching PAYCOM driver is already rostered');}
+  if(!options.silent){persistRosteringSlice();renderRosteringContent();toast(added?`${added} PAYCOM driver${added===1?'':'s'} added to the roster`:'Every matching PAYCOM driver is already rostered');}
   return added;
 }
 function rosteringHelperPoolRows(date=state.rosteringDate) {
@@ -1069,7 +1069,7 @@ function autoRosterFromPaycom(options={}) {
   });
   let added=0,prioritized=0;drivers.slice(0,open.length).forEach((entry,index)=>{const target=open[index]?.row;if(!target)return;const exact=canonicalDriverName(contactForMorningDriver(entry.name)?.name||entry.name);target.associate=exact;target.start=entry.start||target.start;target.role=entry.role||'';target.source='auto-roster';if(rosteringStayHomeCount(exact)>0)prioritized++;added++;});
   touchRosteringPlan();const result={drivers:added,helpers,prioritized,remaining:Math.max(0,drivers.length-added),mode};
-  if(!options.silent){persist();render();toast(`${added} route driver${added===1?'':'s'} rostered in ${mode==='abc'?'ABC':'random'} order · ${helpers} helper${helpers===1?'':'s'} added`);}return result;
+  if(!options.silent){persistRosteringSlice();renderRosteringContent();toast(`${added} route driver${added===1?'':'s'} rostered in ${mode==='abc'?'ABC':'random'} order · ${helpers} helper${helpers===1?'':'s'} added`);}return result;
 }
 function rosteringScreenshotServiceTemplate(name='') {
   const key=headerKey(name),raw=String(name||'');if((key.includes('extralarge')||key.includes('xl'))&&key.includes('amzdonations'))return DEFAULT_ROSTERING_SERVICES.find(row=>row.id==='xl-donations');if(key.includes('xlus')||(key.includes('extralarge')&&/(?:^|[^a-z])us(?:[^a-z]|$)/i.test(raw)))return XL_US_ROSTERING_SERVICE;if(key.includes('withhelperhelper')||key.includes('helperhelper'))return DEFAULT_ROSTERING_SERVICES.find(row=>row.id==='helper-associate');if(key.includes('withhelper'))return DEFAULT_ROSTERING_SERVICES.find(row=>row.id==='rivian-helper-route');if(key.includes('rivianmedium'))return DEFAULT_ROSTERING_SERVICES.find(row=>row.id==='rivian-medium');return null;
@@ -1109,16 +1109,16 @@ function adjustRosteringConfirmed(serviceId='',delta=0) {
   if(next===service.confirmed)return toast(rostered?`Confirmed count cannot be lower than ${rostered} rostered associates`:'Confirmed count is already zero','error');
   if(next>service.confirmed)Array.from({length:next-service.confirmed},()=>addRosteringAssignment(serviceId));
   else {let remove=service.confirmed-next;for(let index=plan.assignments.length-1;index>=0&&remove;index--){const row=plan.assignments[index];if(row.serviceId===serviceId&&!String(row.associate||'').trim()){plan.assignments.splice(index,1);remove--;}}}
-  service.confirmed=next;touchRosteringPlan();persist();render();
+  service.confirmed=next;touchRosteringPlan();persistRosteringSlice();renderRosteringContent();
 }
 function addRosteringService() {
-  const plan=currentRosteringPlan(),id=rosteringId('service');plan.services.push({id,name:'Custom confirmed service - Default as station - 10 Hours',confirmed:1,kind:'driver',defaultTime:'11:15 AM'});plan.assignments.push({id:rosteringId(),serviceId:id,start:'11:15 AM',associate:'',route:'',role:'',source:'manual'});state.rosteringOpenServices[id]=true;touchRosteringPlan();persist();render();toast('Custom service added');
+  const plan=currentRosteringPlan(),id=rosteringId('service');plan.services.push({id,name:'Custom confirmed service - Default as station - 10 Hours',confirmed:1,kind:'driver',defaultTime:'11:15 AM'});plan.assignments.push({id:rosteringId(),serviceId:id,start:'11:15 AM',associate:'',route:'',role:'',source:'manual'});state.rosteringOpenServices[id]=true;touchRosteringPlan();persistRosteringSlice();renderRosteringContent();toast('Custom service added');
 }
 function requestDeleteRosteringService(serviceId='') { const service=rosteringService(serviceId);if(!service)return;state.pendingRosteringServiceDelete={id:service.id,name:service.name,confirmed:service.confirmed,rostered:rosteringServiceRows(service.id).filter(row=>row.associate).length};state.modal='delete-rostering-service';render(); }
 function confirmDeleteRosteringService() { const pending=state.pendingRosteringServiceDelete;if(!pending)return;const plan=currentRosteringPlan(),serviceIndex=plan.services.findIndex(service=>service.id===pending.id);if(serviceIndex<0)return;const service=plan.services[serviceIndex],removedRows=plan.assignments.filter(row=>row.serviceId===pending.id);if(service.kind==='helper')rememberRosteringHelpers(removedRows);plan.services.splice(serviceIndex,1);plan.assignments=plan.assignments.filter(row=>row.serviceId!==pending.id);delete state.rosteringOpenServices[pending.id];state.pendingRosteringServiceDelete=null;state.modal=null;touchRosteringPlan();persist();render();toast(service.kind==='helper'?`${pending.name} removed · ${removedRows.filter(row=>row.associate).length} helper${removedRows.filter(row=>row.associate).length===1?'':'s'} moved to the Helper box`:`${pending.name} roster block deleted`); }
-function removeRosteringAssignment(assignmentId='') { const plan=currentRosteringPlan(),index=plan.assignments.findIndex(row=>row.id===assignmentId);if(index<0)return;const [removed]=plan.assignments.splice(index,1),service=plan.services.find(row=>row.id===removed.serviceId);if(service)service.confirmed=Math.max(plan.assignments.filter(row=>row.serviceId===removed.serviceId&&row.associate).length,service.confirmed-1);touchRosteringPlan();persist();render();toast(removed.associate?`${removed.associate} removed from the roster`:'Empty shift removed'); }
-function clearRosteringAssociate(assignmentId='') { const row=rosteringAssignment(assignmentId);if(!row)return;const name=row.associate||'Associate';row.associate='';row.role='';row.source='manual';touchRosteringPlan();persist();render();toast(`${name} cleared · confirmed slot kept`); }
-function clearRosteringServiceAssociates(serviceId='') { const plan=currentRosteringPlan(),service=plan.services.find(row=>row.id===serviceId);if(!service)return;let cleared=0;plan.assignments.filter(row=>row.serviceId===serviceId).forEach(row=>{if(row.associate)cleared++;row.associate='';row.role='';row.source='manual';});touchRosteringPlan();persist();render();toast(`${cleared} name${cleared===1?'':'s'} cleared from ${service.name}`); }
+function removeRosteringAssignment(assignmentId='') { const plan=currentRosteringPlan(),index=plan.assignments.findIndex(row=>row.id===assignmentId);if(index<0)return;const [removed]=plan.assignments.splice(index,1),service=plan.services.find(row=>row.id===removed.serviceId);if(service)service.confirmed=Math.max(plan.assignments.filter(row=>row.serviceId===removed.serviceId&&row.associate).length,service.confirmed-1);touchRosteringPlan();persistRosteringSlice();renderRosteringContent();toast(removed.associate?`${removed.associate} removed from the roster`:'Empty shift removed'); }
+function clearRosteringAssociate(assignmentId='') { const row=rosteringAssignment(assignmentId);if(!row)return;const name=row.associate||'Associate';if(!row.associate)return toast('This confirmed slot is already empty');row.associate='';row.role='';row.source='manual';touchRosteringPlan();persistRosteringSlice();renderRosteringContent();toast(`${name} cleared · confirmed slot kept`); }
+function clearRosteringServiceAssociates(serviceId='') { const plan=currentRosteringPlan(),service=plan.services.find(row=>row.id===serviceId);if(!service)return;const rows=plan.assignments.filter(row=>row.serviceId===serviceId),cleared=rows.filter(row=>String(row.associate||'').trim()).length;if(!cleared)return toast(`${service.name} is already clear`);rows.forEach(row=>{row.associate='';row.role='';row.source='manual';});touchRosteringPlan();persistRosteringSlice();renderRosteringContent();toast(`${cleared} name${cleared===1?'':'s'} cleared from ${service.name}`); }
 function updateRosteringAssignment(assignmentId='',field='',value='') { const row=rosteringAssignment(assignmentId);if(!row||!['start','associate','route','role'].includes(field))return;if(field==='associate')row[field]=value?canonicalDriverName(value):'';else row[field]=String(value||'').trim();touchRosteringPlan(); }
 function updateRosteringService(serviceId='',field='',value='') { const service=rosteringService(serviceId);if(!service)return;if(field==='name')service.name=String(value||'').trim()||service.name;if(field==='kind')service.kind=value==='helper'?'helper':'driver';if(field==='defaultTime')service.defaultTime=String(value||'').trim()||'11:15 AM';touchRosteringPlan(); }
 function rosteringTimeSummary(rows=[],confirmed=0) { const counts={};rows.slice(0,confirmed).forEach(row=>{const time=row.start||'Unscheduled';counts[time]=(counts[time]||0)+1;});return Object.entries(counts).sort((a,b)=>waveMinutes(a[0])-waveMinutes(b[0])).map(([time,count])=>`<div><span>${esc(time)}</span><b>${count}</b></div>`).join('')||'<div><span>No confirmed shifts</span><b>0</b></div>'; }
@@ -1129,7 +1129,7 @@ function rosteringAssignmentRowHtml(row={},duplicates=new Set()) {
 function rosteringServiceHtml(service={},plan=currentRosteringPlan(),duplicates=new Set()) {
   const rows=rosteringServiceRows(service.id),rostered=rows.filter(row=>row.associate).length,missing=Math.max(0,service.confirmed-rostered),open=Boolean(state.rosteringOpenServices[service.id]),complete=missing===0&&rostered===service.confirmed;
   const paycomFill=service.id==='xl-donations'?'<span class="rostering-manual-note">Manual assignment only</span>':`<button class="btn small" data-action="rostering-fill-paycom-service" data-service-id="${esc(service.id)}">Bulk Import Associates</button>`;
-  return `<article class="rostering-service ${open?'open':''} ${complete?'complete':missing?'needs-drivers':'overstaffed'}"><button class="rostering-service-bar" data-action="rostering-toggle-service" data-service-id="${esc(service.id)}" aria-expanded="${open}"><i>${complete?'✓':'!'}</i><b>${open?'−':'+'}</b><strong>${esc(service.name)}</strong><span><em>${service.confirmed}</em> Confirmed</span><span><em>${rostered}</em> Rostered</span>${missing?`<mark>${missing} Missing</mark>`:''}</button>${open?`<div class="rostering-service-body"><div class="rostering-route-summary"><header><div><span class="eyebrow">CONFIRMED ROUTES</span><h3>Start-time plan</h3></div><div class="rostering-service-actions">${paycomFill}<button class="btn small danger-soft" data-action="rostering-clear-service" data-service-id="${esc(service.id)}">Clear roster</button><button class="btn small danger" data-action="request-delete-rostering-service" data-service-id="${esc(service.id)}">${ICONS.trash} Delete block</button></div></header><div class="rostering-time-head"><span>START TIME</span><b>CONFIRMED</b></div>${rosteringTimeSummary(rows,service.confirmed)}</div><div class="rostering-service-customize"><label><span>Service name</span><input data-rostering-service="${esc(service.id)}" data-rostering-service-field="name" value="${esc(service.name)}"></label><label><span>Type</span><select data-rostering-service="${esc(service.id)}" data-rostering-service-field="kind"><option value="driver" ${service.kind==='driver'?'selected':''}>Driver</option><option value="helper" ${service.kind==='helper'?'selected':''}>Helper</option></select></label><div><span>Confirmed positions</span><p><button data-action="rostering-adjust-confirmed" data-service-id="${esc(service.id)}" data-delta="-1">−</button><b>${service.confirmed}</b><button data-action="rostering-adjust-confirmed" data-service-id="${esc(service.id)}" data-delta="1">+</button></p></div></div><div class="rostering-associate-table"><div class="rostering-associate-head"><span>START TIME</span><span>ASSOCIATE</span><span>ROUTE</span><span>FAIR ROTATION</span><span></span></div><div class="rostering-associate-list">${rows.map(row=>rosteringAssignmentRowHtml(row,duplicates)).join('')}</div><button class="btn small rostering-add-shift" data-action="rostering-add-shift" data-service-id="${esc(service.id)}">+ Add confirmed shift</button></div></div>`:''}</article>`;
+  return `<article class="rostering-service ${open?'open':''} ${complete?'complete':missing?'needs-drivers':'overstaffed'}" data-rostering-service-card="${esc(service.id)}"><button class="rostering-service-bar" data-action="rostering-toggle-service" data-service-id="${esc(service.id)}" aria-expanded="${open}"><i>${complete?'✓':'!'}</i><b>${open?'−':'+'}</b><strong>${esc(service.name)}</strong><span><em>${service.confirmed}</em> Confirmed</span><span><em>${rostered}</em> Rostered</span>${missing?`<mark>${missing} Missing</mark>`:''}</button><div class="rostering-service-body" ${open?'':'hidden'}><div class="rostering-route-summary"><header><div><span class="eyebrow">CONFIRMED ROUTES</span><h3>Start-time plan</h3></div><div class="rostering-service-actions">${paycomFill}<button class="btn small danger-soft" data-action="rostering-clear-service" data-service-id="${esc(service.id)}">Clear roster</button><button class="btn small danger" data-action="request-delete-rostering-service" data-service-id="${esc(service.id)}">${ICONS.trash} Delete block</button></div></header><div class="rostering-time-head"><span>START TIME</span><b>CONFIRMED</b></div>${rosteringTimeSummary(rows,service.confirmed)}</div><div class="rostering-service-customize"><label><span>Service name</span><input data-rostering-service="${esc(service.id)}" data-rostering-service-field="name" value="${esc(service.name)}"></label><label><span>Type</span><select data-rostering-service="${esc(service.id)}" data-rostering-service-field="kind"><option value="driver" ${service.kind==='driver'?'selected':''}>Driver</option><option value="helper" ${service.kind==='helper'?'selected':''}>Helper</option></select></label><div><span>Confirmed positions</span><p><button data-action="rostering-adjust-confirmed" data-service-id="${esc(service.id)}" data-delta="-1">−</button><b>${service.confirmed}</b><button data-action="rostering-adjust-confirmed" data-service-id="${esc(service.id)}" data-delta="1">+</button></p></div></div><div class="rostering-associate-table"><div class="rostering-associate-head"><span>START TIME</span><span>ASSOCIATE</span><span>ROUTE</span><span>FAIR ROTATION</span><span></span></div><div class="rostering-associate-list">${rows.map(row=>rosteringAssignmentRowHtml(row,duplicates)).join('')}</div><button class="btn small rostering-add-shift" data-action="rostering-add-shift" data-service-id="${esc(service.id)}">+ Add confirmed shift</button></div></div></article>`;
 }
 function rosteringUnrosteredBackupGroups(plan=currentRosteringPlan()) {
   const assigned=rosteringAssignedNameKeys(plan),seen=new Set(),groups={vto2:[],vto4:[],other:[]};
@@ -1215,9 +1215,9 @@ function assignRosteringTrainer(ridealong='',trainer='') {
   if(trainer&&!rosteringTrainerCandidates().some(row=>driverIdentityKey(row.name)===driverIdentityKey(trainer)))return toast('Add this driver as a manual trainer or mark Trainer on Drivers & Team first','error');
   if(trainer&&driverIdentityKey(trainer)===driverIdentityKey(entry.name))return toast('A ridealong driver cannot be assigned as their own trainer','error');
   if(trainer&&rosteringTrainerUnavailable(trainer))return toast('That trainer is unavailable for this date','error');
-  const key=rosteringTrainingKey(entry.name);if(trainer)state.rosteringTrainingMatches[key]={ridealong:entry.name,trainer:canonicalDriverName(trainer),date:state.rosteringDate,at:new Date().toISOString()};else delete state.rosteringTrainingMatches[key];persist();render();toast(trainer?`${entry.name} matched with trainer ${trainer}`:`Trainer match cleared for ${entry.name}`);
+  const key=rosteringTrainingKey(entry.name);if(trainer)state.rosteringTrainingMatches[key]={ridealong:entry.name,trainer:canonicalDriverName(trainer),date:state.rosteringDate,at:new Date().toISOString()};else delete state.rosteringTrainingMatches[key];persistRosteringSlice();renderRosteringContent();toast(trainer?`${entry.name} matched with trainer ${trainer}`:`Trainer match cleared for ${entry.name}`);
 }
-function clearRosteringTrainerMatch(ridealong='') { const key=rosteringTrainingKey(ridealong),record=state.rosteringTrainingMatches[key];if(!record)return;delete state.rosteringTrainingMatches[key];persist();render();toast(`${record.ridealong||ridealong} is ready for a trainer swap`); }
+function clearRosteringTrainerMatch(ridealong='') { const key=rosteringTrainingKey(ridealong),record=state.rosteringTrainingMatches[key];if(!record)return;delete state.rosteringTrainingMatches[key];persistRosteringSlice();renderRosteringContent();toast(`${record.ridealong||ridealong} is ready for a trainer swap`); }
 function openRosteringTrainingAdd(kind='ridealong') { state.pendingRosteringTrainingAdd={kind:kind==='trainer'?'trainer':'ridealong'};state.modal='rostering-training-add';render(); }
 function saveRosteringTrainingAdd() {
   const kind=document.getElementById('rostering-training-kind')?.value==='trainer'?'trainer':'ridealong',raw=String(document.getElementById('rostering-training-name')?.value||'').replace(/\s+/g,' ').trim();
@@ -1227,7 +1227,7 @@ function saveRosteringTrainingAdd() {
 function removeRosteringManualTraining(key='') {
   const row=state.rosteringManualTraining?.[key];if(!row)return;
   delete state.rosteringManualTraining[key];if(row.kind==='ridealong')delete state.rosteringTrainingMatches[rosteringTrainingKey(row.name)];
-  persist();render();toast(`${driverDisplayName(row.name)} removed from manual training`);
+  persistRosteringSlice();renderRosteringContent();toast(`${driverDisplayName(row.name)} removed from manual training`);
 }
 function rosteringTrainingHtml() {
   const ridealongs=rosteringRidealongEntries(),trainers=rosteringTrainerCandidates(),scheduled=new Set(scheduleEntriesForDate(state.rosteringDate).map(entry=>driverIdentityKey(entry.name))),manualTrainers=rosteringManualTrainingRows('trainer');
@@ -4111,6 +4111,28 @@ function frameThrottle(fn) {
   };
 }
 const persistSoon=debounce(()=>persist(),320);
+function persistRosteringSlice() {
+  localStorage.setItem('relayops_rostering_date',state.rosteringDate||defaultOperationDate());
+  localStorage.setItem('relayops_rostering_plans',JSON.stringify(state.rosteringPlans||{}));
+  localStorage.setItem('relayops_rostering_helper_pool',JSON.stringify(state.rosteringHelperPool||{}));
+  localStorage.setItem('relayops_rostering_open_services',JSON.stringify(state.rosteringOpenServices||{}));
+  localStorage.setItem('relayops_rostering_paycom_category',state.rosteringPaycomCategory||'all');
+  localStorage.setItem('relayops_rostering_auto_mode',state.rosteringAutoMode==='abc'?'abc':'random');
+  localStorage.setItem('relayops_rostering_training_matches',JSON.stringify(state.rosteringTrainingMatches||{}));
+  localStorage.setItem('relayops_rostering_manual_training',JSON.stringify(state.rosteringManualTraining||{}));
+  window.RelayOpsCloud?.schedule?.('workspace.autosave');
+}
+function toggleRosteringService(serviceId='',trigger=null) {
+  if(!serviceId)return;
+  const open=!Boolean(state.rosteringOpenServices[serviceId]);
+  state.rosteringOpenServices[serviceId]=open;
+  localStorage.setItem('relayops_rostering_open_services',JSON.stringify(state.rosteringOpenServices||{}));
+  const card=trigger?.closest?.('[data-rostering-service-card]')||[...(document.querySelectorAll?.('[data-rostering-service-card]')||[])].find(row=>row.dataset.rosteringServiceCard===serviceId);
+  const bar=card?.querySelector?.('.rostering-service-bar'),body=card?.querySelector?.('.rostering-service-body');
+  card?.classList?.toggle('open',open);
+  if(bar){bar.setAttribute('aria-expanded',String(open));const marker=bar.querySelector('b');if(marker)marker.textContent=open?'−':'+';}
+  if(body)body.hidden=!open;
+}
 function restoreInputFocus(selector,position) {
   const input=document.querySelector?.(selector);
   if(!input)return;
@@ -4119,6 +4141,36 @@ function restoreInputFocus(selector,position) {
     const next=Math.min(position,String(input.value||'').length);
     try{input.setSelectionRange(next,next);}catch(error){}
   }
+}
+
+function bindRosteringContent(root=document) {
+  bindActionControls(root);
+  root.querySelectorAll?.('[data-rostering-date]').forEach(el=>el.addEventListener('change',()=>{state.rosteringDate=el.value||defaultOperationDate();syncRosteringHelperShifts(currentRosteringPlan());persistRosteringSlice();renderRosteringContent();toast(`Rostering date set to ${state.rosteringDate}`);}));
+  root.querySelectorAll?.('[data-rostering-auto-mode]').forEach(el=>el.addEventListener('change',()=>{state.rosteringAutoMode=el.value==='abc'?'abc':'random';persistRosteringSlice();renderRosteringContent();toast(`Auto Roster will use ${state.rosteringAutoMode==='abc'?'ABC':'random'} order`);}));
+  root.querySelectorAll?.('[data-rostering-assignment]').forEach(el=>{
+    el.addEventListener('input',()=>updateRosteringAssignment(el.dataset.rosteringAssignment,el.dataset.rosteringField,el.value));
+    el.addEventListener('change',()=>{updateRosteringAssignment(el.dataset.rosteringAssignment,el.dataset.rosteringField,el.value);persistRosteringSlice();});
+  });
+  root.querySelectorAll?.('[data-rostering-service]').forEach(el=>el.addEventListener('change',()=>{updateRosteringService(el.dataset.rosteringService,el.dataset.rosteringServiceField,el.value);persistRosteringSlice();toast('Service updated');}));
+  root.querySelectorAll?.('[data-rostering-training-match]').forEach(el=>el.addEventListener('change',()=>assignRosteringTrainer(el.dataset.rosteringTrainingMatch||'',el.value||'')));
+  root.querySelectorAll?.('[data-rostering-paycom-search]').forEach(el=>el.addEventListener('input',()=>filterRosteringPaycomSoon(el)));
+  root.querySelectorAll?.('[data-rostering-driver-note-search]').forEach(el=>el.addEventListener('input',()=>filterRosteringDriverNotesSoon(el)));
+  root.querySelectorAll?.('[data-driver-name-input="true"]').forEach(el=>{
+    el.addEventListener('focus',()=>showDriverNameSuggestions(el));el.addEventListener('input',()=>showDriverNameSuggestions(el));
+    el.addEventListener('mouseenter',()=>{clearTimeout(driverSuggestionCloseTimer);driverSuggestionCloseTimer=null;});
+    el.addEventListener('blur',()=>scheduleDriverSuggestionsClose(220));el.addEventListener('mouseleave',()=>scheduleDriverSuggestionsClose(320));
+  });
+  root.querySelectorAll?.('[data-driver-profile-name]').forEach(el=>{el.addEventListener('mouseenter',()=>showDriverProfilePopover(el));el.addEventListener('mouseleave',closeDriverProfilePopover);el.addEventListener('pointerleave',closeDriverProfilePopover);el.addEventListener('focusin',()=>showDriverProfilePopover(el));el.addEventListener('focusout',closeDriverProfilePopover);});
+}
+
+function renderRosteringContent() {
+  if(state.page!=='rostering')return render();
+  const content=document.querySelector?.('.content');if(!content)return render();
+  const scrollTop=window.scrollY||document.documentElement?.scrollTop||0;
+  closeDriverProfilePopover();closeDriverSuggestions();
+  content.innerHTML=rosteringPage();
+  bindRosteringContent(content);
+  window.requestAnimationFrame?.(()=>window.scrollTo?.(0,scrollTop));
 }
 function bindActionControls(root=document) {
   root.querySelectorAll?.('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
@@ -4245,13 +4297,13 @@ function bind() {
   document.querySelectorAll('[data-whiparound-date]').forEach(el=>el.addEventListener('change',()=>{state.whiparoundSelectedDate=el.value;applyWhiparoundChecksToMorning(el.value);persist();render();}));
   document.querySelectorAll('[data-whiparound-template]').forEach(el=>el.addEventListener('change',()=>{state.whiparoundReminderTemplates[el.dataset.whiparoundTemplate]=el.value.trim();persist();toast('Whiparound reminder saved');}));
   document.querySelectorAll('[data-schedule-filter]').forEach(el=>el.addEventListener('change',()=>{state.scheduleFilter=el.value;persist();render();}));
-  document.querySelectorAll('[data-rostering-date]').forEach(el=>el.addEventListener('change',()=>{state.rosteringDate=el.value||defaultOperationDate();syncRosteringHelperShifts(currentRosteringPlan());persist();render();toast(`Rostering date set to ${state.rosteringDate}`);}));
-  document.querySelectorAll('[data-rostering-auto-mode]').forEach(el=>el.addEventListener('change',()=>{state.rosteringAutoMode=el.value==='abc'?'abc':'random';localStorage.setItem('relayops_rostering_auto_mode',state.rosteringAutoMode);render();toast(`Auto Roster will use ${state.rosteringAutoMode==='abc'?'ABC':'random'} order`);}));
+  document.querySelectorAll('[data-rostering-date]').forEach(el=>el.addEventListener('change',()=>{state.rosteringDate=el.value||defaultOperationDate();syncRosteringHelperShifts(currentRosteringPlan());persistRosteringSlice();renderRosteringContent();toast(`Rostering date set to ${state.rosteringDate}`);}));
+  document.querySelectorAll('[data-rostering-auto-mode]').forEach(el=>el.addEventListener('change',()=>{state.rosteringAutoMode=el.value==='abc'?'abc':'random';persistRosteringSlice();renderRosteringContent();toast(`Auto Roster will use ${state.rosteringAutoMode==='abc'?'ABC':'random'} order`);}));
   document.querySelectorAll('[data-rostering-assignment]').forEach(el=>{
     el.addEventListener('input',()=>updateRosteringAssignment(el.dataset.rosteringAssignment,el.dataset.rosteringField,el.value));
-    el.addEventListener('change',()=>{updateRosteringAssignment(el.dataset.rosteringAssignment,el.dataset.rosteringField,el.value);persist();render();});
+    el.addEventListener('change',()=>{updateRosteringAssignment(el.dataset.rosteringAssignment,el.dataset.rosteringField,el.value);persistRosteringSlice();});
   });
-  document.querySelectorAll('[data-rostering-service]').forEach(el=>el.addEventListener('change',()=>{updateRosteringService(el.dataset.rosteringService,el.dataset.rosteringServiceField,el.value);persist();render();toast('Service updated');}));
+  document.querySelectorAll('[data-rostering-service]').forEach(el=>el.addEventListener('change',()=>{updateRosteringService(el.dataset.rosteringService,el.dataset.rosteringServiceField,el.value);persistRosteringSlice();toast('Service updated');}));
   document.querySelectorAll('[data-rostering-training-match]').forEach(el=>el.addEventListener('change',()=>assignRosteringTrainer(el.dataset.rosteringTrainingMatch||'',el.value||'')));
   document.querySelectorAll('[data-charger-report-field]').forEach(el=>{
     el.addEventListener('input',updateChargerReportPreview);
@@ -5184,10 +5236,10 @@ function action(name,el) {
   if (name==='rostering-focus-training') { document.getElementById('rostering-training-box')?.scrollIntoView?.({behavior:'smooth',block:'center'});return; }
   if (name==='copy-rostering-backup-email') return copyRosteringBackupEmailText();
   if (name==='copy-rostering-email-template') return copyRosteringEmailTemplateText();
-  if (name==='rostering-toggle-service') { const id=el.dataset.serviceId||'';state.rosteringOpenServices[id]=!state.rosteringOpenServices[id];localStorage.setItem('relayops_rostering_open_services',JSON.stringify(state.rosteringOpenServices||{}));return render(); }
+  if (name==='rostering-toggle-service') return toggleRosteringService(el.dataset.serviceId||'',el);
   if (name==='rostering-add-service') return addRosteringService();
   if (name==='rostering-adjust-confirmed') return adjustRosteringConfirmed(el.dataset.serviceId||'',Number(el.dataset.delta)||0);
-  if (name==='rostering-add-shift') { const service=rosteringService(el.dataset.serviceId||'');if(!service)return;service.confirmed++;addRosteringAssignment(service.id);persist();render();return toast('Confirmed shift added'); }
+  if (name==='rostering-add-shift') { const service=rosteringService(el.dataset.serviceId||'');if(!service)return;service.confirmed++;addRosteringAssignment(service.id);persistRosteringSlice();renderRosteringContent();return toast('Confirmed shift added'); }
   if (name==='rostering-remove-shift') return removeRosteringAssignment(el.dataset.assignmentId||'');
   if (name==='rostering-clear-associate') return clearRosteringAssociate(el.dataset.assignmentId||'');
   if (name==='rostering-clear-service') return clearRosteringServiceAssociates(el.dataset.serviceId||'');
@@ -5195,7 +5247,7 @@ function action(name,el) {
   if (name==='confirm-delete-rostering-service') return confirmDeleteRosteringService();
   if (name==='rostering-fill-paycom') return fillRosteringFromPaycom();
   if (name==='rostering-fill-paycom-service') return fillRosteringFromPaycom(el.dataset.serviceId||'');
-  if (name==='rostering-add-paycom-driver') { const entry=scheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(el.dataset.driverName||''));if(!entry)return toast('PAYCOM driver was not found for this date','error');if(!rosteringEntryEligibleForRoster(entry))return toast('This shift is not an available driver route shift','error');const added=addPaycomEntryToRostering(entry);if(!added)return toast('This driver is already on the roster','error');persist();render();return toast(`${entry.name} added to the roster`); }
+  if (name==='rostering-add-paycom-driver') { const entry=scheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(el.dataset.driverName||''));if(!entry)return toast('PAYCOM driver was not found for this date','error');if(!rosteringEntryEligibleForRoster(entry))return toast('This shift is not an available driver route shift','error');const added=addPaycomEntryToRostering(entry);if(!added)return toast('This driver is already on the roster','error');persistRosteringSlice();renderRosteringContent();return toast(`${entry.name} added to the roster`); }
   if (name==='open-rostering-driver-swap') return openRosteringDriverSwap(el.dataset.driverName||'');
   if (name==='apply-rostering-driver-swap') return applyRosteringDriverSwap();
   if (name==='open-rostering-training-add') return openRosteringTrainingAdd(el.dataset.trainingKind||'ridealong');
@@ -7051,6 +7103,9 @@ function morningSheetCopyRows() {
   return morningCopyRowsForSections().map(item=>item.values);
 }
 function morningSheetTsv(){ return morningSheetCopyRows().map(row=>row.join('\t')).join('\n'); }
+function morningCoreWaveLabels() {
+  return morningSections(allMorningRows()).filter(section=>section.hasTime&&/^WAVE\s*[1-5]$/i.test(section.label)).slice(0,5).map(section=>({label:section.label,value:morningWaveTimeText(section)}));
+}
 function morningSheetsConnectorPayload() {
   const visibleRows=filteredMorningRows(),sections=fixedMorningSections(visibleRows),rows=[],rowTypes=[],sectionMeta=[],writeMode=morningFiltersAreActive()?'partial-update':'full-replace';
   let index=0;
@@ -7073,7 +7128,7 @@ function morningSheetsConnectorPayload() {
     sectionMeta.push({label:waveLabel,slotKey:morningFixedSectionKey(waveLabel),wave:section.wave||'',driverCount,waveTime,pad,sourceIndex,startRow,rowCount:display.length,timeRow,hasTimeRow:Boolean(section.hasTime),separatorRow,separatorRows,dsp:Boolean(section.dsp)});
   });
   const dateTabs=operationDateTabNames(state.morningOperationDate),sheetName=dateTabs[0]||MORNING_TEMPLATE_SHEET_NAME;
-  return {version:'relayops-morning-v1',writeMode,templateUrl:MORNING_TEMPLATE_URL,templateSheet:MORNING_TEMPLATE_SHEET_NAME,templateLayout:'fixed-ops-log-2026',operationDate:state.morningOperationDate,sheetName,sheetNameCandidates:dateTabs.length?dateTabs:MORNING_TEMPLATE_SHEET_CANDIDATES,dsp:state.dspCode,generatedAt:new Date().toISOString(),startCell:'A3',writeRange:'A3:M',headers:morningConnectorHeaders,rows,rowTypes,sections:sectionMeta};
+  return {version:'relayops-morning-v1',writeMode,templateUrl:MORNING_TEMPLATE_URL,templateSheet:MORNING_TEMPLATE_SHEET_NAME,templateLayout:'fixed-ops-log-2026',operationDate:state.morningOperationDate,sheetName,sheetNameCandidates:dateTabs.length?dateTabs:MORNING_TEMPLATE_SHEET_CANDIDATES,dsp:state.dspCode,generatedAt:new Date().toISOString(),startCell:'A3',writeRange:'A3:M',headers:morningConnectorHeaders,rows,rowTypes,sections:sectionMeta,waves:morningCoreWaveLabels()};
 }
 function morningRtsOnlyPayload() {
   const dateTabs=operationDateTabNames(state.morningOperationDate),visibleRows=filteredMorningRows(),sections=fixedMorningSections(visibleRows),sectionByRoute=morningFixedSectionByRoute();
@@ -7092,7 +7147,7 @@ function morningRtsOnlyPayload() {
     // Older purple-cell values may be Planned Departure Time and must never leak
     // into an RTS-only update.
     updates:[...sourceLocked.entries()].map(([route,plannedRts])=>({route,plannedRts,expectedSection:sectionByRoute.get(route)||''})),
-    waves:sections.filter(section=>section.hasTime&&/^WAVE\s*[1-5]$/i.test(section.label)).map(section=>({label:section.label,value:morningWaveTimeText({...section,rows:morningSections(allMorningRows()).find(full=>full.label===section.label)?.rows||section.rows})})),
+    waves:morningCoreWaveLabels(),
     generatedAt:new Date().toISOString()
   };
 }
@@ -7104,7 +7159,7 @@ function morningWhiparoundOnlyPayload() {
   return {version:'relayops-morning-v1',mode:'whiparound-only',operationDate:state.morningOperationDate,sheetName:dateTabs[0]||MORNING_TEMPLATE_SHEET_NAME,sheetNameCandidates:dateTabs,updates,generatedAt:new Date().toISOString()};
 }
 function morningSheetsPreflight(payload=morningSheetsConnectorPayload()) {
-  const rows=payload.rows||[], rowTypes=payload.rowTypes||[], sections=payload.sections||[], headers=payload.headers||[];
+  const rows=payload.rows||[], rowTypes=payload.rowTypes||[], sections=payload.sections||[], headers=payload.headers||[],waves=payload.waves||[];
   const separatorIndexes=rowTypes.map((type,i)=>type==='separator'?i:-1).filter(i=>i>=0);
   const checks=[
     {label:'Target cell A3',ok:payload.startCell==='A3',detail:'Data starts below the fixed template header row.'},
@@ -7112,6 +7167,7 @@ function morningSheetsPreflight(payload=morningSheetsConnectorPayload()) {
     {label:'Row 1 headers ready',ok:headers.length===13&&headers[0]==='WAVE'&&headers[12]==='PLANNED RTS',detail:'A–M headers match the opening template.'},
     {label:'Every row has 13 columns',ok:rows.length>0&&rows.every(row=>Array.isArray(row)&&row.length===13),detail:`${rows.length} row${rows.length===1?'':'s'} will write across A–M.`},
     {label:'Black dividers are real rows',ok:separatorIndexes.length>0&&separatorIndexes.every(i=>rows[i]?.length===13&&rows[i].every(cell=>String(cell||'')==='')),detail:`${separatorIndexes.length} divider row${separatorIndexes.length===1?'':'s'} included as numbered sheet rows.`},
+    {label:'All five wave times ready',ok:waves.length===5&&waves.every((wave,index)=>morningFixedSectionKey(wave.label)===`WAVE${index+1}`&&String(wave.value||'').trim()),detail:`${waves.length}/5 wave time/count labels will be written to the fixed footer rows.`},
     {label:'Wave/Pad merge map ready',ok:sections.length>0&&sections.every(section=>Number(section.startRow)>=3&&Number(section.rowCount)>0&&((section.hasTimeRow===false&&Number(section.timeRow)===Number(section.startRow)+Number(section.rowCount)-1)||(!section.timeRow||Number(section.timeRow)>=Number(section.startRow)+Number(section.rowCount)))&&(!section.separatorRow||Number(section.separatorRow)>Number(section.startRow))),detail:`${sections.length} section${sections.length===1?'':'s'} tell Google which Wave and Pad cells to merge.`},
     {label:'Row types match payload',ok:rowTypes.length===rows.length&&rowTypes.includes('route')&&(payload.writeMode==='partial-update'||(rowTypes.includes('time')&&rowTypes.includes('separator'))),detail:payload.writeMode==='partial-update'?'Partial update carries only the selected fixed-slot routes.':'Google can tell route rows, wave-time rows, blank rows, and dividers apart.'}
   ];
@@ -7207,7 +7263,7 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-14-workflow-hardening';
+const RELAYOPS_BUILD = '2026-07-20-all-wave-labels';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -7301,6 +7357,7 @@ function doPost(e) {
         lastCell: 'V116',
         rows: (payload.rows || []).length,
         sections: (payload.sections || []).length,
+        waveTimes: relayOpsWaveLabels(payload).filter(function(wave) { return Boolean(wave.value); }).length,
         writeMode: payload.writeMode,
         layout: layout,
         preflight: validation,
@@ -7322,6 +7379,7 @@ function doPost(e) {
       sections: (payload.sections || []).length,
       writeMode: result.writeMode,
       updated: result.updated,
+      waveTimes: result.waveTimes,
       missingRoutes: result.missingRoutes,
       sectionMismatches: result.sectionMismatches,
       preflight: validation,
@@ -7385,6 +7443,20 @@ function relayOpsWaveTimeValue(section) {
   return time ? time + ' (' + (Number.isFinite(count) ? count : 0) + ')' : '';
 }
 
+function relayOpsWaveLabels(payload) {
+  const explicit = Array.isArray(payload && payload.waves) ? payload.waves : [];
+  const byKey = {};
+  explicit.forEach(function(wave) { const layout = relayOpsLayoutForSection({label:wave && wave.label});if (layout && layout.timeRow) byKey[layout.key] = String(wave.value || '').trim(); });
+  (payload && payload.sections || []).forEach(function(section) { const layout = relayOpsLayoutForSection(section);if (layout && layout.timeRow && !byKey[layout.key]) byKey[layout.key] = relayOpsWaveTimeValue(section); });
+  return RELAYOPS_LAYOUT.filter(function(layout) { return Boolean(layout.timeRow); }).map(function(layout) { return {layout:layout,value:byKey[layout.key] || ''}; });
+}
+
+function writeRelayOpsWaveLabels(sheet, payload) {
+  let updated = 0;
+  relayOpsWaveLabels(payload).forEach(function(wave) { if (!wave.value) return;sheet.getRange(wave.layout.timeRow, 1).setValue(wave.value);updated++; });
+  return updated;
+}
+
 function validateRelayOpsMorningPayload(payload) {
   const errors = [];
   const rows = payload && payload.rows || [];
@@ -7409,6 +7481,8 @@ function validateRelayOpsMorningPayload(payload) {
     if (type === 'separator' && rows[i] && rows[i].some(function(cell) { return String(cell || '') !== ''; })) errors.push('Separator row ' + (i + 1) + ' must be empty');
   });
   if (!sections.length) errors.push('No wave sections sent');
+  const waveLabels = relayOpsWaveLabels(payload);
+  if (waveLabels.length !== 5 || waveLabels.some(function(wave) { return !wave.value; })) errors.push('All five Wave 1-5 time/count labels are required');
   sections.forEach(function(section, i) {
     const start = Number(section.startRow);
     const count = Number(section.rowCount);
@@ -7437,7 +7511,8 @@ function validateRelayOpsRtsPayload(payload) {
     if (!String(update.route || '').trim() || !String(update.plannedRts || '').trim()) errors.push('RTS update ' + (index + 1) + ' needs Route and Planned RTS');
     if (update.expectedSection && !relayOpsLayoutForSection({label:update.expectedSection})) errors.push('RTS update ' + (index + 1) + ' has an unsupported fixed wave slot');
   });
-  if (!waves.length) errors.push('Wave time/count labels are required');
+  const waveLabels = relayOpsWaveLabels(payload);
+  if (waves.length !== 5 || waveLabels.some(function(wave) { return !wave.value; })) errors.push('All five Wave 1-5 time/count labels are required');
   return {ready:errors.length===0,errors:errors};
 }
 
@@ -7494,8 +7569,7 @@ function writeRelayOpsRtsOnly(payload) {
     if (expected && expected.key !== record.layout.key) { sectionMismatches.push({route:key,expectedSection:expected.label,actualSection:record.layout.label});return; }
     sheet.getRange(record.row, 21).setValue(update.plannedRts);updated++;
   });
-  let waveTimes = 0;
-  (payload.waves || []).forEach(function(wave) { const layout = relayOpsLayoutForSection({label:wave.label});if (!layout || !layout.timeRow) return;sheet.getRange(layout.timeRow, 1).setValue(wave.value || '');waveTimes++; });
+  const waveTimes = writeRelayOpsWaveLabels(sheet, payload);
   return {sheetName:sheet.getName(),updated:updated,waveTimes:waveTimes,missingRoutes:missingRoutes,sectionMismatches:sectionMismatches};
 }
 
@@ -7606,7 +7680,8 @@ function writeRelayOpsMorningSheet(payload) {
         sheet.getRange(record.row, 21).setValue(row[12]);updated++;
       });
     });
-    return {sheetName:sheet.getName(),startCell:'A3',writeRange:RELAYOPS_TEMPLATE_RANGE,writtenRange:'matched routes only',lastCell:'',createdSheet:false,writeMode:writeMode,updated:updated,missingRoutes:missingRoutes,sectionMismatches:sectionMismatches};
+    const waveTimes = writeRelayOpsWaveLabels(sheet, payload);
+    return {sheetName:sheet.getName(),startCell:'A3',writeRange:RELAYOPS_TEMPLATE_RANGE,writtenRange:'matched routes + five wave labels',lastCell:'',createdSheet:false,writeMode:writeMode,updated:updated,waveTimes:waveTimes,missingRoutes:missingRoutes,sectionMismatches:sectionMismatches};
   }
 
   (payload.sections || []).forEach(function(section) {
@@ -7621,9 +7696,9 @@ function writeRelayOpsMorningSheet(payload) {
     }
     sheet.getRange(layout.startRow, 1).setValue(layout.label);
     if (section.pad !== undefined && section.pad !== null && String(section.pad) !== '') sheet.getRange(layout.startRow, 5).setValue(section.pad);
-    if (layout.timeRow) sheet.getRange(layout.timeRow, 1).setValue(relayOpsWaveTimeValue(section));
   });
-  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V116', lastCell: 'V116', createdSheet: target.created, writeMode:writeMode, updated:(payload.rows || []).filter(function(row){return row && String(row[2] || '').trim();}).length, missingRoutes:[], sectionMismatches:[]};
+  const waveTimes = writeRelayOpsWaveLabels(sheet, payload);
+  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V116', lastCell: 'V116', createdSheet: target.created, writeMode:writeMode, updated:(payload.rows || []).filter(function(row){return row && String(row[2] || '').trim();}).length, waveTimes:waveTimes, missingRoutes:[], sectionMismatches:[]};
 }
 
 function validateRelayOpsTemplateSignature(sheet) {
@@ -7676,7 +7751,8 @@ function testRelayOpsMorningSheet() {
     sheetNameCandidates: ['7/12/26','7.12.26'],
     rows: [['WAVE 1','Demo Driver','CX200','STG.V.1','A','21','3','-','','188','331','','6:20 PM'], ['11:15 (1)','','','','','','','','','','','',''], ['','','','','','','','','','','','','']],
     rowTypes: ['route','time','separator'],
-    sections: [{label:'WAVE 1', wave:'11:15 AM', waveTime:'11:15 (1)', pad:'A', startRow:3, rowCount:1, timeRow:4, separatorRow:5}]
+    sections: [{label:'WAVE 1', wave:'11:15 AM', waveTime:'11:15 (1)', pad:'A', startRow:3, rowCount:1, timeRow:4, separatorRow:5}],
+    waves: [{label:'WAVE 1',value:'11:15 (1)'},{label:'WAVE 2',value:'11:20 (0)'},{label:'WAVE 3',value:'11:25 (0)'},{label:'WAVE 4',value:'11:40 (0)'},{label:'WAVE 5',value:'11:45 (0)'}]
   };
   writeRelayOpsMorningSheet(sample);
 }`;
@@ -7771,11 +7847,13 @@ async function syncFilteredMorningToSheets() {
   try {
     const dryResult=await postMorningSheetsPayload(endpoint,{...payload,dryRun:true});
     if(!dryResult.dryRun)throw new Error('Google did not confirm the safety check');
+    if(Number(dryResult.waveTimes)!==5)throw confirmedConnectorError('Google is still using the older connector that can skip Wave 1–4 times. Install and redeploy the newest five-wave Apps Script before sending.');
     if(payload.writeMode==='partial-update'&&dryResult.wouldCreateSheet)throw new Error('Send all waves once before using a filtered partial update. No unrelated wave sections were changed.');
     if(button)button.textContent='Sending filtered waves…';
     const result=await postMorningSheetsPayload(endpoint,payload);
     const requestedRoutes=payload.sections.reduce((count,section)=>count+(payload.rows||[]).slice(Number(section.sourceIndex)||0,(Number(section.sourceIndex)||0)+Number(section.rowCount||0)).filter(row=>String(row?.[2]||'').trim()).length,0);
     if(result.writeMode!==payload.writeMode)throw confirmedConnectorError('Google did not confirm the requested full/partial write mode. Update and redeploy the revised Apps Script.');
+    if(Number(result.waveTimes)!==5)throw confirmedConnectorError(`Google updated ${result.waveTimes||0} of 5 wave time/count labels. Update and redeploy the newest Apps Script connector, then send again.`);
     if(payload.writeMode==='partial-update'&&(result.missingRoutes?.length||result.sectionMismatches?.length||Number(result.updated)!==requestedRoutes))throw confirmedConnectorError(`Google updated ${result.updated||0} of ${requestedRoutes} filtered routes; ${result.missingRoutes?.length||0} CX missing and ${result.sectionMismatches?.length||0} in a different fixed wave slot. Unrelated sections were left unchanged.`);
     const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastDryRun=sentAt;
@@ -7783,7 +7861,7 @@ async function syncFilteredMorningToSheets() {
     state.morningSheetsLastReceipt={sheet:result.sheet||payload.sheetName,startCell:result.startCell||payload.startCell,writeRange:result.writtenRange||result.writeRange||payload.writeRange,lastCell:result.lastCell||'',rows:result.rows||payload.rows.length,sections:result.sections||payload.sections.length,status:'confirmed',updatedAt:result.updatedAt||sentAt,sentAt,filterScope:morningFilterScopeText()};
     state.morningSheetsLastError='';
     persist(); render();
-    toast(`Google confirmed ${filteredMorningRows().length} filtered routes · ${result.writtenRange||payload.writeRange}`);
+    toast(`Google confirmed ${filteredMorningRows().length} filtered routes + all 5 wave times · ${result.writtenRange||payload.writeRange}`);
     return true;
   } catch(error) {
     if(!error?.relayOpsConfirmed) {
@@ -7806,7 +7884,7 @@ async function syncFilteredMorningToSheets() {
 }
 async function copyMorningAppsScript() {
   const code=morningSheetsAppsScript();
-  if(!code.includes('2026-07-14-workflow-hardening')){toast('The workflow-safe Apps Script is still loading — refresh the dashboard and try again','error');return false;}
+  if(!code.includes('2026-07-20-all-wave-labels')){toast('The five-wave Apps Script is still loading — refresh the dashboard and try again','error');return false;}
   const ok=await writeClipboardText(code);
   toast(ok?'Revised original-template Apps Script copied — replace the old code, save, and deploy a new version':'Clipboard blocked — download the .gs script file instead',ok?'':'error');
   return ok;
@@ -7902,7 +7980,7 @@ async function testMorningSheetsConnector() {
     const response=await fetch(connectorUrlWithPing(endpoint),{method:'GET'});
     const text=await response.text();
     if(!response.ok||!/relayops-morning-v1/.test(text)||!/A3:V/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
-    if(!/2026-07-14-workflow-hardening/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the workflow-safe connector, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
+    if(!/2026-07-20-all-wave-labels/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the five-wave connector, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
     state.morningSheetsLastError='';
     persist(); render();
     toast('Google Sheets connector confirmed');

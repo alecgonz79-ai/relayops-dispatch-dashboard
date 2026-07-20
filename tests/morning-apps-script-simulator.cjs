@@ -236,7 +236,14 @@ const payload = {
     ['', '', '', '', '', '', '', '', '', '', '', '', '']
   ],
   rowTypes: ['route', 'route', 'time', 'separator'],
-  sections: [{ label: 'WAVE 1', wave: '11:15 AM', driverCount: 2, waveTime: '', pad: 'A', startRow: 3, rowCount: 2, timeRow: 5, separatorRow: 6 }]
+  sections: [{ label: 'WAVE 1', wave: '11:15 AM', driverCount: 2, waveTime: '', pad: 'A', startRow: 3, rowCount: 2, timeRow: 5, separatorRow: 6 }],
+  waves: [
+    {label:'WAVE 1',value:'11:15 (2)'},
+    {label:'WAVE 2',value:'11:20 (0)'},
+    {label:'WAVE 3',value:'11:25 (0)'},
+    {label:'WAVE 4',value:'11:40 (0)'},
+    {label:'WAVE 5',value:'11:45 (0)'}
+  ]
 };
 
 const sheet = createLegacyTemplate('7/12/26');
@@ -262,16 +269,16 @@ if (sheet.getCell(3, 2) !== 'Driver One' || sheet.getCell(4, 3) !== 'CX202') thr
 if (sheet.getCell(3, 16) !== '188' || sheet.getCell(3, 17) !== '331' || sheet.getCell(3, 21) !== '5:35 PM') throw new Error('Connector should map stop/package/Planned RTS into P/Q/U');
 if (sheet.formats.get('3:16')?.numberFormat !== '0' || sheet.formats.get('3:17')?.numberFormat !== '0') throw new Error('Stop and Package Count must remain numeric instead of displaying as times');
 if (sheet.getCell(3, 10) !== false || sheet.getCell(3, 13) !== false || sheet.getCell(3, 15) !== 'KEEP RESCUED' || sheet.getCell(3, 18) !== 'KEEP RETURNS' || sheet.getCell(3, 19) !== 'KEEP END' || sheet.getCell(3, 20) !== 'KEEP RTS' || sheet.getCell(3, 22) !== 'KEEP CLOCK OUT') throw new Error('Connector overwrote original checkbox or closing-operations columns');
-if (sheet.getCell(16, 1) !== '11:15 (2)') throw new Error('Connector should write Wave 1 time into fixed row 16');
+if (sheet.getCell(16, 1) !== '11:15 (2)' || sheet.getCell(31, 1) !== '11:20 (0)' || sheet.getCell(46, 1) !== '11:25 (0)' || sheet.getCell(61, 1) !== '11:40 (0)' || sheet.getCell(76, 1) !== '11:45 (0)') throw new Error('Connector should write all five wave time/count labels into their fixed footer rows');
 if (sheet.getCell(18, 1) !== 'WAVE 2' || sheet.getCell(33, 1) !== 'WAVE 3' || sheet.getCell(79, 1) !== "ADHOC's" || sheet.getCell(111, 1) !== 'DSP') throw new Error('Connector should preserve fixed OPS LOG 2026 section anchors');
 if (sheet.columnWidths.get(9) !== 77 || sheet.columnWidths.get(14) !== 77) throw new Error('Connector should preserve every original column width');
 if (resultContext.__result.writeRange !== 'A3:V' || resultContext.__result.writtenRange !== 'A3:V116' || resultContext.__result.lastCell !== 'V116') throw new Error('Connector should return the full fixed A3:V116 template proof');
 
-const rtsOnlyPayload = {version:'relayops-morning-v1',mode:'rts-only',operationDate:'2026-07-12',sheetName:'7/12/26',sheetNameCandidates:['7/12/26','7.12.26'],updates:[{route:'CX201',plannedRts:'8:45 PM'},{route:'CX202',plannedRts:'9:06 PM'}],waves:[{label:'WAVE 1',value:'11:15 (2)'}]};
+const rtsOnlyPayload = {version:'relayops-morning-v1',mode:'rts-only',operationDate:'2026-07-12',sheetName:'7/12/26',sheetNameCandidates:['7/12/26','7.12.26'],updates:[{route:'CX201',plannedRts:'8:45 PM'},{route:'CX202',plannedRts:'9:06 PM'}],waves:payload.waves};
 const rtsSheet = createLegacyTemplate('7/12/26');
 const rtsContext = runConnectorWithSheet(rtsSheet, payload, rtsOnlyPayload);
-if (!rtsContext.__rtsValidation.ready || rtsContext.__rtsResult.updated !== 2 || rtsContext.__rtsResult.waveTimes !== 1) throw new Error('RTS-only connector should validate and update two route times plus one wave label');
-if (rtsSheet.getCell(3, 21) !== '8:45 PM' || rtsSheet.getCell(4, 21) !== '9:06 PM' || rtsSheet.getCell(16, 1) !== '11:15 (2)') throw new Error('RTS-only connector should write only Planned RTS and wave-time/count cells');
+if (!rtsContext.__rtsValidation.ready || rtsContext.__rtsResult.updated !== 2 || rtsContext.__rtsResult.waveTimes !== 5) throw new Error('RTS-only connector should validate and update two route times plus all five wave labels');
+if (rtsSheet.getCell(3, 21) !== '8:45 PM' || rtsSheet.getCell(4, 21) !== '9:06 PM' || rtsSheet.getCell(16, 1) !== '11:15 (2)' || rtsSheet.getCell(61, 1) !== '11:40 (0)' || rtsSheet.getCell(76, 1) !== '11:45 (0)') throw new Error('RTS-only connector should write only Planned RTS and all wave-time/count cells');
 if (rtsSheet.getCell(3, 2) !== 'Driver One' || rtsSheet.getCell(3, 16) !== '188') throw new Error('RTS-only connector changed non-RTS Morning Sheet data');
 
 const whipOnlyPayload = {version:'relayops-morning-v1',mode:'whiparound-only',operationDate:'2026-07-12',sheetName:'7/12/26',sheetNameCandidates:['7/12/26','7.12.26'],updates:[{route:'CX201',driver:'Driver One',preWhip:true,postWhip:false},{route:'CX202',driver:'Driver Two',preWhip:true,postWhip:true}]};

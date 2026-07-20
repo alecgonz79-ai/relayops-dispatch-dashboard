@@ -73,7 +73,8 @@ function partialPayload(route = 'CX302') {
     version: 'relayops-morning-v1', writeMode: 'partial-update', operationDate: '2026-07-14', sheetName: '7/14/26', sheetNameCandidates: ['7/14/26','7.14.26'],
     startCell: 'A3', writeRange: 'A3:M', headers: ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','STOP COUNT','PACKAGE COUNT','','PLANNED RTS'],
     rows: [['WAVE 3','Updated Driver',route,'STG.Z.2','C','31','7','8','','188','344','','8:44 PM']], rowTypes: ['route'],
-    sections: [{ label:'WAVE 3', slotKey:'WAVE3', wave:'11:25 AM', waveTime:'11:25 (2)', pad:'C', sourceIndex:0, startRow:3, rowCount:1, timeRow:4, separatorRow:5, hasTimeRow:true }]
+    sections: [{ label:'WAVE 3', slotKey:'WAVE3', wave:'11:25 AM', waveTime:'11:25 (2)', pad:'C', sourceIndex:0, startRow:3, rowCount:1, timeRow:4, separatorRow:5, hasTimeRow:true }],
+    waves: [{label:'WAVE 1',value:'11:15 (7)'},{label:'WAVE 2',value:'11:20 (9)'},{label:'WAVE 3',value:'11:25 (2)'},{label:'WAVE 4',value:'11:40 (11)'},{label:'WAVE 5',value:'11:45 (8)'}]
   };
 }
 
@@ -84,6 +85,8 @@ function testPartialWritePreservesOtherCells() {
   sheet.set(34, 2, 'Wave Three B'); sheet.set(34, 3, 'CX302'); sheet.set(34, 16, '104');
   const context = connectorContext(sheet), result = context.writeRelayOpsMorningSheet(partialPayload());
   assert(result.writeMode === 'partial-update', 'Connector receipt must report a partial update');
+  assert(result.waveTimes === 5, 'A filtered partial update must write and confirm all five wave labels');
+  assert(sheet.get(16, 1) === '11:15 (7)' && sheet.get(31, 1) === '11:20 (9)' && sheet.get(46, 1) === '11:25 (2)' && sheet.get(61, 1) === '11:40 (11)' && sheet.get(76, 1) === '11:45 (8)', 'A filtered partial update must preserve every Wave 1-5 footer label');
   assert(sheet.get(3, 2) === 'KEEP WAVE ONE' && sheet.get(3, 16) === '101', 'A Wave 3 partial send must not clear Wave 1');
   assert(sheet.get(33, 2) === 'Wave Three A' && sheet.get(33, 16) === 'KEEP ROUTE A', 'A one-route Wave 3 filter must not clear another Wave 3 route');
   assert(sheet.get(34, 2) === 'Updated Driver' && sheet.get(34, 3) === 'CX302' && String(sheet.get(34, 16)) === '188', 'Partial updates must find and update the selected route in its fixed Wave 3 slot');

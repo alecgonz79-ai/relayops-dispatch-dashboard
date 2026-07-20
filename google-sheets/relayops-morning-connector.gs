@@ -9,7 +9,7 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-14-workflow-hardening';
+const RELAYOPS_BUILD = '2026-07-20-all-wave-labels';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -103,6 +103,7 @@ function doPost(e) {
         lastCell: 'V116',
         rows: (payload.rows || []).length,
         sections: (payload.sections || []).length,
+        waveTimes: relayOpsWaveLabels(payload).filter(function(wave) { return Boolean(wave.value); }).length,
         writeMode: payload.writeMode,
         layout: layout,
         preflight: validation,
@@ -124,6 +125,7 @@ function doPost(e) {
       sections: (payload.sections || []).length,
       writeMode: result.writeMode,
       updated: result.updated,
+      waveTimes: result.waveTimes,
       missingRoutes: result.missingRoutes,
       sectionMismatches: result.sectionMismatches,
       preflight: validation,
@@ -187,6 +189,20 @@ function relayOpsWaveTimeValue(section) {
   return time ? time + ' (' + (Number.isFinite(count) ? count : 0) + ')' : '';
 }
 
+function relayOpsWaveLabels(payload) {
+  const explicit = Array.isArray(payload && payload.waves) ? payload.waves : [];
+  const byKey = {};
+  explicit.forEach(function(wave) { const layout = relayOpsLayoutForSection({label:wave && wave.label});if (layout && layout.timeRow) byKey[layout.key] = String(wave.value || '').trim(); });
+  (payload && payload.sections || []).forEach(function(section) { const layout = relayOpsLayoutForSection(section);if (layout && layout.timeRow && !byKey[layout.key]) byKey[layout.key] = relayOpsWaveTimeValue(section); });
+  return RELAYOPS_LAYOUT.filter(function(layout) { return Boolean(layout.timeRow); }).map(function(layout) { return {layout:layout,value:byKey[layout.key] || ''}; });
+}
+
+function writeRelayOpsWaveLabels(sheet, payload) {
+  let updated = 0;
+  relayOpsWaveLabels(payload).forEach(function(wave) { if (!wave.value) return;sheet.getRange(wave.layout.timeRow, 1).setValue(wave.value);updated++; });
+  return updated;
+}
+
 function validateRelayOpsMorningPayload(payload) {
   const errors = [];
   const rows = payload && payload.rows || [];
@@ -211,6 +227,8 @@ function validateRelayOpsMorningPayload(payload) {
     if (type === 'separator' && rows[i] && rows[i].some(function(cell) { return String(cell || '') !== ''; })) errors.push('Separator row ' + (i + 1) + ' must be empty');
   });
   if (!sections.length) errors.push('No wave sections sent');
+  const waveLabels = relayOpsWaveLabels(payload);
+  if (waveLabels.length !== 5 || waveLabels.some(function(wave) { return !wave.value; })) errors.push('All five Wave 1-5 time/count labels are required');
   sections.forEach(function(section, i) {
     const start = Number(section.startRow);
     const count = Number(section.rowCount);
@@ -239,7 +257,8 @@ function validateRelayOpsRtsPayload(payload) {
     if (!String(update.route || '').trim() || !String(update.plannedRts || '').trim()) errors.push('RTS update ' + (index + 1) + ' needs Route and Planned RTS');
     if (update.expectedSection && !relayOpsLayoutForSection({label:update.expectedSection})) errors.push('RTS update ' + (index + 1) + ' has an unsupported fixed wave slot');
   });
-  if (!waves.length) errors.push('Wave time/count labels are required');
+  const waveLabels = relayOpsWaveLabels(payload);
+  if (waves.length !== 5 || waveLabels.some(function(wave) { return !wave.value; })) errors.push('All five Wave 1-5 time/count labels are required');
   return {ready:errors.length===0,errors:errors};
 }
 
@@ -296,8 +315,7 @@ function writeRelayOpsRtsOnly(payload) {
     if (expected && expected.key !== record.layout.key) { sectionMismatches.push({route:key,expectedSection:expected.label,actualSection:record.layout.label});return; }
     sheet.getRange(record.row, 21).setValue(update.plannedRts);updated++;
   });
-  let waveTimes = 0;
-  (payload.waves || []).forEach(function(wave) { const layout = relayOpsLayoutForSection({label:wave.label});if (!layout || !layout.timeRow) return;sheet.getRange(layout.timeRow, 1).setValue(wave.value || '');waveTimes++; });
+  const waveTimes = writeRelayOpsWaveLabels(sheet, payload);
   return {sheetName:sheet.getName(),updated:updated,waveTimes:waveTimes,missingRoutes:missingRoutes,sectionMismatches:sectionMismatches};
 }
 
@@ -408,7 +426,8 @@ function writeRelayOpsMorningSheet(payload) {
         sheet.getRange(record.row, 21).setValue(row[12]);updated++;
       });
     });
-    return {sheetName:sheet.getName(),startCell:'A3',writeRange:RELAYOPS_TEMPLATE_RANGE,writtenRange:'matched routes only',lastCell:'',createdSheet:false,writeMode:writeMode,updated:updated,missingRoutes:missingRoutes,sectionMismatches:sectionMismatches};
+    const waveTimes = writeRelayOpsWaveLabels(sheet, payload);
+    return {sheetName:sheet.getName(),startCell:'A3',writeRange:RELAYOPS_TEMPLATE_RANGE,writtenRange:'matched routes + five wave labels',lastCell:'',createdSheet:false,writeMode:writeMode,updated:updated,waveTimes:waveTimes,missingRoutes:missingRoutes,sectionMismatches:sectionMismatches};
   }
 
   (payload.sections || []).forEach(function(section) {
@@ -423,9 +442,9 @@ function writeRelayOpsMorningSheet(payload) {
     }
     sheet.getRange(layout.startRow, 1).setValue(layout.label);
     if (section.pad !== undefined && section.pad !== null && String(section.pad) !== '') sheet.getRange(layout.startRow, 5).setValue(section.pad);
-    if (layout.timeRow) sheet.getRange(layout.timeRow, 1).setValue(relayOpsWaveTimeValue(section));
   });
-  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V116', lastCell: 'V116', createdSheet: target.created, writeMode:writeMode, updated:(payload.rows || []).filter(function(row){return row && String(row[2] || '').trim();}).length, missingRoutes:[], sectionMismatches:[]};
+  const waveTimes = writeRelayOpsWaveLabels(sheet, payload);
+  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V116', lastCell: 'V116', createdSheet: target.created, writeMode:writeMode, updated:(payload.rows || []).filter(function(row){return row && String(row[2] || '').trim();}).length, waveTimes:waveTimes, missingRoutes:[], sectionMismatches:[]};
 }
 
 function validateRelayOpsTemplateSignature(sheet) {
@@ -478,7 +497,8 @@ function testRelayOpsMorningSheet() {
     sheetNameCandidates: ['7/12/26','7.12.26'],
     rows: [['WAVE 1','Demo Driver','CX200','STG.V.1','A','21','3','-','','188','331','','6:20 PM'], ['11:15 (1)','','','','','','','','','','','',''], ['','','','','','','','','','','','','']],
     rowTypes: ['route','time','separator'],
-    sections: [{label:'WAVE 1', wave:'11:15 AM', waveTime:'11:15 (1)', pad:'A', startRow:3, rowCount:1, timeRow:4, separatorRow:5}]
+    sections: [{label:'WAVE 1', wave:'11:15 AM', waveTime:'11:15 (1)', pad:'A', startRow:3, rowCount:1, timeRow:4, separatorRow:5}],
+    waves: [{label:'WAVE 1',value:'11:15 (1)'},{label:'WAVE 2',value:'11:20 (0)'},{label:'WAVE 3',value:'11:25 (0)'},{label:'WAVE 4',value:'11:40 (0)'},{label:'WAVE 5',value:'11:45 (0)'}]
   };
   writeRelayOpsMorningSheet(sample);
 }
