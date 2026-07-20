@@ -842,12 +842,21 @@ function topbarLegacy() {
   const fleetClean=state.page==='fleet';
   if(PARKING_ONLY_VIEW)return `<header class="topbar fleet-parking-topbar">
     <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">${ICONS.menu}</button><div class="page-heading"><h1>Van Parking</h1><p>Read-only parking map, battery levels, and charger status for the fleet team</p></div></div>
-    <div class="top-actions"><span class="btn cloud-status-button ${esc(state.cloudStatus)}" aria-live="polite"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting shared workspace…':state.cloudStatus==='offline'?'Offline · saved here':'Shared link access'}</span></span><button class="btn ghost share-link-btn" data-action="copy-fleet-parking-link">${ICONS.link}<span class="hide-mobile">Copy fleet link</span></button></div>
+    <div class="top-actions">${cloudStatusControl()}<button class="btn ghost share-link-btn" data-action="copy-fleet-parking-link">${ICONS.link}<span class="hide-mobile">Copy fleet link</span></button></div>
   </header>`;
   return `<header class="topbar">
     <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">${ICONS.menu}</button><div class="page-heading"><h1>${title}</h1><p>${sub}</p></div></div>
-    <div class="top-actions">${fleetClean?'':globalSearchHtml()}${state.page==='morning'?'<button class="btn info-top-button" data-action="open-morning-diagnostics" title="Setup & diagnostics"><span>ℹ</span><span class="hide-mobile">Setup & diagnostics</span></button>':''}<span class="btn cloud-status-button ${esc(state.cloudStatus)}" aria-live="polite"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting shared workspace…':state.cloudStatus==='offline'?'Offline · saved here':'Shared link access'}</span></span><button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button>${notificationButtonHtml()}${state.page==='morning'?`<button class="icon-button connector-settings-icon" data-action="morning-sheets-connector" aria-label="Google Sheets connector settings" title="Google Sheets connector settings">${ICONS.settings||'⚙'}</button>`:''}${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
+    <div class="top-actions">${fleetClean?'':globalSearchHtml()}${state.page==='morning'?'<button class="btn info-top-button" data-action="open-morning-diagnostics" title="Setup & diagnostics"><span>ℹ</span><span class="hide-mobile">Setup & diagnostics</span></button>':''}${cloudStatusControl()}<button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button>${notificationButtonHtml()}${state.page==='morning'?`<button class="icon-button connector-settings-icon" data-action="morning-sheets-connector" aria-label="Google Sheets connector settings" title="Google Sheets connector settings">${ICONS.settings||'⚙'}</button>`:''}${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
   </header>`;
+}
+
+function cloudStatusControl() {
+  const synced=state.cloudStatus==='synced',connecting=state.cloudStatus==='connecting';
+  const needsRetry=['error','access-denied','offline','signed-out'].includes(state.cloudStatus);
+  const label=synced?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:connecting?'Connecting shared workspace…':needsRetry?'Sync issue · retry':'Starting shared sync…';
+  const title=needsRetry?(state.cloudAccessError||'Shared cloud is disconnected. Tap to retry.'):'Shared cloud synchronization';
+  const tag=needsRetry?'button':'span';
+  return `<${tag} class="btn cloud-status-button ${esc(state.cloudStatus)}" ${needsRetry?'data-action="retry-cloud-link"':''} aria-live="polite" title="${esc(title)}"><i></i><span class="hide-mobile">${esc(label)}</span></${tag}>`;
 }
 
 function topbar() {
@@ -5124,6 +5133,17 @@ async function lockAdminAccess() {
   try{await window.RelayOpsCloud?.lockAdmin?.();}catch(error){console.warn('Could not clear the server Admin session',error);}
   toast('Admin controls locked');
 }
+let cloudRetryInFlight=false,cloudAutoRetryAttempts=0;
+async function retryCloudLinkAccess(silent=false) {
+  if(cloudRetryInFlight)return;
+  cloudRetryInFlight=true;state.cloudStatus='connecting';render();
+  try{
+    const result=await window.RelayOpsCloud?.retryLinkAccess?.();
+    if(!result?.session)throw result?.error||new Error('Shared session was not created');
+    if(!silent)toast('Shared cloud reconnected');
+  }catch(error){state.cloudStatus='error';state.cloudAccessError=error?.message||'Shared cloud retry failed';render();if(!silent)toast(`Could not reconnect: ${state.cloudAccessError}`,'error');}
+  finally{cloudRetryInFlight=false;}
+}
 async function refreshCloudMembers() {
   if(!window.RelayOpsCloud?.session)return [];
   try{state.cloudMembers=await window.RelayOpsCloud.members();const current=state.cloudMembers.find(member=>member.user_id===window.RelayOpsCloud.session.user.id);if(current?.role)state.role=current.role==='owner'?'dispatcher':current.role;render();return state.cloudMembers;}
@@ -5241,11 +5261,12 @@ function importAcceptForPurpose(purpose='morning') {
 
 function action(name,el) {
   if(PARKING_ONLY_VIEW) {
-    const allowed=new Set(['menu','copy-parking-list','copy-fleet-parking-link','close-modal']);
+    const allowed=new Set(['menu','copy-parking-list','copy-fleet-parking-link','retry-cloud-link','close-modal']);
     if(!allowed.has(name))return toast('Fleet team view is read-only and limited to Van Parking','error');
   }
   if(OWNER_ADMIN_ACTIONS.has(name)&&!hasOwnerAdminAccess())return toast('Enter the Admin PIN first','error');
   if (name==='menu') return toggleMobileSidebar();
+  if (name==='retry-cloud-link') return retryCloudLinkAccess(false);
   if (name==='opening-paycom-tab') { state.openingRosterPaycomTab=el.dataset.paycomTab==='marked'?'marked':'scheduled';localStorage.setItem('relayops_opening_roster_paycom_tab',state.openingRosterPaycomTab);return render(); }
   if (name==='clear-global-search') { state.search='';render();setTimeout(()=>document.getElementById('global-search')?.focus(),0);return; }
   if (name==='open-global-search-result') {
@@ -8422,10 +8443,10 @@ window.RelayOpsCloud?.on?.(event=>{
   if(event.type==='admin-status'){state.adminPinUnlocked=Boolean(event.unlocked);render();}
   if(event.type==='access-granted'){state.cloudAccessError='';state.role=['fleet_lead','viewer'].includes(event.membership?.role)?event.membership.role:'dispatcher';render();}
   if(event.type==='access-denied'){state.cloudStatus='access-denied';state.cloudAccessError='Automatic shared-link access has not been provisioned for this browser.';render();toast('Shared link access needs repair in Supabase','error');}
-  if(event.type==='link-access-error'){state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';render();toast(`Shared access failed: ${state.cloudAccessError}`,'error');}
+  if(event.type==='link-access-error'){state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';render();toast(`Shared access failed: ${state.cloudAccessError}`,'error');if(cloudAutoRetryAttempts<2){cloudAutoRetryAttempts++;setTimeout(()=>retryCloudLinkAccess(true),750*cloudAutoRetryAttempts);}}
   if(event.type==='workspace-empty'){state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';render();toast('Shared workspace is not initialized for this day yet','error');}
   if(event.type==='presence'){state.cloudPresence=event.users||[];render();}
-  if(event.type==='loaded'||event.type==='saved'){state.cloudStatus='synced';state.cloudAccessError='';render();}
+  if(event.type==='loaded'||event.type==='saved'){state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;render();}
   if(event.type==='remote-update'){state.cloudStatus='synced';render();toast('Another dispatcher updated today’s workspace');}
   if(event.type==='conflict')toast('A newer dispatcher update was loaded before saving','error');
   if(event.type==='error'){state.cloudStatus='error';render();toast(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}

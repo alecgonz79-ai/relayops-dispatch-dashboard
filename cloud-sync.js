@@ -186,9 +186,32 @@
       return friendly;
     }
     if(/load failed|failed to fetch|fetch failed|network request failed|networkerror|network error/i.test(message)){
-      return new Error('Shared sign-in service is unreachable. The owner needs to restore the Supabase project, then try again.');
+      return new Error('Shared cloud service is unreachable. Check the connection, then retry.');
     }
     return error instanceof Error?error:new Error(message||'Unable to send the secure sign-in link');
+  }
+  const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  async function createAnonymousLinkSession(){
+    if(typeof client?.auth?.signInAnonymously!=='function')throw new Error('Automatic shared access is unavailable');
+    let lastError=null;
+    for(let attempt=0;attempt<3;attempt++){
+      const anonymous=await client.auth.signInAnonymously({options:{data:{relayops_link_access:true}}});
+      if(!anonymous.error&&anonymous.data?.session)return anonymous.data.session;
+      lastError=anonymous.error||new Error('Automatic shared access did not return a session');
+      if(!/load failed|failed to fetch|network|timeout/i.test(String(lastError?.message||lastError)))break;
+      if(attempt<2)await pause(500*(attempt+1));
+    }
+    throw readableAuthError(lastError||new Error('Automatic shared access failed'));
+  }
+  async function replaceWithAnonymousLinkSession(){
+    if(session)await client.auth.signOut({scope:'local'}).catch(()=>{});
+    session=null;membership=null;
+    session=await createAnonymousLinkSession();
+    notify({type:'auth',session});
+    await load();
+    if(!membership)throw new Error('The shared station membership could not be created');
+    notify({type:'admin-status',unlocked:await adminStatus().catch(()=>false)});
+    return session;
   }
   async function init(){
     client=createClient();
@@ -197,26 +220,32 @@
     try{
       const result=await client.auth.getSession();session=result.data.session;
       client.auth.onAuthStateChange((_event,next)=>{session=next;if(!session)membership=null;notify({type:'auth',session});if(session&&!initializing)load().catch(error=>notify({type:'error',error}));});
-      if(!session&&typeof client.auth.signInAnonymously==='function'){
-        const anonymous=await client.auth.signInAnonymously({options:{data:{relayops_link_access:true}}});
-        if(anonymous.error){notify({type:'link-access-error',error:anonymous.error});return {configured:true,session:null,error:anonymous.error};}
-        session=anonymous.data?.session||null;
-      }
+      if(!session)session=await createAnonymousLinkSession();
       if(session){
         notify({type:'auth',session});await load();
-        // Retire stale email-link sessions that no longer have workspace access.
-        // This keeps "anyone with the link" true for dispatchers who previously
-        // tried the old sign-in flow on the same device.
-        if(!membership&&!session.user?.is_anonymous&&typeof client.auth.signInAnonymously==='function'){
-          await client.auth.signOut({scope:'local'});session=null;
-          const anonymous=await client.auth.signInAnonymously({options:{data:{relayops_link_access:true}}});
-          if(anonymous.error){notify({type:'link-access-error',error:anonymous.error});return {configured:true,session:null,error:anonymous.error};}
-          session=anonymous.data?.session||null;if(session){notify({type:'auth',session});await load();}
-        }
+        // Replace any stale browser session that lacks station access, including
+        // anonymous sessions created before the link-access trigger existed.
+        if(!membership)await replaceWithAnonymousLinkSession();
         if(membership)notify({type:'admin-status',unlocked:await adminStatus().catch(()=>false)});
       }else notify({type:'link-access-error',error:new Error('Automatic shared access is unavailable')});
       return {configured:true,session};
-    }finally{initializing=false;}
+    }catch(error){notify({type:'link-access-error',error});return {configured:true,session,error};}
+    finally{initializing=false;}
+  }
+  async function retryLinkAccess(){
+    if(initializing)return {configured,session};
+    if(!client)client=createClient();
+    if(!client)throw new Error('Shared cloud is not configured');
+    initializing=true;notify({type:'reconnecting'});
+    try{
+      if(session){
+        await load();
+        if(membership){notify({type:'admin-status',unlocked:await adminStatus().catch(()=>false)});return {configured:true,session};}
+      }
+      await replaceWithAnonymousLinkSession();
+      return {configured:true,session};
+    }catch(error){notify({type:'link-access-error',error});throw error;}
+    finally{initializing=false;}
   }
   function operationDate(){return window.RelayOpsApp?.operationDate?.()||new Date().toISOString().slice(0,10);}
   async function signIn(email){
@@ -372,5 +401,5 @@
     window.addEventListener('online',()=>{notify({type:'reconnecting'});if(session)load().catch(error=>notify({type:'error',error}));});
     window.addEventListener('offline',()=>notify({type:'offline',reason:'browser-offline'}));
   }
-  window.RelayOpsCloud={configured,init,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{preparePayload,reconcilePayload,semanticKey,canonical}};
+  window.RelayOpsCloud={configured,init,retryLinkAccess,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{preparePayload,reconcilePayload,semanticKey,canonical}};
 })();

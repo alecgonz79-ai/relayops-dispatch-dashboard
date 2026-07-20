@@ -53,5 +53,7 @@ vm.runInNewContext(source,context,{filename:'cloud-sync.js'});
   assert(migration.includes('extensions.crypt(candidate_pin,access_row.admin_pin_hash)')&&migration.includes('next_failures>=5'),'Admin PIN must be hashed and rate-limited by Supabase');
   assert(!app.includes('"6969"')&&!app.includes("'6969'"),'Public app code must not contain the Admin PIN');
   assert(!app.includes('Dispatcher sign in'),'Retired dispatcher sign-in control returned to the UI');
+  assert(source.includes('retryLinkAccess')&&source.includes('if(!membership)await replaceWithAnonymousLinkSession()'),'Stale shared-link sessions must recover without email sign-in');
+  assert(app.includes('Sync issue · retry')&&app.includes("name==='retry-cloud-link'"),'Cloud failures need a visible one-click recovery path');
   console.log('Automatic shared-link access and server-verified Admin PIN test passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});
