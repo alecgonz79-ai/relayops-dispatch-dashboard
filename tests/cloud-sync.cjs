@@ -15,7 +15,7 @@ const client={
     order(){return Promise.resolve({data:[],error:null});},
     maybeSingle:async()=>{if(updatePayload){memberUpdates.push({table,payload:updatePayload,filters});return{data:{user_id:'user-2',role:updatePayload.role,display_name:'Dispatcher Two',active:updatePayload.active,created_at:'2026-07-01'},error:null};}if(table==='memberships')return{data:{user_id:'user-1',role:'owner',display_name:'Owner',active:true},error:null};return{data:row,error:null};}
   };},
-  rpc:async(name,args)=>{rpcCalls.push({name,args});return{data:{revision:5,updated_at:'2026-07-11T12:01:00Z'},error:null};},
+  rpc:async(name,args)=>{rpcCalls.push({name,args});if(name==='relayops_admin_status')return{data:false,error:null};return{data:{revision:5,updated_at:'2026-07-11T12:01:00Z'},error:null};},
   functions:{invoke:async()=>({data:{ok:true},error:null})},
   channel(name){const presence=name.startsWith('presence:');return{on(_event,_filter,callback){if(!presence)postgresCallback=callback;return this;},subscribe(callback){if(callback)setTimeout(()=>callback('SUBSCRIBED'),0);return this;},presenceState(){return{};},async track(){}};},
   removeChannel(){}
@@ -40,7 +40,8 @@ cloud.on(event=>events.push(event));
   await cloud.init();
   if(applied.length!==2||applied[0].kind!=='daily'||applied[0].payload.morningRoutes[0].route!=='CX200'||applied[1].kind!=='persistent'||cloud.revision!==4||cloud.persistentRevision!==4)throw new Error('Daily and persistent snapshots did not load');
   await cloud.save('test.save');
-  if(rpcCalls.length!==2||rpcCalls[0].name!=='save_workspace_snapshot'||rpcCalls[0].args.expected_revision!==4||rpcCalls[0].args.target_station!=='station-1'||rpcCalls[0].args.new_payload.morningRoutes[0].route!=='CX100'||!rpcCalls[0].args.new_payload.__relayopsSync||rpcCalls[1].args.target_date!=='2000-01-01'||!rpcCalls[1].args.new_payload.fleetIssues||!rpcCalls[1].args.new_payload.__relayopsSync||cloud.revision!==5||cloud.persistentRevision!==5)throw new Error('Versioned daily/persistent workspace save failed');
+  const saveCalls=rpcCalls.filter(call=>call.name==='save_workspace_snapshot');
+  if(saveCalls.length!==2||saveCalls[0].args.expected_revision!==4||saveCalls[0].args.target_station!=='station-1'||saveCalls[0].args.new_payload.morningRoutes[0].route!=='CX100'||!saveCalls[0].args.new_payload.__relayopsSync||saveCalls[1].args.target_date!=='2000-01-01'||!saveCalls[1].args.new_payload.fleetIssues||!saveCalls[1].args.new_payload.__relayopsSync||cloud.revision!==5||cloud.persistentRevision!==5)throw new Error('Versioned daily/persistent workspace save failed');
   postgresCallback({new:{operation_date:'2000-01-01',revision:6,payload:{fleetIssues:{EV9:{active:[{id:'issue-9',text:'Flat tire'}],history:[]}}},updated_at:'2026-07-11T12:01:30Z'}});
   if(applied.length!==3||applied[2].kind!=='persistent'||!applied[2].payload.fleetIssues.EV9||cloud.persistentRevision!==6)throw new Error('Station-wide persistent Fleet update failed');
   postgresCallback({new:{operation_date:'2026-07-11',revision:6,payload:{morningRoutes:[{route:'CX300'}]},updated_at:'2026-07-11T12:02:00Z'}});

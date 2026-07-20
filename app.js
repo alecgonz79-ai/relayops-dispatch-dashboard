@@ -31,14 +31,13 @@ const ICONS = {
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>'
 };
 
-const ADMIN_OWNER_EMAIL = 'alecgonz79@gmail.com';
-const OWNER_ADMIN_ACTIONS = new Set(['invite','send-user-invite','edit-member-access','save-member-access','save-organization']);
+const OWNER_ADMIN_ACTIONS = new Set(['save-organization']);
 
 function authenticatedCloudEmail() {
   return String(window.RelayOpsCloud?.session?.user?.email||state?.cloudUser||'').trim().toLowerCase();
 }
 function hasOwnerAdminAccess() {
-  return state?.role==='admin'&&authenticatedCloudEmail()===ADMIN_OWNER_EMAIL;
+  return Boolean(state?.adminPinUnlocked);
 }
 
 const NAV = [
@@ -495,6 +494,7 @@ let state = {
   cloudSigninCooldownUntil: Number(localStorage.getItem('relayops_cloud_signin_cooldown_until') || 0),
   cloudSigninPrompted: false,
   cloudMembers: [],
+  adminPinUnlocked: false,
   pendingMemberEdit: null,
   pendingChargerReport: null,
   slackReportRoomUrl: localStorage.getItem('relayops_slack_report_room_url') || 'https://app.slack.com/client',
@@ -798,8 +798,8 @@ function sidebar() {
   return `<aside class="sidebar" id="sidebar">
     <div class="brand"><div class="brand-mark"></div><div class="brand-copy"><div class="brand-name">RelayOps</div><div class="brand-sub">Dispatch command</div></div></div>
     <div class="station-pill"><div class="station-icon">${esc(state.stationCode.slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(state.stationCode.toUpperCase())} · Los Angeles</span></div>${ICONS.chevron}</div>
-    <nav>${NAV.map(group=>({...group,items:group.items.filter(item=>!item[4]||hasOwnerAdminAccess())})).filter(group=>group.items.length).map(group => `<div class="side-section"><div class="side-label">${group.section}</div>${group.items.map(([id,label,icon,count]) => `<button class="nav-item ${state.page===id?'active':''}" data-page="${id}" aria-label="${label}">${ICONS[icon]}<span>${label}</span>${count?`<b class="nav-count">${count}</b>`:''}</button>`).join('')}</div>`).join('')}</nav>
-    <div class="side-bottom"><div class="user-card"><div class="avatar">AG</div><div class="user-copy"><strong>Alex Gonzalez</strong><span>${hasOwnerAdminAccess()?'Owner · Full access':'Opening dispatcher'}</span></div><div class="role-tag">${hasOwnerAdminAccess()?'ADMIN':'OPS'}</div></div></div>
+    <nav>${NAV.map(group=>({...group,items:group.items})).filter(group=>group.items.length).map(group => `<div class="side-section"><div class="side-label">${group.section}</div>${group.items.map(([id,label,icon,count]) => `<button class="nav-item ${state.page===id?'active':''}" data-page="${id}" aria-label="${label}">${ICONS[icon]}<span>${label}</span>${id==='admin'&&!hasOwnerAdminAccess()?'<b class="nav-count">🔒</b>':count?`<b class="nav-count">${count}</b>`:''}</button>`).join('')}</div>`).join('')}</nav>
+    <div class="side-bottom"><div class="user-card"><div class="avatar">RO</div><div class="user-copy"><strong>RelayOps team</strong><span>${hasOwnerAdminAccess()?'Admin PIN unlocked':'Shared link access'}</span></div><div class="role-tag">${hasOwnerAdminAccess()?'ADMIN':'LIVE'}</div></div></div>
   </aside>`;
 }
 
@@ -842,11 +842,11 @@ function topbarLegacy() {
   const fleetClean=state.page==='fleet';
   if(PARKING_ONLY_VIEW)return `<header class="topbar fleet-parking-topbar">
     <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">${ICONS.menu}</button><div class="page-heading"><h1>Van Parking</h1><p>Read-only parking map, battery levels, and charger status for the fleet team</p></div></div>
-    <div class="top-actions"><button class="btn cloud-status-button ${esc(state.cloudStatus)}" data-action="cloud-account"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting…':state.cloudStatus==='offline'?'Offline · saved here':state.cloudStatus==='signed-out'?'Dispatcher sign in':'Cloud setup'}</span></button><button class="btn ghost share-link-btn" data-action="copy-fleet-parking-link">${ICONS.link}<span class="hide-mobile">Copy fleet link</span></button></div>
+    <div class="top-actions"><span class="btn cloud-status-button ${esc(state.cloudStatus)}" aria-live="polite"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting shared workspace…':state.cloudStatus==='offline'?'Offline · saved here':'Shared link access'}</span></span><button class="btn ghost share-link-btn" data-action="copy-fleet-parking-link">${ICONS.link}<span class="hide-mobile">Copy fleet link</span></button></div>
   </header>`;
   return `<header class="topbar">
     <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">${ICONS.menu}</button><div class="page-heading"><h1>${title}</h1><p>${sub}</p></div></div>
-    <div class="top-actions">${fleetClean?'':globalSearchHtml()}${state.page==='morning'?'<button class="btn info-top-button" data-action="open-morning-diagnostics" title="Setup & diagnostics"><span>ℹ</span><span class="hide-mobile">Setup & diagnostics</span></button>':''}<button class="btn cloud-status-button ${esc(state.cloudStatus)}" data-action="cloud-account"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting…':state.cloudStatus==='offline'?'Offline · saved here':state.cloudStatus==='signed-out'?'Dispatcher sign in':'Cloud setup'}</span></button><button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button>${notificationButtonHtml()}${state.page==='morning'?`<button class="icon-button connector-settings-icon" data-action="morning-sheets-connector" aria-label="Google Sheets connector settings" title="Google Sheets connector settings">${ICONS.settings||'⚙'}</button>`:''}${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
+    <div class="top-actions">${fleetClean?'':globalSearchHtml()}${state.page==='morning'?'<button class="btn info-top-button" data-action="open-morning-diagnostics" title="Setup & diagnostics"><span>ℹ</span><span class="hide-mobile">Setup & diagnostics</span></button>':''}<span class="btn cloud-status-button ${esc(state.cloudStatus)}" aria-live="polite"><i></i><span class="hide-mobile">${state.cloudStatus==='synced'?`Shared & synced${state.cloudPresence.length?` · ${state.cloudPresence.length} online`:''}`:state.cloudStatus==='connecting'?'Connecting shared workspace…':state.cloudStatus==='offline'?'Offline · saved here':'Shared link access'}</span></span><button class="btn ghost share-link-btn" data-action="share-dispatcher-link">${ICONS.link}<span class="hide-mobile">Share link</span></button>${notificationButtonHtml()}${state.page==='morning'?`<button class="icon-button connector-settings-icon" data-action="morning-sheets-connector" aria-label="Google Sheets connector settings" title="Google Sheets connector settings">${ICONS.settings||'⚙'}</button>`:''}${fleetClean?'':`<button class="btn primary" data-action="import">${ICONS.upload}<span class="hide-mobile">Upload Excel / CSV</span></button>`}</div>
   </header>`;
 }
 
@@ -855,7 +855,7 @@ function topbar() {
 }
 
 function contextBar(extra='') {
-  const synced=state.cloudStatus==='synced',label=synced?`Shared workspace${state.cloudUser?` · ${state.cloudUser}`:''}`:state.cloudStatus==='access-denied'?'Access required · ask the owner to invite this email':state.cloudStatus==='workspace-empty'?'Shared day is waiting for an owner to start it':state.cloudStatus==='offline'?'Offline · edits saved and will sync automatically':state.cloudStatus==='signed-out'?'Sign in required · local changes are not shared':state.cloudStatus==='connecting'?'Connecting shared workspace…':'Local cache · cloud setup required';
+  const synced=state.cloudStatus==='synced',label=synced?'Shared workspace · everyone with the link sees these updates':state.cloudStatus==='access-denied'?'Shared link access needs repair':state.cloudStatus==='workspace-empty'?'Starting today’s shared workspace…':state.cloudStatus==='offline'?'Offline · edits saved and will sync automatically':state.cloudStatus==='connecting'?'Connecting shared workspace…':'Shared cloud setup required';
   return `<div class="context-bar"><div class="date-nav"><div class="date-chip">${ICONS.calendar}${fmtDate()}</div>${extra}</div><div class="sync-state ${synced?'cloud-live':''}"><i class="live-dot"></i>${esc(label)}</div></div>`;
 }
 
@@ -1987,7 +1987,7 @@ function fleetLiveConnectorStrip() {
   const signedIn=Boolean(window.RelayOpsCloud?.session), authReady=endpointInfo.local||signedIn;
   const tone=connected&&authReady?(error?'warn':'ok'):'warn';
   const title=connected?(authReady?'Authenticated Fleet proxy ready':'Fleet proxy saved · dispatcher sign-in required'):'Authenticated Fleet proxy not connected';
-  const detail=connected?`${endpointInfo.local?'Local development proxy':'Refresh sends the signed-in dispatcher’s Supabase access token to the proxy'}; the private connector token stays server-side. ${last?`Last live pull: ${esc(last)}.`:'No authenticated pull completed yet.'}`:'Save an HTTPS Supabase Edge Function or equivalent authenticated proxy endpoint. Refresh never calls Amazon, FleetOS, or the private connector directly from this browser.';
+  const detail=connected?`${endpointInfo.local?'Local development proxy':'Refresh sends the automatic shared-session Supabase access token to the proxy'}; the private connector token stays server-side. ${last?`Last live pull: ${esc(last)}.`:'No authenticated pull completed yet.'}`:'Save an HTTPS Supabase Edge Function or equivalent authenticated proxy endpoint. Refresh never calls Amazon, FleetOS, or the private connector directly from this browser.';
   return `<div class="fleet-live-connector ${tone}"><div><strong>${esc(title)}</strong><span>${detail}</span>${error?`<small>${esc(error)}</small>`:''}<div class="fleet-live-links"><a href="${esc(fleetAmazonPortalUrl())}" target="_blank" rel="noopener">Amazon Fleet</a><a href="${esc(fleetFleetosPortalUrl())}" target="_blank" rel="noopener">FleetOS</a></div></div><div class="fleet-live-connector-steps"><span class="ok"><b>1</b>Amazon Fleet link saved</span><span class="ok"><b>2</b>FleetOS link saved</span><span class="${connected?'ok':'warn'}"><b>3</b>Authenticated proxy endpoint</span><span class="${authReady?'ok':'warn'}"><b>4</b>${authReady?'Dispatcher session ready':'Sign in before cloud refresh'}</span></div><button class="btn small ${connected&&authReady?'lime':'primary'}" data-action="${connected&&authReady?'refresh-fleet':'fleet-live-setup'}">${connected&&authReady?'Authenticated refresh':'Proxy setup'}<span class="assistive-text">Set authenticated proxy endpoint</span></button></div>`;
 }
 
@@ -3055,11 +3055,17 @@ function adminMemberRows() {
   const currentId=window.RelayOpsCloud.session.user?.id||'';
   return state.cloudMembers.map(member=>{const locked=member.role==='owner'||member.user_id===currentId;return `<tr><td><div class="admin-member-name"><strong>${esc(member.display_name||'Authorized member')}</strong><small>${member.user_id===currentId?'Current account':`User ${String(member.user_id||'').slice(0,8)}…`}</small></div></td><td><span class="role-chip ${esc(member.role)}">${esc(roleLabel(member.role))}</span></td><td><span class="status ${member.active?'':'risk'}">${member.active?'Active':'Inactive'}</span></td><td>${locked?'<span class="member-access-locked">Owner access locked</span>':`<button class="btn small" data-action="edit-member-access" data-member-id="${esc(member.user_id)}">Edit access</button>`}</td></tr>`;}).join('');
 }
-function adminPage() {
-  if(!hasOwnerAdminAccess())return `<article class="card empty-state"><div class="empty-icon">${ICONS.alert}</div><h3>Owner access required</h3><p>Admin access is restricted to ${esc(ADMIN_OWNER_EMAIL)} and protected by the signed-in Supabase owner membership.</p></article>`;
+function legacyAdminPage() {
+  if(!hasOwnerAdminAccess())return `<article class="card empty-state"><div class="empty-icon">${ICONS.alert}</div><h3>Admin PIN required</h3></article>`;
   const cloudConfigured=Boolean(window.RelayOpsCloud?.configured),signedIn=Boolean(window.RelayOpsCloud?.session),sheetReady=Boolean(state.morningSheetsEndpoint);
   const policyRows=ROLE_POLICY_MATRIX.map(row=>`<tr><td><strong>${esc(row.capability)}</strong></td><td>${permissionMark(row.owner)}</td><td>${permissionMark(row.ops_manager)}</td><td>${permissionMark(row.dispatcher)}</td><td>${permissionMark(row.fleet_lead)}</td><td>${permissionMark(row.viewer)}</td></tr>`).join('');
   return `${contextBar('<span class="status">Owner access</span>')}<section class="admin-layout"><div class="admin-main"><article class="card settings-section"><h2>Organization</h2><p>These shared labels appear throughout RelayOps for every dispatcher.</p><div class="field-grid"><div class="field"><label for="admin-dsp-name">DSP name</label><input id="admin-dsp-name" value="${esc(state.organizationName)}"></div><div class="field"><label for="admin-station-code">Station code</label><input id="admin-station-code" value="${esc(state.stationCode)}" maxlength="12"></div><div class="field"><label>Timezone</label><input value="America/Los_Angeles" readonly></div><div class="field"><label>Operating day starts</label><input value="06:00" readonly></div></div><div class="modal-actions"><button class="btn primary" data-action="save-organization">Save organization</button></div></article><article class="card table-card admin-members-card"><div class="card-head"><div class="card-title"><h2>Member access</h2><p>Role and active status are saved to Supabase and enforced by row-level security.</p></div>${signedIn?`<button class="btn small" data-action="invite">${ICONS.plus} Invite user</button>`:`<button class="btn small" data-action="cloud-account">Sign in</button>`}</div><div class="table-wrap"><table><thead><tr><th>Member</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${adminMemberRows()}</tbody></table></div></article><article class="card table-card"><div class="card-head"><div class="card-title"><h2>Fixed role policy</h2><p>This is a read-only policy summary, not a set of pretend switches.</p></div><span class="status neutral">Database enforced</span></div><div class="table-wrap"><table class="permissions-table fixed-policy-table"><thead><tr><th>Capability</th><th>Owner</th><th>Ops manager</th><th>Dispatcher</th><th>Fleet lead</th><th>Viewer</th></tr></thead><tbody>${policyRows}</tbody></table></div></article></div><aside class="admin-side"><article class="card settings-section"><h2>Connections</h2><p>RelayOps clearly separates working handoffs from unavailable integrations.</p><div class="connection"><div class="connection-logo">amz</div><div class="connection-copy"><strong>Amazon Logistics</strong><span>Manual XLSX/CSV import is available</span></div><span class="status">File import ready</span></div><div class="connection"><div class="connection-logo" style="background:#287247">GS</div><div class="connection-copy"><strong>Google Sheets</strong><span>${sheetReady?'Saved connector endpoint':'Connector endpoint not configured'}</span></div><span class="status ${sheetReady?'':'warn'}">${sheetReady?'Ready':'Setup required'}</span></div><div class="connection unavailable-connection"><div class="connection-logo" style="background:#6d7480">ADP</div><div class="connection-copy"><strong>ADP Workforce</strong><span>No supported connector is installed</span></div><span class="status neutral" aria-disabled="true">Not available</span></div><button class="btn" style="width:100%;margin-top:5px" data-action="import">Open Amazon file import</button></article><article class="card settings-section"><h2>Dispatcher access link</h2><p>Send this full HTTPS link. Authorized cloud users see the shared workspace after sign-in.</p><div class="callout"><strong>Live shared dashboard</strong><p><a href="${DISPATCHER_SHARE_URL}" target="_blank" rel="noopener">${DISPATCHER_SHARE_URL}</a></p><p class="share-note">${DISPATCHER_SHARE_NOTE}</p><button class="btn small lime" data-action="share-dispatcher-link">${ICONS.copy} Copy clickable link</button></div><div class="callout"><strong>Fleet team parking link</strong><p><a href="${FLEET_PARKING_SHARE_URL}" target="_blank" rel="noopener">${FLEET_PARKING_SHARE_URL}</a></p><p class="share-note">Opens a Van Parking-only view with map arrangement, battery percentages, and charger status.</p><button class="btn small lime" data-action="copy-fleet-parking-link">${ICONS.copy} Copy fleet team link</button></div><div class="callout"><strong>Cloud status</strong><p>${!cloudConfigured?'Supabase is not configured in this build.':signedIn?'Owner session verified.':'Supabase is configured; sign in to manage members.'}</p><button class="btn small" data-action="cloud-account">${signedIn?'View account':'Sign in'}</button></div></article><article class="card settings-section admin-security-note"><h2>Security boundary</h2><p>Owner membership updates are accepted only when Supabase RLS verifies an active owner in this organization. Owner accounts cannot be changed from this screen.</p></article></aside></section>`;
+}
+
+function adminPage() {
+  if(!hasOwnerAdminAccess())return `<article class="card empty-state"><div class="empty-icon">${ICONS.alert}</div><h3>Admin PIN required</h3><p>Open Admin access from the sidebar and enter the four-digit PIN.</p><button class="btn primary" data-action="open-admin-pin">Unlock Admin</button></article>`;
+  const cloudConfigured=Boolean(window.RelayOpsCloud?.configured),sheetReady=Boolean(state.morningSheetsEndpoint);
+  return `${contextBar('<span class="status">Admin PIN unlocked</span><button class="btn small" data-action="lock-admin">Lock Admin</button>')}<section class="admin-layout"><div class="admin-main"><article class="card settings-section"><h2>Organization</h2><p>These synchronized labels appear throughout RelayOps for everyone using the shared link.</p><div class="field-grid"><div class="field"><label for="admin-dsp-name">DSP name</label><input id="admin-dsp-name" value="${esc(state.organizationName)}"></div><div class="field"><label for="admin-station-code">Station code</label><input id="admin-station-code" value="${esc(state.stationCode)}" maxlength="12"></div><div class="field"><label>Timezone</label><input value="America/Los_Angeles" readonly></div><div class="field"><label>Operating day starts</label><input value="06:00" readonly></div></div><div class="modal-actions"><button class="btn primary" data-action="save-organization">Save organization</button></div></article><article class="card settings-section"><h2>Shared-link access</h2><p>No dispatcher email or sign-in link is required. Opening the published dashboard automatically creates a restricted Supabase link session and loads the same station workspace.</p><div class="cloud-account-summary"><span><b>✓</b>Automatic link session</span><span><b>✓</b>Realtime shared edits</span><span><b>✓</b>Admin screen PIN-gated</span></div><div class="private-contact-note danger"><b>Share only with your operations team</b><span>Anyone who receives the dashboard link can view and edit synchronized operational data, including imported driver and fleet information.</span></div></article></div><aside class="admin-side"><article class="card settings-section"><h2>Connections</h2><p>Working handoffs and their current status.</p><div class="connection"><div class="connection-logo">amz</div><div class="connection-copy"><strong>Amazon Logistics</strong><span>Manual XLSX/CSV import</span></div><span class="status">Ready</span></div><div class="connection"><div class="connection-logo" style="background:#287247">GS</div><div class="connection-copy"><strong>Google Sheets</strong><span>${sheetReady?'Saved connector endpoint':'Connector endpoint not configured'}</span></div><span class="status ${sheetReady?'':'warn'}">${sheetReady?'Ready':'Setup required'}</span></div><div class="connection"><div class="connection-logo" style="background:#287247">SB</div><div class="connection-copy"><strong>Supabase sync</strong><span>${cloudConfigured?'Automatic shared-link session':'Cloud configuration missing'}</span></div><span class="status ${cloudConfigured?'':'warn'}">${cloudConfigured?'Live':'Setup required'}</span></div></article><article class="card settings-section"><h2>Share RelayOps</h2><p>Every dispatcher who opens this HTTPS link joins the same synchronized workspace automatically.</p><div class="callout"><strong>Live shared dashboard</strong><p><a href="${DISPATCHER_SHARE_URL}" target="_blank" rel="noopener">${DISPATCHER_SHARE_URL}</a></p><button class="btn small lime" data-action="share-dispatcher-link">${ICONS.copy} Copy clickable link</button></div><div class="callout"><strong>Fleet parking link</strong><p><a href="${FLEET_PARKING_SHARE_URL}" target="_blank" rel="noopener">${FLEET_PARKING_SHARE_URL}</a></p><button class="btn small lime" data-action="copy-fleet-parking-link">${ICONS.copy} Copy fleet link</button></div></article><article class="card settings-section admin-security-note"><h2>Admin protection</h2><p>The PIN is checked by Supabase, rate-limited after failed attempts, and remains unlocked for this shared browser session for up to eight hours.</p><button class="btn danger" data-action="lock-admin">Lock Admin now</button></article></aside></section>`;
 }
 
 function importPreviewStats() {
@@ -3246,6 +3252,9 @@ function modal() {
     const history=[...(state.sheetHistory?.past||[])].reverse();
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheet-history-modal" role="dialog" aria-modal="true" aria-labelledby="sheet-history-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">REVERSIBLE OPERATIONS</span><h2 id="sheet-history-title">Morning Sheet & Picklist history</h2><p>Undo and Redo restore shared route data without changing Fleet Health or driver profiles.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheet-history-list">${history.length?history.map(item=>`<article><span><b>${esc(item.label)}</b><small>${esc(item.by||'Dispatcher')} · ${esc(equipmentIssueDate(item.at))}</small></span><em>${esc(item.scope||'both')}</em></article>`).join(''):'<div class="rostering-empty"><strong>No sheet changes yet</strong><span>Edits, clears, row changes, and wave removal will appear here.</span></div>'}</div><div class="modal-actions"><button class="btn" data-action="sheet-undo" ${state.sheetHistory?.past?.length?'':'disabled'}>↶ Undo latest</button><button class="btn" data-action="sheet-redo" ${state.sheetHistory?.future?.length?'':'disabled'}>↷ Redo</button><button class="btn primary" data-action="close-modal">Done</button></div></div></div></div>`;
   }
+  if (state.modal === 'admin-pin') {
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal admin-pin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-pin-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">ADMIN ACCESS</span><h2 id="admin-pin-title">Enter the Admin PIN</h2><p>Daily dispatcher tools remain open to everyone with the shared link. This PIN protects the Admin screen.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="cloud-email-field"><span>4-digit PIN</span><input id="admin-pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••" autofocus></label><div class="private-contact-note"><b>Server-verified PIN</b><span>The PIN is checked by Supabase and is not stored in the public dashboard code. Five incorrect attempts pause PIN entry for 15 minutes.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="unlock-admin">Unlock Admin</button></div></div></div></div>`;
+  }
   if (state.modal === 'cloud-account') {
     const configured=Boolean(window.RelayOpsCloud?.configured),signedIn=Boolean(window.RelayOpsCloud?.session);
     const signinCooling=state.cloudSigninCooldownUntil>Date.now();
@@ -3330,7 +3339,7 @@ function modal() {
   }
   if (state.modal === 'fleet-live-setup') {
     const endpoint=fleetLiveEndpoint(),endpointInfo=fleetLiveEndpointInfo(endpoint),signedIn=Boolean(window.RelayOpsCloud?.session);
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-live-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">AUTHENTICATED FLEET PROXY</span><h2 id="fleet-live-title">Connect Amazon Fleet + FleetOS safely</h2><p>RelayOps calls a signed-in Supabase proxy. The proxy—not this browser—holds the private connector URL and token.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="fleet-live-setup-grid"><label><strong>Amazon Fleet link</strong><input id="fleet-amazon-url" value="${esc(fleetAmazonPortalUrl())}" placeholder="${AMAZON_FLEET_PORTAL_URL}"><span>Dispatcher shortcut only. This link is never forwarded as an upstream URL.</span></label><label><strong>FleetOS link</strong><input id="fleet-fleetos-url" value="${esc(fleetFleetosPortalUrl())}" placeholder="${FLEETOS_PORTAL_URL}"><span>Dispatcher shortcut only. This link is never forwarded as an upstream URL.</span></label><label class="full"><strong>Authenticated proxy / Supabase Edge Function endpoint</strong><input id="fleet-live-endpoint" value="${esc(endpoint)}" placeholder="https://PROJECT.supabase.co/functions/v1/fleet-live-proxy"><span>HTTPS is required. Localhost HTTP is accepted only for development. Never paste a connector token, portal cookie, password, or Amazon/FleetOS URL here.</span></label></div><div class="fleet-live-flow"><strong>Secure refresh flow</strong><span><b>1</b>Dispatcher signs in to RelayOps</span><span><b>2</b>Browser sends only the Supabase user access token</span><span><b>3</b>Edge Function validates organization + station membership</span><span><b>4</b>Server uses FLEET_CONNECTOR_URL and FLEET_CONNECTOR_TOKEN secrets</span></div><div class="fleet-live-warning"><strong>${signedIn?'Dispatcher session ready':'Sign-in required for cloud refresh'}</strong><span>${signedIn?'Your current Supabase session will authenticate the next refresh. The connector secret never enters the dashboard.':'Save the endpoint now if needed, then sign in with the Dispatcher sign in button before using authenticated Refresh.'}</span></div>${!endpointInfo.empty&&!endpointInfo.valid?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Endpoint needs attention</strong><span>${esc(endpointInfo.error)}</span></div></div>`:''}${state.fleetLiveLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Last authenticated pull failed</strong><span>${esc(state.fleetLiveLastError)}</span></div></div>`:''}<div class="modal-actions"><a class="btn" href="${esc(fleetAmazonPortalUrl())}" target="_blank" rel="noopener">Open Amazon Fleet</a><a class="btn" href="${esc(fleetFleetosPortalUrl())}" target="_blank" rel="noopener">Open FleetOS</a><button class="btn" data-action="fleet-import">Use upload/paste instead</button><button class="btn primary" data-action="save-fleet-live-setup">Save authenticated proxy</button></div><p class="upload-help">Refresh never calls the private connector directly and never accepts a caller-provided upstream URL.</p></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-live-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">AUTHENTICATED FLEET PROXY</span><h2 id="fleet-live-title">Connect Amazon Fleet + FleetOS safely</h2><p>RelayOps uses the automatic Supabase link session. The proxy—not this browser—holds the private connector URL and token.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="fleet-live-setup-grid"><label><strong>Amazon Fleet link</strong><input id="fleet-amazon-url" value="${esc(fleetAmazonPortalUrl())}" placeholder="${AMAZON_FLEET_PORTAL_URL}"><span>Dispatcher shortcut only. This link is never forwarded as an upstream URL.</span></label><label><strong>FleetOS link</strong><input id="fleet-fleetos-url" value="${esc(fleetFleetosPortalUrl())}" placeholder="${FLEETOS_PORTAL_URL}"><span>Dispatcher shortcut only. This link is never forwarded as an upstream URL.</span></label><label class="full"><strong>Authenticated proxy / Supabase Edge Function endpoint</strong><input id="fleet-live-endpoint" value="${esc(endpoint)}" placeholder="https://PROJECT.supabase.co/functions/v1/fleet-live-proxy"><span>HTTPS is required. Localhost HTTP is accepted only for development. Never paste a connector token, portal cookie, password, or Amazon/FleetOS URL here.</span></label></div><div class="fleet-live-flow"><strong>Secure refresh flow</strong><span><b>1</b>RelayOps starts a shared link session</span><span><b>2</b>Browser sends only the Supabase access token</span><span><b>3</b>Edge Function validates organization + station membership</span><span><b>4</b>Server uses FLEET_CONNECTOR_URL and FLEET_CONNECTOR_TOKEN secrets</span></div><div class="fleet-live-warning"><strong>${signedIn?'Shared session ready':'Shared session is still connecting'}</strong><span>${signedIn?'Your automatic Supabase session will authenticate the next refresh. The connector secret never enters the dashboard.':'Wait for the Shared & synced indicator before using authenticated Refresh.'}</span></div>${!endpointInfo.empty&&!endpointInfo.valid?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Endpoint needs attention</strong><span>${esc(endpointInfo.error)}</span></div></div>`:''}${state.fleetLiveLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Last authenticated pull failed</strong><span>${esc(state.fleetLiveLastError)}</span></div></div>`:''}<div class="modal-actions"><a class="btn" href="${esc(fleetAmazonPortalUrl())}" target="_blank" rel="noopener">Open Amazon Fleet</a><a class="btn" href="${esc(fleetFleetosPortalUrl())}" target="_blank" rel="noopener">Open FleetOS</a><button class="btn" data-action="fleet-import">Use upload/paste instead</button><button class="btn primary" data-action="save-fleet-live-setup">Save authenticated proxy</button></div><p class="upload-help">Refresh never calls the private connector directly and never accepts a caller-provided upstream URL.</p></div></div></div>`;
   }
   if (state.modal === 'fleet-refresh' && state.fleetRefreshPreview) {
     const p=state.fleetRefreshPreview, missing=p.missingSources||[], blockers=p.blockers||[], tone=blockers.length?'warn':'ok';
@@ -4103,6 +4112,9 @@ function syncModalFocus(previouslyOpen=false) {
 }
 function handleModalKeydown(event) {
   if(!state.modal)return;
+  if(state.modal==='admin-pin'&&event.key==='Enter'){
+    event.preventDefault();unlockAdminAccess();return;
+  }
   if(event.key==='Escape'){
     event.preventDefault();document.querySelector?.('.modal [data-action="close-modal"]')?.click();return;
   }
@@ -4250,7 +4262,7 @@ function filterVtoRouteSwapOptions(input) {
 function render() {
   const previouslyOpen=modalWasOpen;
   if(PARKING_ONLY_VIEW)state.page='parking';
-  if(state.page==='admin'&&!hasOwnerAdminAccess())state.page='dashboard';
+  if(state.page==='admin'&&!hasOwnerAdminAccess()){state.page='dashboard';state.modal='admin-pin';}
   if(state.modal&&!previouslyOpen)modalReturnFocus=captureModalReturnFocus();
   closeDriverProfilePopover();
   closeDriverRouteContextMenu();
@@ -5060,7 +5072,7 @@ function handleSheetPaste(e,el) {
 
 async function shareDispatcherLink() {
   const url=sharedDashboardUrl(),ok=await writeClipboardText(`LLOL Dispatch Opening Operations\n${url}`);
-  toast(ok?`Clickable link for ${state.morningOperationDate} copied — every signed-in dispatcher opens the same shared day`:'Clipboard access was blocked — copy the full https:// link from Admin control',ok?'':'error');
+  toast(ok?`Clickable link for ${state.morningOperationDate} copied — everyone opens the same shared day automatically`:'Clipboard access was blocked — copy the full https:// link from Admin',ok?'':'error');
   return ok;
 }
 async function shareFleetParkingLink() {
@@ -5096,13 +5108,29 @@ async function cloudSignOut() {
   try{await window.RelayOpsCloud.signOut();state.modal=null;state.cloudStatus='signed-out';state.cloudUser='';state.role='viewer';localStorage.setItem('relayops_role','viewer');render();toast('Signed out · local cache remains on this device');}
   catch(error){toast(`Could not sign out: ${error.message||'try again'}`,'error');}
 }
+async function unlockAdminAccess() {
+  const pin=String(document.getElementById('admin-pin-input')?.value||'').trim();
+  if(!/^\d{4}$/.test(pin))return toast('Enter the four-digit Admin PIN','error');
+  const button=document.querySelector('[data-action="unlock-admin"]');
+  if(button){button.disabled=true;button.textContent='Checking PIN…';}
+  try{
+    const unlocked=await window.RelayOpsCloud?.unlockAdminPin?.(pin);
+    if(!unlocked){if(button){button.disabled=false;button.textContent='Unlock Admin';}return toast('Incorrect PIN or PIN entry is temporarily paused','error');}
+    state.adminPinUnlocked=true;state.modal=null;state.page='admin';render();toast('Admin controls unlocked');
+  }catch(error){if(button){button.disabled=false;button.textContent='Unlock Admin';}toast(`Admin unlock failed: ${error.message||'shared workspace is still connecting'}`,'error');}
+}
+async function lockAdminAccess() {
+  state.adminPinUnlocked=false;state.page='dashboard';state.modal=null;render();
+  try{await window.RelayOpsCloud?.lockAdmin?.();}catch(error){console.warn('Could not clear the server Admin session',error);}
+  toast('Admin controls locked');
+}
 async function refreshCloudMembers() {
   if(!window.RelayOpsCloud?.session)return [];
-  try{state.cloudMembers=await window.RelayOpsCloud.members();const current=state.cloudMembers.find(member=>member.user_id===window.RelayOpsCloud.session.user.id);if(current?.role)state.role=current.role==='owner'&&authenticatedCloudEmail()===ADMIN_OWNER_EMAIL?'admin':current.role==='owner'?'dispatcher':current.role;render();return state.cloudMembers;}
+  try{state.cloudMembers=await window.RelayOpsCloud.members();const current=state.cloudMembers.find(member=>member.user_id===window.RelayOpsCloud.session.user.id);if(current?.role)state.role=current.role==='owner'?'dispatcher':current.role;render();return state.cloudMembers;}
   catch(error){console.warn('Could not load members',error);return[];}
 }
 async function sendUserInvite() {
-  if(!hasOwnerAdminAccess())return toast(`Admin access is restricted to ${ADMIN_OWNER_EMAIL}`,'error');
+  if(!hasOwnerAdminAccess())return toast('Enter the Admin PIN first','error');
   const email=String(document.getElementById('invite-user-email')?.value||'').trim().toLowerCase(),displayName=String(document.getElementById('invite-user-name')?.value||'').trim(),role=String(document.getElementById('invite-user-role')?.value||'dispatcher');
   if(!/^\S+@\S+\.\S+$/.test(email))return toast('Enter a complete company email','error');
   try{await window.RelayOpsCloud.inviteMember({email,displayName,role});state.modal=null;await refreshCloudMembers();toast(`${displayName||email} invited as ${role.replace('_',' ')}`);}
@@ -5110,14 +5138,14 @@ async function sendUserInvite() {
 }
 
 function openMemberAccess(userId='') {
-  if(!hasOwnerAdminAccess())return toast(`Admin access is restricted to ${ADMIN_OWNER_EMAIL}`,'error');
+  if(!hasOwnerAdminAccess())return toast('Enter the Admin PIN first','error');
   const member=(state.cloudMembers||[]).find(item=>item.user_id===userId);
   if(!member)return toast('Member record is no longer available — refresh Admin control','error');
   if(member.role==='owner'||member.user_id===window.RelayOpsCloud?.session?.user?.id)return toast('Owner access is locked for safety','error');
   state.pendingMemberEdit={...member};state.modal='member-access';render();
 }
 async function saveMemberAccess() {
-  if(!hasOwnerAdminAccess())return toast(`Admin access is restricted to ${ADMIN_OWNER_EMAIL}`,'error');
+  if(!hasOwnerAdminAccess())return toast('Enter the Admin PIN first','error');
   const member=state.pendingMemberEdit,role=String(document.getElementById('member-access-role')?.value||''),active=String(document.getElementById('member-access-active')?.value||'true')==='true';
   if(!member)return toast('Choose a member first','error');
   if(!['ops_manager','dispatcher','fleet_lead','viewer'].includes(role))return toast('Choose a supported member role','error');
@@ -5172,10 +5200,10 @@ function saveCoachingTemplate() {
 
 function go(page) {
   if (PARKING_ONLY_VIEW && page!=='parking') return toast('Fleet team link only opens Van Parking','error');
-  if (page==='admin'&&!hasOwnerAdminAccess()) return toast(`Admin access is restricted to ${ADMIN_OWNER_EMAIL}`,'error');
+  if (page==='admin'&&!hasOwnerAdminAccess()){state.modal='admin-pin';return render();}
   cancelDeferredRenders();
   document.body?.classList?.remove('mobile-sidebar-open');
-  state.page=page; state.search=''; state.modal=null;if(page==='rostering')syncRosteringHelperShifts(currentRosteringPlan());persist(); render();if(page==='admin')refreshCloudMembers();window.scrollTo({top:0,behavior:'smooth'});
+  state.page=page; state.search=''; state.modal=null;if(page==='rostering')syncRosteringHelperShifts(currentRosteringPlan());persist(); render();window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function toggleMobileSidebar() {
@@ -5187,7 +5215,7 @@ function toggleMobileSidebar() {
 }
 
 function saveOrganizationSettings() {
-  if(!hasOwnerAdminAccess())return toast(`Admin access is restricted to ${ADMIN_OWNER_EMAIL}`,'error');
+  if(!hasOwnerAdminAccess())return toast('Enter the Admin PIN first','error');
   const organizationName=document.getElementById('admin-dsp-name')?.value.trim();
   const stationCode=document.getElementById('admin-station-code')?.value.trim().toUpperCase();
   if(!organizationName)return toast('Enter a DSP name','error');
@@ -5213,10 +5241,10 @@ function importAcceptForPurpose(purpose='morning') {
 
 function action(name,el) {
   if(PARKING_ONLY_VIEW) {
-    const allowed=new Set(['menu','copy-parking-list','copy-fleet-parking-link','cloud-account','cloud-sign-in','cloud-sign-out','close-modal']);
+    const allowed=new Set(['menu','copy-parking-list','copy-fleet-parking-link','close-modal']);
     if(!allowed.has(name))return toast('Fleet team view is read-only and limited to Van Parking','error');
   }
-  if(OWNER_ADMIN_ACTIONS.has(name)&&!hasOwnerAdminAccess())return toast(`Admin access is restricted to ${ADMIN_OWNER_EMAIL}`,'error');
+  if(OWNER_ADMIN_ACTIONS.has(name)&&!hasOwnerAdminAccess())return toast('Enter the Admin PIN first','error');
   if (name==='menu') return toggleMobileSidebar();
   if (name==='opening-paycom-tab') { state.openingRosterPaycomTab=el.dataset.paycomTab==='marked'?'marked':'scheduled';localStorage.setItem('relayops_opening_roster_paycom_tab',state.openingRosterPaycomTab);return render(); }
   if (name==='clear-global-search') { state.search='';render();setTimeout(()=>document.getElementById('global-search')?.focus(),0);return; }
@@ -5349,9 +5377,9 @@ function action(name,el) {
   if (name==='confirm-clear-operational-sheet') return confirmClearOperationalSheet();
   if (name==='share-dispatcher-link') return shareDispatcherLink();
   if (name==='copy-fleet-parking-link') return shareFleetParkingLink();
-  if (name==='cloud-account') { state.modal='cloud-account';return render(); }
-  if (name==='cloud-sign-in') return cloudSignIn();
-  if (name==='cloud-sign-out') return cloudSignOut();
+  if (name==='open-admin-pin') { state.modal='admin-pin';return render(); }
+  if (name==='unlock-admin') return unlockAdminAccess();
+  if (name==='lock-admin') return lockAdminAccess();
   if (name==='invite') { if(!window.RelayOpsCloud?.session)return toast('Sign in as the owner before inviting users','error');state.modal='invite-user';return render(); }
   if (name==='send-user-invite') return sendUserInvite();
   if (name==='edit-member-access') return openMemberAccess(el.dataset.memberId||'');
@@ -6871,7 +6899,7 @@ async function pullFleetLiveData() {
   if(!endpointInfo.local){
     if(!cloud?.configured||typeof cloud.accessToken!=='function')throw new Error('RelayOps cloud sign-in must be configured before authenticated Fleet refresh');
     accessToken=await cloud.accessToken();
-    if(!accessToken)throw new Error('Sign in as an authorized dispatcher before authenticated Fleet refresh');
+    if(!accessToken)throw new Error('Wait for the automatic shared cloud session before authenticated Fleet refresh');
   } else if(typeof cloud?.accessToken==='function'&&cloud.session) {
     accessToken=await cloud.accessToken();
   }
@@ -8390,16 +8418,17 @@ window.RelayOpsApp={sharedState:sharedWorkspaceState,persistentState:persistentW
 window.RelayOpsCloud?.on?.(event=>{
   if(event.type==='offline'){state.cloudStatus='offline';render();}
   if(event.type==='reconnecting'){state.cloudStatus='connecting';render();}
-  if(event.type==='auth'){state.cloudStatus=event.session?'connecting':'signed-out';state.cloudUser=event.session?.user?.email||'';state.cloudAccessError='';if(event.session){state.cloudSigninError='';state.cloudSigninCooldownUntil=0;localStorage.removeItem('relayops_cloud_signin_cooldown_until');}if(!event.session){state.role='viewer';if(!state.cloudSigninPrompted){state.cloudSigninPrompted=true;state.modal='cloud-account';}}render();if(event.session)setTimeout(()=>refreshCloudMembers(),0);}
-  if(event.type==='access-granted'){state.cloudAccessError='';}
-  if(event.type==='access-denied'){state.cloudStatus='access-denied';state.cloudAccessError=`${event.email||'This email'} is signed in but has not been invited to this station.`;state.modal='cloud-account';render();}
+  if(event.type==='auth'){state.cloudStatus=event.session?'connecting':'connecting';state.cloudUser=event.session?.user?.is_anonymous?'Shared link':event.session?.user?.email||'Shared link';state.cloudAccessError='';state.cloudSigninError='';state.cloudSigninCooldownUntil=0;localStorage.removeItem('relayops_cloud_signin_cooldown_until');if(!event.session)state.role='viewer';render();}
+  if(event.type==='admin-status'){state.adminPinUnlocked=Boolean(event.unlocked);render();}
+  if(event.type==='access-granted'){state.cloudAccessError='';state.role=['fleet_lead','viewer'].includes(event.membership?.role)?event.membership.role:'dispatcher';render();}
+  if(event.type==='access-denied'){state.cloudStatus='access-denied';state.cloudAccessError='Automatic shared-link access has not been provisioned for this browser.';render();toast('Shared link access needs repair in Supabase','error');}
+  if(event.type==='link-access-error'){state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';render();toast(`Shared access failed: ${state.cloudAccessError}`,'error');}
   if(event.type==='workspace-empty'){state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';render();toast('Shared workspace is not initialized for this day yet','error');}
   if(event.type==='presence'){state.cloudPresence=event.users||[];render();}
   if(event.type==='loaded'||event.type==='saved'){state.cloudStatus='synced';state.cloudAccessError='';render();}
   if(event.type==='remote-update'){state.cloudStatus='synced';render();toast('Another dispatcher updated today’s workspace');}
   if(event.type==='conflict')toast('A newer dispatcher update was loaded before saving','error');
   if(event.type==='error'){state.cloudStatus='error';render();toast(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
-  if(event.type==='magic-link-sent')toast(`Sign-in link sent to ${event.email}`);
 });
 render();
 window.RelayOpsCloud?.init?.().catch(error=>console.error('RelayOps cloud initialization failed',error));

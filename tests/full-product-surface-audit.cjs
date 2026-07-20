@@ -67,7 +67,7 @@ function testVisiblePageInventory() {
   const criticalPages = new Set(['dashboard', 'morning', 'roster', 'rostering', 'live', 'team', 'fleet', 'parking', 'inbox', 'reports', 'admin']);
   const handled = new Set([...source.matchAll(/name==='([^']+)'/g)].map(match => match[1]));
   const inventory = {};
-  vm.runInContext("state.role='admin'; state.cloudUser='Alecgonz79@gmail.com'; state.morningOperationDate='2026-07-14'; state.driverContacts=[{name:'Andre Wilson',key:'andre wilson'}]; state.morningRoutes=[{dsp:'LLOL',route:'CX101',routeUid:'fixture-route',driver:'Andre Wilson',wave:'11:15 AM',staging:'STG.V.1',service:'Standard Parcel'}];", context);
+  vm.runInContext("state.adminPinUnlocked=true; state.morningOperationDate='2026-07-14'; state.driverContacts=[{name:'Andre Wilson',key:'andre wilson'}]; state.morningRoutes=[{dsp:'LLOL',route:'CX101',routeUid:'fixture-route',driver:'Andre Wilson',wave:'11:15 AM',staging:'STG.V.1',service:'Standard Parcel'}];", context);
   for (const page of pages) {
     vm.runInContext(`state.page=${JSON.stringify(page)}; globalThis.__pageHtml=topbar()+pageContent();`, context);
     const html = context.__pageHtml;
@@ -96,9 +96,9 @@ function testVisiblePageInventory() {
   for (const page of pages) {
     assert(inventory[page].inertButtons.length === 0, `${page} added an unexpected inert control: ${inventory[page].inertButtons.join(', ')}`);
   }
-  vm.runInContext("state.role='admin';state.cloudUser='ALECGONZ79@GMAIL.COM';globalThis.__adminHtml=adminPage();", context);
-  assert(context.__adminHtml.includes('Fixed role policy') && context.__adminHtml.includes('Database enforced'), 'Admin must show a truthful fixed role-policy matrix');
-  assert(context.__adminHtml.includes('ADP Workforce') && context.__adminHtml.includes('Not available') && !context.__adminHtml.includes('>Connect<'), 'Unavailable ADP integration must not look clickable');
+  vm.runInContext("state.adminPinUnlocked=true;globalThis.__adminHtml=adminPage();", context);
+  assert(context.__adminHtml.includes('Shared-link access') && context.__adminHtml.includes('Automatic link session'), 'Admin must describe the automatic shared-link workspace');
+  assert(context.__adminHtml.includes('Admin protection') && context.__adminHtml.includes('data-action=\"lock-admin\"'), 'Admin must expose a clear PIN lock control');
 
   const result = Object.entries(inventory).map(([page, value]) => `${page}:${value.actions.length}${value.unhandled.length ? `[prototype:${value.unhandled.join('|')}]` : ''}`).join(' ');
   console.log(`Visible page/action inventory passed (${result})`);
@@ -108,8 +108,8 @@ function testVisiblePageInventory() {
 function testPermissionsAndImportChooserContracts() {
   const { context, fileInput } = harness();
   vm.runInContext(`
-    state.role='viewer';state.page='dashboard';go('admin');globalThis.__viewerPage=state.page;globalThis.__viewerSide=sidebar();
-    state.role='admin';state.cloudUser='wrong-owner@example.com';globalThis.__wrongOwnerSide=sidebar();state.cloudUser='Alecgonz79@gmail.com';globalThis.__adminSide=sidebar();
+    state.adminPinUnlocked=false;state.page='dashboard';go('admin');globalThis.__lockedPage=state.page;globalThis.__lockedModal=state.modal;globalThis.__lockedSide=sidebar();
+    state.adminPinUnlocked=true;globalThis.__adminSide=sidebar();
     action('fleet-import-amazon',{});globalThis.__amazonAccept=fileInput.accept;
     action('fleet-import-fleetos',{});globalThis.__fleetosAccept=fileInput.accept;
     action('driver-import',{});globalThis.__driverAccept=fileInput.accept;
@@ -119,8 +119,8 @@ function testPermissionsAndImportChooserContracts() {
     action('fleet-import-fleetos',{});action('equipment-import',{});action('choose-file',{});globalThis.__equipmentAfterFleetosAccept=fileInput.accept;
     action('fleet-import-amazon',{});state.importPurpose='morning';action('choose-file',{});globalThis.__morningAfterAmazonAccept=fileInput.accept;
   `, context);
-  assert(context.__viewerPage === 'dashboard', 'Viewer must not navigate to Admin control');
-  assert(!context.__viewerSide.includes('data-page="admin"') && !context.__wrongOwnerSide.includes('data-page="admin"') && context.__adminSide.includes('data-page="admin"'), 'Admin navigation visibility must require both the admin role and exact owner email');
+  assert(context.__lockedPage === 'dashboard' && context.__lockedModal === 'admin-pin', 'Locked Admin navigation must open the PIN dialog without exposing the page');
+  assert(context.__lockedSide.includes('data-page="admin"') && context.__lockedSide.includes('🔒') && context.__adminSide.includes('data-page="admin"'), 'Admin navigation must remain discoverable and visibly PIN-locked for shared-link dispatchers');
   assert(context.__adminSide.indexOf('data-page="achat"') < context.__adminSide.indexOf('data-page="admin"'), 'Admin access must sit directly after A-Chat in the Improve section');
   assert(context.__amazonAccept.includes('.xlsx') && !context.__amazonAccept.includes('.csv'), 'Amazon Fleet chooser must stay XLSX-only');
   assert(context.__fleetosAccept.includes('.csv') && !context.__fleetosAccept.includes('.xlsx'), 'FleetOS chooser must stay CSV-only');
@@ -135,11 +135,9 @@ function testPermissionsAndImportChooserContracts() {
 
 function testModalAndKeyboardInventory() {
   const { context, listeners } = harness();
-  vm.runInContext("state.role='admin';state.cloudUser='Alecgonz79@gmail.com';", context);
+  vm.runInContext("state.adminPinUnlocked=true;", context);
   const setups = {
-    'cloud-account': '',
-    'invite-user': '',
-    'member-access': "state.pendingMemberEdit={user_id:'member-2',display_name:'Dispatcher Two',role:'dispatcher',active:true};",
+    'admin-pin': 'state.adminPinUnlocked=false;',
     'coaching-review': "state.pendingCoachingId='andre-wilson-following-distance';ensureCoachingRecord(state.pendingCoachingId);",
     'coaching-template': '',
     'import': "state.importPurpose='morning';",
@@ -172,7 +170,7 @@ function testModalAndKeyboardInventory() {
     assert(/role="(?:dialog|alertdialog)"/.test(html) && html.includes('aria-modal="true"'), `${modalName} modal lacks dialog semantics`);
     assert(html.includes('data-action="close-modal"') && html.includes('aria-label="Close"'), `${modalName} modal lacks a labeled close control`);
   }
-  vm.runInContext("state.modal='cloud-account';render();", context);
+  vm.runInContext("state.modal='admin-pin';render();", context);
   assert(listeners.has('keydown'), 'Opening a modal must attach the keyboard handler');
   const event = { key: 'Escape', preventDefaultCalled: false, preventDefault() { this.preventDefaultCalled = true; } };
   // The click target is exercised structurally because this harness intentionally has no browser DOM.

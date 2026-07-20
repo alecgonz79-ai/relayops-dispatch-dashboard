@@ -13,6 +13,7 @@ const connector = read('../live-connector/server.mjs');
 const app = read('../app.js');
 const cloud = read('../cloud-sync.js');
 const fleetProxy = read('../supabase/functions/fleet-live-proxy/index.ts');
+const linkMigration = read('../supabase/migrations/20260720_link_access_admin_pin.sql');
 
 assert(/Build public site allowlist/.test(workflow), 'GitHub Pages must be assembled from an explicit public-file allowlist');
 assert(/Run release regression gate/.test(workflow), 'GitHub Pages publishing must be gated by the release regression suite');
@@ -43,13 +44,15 @@ assert(/x-relayops-organization-id/.test(app)&&/x-relayops-station-id/.test(app)
 assert(/url\.protocol!==['"]https:['"][\s\S]{0,100}?local/.test(app), 'Fleet proxy endpoint validation must require HTTPS with a localhost-only development exception');
 assert(/url\.pathname\.split\(['"]\/['"]\)\.includes\(['"]fleet-live-proxy['"]\)/.test(app), 'Dashboard must accept only the fleet-live-proxy endpoint contract, never the private connector URL');
 assert(!/searchParams\.set\(['"]amazonPortalUrl/.test(app)&&!/searchParams\.set\(['"]fleetosPortalUrl/.test(app), 'Dashboard must not let callers forward Amazon/FleetOS upstream URLs');
-assert(/Sign in as an authorized dispatcher before authenticated Fleet refresh/.test(app), 'Cloud Fleet refresh must clearly require dispatcher sign-in');
+assert(/Wait for the automatic shared cloud session before authenticated Fleet refresh/.test(app), 'Cloud Fleet refresh must wait for automatic shared-link access');
 
 assert(/MORNING_SHEETS_DEFAULT_ENDPOINT\s*=\s*['"]['"]/.test(app), 'A writable Google Apps Script endpoint must not be hardcoded into the public dashboard');
 assert(/role:\s*localStorage\.getItem\(['"]relayops_role['"]\)\s*\|\|\s*['"]viewer['"]/.test(app), 'Fresh or signed-out browsers must not default to the admin UI role');
-assert(/ADMIN_OWNER_EMAIL\s*=\s*['"]alecgonz79@gmail\.com['"]/.test(app), 'Admin UI must be locked to the configured owner email');
-assert(/state\?\.role===['"]admin['"]&&authenticatedCloudEmail\(\)===ADMIN_OWNER_EMAIL/.test(app), 'Admin access must require both owner role and exact authenticated email');
-assert(/OWNER_ADMIN_ACTIONS\.has\(name\)&&!hasOwnerAdminAccess\(\)/.test(app), 'Admin mutations must use the same exact owner gate as the Admin page');
+assert(/signInAnonymously/.test(cloud) && /relayops_link_access:true/.test(cloud), 'Every shared-link browser must receive an automatic restricted Supabase session');
+assert(/state\?\.adminPinUnlocked/.test(app) && /OWNER_ADMIN_ACTIONS\.has\(name\)&&!hasOwnerAdminAccess\(\)/.test(app), 'Admin mutations must use the same PIN-unlocked gate as the Admin page');
+assert(/unlock_relayops_admin/.test(cloud) && /relayops_admin_status/.test(cloud) && /lock_relayops_admin/.test(cloud), 'Admin PIN unlock, status, and lock must be verified by Supabase RPCs');
+assert(/crypt\(candidate_pin,access_row\.admin_pin_hash\)/.test(linkMigration) && /next_failures>=5/.test(linkMigration) && /interval '15 minutes'/.test(linkMigration), 'Admin PIN verification must be hashed and rate-limited server-side');
+assert(!app.includes('"6969"') && !app.includes("'6969'"), 'The requested Admin PIN must never be exposed in public application JavaScript');
 assert(/handleModalKeydown/.test(app) && /event\.key\s*===\s*['"]Escape['"]/.test(app), 'Dialogs must support Escape and keyboard focus containment');
 assert(/id="toast-stack"[^>]*aria-live="polite"/.test(app), 'Status messages must be announced to assistive technology');
 

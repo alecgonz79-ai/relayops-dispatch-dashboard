@@ -3,7 +3,7 @@
   const configured=Boolean(config.supabaseUrl&&config.supabaseAnonKey&&config.organizationId&&config.stationId&&!config.supabaseUrl.includes('YOUR_PROJECT'));
   const PERSISTENT_DATE='2000-01-01';
   const SYNC_META='__relayopsSync';
-  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,saveTimer=null,applying=false,basePayload={},basePersistentPayload={};
+  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,saveTimer=null,applying=false,initializing=false,basePayload={},basePersistentPayload={};
   const listeners=new Set();
   const notify=event=>listeners.forEach(fn=>{try{fn(event);}catch(error){console.error(error);}});
   const queueKey=()=>`relayops_cloud_queue:${config.stationId||'local'}:${operationDate()}`;
@@ -193,10 +193,30 @@
   async function init(){
     client=createClient();
     if(!client){notify({type:'offline',reason:'not-configured'});return {configured:false};}
-    const result=await client.auth.getSession();session=result.data.session;
-    client.auth.onAuthStateChange((_event,next)=>{session=next;if(!session)membership=null;notify({type:'auth',session});if(session)load().catch(error=>notify({type:'error',error}));});
-    if(session)await load();else notify({type:'auth',session:null});
-    return {configured:true,session};
+    initializing=true;
+    try{
+      const result=await client.auth.getSession();session=result.data.session;
+      client.auth.onAuthStateChange((_event,next)=>{session=next;if(!session)membership=null;notify({type:'auth',session});if(session&&!initializing)load().catch(error=>notify({type:'error',error}));});
+      if(!session&&typeof client.auth.signInAnonymously==='function'){
+        const anonymous=await client.auth.signInAnonymously({options:{data:{relayops_link_access:true}}});
+        if(anonymous.error){notify({type:'link-access-error',error:anonymous.error});return {configured:true,session:null,error:anonymous.error};}
+        session=anonymous.data?.session||null;
+      }
+      if(session){
+        notify({type:'auth',session});await load();
+        // Retire stale email-link sessions that no longer have workspace access.
+        // This keeps "anyone with the link" true for dispatchers who previously
+        // tried the old sign-in flow on the same device.
+        if(!membership&&!session.user?.is_anonymous&&typeof client.auth.signInAnonymously==='function'){
+          await client.auth.signOut({scope:'local'});session=null;
+          const anonymous=await client.auth.signInAnonymously({options:{data:{relayops_link_access:true}}});
+          if(anonymous.error){notify({type:'link-access-error',error:anonymous.error});return {configured:true,session:null,error:anonymous.error};}
+          session=anonymous.data?.session||null;if(session){notify({type:'auth',session});await load();}
+        }
+        if(membership)notify({type:'admin-status',unlocked:await adminStatus().catch(()=>false)});
+      }else notify({type:'link-access-error',error:new Error('Automatic shared access is unavailable')});
+      return {configured:true,session};
+    }finally{initializing=false;}
   }
   function operationDate(){return window.RelayOpsApp?.operationDate?.()||new Date().toISOString().slice(0,10);}
   async function signIn(email){
@@ -231,7 +251,7 @@
     return membership;
   }
   function canWrite(){return Boolean(membership&&membership.active&&membership.role!=='viewer');}
-  function canInitialize(){return Boolean(membership&&membership.active&&['owner','ops_manager'].includes(membership.role));}
+  function canInitialize(){return canWrite();}
   async function load(){
     if(!client||!session)return null;
     clearTimeout(saveTimer);saveTimer=null;
@@ -333,9 +353,24 @@
     if(!data)throw new Error('Owner authorization required or member not found');
     notify({type:'member-updated',member:data});return data;
   }
+  async function unlockAdminPin(pin){
+    if(!client||!session)throw new Error('Shared workspace is still connecting');
+    const {data,error}=await client.rpc('unlock_relayops_admin',{candidate_pin:String(pin||''),target_org:config.organizationId});
+    if(error)throw error;return Boolean(data);
+  }
+  async function adminStatus(){
+    if(!client||!session)return false;
+    const {data,error}=await client.rpc('relayops_admin_status',{target_org:config.organizationId});
+    if(error)throw error;return Boolean(data);
+  }
+  async function lockAdmin(){
+    if(!client||!session)return;
+    const {error}=await client.rpc('lock_relayops_admin',{target_org:config.organizationId});
+    if(error)throw error;
+  }
   if(window.addEventListener){
     window.addEventListener('online',()=>{notify({type:'reconnecting'});if(session)load().catch(error=>notify({type:'error',error}));});
     window.addEventListener('offline',()=>notify({type:'offline',reason:'browser-offline'}));
   }
-  window.RelayOpsCloud={configured,init,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{preparePayload,reconcilePayload,semanticKey,canonical}};
+  window.RelayOpsCloud={configured,init,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{preparePayload,reconcilePayload,semanticKey,canonical}};
 })();

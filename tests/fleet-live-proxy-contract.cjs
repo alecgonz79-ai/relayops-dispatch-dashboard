@@ -75,8 +75,8 @@ async function run() {
   cloud.accessToken = async () => '';
   let signedOutError = '';
   try { await context.pullFleetLiveData(); } catch (error) { signedOutError = error.message; }
-  assert(/Sign in as an authorized dispatcher/.test(signedOutError), 'Cloud proxy refresh must fail clearly when the dispatcher is signed out');
-  assert(fetchCall === null, 'Signed-out browser must not call the cloud Fleet proxy');
+  assert(/automatic shared cloud session/.test(signedOutError), 'Cloud proxy refresh must wait clearly for automatic shared-link access');
+  assert(fetchCall === null, 'Browser without a shared-link session must not call the cloud Fleet proxy');
 
   cloud.session = { user: { id: 'dispatcher-1' } };
   cloud.accessToken = async () => 'signed-in-supabase-jwt';

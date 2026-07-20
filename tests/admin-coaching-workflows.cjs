@@ -37,32 +37,28 @@ function testCoachingWorkflow(){
 function testAdminWorkflow(){
   const {context}=harness();
   vm.runInContext(`
-    state.role='admin';state.cloudUser='Alecgonz79@gmail.com';
-    window.RelayOpsCloud={configured:true,session:{user:{id:'owner-1',email:'Alecgonz79@gmail.com'}},updateMemberAccess:async()=>({})};
-    state.cloudMembers=[
-      {user_id:'owner-1',display_name:'Owner',role:'owner',active:true},
-      {user_id:'dispatcher-2',display_name:'Dispatcher Two',role:'dispatcher',active:true}
-    ];
+    state.adminPinUnlocked=true;
+    window.RelayOpsCloud={configured:true,session:{user:{id:'link-1',is_anonymous:true}}};
     globalThis.__admin=adminPage();
-    openMemberAccess('dispatcher-2');globalThis.__memberModal=modal();
+    state.adminPinUnlocked=false;state.modal='admin-pin';globalThis.__pinModal=modal();
+    globalThis.__lockedAdmin=adminPage();
   `,context);
-  assert(context.__admin.includes('Fixed role policy')&&context.__admin.includes('permission-mark allowed')&&!context.__admin.includes('class="switch'),'Admin must render a fixed policy matrix without inert switches');
-  assert(context.__admin.includes('ADP Workforce')&&context.__admin.includes('Not available')&&!context.__admin.includes('>Connect<'),'ADP must be shown as unavailable rather than clickable');
-  assert(context.__admin.includes('Owner access locked')&&context.__admin.includes('data-action="edit-member-access"'),'Admin member rows must lock owners and allow editing non-owners');
-  assert(context.__memberModal.includes('member-access-role')&&context.__memberModal.includes('member-access-active')&&context.__memberModal.includes('save-member-access'),'Member access modal must expose working role and active controls');
-  vm.runInContext("state.cloudUser='another-owner@example.com';window.RelayOpsCloud.session.user.email='another-owner@example.com';globalThis.__blockedAdmin=adminPage();globalThis.__blockedSidebar=sidebar();",context);
-  assert(context.__blockedAdmin.includes('Owner access required')&&!context.__blockedSidebar.includes('data-page="admin"'),'A generic admin role must not bypass the exact owner email gate');
+  assert(context.__admin.includes('Shared-link access')&&context.__admin.includes('Automatic link session')&&context.__admin.includes('Admin protection'),'Unlocked Admin must explain automatic shared access and PIN protection');
+  assert(context.__admin.includes('data-action="lock-admin"')&&!context.__admin.includes('Invite user')&&!context.__admin.includes('Dispatcher sign in'),'Admin must expose a lock control without the retired email-member workflow');
+  assert(context.__pinModal.includes('id="admin-pin-input"')&&context.__pinModal.includes('Server-verified PIN')&&context.__pinModal.includes('data-action="unlock-admin"'),'Locked Admin must use the server-verified PIN dialog');
+  assert(context.__lockedAdmin.includes('Admin PIN required')&&context.__lockedAdmin.includes('data-action="open-admin-pin"'),'Admin content must stay gated until the PIN is unlocked');
 }
 
 function testCloudPolicyContracts(){
-  const cloud=fs.readFileSync(require.resolve('../cloud-sync.js'),'utf8'),schema=fs.readFileSync(require.resolve('../supabase/schema.sql'),'utf8'),migration=fs.readFileSync(require.resolve('../supabase/migrations/20260714_owner_member_access.sql'),'utf8'),invite=fs.readFileSync(require.resolve('../supabase/functions/invite-user/index.ts'),'utf8');
-  assert(cloud.includes('async function updateMemberAccess')&&cloud.includes(".neq('role','owner')")&&cloud.includes('updateMemberAccess,on('),'Cloud bridge must expose an owner-safe member role/active update');
-  assert(schema.includes('membership_owner_update')&&schema.includes("array['owner']::relayops_role[]")&&!schema.includes('create policy membership_admin'),'Fresh schema must enforce owner-only membership updates');
-  assert(migration.includes('drop policy if exists membership_admin')&&migration.includes('membership_owner_update'),'Existing projects must have an owner-only RLS migration');
-  assert(invite.includes("membership.role!=='owner'")&&!invite.includes("['owner','ops_manager'].includes(membership.role)"),'Invite function must require owner access');
+  const cloud=fs.readFileSync(require.resolve('../cloud-sync.js'),'utf8'),migration=fs.readFileSync(require.resolve('../supabase/migrations/20260720_link_access_admin_pin.sql'),'utf8'),app=fs.readFileSync(require.resolve('../app.js'),'utf8');
+  assert(cloud.includes('signInAnonymously')&&cloud.includes('relayops_link_access:true'),'Cloud bridge must automatically create a restricted shared-link session');
+  assert(cloud.includes("client.rpc('unlock_relayops_admin'")&&cloud.includes("client.rpc('relayops_admin_status'")&&cloud.includes("client.rpc('lock_relayops_admin'"),'Cloud bridge must expose the server-backed Admin PIN lifecycle');
+  assert(migration.includes('new.is_anonymous')&&migration.includes('relayops_provision_link_user')&&migration.includes("'dispatcher','Shared link dispatcher',true"),'Anonymous users must be provisioned into the station as dispatchers');
+  assert(migration.includes('crypt(candidate_pin,access_row.admin_pin_hash)')&&migration.includes("interval '15 minutes'")&&migration.includes("interval '8 hours'"),'Admin PIN verification must be hashed, rate-limited, and time-bound');
+  assert(!app.includes('"6969"')&&!app.includes("'6969'"),'The Admin PIN must not be embedded in public application JavaScript');
 }
 
 testCoachingWorkflow();
 testAdminWorkflow();
 testCloudPolicyContracts();
-console.log('Admin role policy/member controls and shared Coaching workflow tests passed');
+console.log('Shared-link Admin PIN and shared Coaching workflow tests passed');

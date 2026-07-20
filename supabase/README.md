@@ -1,16 +1,15 @@
 # RelayOps shared cloud setup
 
-RelayOps uses Supabase for email authentication, database-enforced roles, synchronized station data, realtime updates, and audit history. Imported employee contacts are protected by row-level security and are no longer limited to one browser after this setup is completed.
+RelayOps uses automatic Supabase anonymous sessions for synchronized station data, realtime updates, and audit history. Anyone with the published dashboard link can join the shared station workspace without an email sign-in. Imported employee contacts are therefore visible to anyone who receives that link.
 
 ## Owner setup
 
 1. Create a Supabase project for Legacy Logistics / LLOL.
 2. In **SQL Editor**, run `schema.sql` once. Existing projects created before July 14, 2026 must also run `migrations/20260714_owner_member_access.sql` once.
-3. In **Authentication → URL Configuration**, add the exact GitHub Pages dashboard URL as a redirect URL.
-4. In **Authentication → Users**, invite the owner email first.
-5. Run the bootstrap SQL below after replacing the owner user UUID with the UUID from Authentication → Users.
-6. Copy Project URL and the public anon key from **Project Settings → API** into `config.js`.
-7. Commit and deploy `config.js`. Never place the service-role key, passwords, Amazon cookies, or FleetOS cookies in this repository.
+3. Run `migrations/20260720_link_access_admin_pin.sql` once.
+4. In **Authentication → Sign In / Providers**, enable **Allow anonymous sign-ins**.
+5. Copy Project URL and the public anon key from **Project Settings → API** into `config.js`.
+6. Commit and deploy `config.js`. Never place the service-role key, Admin PIN, Amazon cookies, or FleetOS cookies in this repository.
 
 ## First organization bootstrap
 
@@ -36,21 +35,13 @@ select o.id organization_id,s.id station_id,o.dsp_code,s.code
 from public.organizations o join public.stations s on s.organization_id=o.id;
 ```
 
-## Dispatcher accounts
+## Shared-link access and Admin PIN
 
-The owner can now use **Admin control → Invite user**; the deployed `invite-user` Edge Function creates the Auth user, organization membership, and station membership together. The dispatcher opens that email link once on each device.
+The link-access migration provisions every new anonymous Supabase user as a dispatcher for the configured organization and station. The browser persists that anonymous session, so refreshes return to the same synchronized workspace without sending email.
 
-For manual recovery, invite the dispatcher in Authentication → Users, then add their user UUID:
+The Admin screen uses a server-verified four-digit PIN. The public JavaScript never contains the PIN; Supabase stores only a password hash and rate-limits failed attempts. The Admin PIN gates the interface, while daily operational writes remain available to anyone with the shared dashboard link.
 
-```sql
-insert into public.memberships(organization_id,user_id,role,display_name)
-values ('ORGANIZATION_UUID','DISPATCHER_AUTH_USER_UUID','dispatcher','Dispatcher Name');
-
-insert into public.station_memberships(station_id,user_id)
-values ('STATION_UUID','DISPATCHER_AUTH_USER_UUID');
-```
-
-Allowed member roles are `ops_manager`, `dispatcher`, `fleet_lead`, and `viewer`; the bootstrapped owner remains locked. Viewers cannot modify the shared workspace. Member role and active-status changes require an active owner and are enforced by database row-level security rather than only hidden in the interface.
+Treat the dashboard URL as operationally sensitive. Anyone who receives it can view and edit shared route, driver, phone, fleet, device, and parking data.
 
 ## What synchronizes
 
@@ -64,10 +55,10 @@ Allowed member roles are `ops_manager`, `dispatcher`, `fleet_lead`, and `viewer`
 
 Each day is stored as a versioned station workspace. Writes use an expected revision, reload newer work on a conflict, publish realtime changes to open dispatcher sessions, and write an audit event.
 
-Shared links include `?date=YYYY-MM-DD`, so every dispatcher opens the same operational day. Signed-out browser data stays local and is never merged into the station workspace after another person signs in. The first owner or operations manager to open a new date initializes it; dispatchers cannot seed a missing day from an outdated local cache.
+Shared links include `?date=YYYY-MM-DD`, so every dispatcher opens the same operational day. The anonymous browser session is restricted to the configured station and is automatically restored. A new date is initialized through the same synchronized dispatcher workspace.
 
 ## Authenticated Fleet refresh
 
-Deploy `functions/fleet-live-proxy` when live Fleet refresh is enabled. The public dashboard sends the signed-in dispatcher Supabase access token to this function; the function validates active organization membership and station access before calling the private Fleet connector.
+Deploy `functions/fleet-live-proxy` when live Fleet refresh is enabled. The public dashboard sends its automatic shared-link Supabase access token to this function; the function validates active organization membership and station access before calling the private Fleet connector.
 
 Configure `FLEET_PROXY_ALLOWED_ORIGINS`, `FLEET_CONNECTOR_URL`, and `FLEET_CONNECTOR_TOKEN` as Supabase function secrets. Never place the connector token, portal cookies, passwords, or upstream URLs in public dashboard files. Full setup: [`functions/fleet-live-proxy/README.md`](functions/fleet-live-proxy/README.md).
