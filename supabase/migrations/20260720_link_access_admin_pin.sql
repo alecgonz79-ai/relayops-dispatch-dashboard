@@ -1,6 +1,8 @@
 -- RelayOps link access + server-verified Admin PIN.
 -- Anonymous Auth must also be enabled in Authentication -> Sign In / Providers.
 
+create extension if not exists pgcrypto with schema extensions;
+
 create table if not exists public.relayops_link_access (
   station_id uuid primary key references public.stations(id) on delete cascade,
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -97,7 +99,7 @@ begin
   where user_id=auth.uid() and organization_id=target_org;
   if attempt_row.locked_until is not null and attempt_row.locked_until>now() then return false; end if;
 
-  if crypt(candidate_pin,access_row.admin_pin_hash)=access_row.admin_pin_hash then
+  if extensions.crypt(candidate_pin,access_row.admin_pin_hash)=access_row.admin_pin_hash then
     delete from public.relayops_admin_pin_attempts where user_id=auth.uid() and organization_id=target_org;
     insert into public.relayops_admin_sessions(user_id,organization_id,expires_at)
     values(auth.uid(),target_org,now()+interval '8 hours')

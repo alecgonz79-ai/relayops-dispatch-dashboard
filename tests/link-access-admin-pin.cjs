@@ -50,7 +50,7 @@ vm.runInNewContext(source,context,{filename:'cloud-sync.js'});
   await cloud.lockAdmin();
   assert(['unlock_relayops_admin','relayops_admin_status','lock_relayops_admin'].every(name=>rpcCalls.some(call=>call.name===name)),'Cloud bridge lost part of the Admin PIN RPC lifecycle');
   assert(migration.includes('new.is_anonymous')&&migration.includes('relayops_provision_link_user'),'Migration must provision anonymous link users');
-  assert(migration.includes('crypt(candidate_pin,access_row.admin_pin_hash)')&&migration.includes('next_failures>=5'),'Admin PIN must be hashed and rate-limited by Supabase');
+  assert(migration.includes('extensions.crypt(candidate_pin,access_row.admin_pin_hash)')&&migration.includes('next_failures>=5'),'Admin PIN must be hashed and rate-limited by Supabase');
   assert(!app.includes('"6969"')&&!app.includes("'6969'"),'Public app code must not contain the Admin PIN');
   assert(!app.includes('Dispatcher sign in'),'Retired dispatcher sign-in control returned to the UI');
   console.log('Automatic shared-link access and server-verified Admin PIN test passed');
