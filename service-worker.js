@@ -1,4 +1,4 @@
-const CACHE='relayops-driver-route-menu-v35';
+const CACHE='relayops-paycom-date-fix-v36';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{
