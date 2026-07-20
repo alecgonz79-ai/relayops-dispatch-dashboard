@@ -66,6 +66,7 @@ vm.runInContext(`
     unknown:fleetVehicleAssignmentEligibility(vehicles[8])
   };
   state.dspCode='LLOL';state.morningFilters={wave:'all',staging:'all',pad:'all'};
+  state.equipmentImport={details:{'1':{device:'D1',portable:'P1'},'2':{device:'D2',portable:'P2'},'8':{device:'D8',portable:'P8'}}};
   state.morningRoutes=Array.from({length:5},(_,index)=>({
     routeUid:'safe-'+index,dsp:'LLOL',driver:'Driver '+(index+1),route:'CX'+(101+index),
     wave:'11:15 AM',staging:'STG.V.'+(index+1),service:'Standard Parcel',ev:'58',deviceName:'old',portable:'old'

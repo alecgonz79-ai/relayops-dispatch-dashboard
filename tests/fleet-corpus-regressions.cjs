@@ -153,6 +153,8 @@ async function run() {
 
   const safeIds = safe.map(vehicle => context.fleetEquipmentIdentity(vehicle)?.label).filter(Boolean).slice(0, 6);
   assert(safeIds.length >= 5, 'Not enough corpus EV identities for assignment regression');
+  safe.forEach((vehicle,index)=>{const label=context.fleetEquipmentIdentity(vehicle)?.label,key=context.normalizeEquipmentId(label);if(key)deviceDetails[key]={device:'D'+(index+1),portable:'P'+(index+1)};});
+  context.state.equipmentImport = { name: 'Historical VAN_DEV_PORT corpus', details: deviceDetails };
   const routeRows = () => Array.from({length: safeIds.length + 1}, (_, index) => ({
     routeUid:'corpus-'+index,dsp:'LLOL',driver:'Driver '+index,route:'CX'+(200+index),wave:['11:15 AM','11:20 AM','11:25 AM','11:40 AM','11:45 AM'][Math.min(index,4)],staging:'STG.V.'+(index+1),service:'Standard Parcel',ev:'58',deviceName:'stale',portable:'stale'
   }));

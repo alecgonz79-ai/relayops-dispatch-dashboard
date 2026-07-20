@@ -78,22 +78,23 @@ const checks = `
   const missingFleetRequirements=fleetRequirements.filter(value=>!fleetHtml.includes(value));
   if(missingFleetRequirements.length) throw new Error('Simplified mixed Fleet Health board missing: '+missingFleetRequirements.join(', '));
   if (fleetHtml.includes('Live setup') || fleetHtml.includes('Vehicle CSV') || fleetHtml.includes('Gap CSV') || fleetHtml.includes('Data checks & setup')) throw new Error('Removed Fleet Health diagnostic/export controls should stay hidden');
-  const savedParking=state.vanParking,savedParkingStatus=state.parkingChargerStatus,savedParkingNotes=state.parkingNotes,savedParkingDate=state.vanParkingUpdated,savedParkingRoutes=state.morningRoutes,savedFleetForParking=[...rivianFleet];
+  const savedParking=state.vanParking,savedParkingStatus=state.parkingChargerStatus,savedParkingNotes=state.parkingNotes,savedParkingDate=state.vanParkingUpdated,savedParkingRoutes=state.morningRoutes,savedFleetForParking=[...rivianFleet],savedParkingEquipment=state.equipmentImport;
   state.vanParking=[{id:'w1',zone:'west',label:'Left 1',value:'91',kind:'spot'},{id:'w2',zone:'west',label:'Left 2',value:'92',kind:'spot'},{id:'e1',zone:'east',label:'Right 1',value:'93',kind:'spot'},{id:'e2',zone:'east',label:'Right 2',value:'94',kind:'spot'},{id:'n1',zone:'northRight',label:'Upper 1',value:'95',kind:'spot'},{id:'n2',zone:'northLeft',label:'Upper 2',value:'96',kind:'spot'}];state.parkingChargerStatus={};state.parkingNotes='Close lane after charging';state.vanParkingUpdated='2026-07-11';rivianFleet.push(...[91,92,93,94,95,96].map(number=>({name:'EV'+number,vin:'7FCEHEB79PN'+String(number).padStart(6,'0'),battery:number===95?20:80,miles:number===95?30:120,vehicleType:'Rivian EDV 700',operational:'Operational',active:'Active',source:'Amazon fleet list + FleetOS tracker',hasBattery:true,hasActive:true,hasOperational:true})));
   const parkingHtml=vanParkingSection();
   if(!parkingHtml.includes('data-parking-notes')||!parkingHtml.includes('Close lane after charging')||!parkingHtml.includes('data-parking-date')||!parkingHtml.includes('data-charging-check-date')||!parkingHtml.includes('charger-pair')||!parkingHtml.includes('middle-1-left')||!parkingHtml.includes('parking-tent-square')||!parkingHtml.includes('stroke="currentColor"')||!parkingHtml.includes('upper-n1')||!parkingHtml.includes('parking-gas-area')||parkingHtml.includes('middle-4-left')||parkingHtml.includes('DRIVE LANE')) throw new Error('Editable street, crosswalk-safe chargers, gas parking, and white tent square missing');
   state.vanParking=defaultVanParkingSlots();
   const defaultParkingHtml=vanParkingSection();
-  if(defaultParkingHtml.includes('middle-20-left')||!defaultParkingHtml.includes('middle-21-left')||!defaultParkingHtml.includes('middle-22-left')) throw new Error('Chargers should skip crosswalk van 50 but remain beside vans 35 and 51');
+  if(defaultParkingHtml.includes('middle-21-left')||!defaultParkingHtml.includes('middle-22-left')||!defaultParkingHtml.includes('middle-23-left')) throw new Error('Chargers should skip crosswalk van 50 but remain beside vans 35 and 51 after inserting spot #4');
   const visualClasses=new Set();
   const visualInput={value:'56',closest:()=>({classList:{toggle:(name,on)=>on?visualClasses.add(name):visualClasses.delete(name)}})};
   syncParkingSlotVisual(visualInput);
   if(!visualClasses.has('has-vehicle')||visualClasses.has('blocked')) throw new Error('Typed street vehicle should immediately display its overhead van');
   state.vanParking=[{id:'w1',zone:'west',label:'Left 1',value:'91',kind:'spot'},{id:'w2',zone:'west',label:'Left 2',value:'92',kind:'spot'},{id:'e1',zone:'east',label:'Right 1',value:'93',kind:'spot'},{id:'e2',zone:'east',label:'Right 2',value:'94',kind:'spot'},{id:'n1',zone:'northRight',label:'Upper 1',value:'95',kind:'spot'},{id:'n2',zone:'northLeft',label:'Upper 2',value:'96',kind:'spot'}];
+  state.equipmentImport={details:Object.fromEntries([91,92,93,94,95,96].map(number=>[String(number),{device:'D'+number,portable:'P'+number}]))};
   toggleParkingCharger('middle-1-left');if(state.parkingChargerStatus['middle-1-left']!=='green'||!parkingChargerButton('middle-1-left').includes('CHG')) throw new Error('Parking charger green state failed');toggleParkingCharger('middle-1-left');if(state.parkingChargerStatus['middle-1-left']!=='red'||!parkingChargerButton('middle-1-left').includes('FAULT')) throw new Error('Parking charger red state failed');
   state.morningRoutes=[['R1','11:15 AM'],['R2','11:20 AM'],['R3','11:25 AM'],['R4','11:40 AM'],['R5','11:45 AM']].map(([route,wave])=>({dsp:'LLOL',driver:route,route,wave,staging:'',ev:'',deviceName:'',portable:''}));assignVansByParking();
   if(state.morningRoutes.map(row=>row.ev).join(',')!=='91,92,94,93,96'||vehicleIssueForEquipmentId('95')?.type!=='battery') throw new Error('Parking-order assignment did not prioritize left/right order and healthy unused Wave 5 vans while retaining low-battery flags');
-  state.vanParking=savedParking;state.parkingChargerStatus=savedParkingStatus;state.parkingNotes=savedParkingNotes;state.vanParkingUpdated=savedParkingDate;state.morningRoutes=savedParkingRoutes;rivianFleet.splice(0,rivianFleet.length,...savedFleetForParking);
+  state.vanParking=savedParking;state.parkingChargerStatus=savedParkingStatus;state.parkingNotes=savedParkingNotes;state.vanParkingUpdated=savedParkingDate;state.morningRoutes=savedParkingRoutes;state.equipmentImport=savedParkingEquipment;rivianFleet.splice(0,rivianFleet.length,...savedFleetForParking);
   state.fleetLiveEndpoint = 'https://relayops.example.com/api/fleet-live-proxy';
   if (!fleetLiveConnectorStrip().includes('Fleet proxy saved · dispatcher sign-in required') || !fleetLiveConnectorStrip().includes('private connector token stays server-side') || fleetLiveEndpoint() !== 'https://relayops.example.com/api/fleet-live-proxy') throw new Error('Fleet authenticated proxy endpoint state failed');
   const driverContacts = driverContactsFromRows([
@@ -678,6 +679,7 @@ const checks = `
   rivianFleet.push({name:'EV1',vin:'7FCEHEB79PN000001',battery:90,miles:140,operational:'Operational',active:'Active',source:'Amazon fleet list + FleetOS tracker',hasBattery:true,hasActive:true,hasOperational:true});
   assignElectricVehicles('low');
   if (state.morningRoutes[0].ev !== '1') throw new Error('Lowest-to-highest EV assignment failed');
+  state.equipmentImport={...(state.equipmentImport||{}),details:{...(state.equipmentImport?.details||{}),F33:{device:'33',portable:'133'}}};
   openGasVehicleAssignment();
   const gasModalHtml=modal();
   if(!gasModalHtml.includes('Choose the driver boxes')||!gasModalHtml.includes('F33')||!gasModalHtml.includes('toggle-gas-driver')) throw new Error('Selectable gas vehicle modal missing');

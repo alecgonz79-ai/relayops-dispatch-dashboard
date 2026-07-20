@@ -189,6 +189,7 @@
   function workspaceContext(){return {organizationId:config.organizationId||'',stationId:config.stationId||''};}
   async function load(){
     if(!client||!session)return null;
+    clearTimeout(saveTimer);saveTimer=null;
     const date=operationDate();
     const query=date=>client.from('workspace_snapshots').select('payload,revision,updated_at,updated_by').eq('station_id',config.stationId).eq('operation_date',date).maybeSingle();
     const [dailyResult,persistentResult]=await Promise.all([query(date),query(PERSISTENT_DATE)]);
@@ -225,7 +226,7 @@
   function schedule(action='workspace.autosave'){
     if(applying)return;
     const payload=window.RelayOpsApp?.sharedState?.();if(payload)queueSnapshot(payload,action,window.RelayOpsApp?.persistentState?.()||{});
-    clearTimeout(saveTimer);if(client&&session)saveTimer=setTimeout(()=>save(action).catch(error=>notify({type:'error',error})),500);
+    clearTimeout(saveTimer);if(client&&session)saveTimer=setTimeout(()=>save(action).catch(error=>notify({type:'error',error})),180);
   }
   function subscribe(date){
     if(channel)client.removeChannel(channel);

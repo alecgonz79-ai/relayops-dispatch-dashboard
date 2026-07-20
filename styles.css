@@ -2610,6 +2610,12 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .vehicle-issue-popover-list button { grid-column:2; grid-row:1/3; align-self:center; }
 .vehicle-issue-popover > button.acknowledge { background:#1d4d35; border-color:#1d4d35; color:#fff; }
 .vehicle-issue-popover > button:disabled { opacity:.58; cursor:default; }
+.morning-template-sheet td.duplicate-van-cell,.opening-picklist-main td.duplicate-van-cell { position:relative; overflow:visible!important; background:#e9ddff!important; color:#4d2b7d!important; box-shadow:inset 0 0 0 2px #8858ca!important; font-weight:1000!important; }
+.duplicate-van-cell::after { content:'DUP'; position:absolute; right:2px; bottom:1px; color:#6a35a8; font:900 5px/1 Inter,system-ui,sans-serif; letter-spacing:.04em; pointer-events:none; }
+.duplicate-vehicle-popover { position:absolute; z-index:930; left:50%; top:calc(100% + 4px); width:230px; display:none; gap:5px; padding:9px; border:1px solid #9c72d4; border-radius:10px; background:#fbf8ff; color:#352044; box-shadow:0 14px 32px rgba(54,27,79,.24); transform:translateX(-50%); white-space:normal; text-align:left; font:750 10px/1.3 Inter,system-ui,sans-serif; }
+.duplicate-vehicle-popover strong { color:#612d9d; font-size:11px; }
+.duplicate-vehicle-popover span { display:block; padding:4px 6px; border-radius:6px; background:#fff; }
+.duplicate-van-cell:hover .duplicate-vehicle-popover,.duplicate-van-cell:focus-within .duplicate-vehicle-popover { display:grid; }
 .helper-button { border-color:#9bc5dc!important; background:#e8f7ff!important; color:#175b80!important; }
 .scheduled-section.helper-roster { border-color:#a8d1e5; background:linear-gradient(145deg,#fff,#edf9ff); }
 .scheduled-section.helper-roster .scheduled-section-head b { background:#d9f1fc; color:#1d5978; }
