@@ -4,4 +4,3 @@ window.RELAYOPS_CLOUD_CONFIG = {
   organizationId: 'YOUR_ORGANIZATION_UUID',
   stationId: 'YOUR_STATION_UUID'
 };
-
