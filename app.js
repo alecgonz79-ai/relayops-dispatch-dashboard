@@ -5824,6 +5824,16 @@ function assignHelperBags() {
   persist();render();toast(`${assigned} Helper Bag${assigned===1?'':'s'} assigned to matched drivers and the Helper wave`);
 }
 function scheduleDateKey(value='') { const m=String(value).match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);if(!m)return '';let year=m[3]?Number(m[3]):Number(state.morningOperationDate.slice(0,4));if(year<100)year+=2000;return `${year}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`; }
+function scheduleImportDateKeys(entries=[]) {
+  return [...new Set((entries||[]).map(entry=>scheduleDateKey(entry?.date)).filter(Boolean))];
+}
+function alignScheduleImportDate(entries=[],destination='roster') {
+  const dates=scheduleImportDateKeys(entries);if(!dates.length)return '';
+  const current=destination==='rostering'?state.rosteringDate:state.morningOperationDate,target=dates.includes(current)?current:dates[0];
+  if(destination==='rostering')state.rosteringDate=target;
+  else { state.morningOperationDate=target;state.morningSheetsLastReceipt=null; }
+  return target;
+}
 function currentScheduleEntries() {
   return scheduleEntriesForDate(state.morningOperationDate);
 }
@@ -5854,10 +5864,11 @@ async function readFiles(files) {
     if(state.importPurpose==='schedule') {
       const entries=parsed.flatMap(file=>file.rows?.length?scheduleEntriesFromRows(file.rows,{fileName:file.name}):scheduleEntriesFromText(file.text||''));
       if(!entries.length)throw new Error('no schedule shifts');
-      const destination=state.scheduleImportDestination||'roster',entryDate=entries.map(entry=>scheduleDateKey(entry.date)).find(Boolean);state.scheduleEntries=entries;state.scheduleImportName=parsed.map(file=>file.name).join(' + ');
-      let helperAdded=0;if(destination==='rostering'){if(entryDate)state.rosteringDate=entryDate;helperAdded=syncRosteringHelperShifts(currentRosteringPlan());}
+      const destination=state.scheduleImportDestination||'roster',entryDate=alignScheduleImportDate(entries,destination);state.scheduleEntries=entries;state.scheduleImportName=parsed.map(file=>file.name).join(' + ');
+      let helperAdded=0;if(destination==='rostering')helperAdded=syncRosteringHelperShifts(currentRosteringPlan());
       state.scheduleImportDestination='';state.importPurpose='morning';state.page=destination==='rostering'?'rostering':'roster';persist();render();
-      return toast(destination==='rostering'?`${entries.length} PAYCOM shifts imported · ${helperAdded} Helper shift${helperAdded===1?'':'s'} added automatically · Auto Roster is ready`:`${entries.length} Paycom shifts organized for the Opening Roster`);
+      const dateNote=entryDate?` · ${formatShortOperationDate(entryDate)}`:'';
+      return toast(destination==='rostering'?`${entries.length} PAYCOM shifts imported${dateNote} · ${helperAdded} Helper shift${helperAdded===1?'':'s'} added automatically · Auto Roster is ready`:`${entries.length} Paycom shifts organized for the Opening Roster${dateNote}`);
     }
     if(state.importPurpose==='rostering-screenshot') {
       const text=parsed.map(file=>file.text||rowsToText(file.rows||[])).filter(Boolean).join('\n');if(!text.trim())throw new Error('No readable roster text was found in the screenshot');
