@@ -32,6 +32,8 @@ function testAutomaticVtoDestinations() {
       {date:'7/16/2026',name:'Unrostered Rescue',start:'10:30 AM',end:'7:00 PM',role:'Rescue'},
       {date:'7/16/2026',name:'Unrostered Associate',start:'10:30 AM',end:'7:00 PM',role:'Delivery Associate'},
       {date:'7/16/2026',name:'Midshift Support',start:'12:00 PM',end:'8:30 PM',role:'Midshift'},
+      {date:'7/16/2026',name:'Pilot Rescue Support',start:'12:00 PM',end:'8:30 PM',role:'Pilot/Rescues'},
+      {date:'7/16/2026',name:'Modified Duty Support',start:'12:00 PM',end:'8:30 PM',role:'Modified duty/Rescues'},
       {date:'7/16/2026',name:'Fleet Coordinator',start:'8:00 AM',end:'4:30 PM',role:'Fleet Coordinator/Rescue'}
     ];
     state.scheduleDriverMarks={};state.scheduleBackupRecords={};state.scheduleStayHome={};state.scheduleStayHomeHistory={};state.scheduleReductions={};state.scheduleHelpers={};state.callOffDriverKeys={};state.callOffReasons={};
@@ -44,13 +46,15 @@ function testAutomaticVtoDestinations() {
   assert(context.__auto.some(row => row.name === 'Unrostered Rescue' && row.vto === 'VTO 2'), 'Unrostered Rescue must auto-mark VTO 2');
   assert(context.__auto.some(row => row.name === 'Unrostered Associate' && row.vto === 'VTO 4'), 'Unrostered Delivery Associate must auto-mark VTO 4');
   assert(!context.__auto.some(row => row.name === 'Fleet Coordinator'), 'A Fleet Coordinator/Rescue dispatcher shift must not be misclassified as VTO 2');
+  assert(!context.__auto.some(row => /Pilot Rescue|Modified Duty/.test(row.name)), 'Pilot/Rescues and Modified Duty shifts must never become automatic VTO backups');
   assert(context.__picklist.some(row => row.name === 'Unrostered Rescue' && row.vto === 'VTO 2') && context.__picklist.some(row => row.name === 'Unrostered Associate' && row.vto === 'VTO 4'), 'Automatic VTO rows must flow into the Picklist backup table');
   assert(context.__html.includes('VTO 2 · Rescue backups') && context.__html.includes('VTO 4 · Delivery Associate backups'), 'Opening Roster must render separate VTO 2 and VTO 4 destination boxes');
   assert(context.__html.includes('roster-bottom-destination scroll-roster') && context.__html.includes('data-roster-destination="vto2"') && context.__html.includes('data-roster-destination="vto4"'), 'VTO destination boxes must stay scrollable and expose destination actions');
   assert(context.__html.includes('data-action="open-roster-destination-actions"'), 'Non-PAYCOM roster names must open the destination action popup');
   const paycom = context.__html.split('All Scheduled driver shifts (PAYCOM)')[1].split('scheduled-section called-off')[0];
   assert(paycom.includes('Unrostered Rescue') && paycom.includes('Unrostered Associate') && paycom.includes('Midshift Support') && paycom.includes('Routed Rescue'), 'All Scheduled must retain every imported driver even after VTO or route placement');
-  assert(paycom.includes('data-paycom-tab="scheduled"') && paycom.includes('data-paycom-tab="marked"') && paycom.includes('All Scheduled') && paycom.includes('Marked Drivers'), 'PAYCOM must expose separate All Scheduled and Marked Drivers inner tabs');
+  assert(paycom.includes('data-paycom-tab="scheduled"') && paycom.includes('data-paycom-tab="unmarked"') && paycom.includes('data-paycom-tab="marked"') && paycom.includes('All Scheduled') && paycom.includes('Unmarked Drivers') && paycom.includes('Marked Drivers'), 'PAYCOM must expose All Scheduled, Unmarked Drivers, and Marked Drivers inner tabs');
+  assert(!paycom.includes('Pilot Rescue Support') && !paycom.includes('Modified Duty Support') && context.__html.includes('Pilot Rescue Support') && context.__html.includes('Modified Duty Support'), 'Pilot/Rescues and Modified Duty must move out of the driver PAYCOM list and into Other scheduled shifts');
   assert(!paycom.includes('roster-driver-action-trigger') || !paycom.match(/roster-driver-action-trigger[\s\S]{0,250}Midshift Support/), 'PAYCOM names must remain plain and must not open the destination popup');
 }
 
@@ -84,8 +88,9 @@ function testMarkedDriversInnerTab() {
       backups:currentBackupDriverRows(),stayHome:rosterStatusRows(state.scheduleStayHome),reductions:rosterStatusRows(state.scheduleReductions),
       calledOff:rosterStatusRows(state.callOffDriverKeys),helpers:helperRosterRows()
     });
+    globalThis.__unmarked=openingRosterUnmarkedDrivers(currentScheduleEntries().filter(entry=>scheduleRoleGroup(entry.role)==='driver'),globalThis.__marked);
     globalThis.__html=openingRosterScheduleHtml();
-    action('opening-paycom-tab',{dataset:{paycomTab:'scheduled'}});globalThis.__tab=state.openingRosterPaycomTab;globalThis.__saved=localStorage.getItem('relayops_opening_roster_paycom_tab');
+    action('opening-paycom-tab',{dataset:{paycomTab:'unmarked'}});globalThis.__tab=state.openingRosterPaycomTab;globalThis.__saved=localStorage.getItem('relayops_opening_roster_paycom_tab');globalThis.__unmarkedHtml=openingRosterScheduleHtml();globalThis.__unmarkedPaycom=globalThis.__unmarkedHtml.split('All Scheduled driver shifts (PAYCOM)')[1].split('scheduled-section called-off')[0];
   `, context);
   const statusByName = Object.fromEntries(context.__marked.map(row => [row.name, row.statusLabel]));
   assert(statusByName['Route Driver'] === 'On Route' && statusByName['Adhoc Driver'] === 'Adhoc', 'Marked Drivers must identify route and Adhoc placements');
@@ -95,7 +100,9 @@ function testMarkedDriversInnerTab() {
   assert(context.__html.includes('data-paycom-pane="marked"') && context.__html.includes('aria-selected="true" data-action="opening-paycom-tab" data-paycom-tab="marked"'), 'Marked Drivers must render as the active accessible inner tab');
   ['marked-driver-route','marked-driver-adhoc','marked-driver-vto2','marked-driver-vto4','marked-driver-reduction','marked-driver-called-off','marked-driver-stay-home','marked-driver-helper'].forEach(className=>assert(context.__html.includes(className), `${className} color status is missing`));
   assert(!context.__html.includes('Plain Midshift'), 'Marked Drivers pane must omit unmarked scheduled shifts');
-  assert(context.__tab === 'scheduled' && context.__saved === 'scheduled', 'PAYCOM inner-tab selection must persist locally');
+  assert(context.__unmarked.length === 1 && context.__unmarked[0].name === 'Plain Midshift', 'Unmarked Drivers must identify every route-eligible PAYCOM shift without a destination');
+  assert(context.__unmarkedPaycom.includes('data-paycom-pane="unmarked"') && context.__unmarkedPaycom.includes('Plain Midshift') && !context.__unmarkedPaycom.includes('Route Driver'), 'Unmarked Drivers pane must show only drivers still needing a roster decision');
+  assert(context.__tab === 'unmarked' && context.__saved === 'unmarked', 'Unmarked PAYCOM inner-tab selection must persist locally');
 }
 
 function testDestinationPopupAndManualOverride() {
@@ -142,6 +149,8 @@ function testRestoreIsSingleDestinationAndPicklistActions() {
   assert((paycom.match(/data-roster-name="casey rescue"/g)||[]).length === 1, 'Restored driver must appear exactly once in the PAYCOM list');
   assert(context.__picklistActions.includes('picklist-vto-actions') && context.__picklistActions.includes('data-vto-target="calloff"') && context.__picklistActions.includes('data-vto-target="reduction"') && context.__picklistActions.includes('data-vto-target="stay-home"'), 'Picklist VTO names must expose the scrollable destination action controls');
   assert(context.__picklistActions.includes('data-action="open-vto-route-swap"') && context.__picklistActions.includes('Swap To Route'), 'Every populated Picklist VTO hover menu must expose Swap To Route');
+  const styleSource=fs.readFileSync(require.resolve('../styles.css'),'utf8'),appSource=fs.readFileSync(require.resolve('../app.js'),'utf8');
+  assert(styleSource.includes('.picklist-vto-driver.linger-open .picklist-vto-actions') && styleSource.includes('top:calc(100% - 1px)') && appSource.includes("setTimeout(()=>card.classList.remove('linger-open'),700)"), 'Picklist VTO hover controls must bridge the cursor gap and remain open long enough to choose an action');
   assert(context.__calledOff.length === 1 && context.__calledOff[0].name === 'Casey Rescue', 'A Picklist VTO action must move the driver to the selected destination exactly once');
   assert(context.__calledOffHtml.includes('roster-destination-called-off'), 'Destination rows must retain a visible status color class');
 }
