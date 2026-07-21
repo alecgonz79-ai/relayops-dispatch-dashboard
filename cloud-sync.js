@@ -3,7 +3,7 @@
   const configured=Boolean(config.supabaseUrl&&config.supabaseAnonKey&&config.organizationId&&config.stationId&&!config.supabaseUrl.includes('YOUR_PROJECT'));
   const PERSISTENT_DATE='2000-01-01';
   const SYNC_META='__relayopsSync';
-  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,pollTimer=null,polling=false,saveTimer=null,applying=false,initializing=false,initializingSince=0,basePayload={},basePersistentPayload={},memoryPending=null;
+  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,pollTimer=null,polling=false,saveTimer=null,saveInFlight=null,pendingSaveAction='',applying=false,initializing=false,initializingSince=0,basePayload={},basePersistentPayload={},memoryPending=null;
   const CLOUD_TIMEOUT_MS=Math.max(4000,Math.min(30000,Number(config.requestTimeoutMs)||10000));
   const CLOUD_POLL_MS=Math.max(15000,Math.min(180000,Number(config.pollIntervalMs)||30000));
   const listeners=new Set();
@@ -380,7 +380,7 @@
     if(((!data||!persistent)&&canInitialize())||pending?.payload)setTimeout(()=>save(!data||!persistent?'workspace.initialize':'workspace.offline-reconcile').catch(error=>notify({type:'error',error})),0);
     subscribe(date);subscribePresence(date);return data;
   }
-  async function save(action='workspace.save'){
+  async function performSave(action='workspace.save'){
     const currentPayload=window.RelayOpsApp?.sharedState?.();if(!currentPayload)return null;
     const currentPersistentPayload=window.RelayOpsApp?.persistentState?.()||{};
     if(applying)return null;
@@ -389,17 +389,34 @@
     if(!canWrite())throw new Error('This account does not have permission to edit the shared workspace');
     const queued=queueSnapshot(currentPayload,action,currentPersistentPayload),payload=queued.payload,persistentPayload=queued.persistentPayload;
     try{
-      const daily=await withCloudTimeout(client.rpc('save_workspace_snapshot',{target_station:config.stationId,target_date:operationDate(),expected_revision:revision,new_payload:payload,action_name:action}),'Daily operations save');
+      const daily=await withCloudTimeout(client.rpc('save_workspace_snapshot_v2',{target_station:config.stationId,target_date:operationDate(),expected_revision:revision,new_payload:payload,action_name:action}),'Daily operations save');
       if(daily.error){if(String(daily.error.message||'').includes('revision_conflict')){notify({type:'conflict'});await load();return null;}throw daily.error;}
       revision=Number(daily.data?.revision)||revision+1;
-      const persistent=await withCloudTimeout(client.rpc('save_workspace_snapshot',{target_station:config.stationId,target_date:PERSISTENT_DATE,expected_revision:persistentRevision,new_payload:persistentPayload,action_name:`${action}.persistent` }),'Station settings save');
+      const persistent=await withCloudTimeout(client.rpc('save_workspace_snapshot_v2',{target_station:config.stationId,target_date:PERSISTENT_DATE,expected_revision:persistentRevision,new_payload:persistentPayload,action_name:`${action}.persistent` }),'Station settings save');
       if(persistent.error){if(String(persistent.error.message||'').includes('revision_conflict')){notify({type:'conflict'});await load();return null;}throw persistent.error;}
-      persistentRevision=Number(persistent.data?.revision)||persistentRevision+1;basePayload=clone(payload);basePersistentPayload=clone(persistentPayload);clearPending();notify({type:'saved',revision,persistentRevision,updatedAt:daily.data?.updated_at||persistent.data?.updated_at});return daily.data;
+      persistentRevision=Number(persistent.data?.revision)||persistentRevision+1;basePayload=clone(payload);basePersistentPayload=clone(persistentPayload);
+      const latest=pendingSnapshot();
+      if(!latest||(same(latest.payload,payload)&&same(latest.persistentPayload,persistentPayload)))clearPending();
+      notify({type:'saved',revision,persistentRevision,updatedAt:daily.data?.updated_at||persistent.data?.updated_at});return daily.data;
     }catch(error){queueSnapshot(currentPayload,action,currentPersistentPayload);notify({type:'offline',reason:'save-failed',error});throw error;}
+  }
+  function save(action='workspace.save'){
+    if(saveInFlight){pendingSaveAction=action;return saveInFlight;}
+    saveInFlight=performSave(action);
+    return saveInFlight.then(result=>{
+      saveInFlight=null;
+      const next=pendingSaveAction;pendingSaveAction='';
+      if(next&&session&&membership)setTimeout(()=>save(next).catch(error=>notify({type:'error',error})),0);
+      return result;
+    },error=>{saveInFlight=null;pendingSaveAction='';throw error;});
   }
   function schedule(action='workspace.autosave'){
     if(applying)return;
     if(!session){notify({type:'offline',reason:'signed-out-local-only'});return;}
+    // Do not let startup renders fan out concurrent writes while the station
+    // membership check is still pending. Once load succeeds, normal edits are
+    // queued and the single-flight writer flushes them in order.
+    if(!membership){notify({type:'reconnecting',reason:'membership-pending'});return;}
     if(membership&&!canWrite())return;
     const payload=window.RelayOpsApp?.sharedState?.();if(payload)queueSnapshot(payload,action,window.RelayOpsApp?.persistentState?.()||{});
     clearTimeout(saveTimer);if(client&&session)saveTimer=setTimeout(()=>save(action).catch(error=>notify({type:'error',error})),900);

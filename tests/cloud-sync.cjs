@@ -40,7 +40,7 @@ cloud.on(event=>events.push(event));
   await cloud.init();
   if(applied.length!==2||applied[0].kind!=='daily'||applied[0].payload.morningRoutes[0].route!=='CX200'||applied[1].kind!=='persistent'||cloud.revision!==4||cloud.persistentRevision!==4)throw new Error('Daily and persistent snapshots did not load');
   await cloud.save('test.save');
-  const saveCalls=rpcCalls.filter(call=>call.name==='save_workspace_snapshot');
+  const saveCalls=rpcCalls.filter(call=>call.name==='save_workspace_snapshot_v2');
   if(saveCalls.length!==2||saveCalls[0].args.expected_revision!==4||saveCalls[0].args.target_station!=='station-1'||saveCalls[0].args.new_payload.morningRoutes[0].route!=='CX100'||!saveCalls[0].args.new_payload.__relayopsSync||saveCalls[1].args.target_date!=='2000-01-01'||!saveCalls[1].args.new_payload.fleetIssues||!saveCalls[1].args.new_payload.__relayopsSync||cloud.revision!==5||cloud.persistentRevision!==5)throw new Error('Versioned daily/persistent workspace save failed');
   if(channelCalls!==0)throw new Error('Cloud sync must not open Realtime channels on nano compute');
   cloud.__test.applyRemoteSnapshot({operation_date:'2000-01-01',revision:6,payload:{fleetIssues:{EV9:{active:[{id:'issue-9',text:'Flat tire'}],history:[]}}},updated_at:'2026-07-11T12:01:30Z'},'2026-07-11');
