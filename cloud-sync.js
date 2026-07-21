@@ -3,7 +3,9 @@
   const configured=Boolean(config.supabaseUrl&&config.supabaseAnonKey&&config.organizationId&&config.stationId&&!config.supabaseUrl.includes('YOUR_PROJECT'));
   const PERSISTENT_DATE='2000-01-01';
   const SYNC_META='__relayopsSync';
-  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,saveTimer=null,applying=false,initializing=false,basePayload={},basePersistentPayload={},memoryPending=null;
+  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,pollTimer=null,polling=false,saveTimer=null,applying=false,initializing=false,initializingSince=0,basePayload={},basePersistentPayload={},memoryPending=null;
+  const CLOUD_TIMEOUT_MS=Math.max(4000,Math.min(30000,Number(config.requestTimeoutMs)||10000));
+  const CLOUD_POLL_MS=Math.max(15000,Math.min(180000,Number(config.pollIntervalMs)||30000));
   const listeners=new Set();
   const notify=event=>listeners.forEach(fn=>{try{fn(event);}catch(error){console.error(error);}});
   const queueKey=()=>`relayops_cloud_queue:${config.stationId||'local'}:${operationDate()}`;
@@ -164,9 +166,18 @@
     const record=writePending({payload:prepared,persistentPayload:preparedPersistent,basePayload:clone(dailyBase),basePersistentPayload:clone(persistentBase),action,shared:true,userId:session?.user?.id||'',queuedAt:existing?.queuedAt||now,updatedAt:now});
     notify({type:'queued',action});return record;
   }
+  function authSessionStorage(){try{return window.sessionStorage||null;}catch{return null;}}
+  async function unlockedAuthOperation(_name,_acquireTimeout,operation){return operation();}
   function createClient(){
     if(!configured||!window.supabase?.createClient)return null;
-    return window.supabase.createClient(config.supabaseUrl,config.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+    // RelayOps uses an anonymous, link-scoped session. Keep that session inside
+    // the current tab instead of the app's already-busy localStorage. Supabase's
+    // default cross-tab Web Lock can remain held by a sleeping mobile tab and
+    // leave every other dispatcher stuck on "Connecting". Each tab has its own
+    // anonymous session, so running the small auth operation directly is safe.
+    const auth={persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,lock:unlockedAuthOperation};
+    const isolatedStorage=authSessionStorage();if(isolatedStorage)auth.storage=isolatedStorage;
+    return window.supabase.createClient(config.supabaseUrl,config.supabaseAnonKey,{auth});
   }
   function authRedirectUrl(){
     const configuredRedirect=String(config.authRedirectUrl||'').trim();
@@ -195,6 +206,21 @@
     return error instanceof Error?error:new Error(message||'Unable to send the secure sign-in link');
   }
   const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  function withCloudTimeout(promise,label='Shared cloud request',timeout=CLOUD_TIMEOUT_MS){
+    let timer;
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise((_,reject)=>{timer=setTimeout(()=>{const error=new Error(`${label} timed out. RelayOps will start a fresh shared session.`);error.code='cloud_timeout';reject(error);},timeout);})
+    ]).finally(()=>clearTimeout(timer));
+  }
+  function transientPoolError(error){return /PGRST003|connection pool|timed out acquiring connection|database.*busy/i.test(String(error?.code||'')+' '+String(error?.message||error||''));}
+  async function cloudRequest(factory,label){
+    let result=await withCloudTimeout(factory(),label);
+    if(!transientPoolError(result?.error))return result;
+    notify({type:'reconnecting',reason:'database-busy'});await pause(3500);
+    result=await withCloudTimeout(factory(),label);return result;
+  }
+  function isAuthSessionError(error){return /jwt|refresh.?token|invalid.?token|session.*(missing|expired|invalid)|unauthorized|not authenticated|cloud_timeout/i.test(String(error?.message||error||''));}
   function isStorageQuotaError(error){return /quota|storage.*full|exceeded/i.test(String(error?.message||error||''));}
   function reclaimStorageForSharedSession(){
     const target=storage();if(!target)return 0;
@@ -227,7 +253,7 @@
     let lastError=null;
     for(let attempt=0;attempt<3;attempt++){
       let anonymous;
-      try{anonymous=await client.auth.signInAnonymously({options:{data:{relayops_link_access:true}}});}
+      try{anonymous=await withCloudTimeout(client.auth.signInAnonymously({options:{data:{relayops_link_access:true}}}),'Shared link sign-in');}
       catch(error){anonymous={data:null,error};}
       if(!anonymous.error&&anonymous.data?.session)return anonymous.data.session;
       lastError=anonymous.error||new Error('Automatic shared access did not return a session');
@@ -238,7 +264,7 @@
     throw readableAuthError(lastError||new Error('Automatic shared access failed'));
   }
   async function replaceWithAnonymousLinkSession(){
-    if(session)await client.auth.signOut({scope:'local'}).catch(()=>{});
+    if(session)await withCloudTimeout(client.auth.signOut({scope:'local'}),'Old shared session cleanup',5000).catch(()=>{});
     session=null;membership=null;
     session=await createAnonymousLinkSession();
     notify({type:'auth',session});
@@ -250,13 +276,15 @@
   async function init(){
     client=createClient();
     if(!client){notify({type:'offline',reason:'not-configured'});return {configured:false};}
-    initializing=true;
+    initializing=true;initializingSince=Date.now();
     try{
-      const result=await client.auth.getSession();session=result.data.session;
+      const result=await withCloudTimeout(client.auth.getSession(),'Saved shared session check');if(result?.error)throw result.error;session=result?.data?.session||null;
       client.auth.onAuthStateChange((_event,next)=>{session=next;if(!session)membership=null;notify({type:'auth',session});if(session&&!initializing)load().catch(error=>notify({type:'error',error}));});
       if(!session)session=await createAnonymousLinkSession();
       if(session){
-        notify({type:'auth',session});await load();
+        notify({type:'auth',session});
+        try{await load();}
+        catch(error){if(!isAuthSessionError(error))throw error;await replaceWithAnonymousLinkSession();}
         // Replace any stale browser session that lacks station access, including
         // anonymous sessions created before the link-access trigger existed.
         if(!membership)await replaceWithAnonymousLinkSession();
@@ -264,13 +292,19 @@
       }else notify({type:'link-access-error',error:new Error('Automatic shared access is unavailable')});
       return {configured:true,session};
     }catch(error){notify({type:'link-access-error',error});return {configured:true,session,error};}
-    finally{initializing=false;}
+    finally{initializing=false;initializingSince=0;}
   }
   async function retryLinkAccess(){
-    if(initializing)return {configured,session};
+    if(initializing){
+      notify({type:'reconnecting'});
+      const deadline=(initializingSince||Date.now())+CLOUD_TIMEOUT_MS+1500;
+      while(initializing&&Date.now()<deadline)await pause(150);
+      if(initializing)throw new Error('The previous shared-cloud connection stalled. Reload once to start the repaired session.');
+      if(session&&membership)return {configured:true,session};
+    }
     if(!client)client=createClient();
     if(!client)throw new Error('Shared cloud is not configured');
-    initializing=true;notify({type:'reconnecting'});
+    initializing=true;initializingSince=Date.now();notify({type:'reconnecting'});
     try{
       if(session){
         await load();
@@ -279,7 +313,7 @@
       await replaceWithAnonymousLinkSession();
       return {configured:true,session};
     }catch(error){notify({type:'link-access-error',error});throw error;}
-    finally{initializing=false;}
+    finally{initializing=false;initializingSince=0;}
   }
   function operationDate(){return window.RelayOpsApp?.operationDate?.()||new Date().toISOString().slice(0,10);}
   async function signIn(email){
@@ -301,11 +335,11 @@
   async function currentMembership({refresh=false}={}){
     if(!client||!session)return null;
     if(membership&&!refresh)return membership;
-    const {data,error}=await client.from('memberships').select('user_id,role,display_name,active').eq('organization_id',config.organizationId).eq('user_id',session.user.id).eq('active',true).maybeSingle();
+    const {data,error}=await cloudRequest(()=>client.from('memberships').select('user_id,role,display_name,active').eq('organization_id',config.organizationId).eq('user_id',session.user.id).eq('active',true).maybeSingle(),'Shared station access check');
     if(error)throw error;
     membership=data||null;
     if(membership&&!['owner','ops_manager'].includes(membership.role)){
-      const station=await client.from('station_memberships').select('station_id').eq('station_id',config.stationId).eq('user_id',session.user.id).maybeSingle();
+      const station=await cloudRequest(()=>client.from('station_memberships').select('station_id').eq('station_id',config.stationId).eq('user_id',session.user.id).maybeSingle(),'Station membership check');
       if(station.error)throw station.error;
       if(!station.data)membership=null;
     }
@@ -321,8 +355,10 @@
     const access=await currentMembership({refresh:true});
     if(!access)return null;
     const date=operationDate();
-    const query=date=>client.from('workspace_snapshots').select('payload,revision,updated_at,updated_by').eq('station_id',config.stationId).eq('operation_date',date).maybeSingle();
-    const [dailyResult,persistentResult]=await Promise.all([query(date),query(PERSISTENT_DATE)]);
+    const query=targetDate=>cloudRequest(()=>client.from('workspace_snapshots').select('payload,revision,updated_at,updated_by').eq('station_id',config.stationId).eq('operation_date',targetDate).maybeSingle(),targetDate===PERSISTENT_DATE?'Shared station settings download':'Shared daily operations download');
+    // Run the two small snapshot reads in sequence. On Supabase's nano compute,
+    // parallel PostgREST requests can compete for the same tiny connection pool.
+    const dailyResult=await query(date),persistentResult=await query(PERSISTENT_DATE);
     if(dailyResult.error)throw dailyResult.error;if(persistentResult.error)throw persistentResult.error;
     const data=dailyResult.data,persistent=persistentResult.data,dailyRemote=data?.payload||{},persistentRemote=persistent?.payload||{};
     let pending=pendingSnapshot();
@@ -353,10 +389,10 @@
     if(!canWrite())throw new Error('This account does not have permission to edit the shared workspace');
     const queued=queueSnapshot(currentPayload,action,currentPersistentPayload),payload=queued.payload,persistentPayload=queued.persistentPayload;
     try{
-      const daily=await client.rpc('save_workspace_snapshot',{target_station:config.stationId,target_date:operationDate(),expected_revision:revision,new_payload:payload,action_name:action});
+      const daily=await withCloudTimeout(client.rpc('save_workspace_snapshot',{target_station:config.stationId,target_date:operationDate(),expected_revision:revision,new_payload:payload,action_name:action}),'Daily operations save');
       if(daily.error){if(String(daily.error.message||'').includes('revision_conflict')){notify({type:'conflict'});await load();return null;}throw daily.error;}
       revision=Number(daily.data?.revision)||revision+1;
-      const persistent=await client.rpc('save_workspace_snapshot',{target_station:config.stationId,target_date:PERSISTENT_DATE,expected_revision:persistentRevision,new_payload:persistentPayload,action_name:`${action}.persistent`});
+      const persistent=await withCloudTimeout(client.rpc('save_workspace_snapshot',{target_station:config.stationId,target_date:PERSISTENT_DATE,expected_revision:persistentRevision,new_payload:persistentPayload,action_name:`${action}.persistent` }),'Station settings save');
       if(persistent.error){if(String(persistent.error.message||'').includes('revision_conflict')){notify({type:'conflict'});await load();return null;}throw persistent.error;}
       persistentRevision=Number(persistent.data?.revision)||persistentRevision+1;basePayload=clone(payload);basePersistentPayload=clone(persistentPayload);clearPending();notify({type:'saved',revision,persistentRevision,updatedAt:daily.data?.updated_at||persistent.data?.updated_at});return daily.data;
     }catch(error){queueSnapshot(currentPayload,action,currentPersistentPayload);notify({type:'offline',reason:'save-failed',error});throw error;}
@@ -366,34 +402,46 @@
     if(!session){notify({type:'offline',reason:'signed-out-local-only'});return;}
     if(membership&&!canWrite())return;
     const payload=window.RelayOpsApp?.sharedState?.();if(payload)queueSnapshot(payload,action,window.RelayOpsApp?.persistentState?.()||{});
-    clearTimeout(saveTimer);if(client&&session)saveTimer=setTimeout(()=>save(action).catch(error=>notify({type:'error',error})),180);
+    clearTimeout(saveTimer);if(client&&session)saveTimer=setTimeout(()=>save(action).catch(error=>notify({type:'error',error})),900);
   }
+  function applyRemoteSnapshot(row,date){
+    const pending=pendingSnapshot();if(!row?.operation_date)return false;
+    if(row.operation_date===PERSISTENT_DATE){
+      if(Number(row.revision)<=persistentRevision)return false;
+      const remote=row.payload||{},local=pending?.persistentPayload||null,next=local?reconcilePayload(remote,local,pending?.basePersistentPayload||basePersistentPayload||{}):remote;
+      persistentRevision=Number(row.revision);basePersistentPayload=clone(remote);
+      if(pending)writePending({...pending,persistentPayload:next,basePersistentPayload:clone(remote),updatedAt:new Date().toISOString()});
+      applying=true;window.RelayOpsApp?.applyPersistentState?.(next);applying=false;notify({type:'remote-update',revision,persistentRevision,updatedAt:row.updated_at});
+    }else{
+      if(row.operation_date!==date||Number(row.revision)<=revision)return false;
+      const remote=row.payload||{},next=pending?.payload?reconcilePayload(remote,pending.payload,pending?.basePayload||basePayload||{}):remote;
+      revision=Number(row.revision);basePayload=clone(remote);
+      if(pending)writePending({...pending,payload:next,basePayload:clone(remote),updatedAt:new Date().toISOString()});
+      applying=true;window.RelayOpsApp?.applySharedState?.(next);applying=false;notify({type:'remote-update',revision,persistentRevision,updatedAt:row.updated_at});
+    }
+    if(pending?.payload)setTimeout(()=>save('workspace.poll-reconcile').catch(error=>notify({type:'error',error})),0);return true;
+  }
+  async function pollForUpdates(date=operationDate()){
+    if(polling||!client||!session||date!==operationDate())return false;
+    if(typeof document!=='undefined'&&document.visibilityState==='hidden')return false;
+    polling=true;
+    try{
+      const query=targetDate=>cloudRequest(()=>client.from('workspace_snapshots').select('payload,revision,updated_at,updated_by,operation_date').eq('station_id',config.stationId).eq('operation_date',targetDate).maybeSingle(),targetDate===PERSISTENT_DATE?'Shared station update check':'Shared daily update check');
+      const daily=await query(date);if(daily.error)throw daily.error;
+      const persistent=await query(PERSISTENT_DATE);if(persistent.error)throw persistent.error;
+      const changed=applyRemoteSnapshot(persistent.data,date)|applyRemoteSnapshot(daily.data,date);return Boolean(changed);
+    }catch(error){notify({type:'offline',reason:'poll-failed',error});return false;}
+    finally{polling=false;}
+  }
+  function scheduleNextPoll(date){clearTimeout(pollTimer);pollTimer=setTimeout(async()=>{await pollForUpdates(date);if(session&&date===operationDate())scheduleNextPoll(date);},CLOUD_POLL_MS);if(typeof pollTimer?.unref==='function')pollTimer.unref();}
   function subscribe(date){
-    if(channel)client.removeChannel(channel);
-    channel=client.channel(`workspace:${config.stationId}:${date}`).on('postgres_changes',{event:'*',schema:'public',table:'workspace_snapshots',filter:`station_id=eq.${config.stationId}`},payload=>{
-      const row=payload.new,pending=pendingSnapshot();if(!row?.operation_date)return;
-      if(row.operation_date===PERSISTENT_DATE){
-        if(Number(row.revision)<=persistentRevision)return;
-        const remote=row.payload||{},local=pending?.persistentPayload||null,next=local?reconcilePayload(remote,local,pending?.basePersistentPayload||basePersistentPayload||{}):remote;
-        persistentRevision=Number(row.revision);basePersistentPayload=clone(remote);
-        if(pending)writePending({...pending,persistentPayload:next,basePersistentPayload:clone(remote),updatedAt:new Date().toISOString()});
-        applying=true;window.RelayOpsApp?.applyPersistentState?.(next);applying=false;notify({type:'remote-update',revision,persistentRevision,updatedAt:row.updated_at});
-      }else{
-        if(row.operation_date!==date||Number(row.revision)<=revision)return;
-        const remote=row.payload||{},next=pending?.payload?reconcilePayload(remote,pending.payload,pending?.basePayload||basePayload||{}):remote;
-        revision=Number(row.revision);basePayload=clone(remote);
-        if(pending)writePending({...pending,payload:next,basePayload:clone(remote),updatedAt:new Date().toISOString()});
-        applying=true;window.RelayOpsApp?.applySharedState?.(next);applying=false;notify({type:'remote-update',revision,persistentRevision,updatedAt:row.updated_at});
-      }
-      if(pending?.payload)setTimeout(()=>save('workspace.realtime-reconcile').catch(error=>notify({type:'error',error})),0);
-    }).subscribe();
+    // Realtime's WAL polling consumed nearly all CPU on the project's nano
+    // compute even with only a few tabs. A visibility-aware 30-second refresh
+    // keeps shared edits current without holding database replication workers.
+    if(channel)client.removeChannel(channel);if(presenceChannel)client.removeChannel(presenceChannel);channel=null;presenceChannel=null;
+    notify({type:'presence',users:session?[{userId:session.user.id,email:session.user.email||'Shared link',onlineAt:new Date().toISOString()}]:[]});scheduleNextPoll(date);
   }
-  function subscribePresence(date){
-    if(presenceChannel)client.removeChannel(presenceChannel);
-    presenceChannel=client.channel(`presence:${config.stationId}:${date}`,{config:{presence:{key:session.user.id}}})
-      .on('presence',{event:'sync'},()=>{const state=presenceChannel.presenceState();const users=Object.values(state).flat().map(item=>({userId:item.user_id,email:item.email,onlineAt:item.online_at}));notify({type:'presence',users});})
-      .subscribe(async status=>{if(status==='SUBSCRIBED')await presenceChannel.track({user_id:session.user.id,email:session.user.email,online_at:new Date().toISOString()});});
-  }
+  function subscribePresence(){return null;}
   async function members(){
     if(!client||!session)return [];
     const {data,error}=await client.from('memberships').select('user_id,role,display_name,active,created_at').eq('organization_id',config.organizationId).order('display_name');
@@ -432,8 +480,8 @@
     if(error)throw error;
   }
   if(window.addEventListener){
-    window.addEventListener('online',()=>{notify({type:'reconnecting'});if(session)load().catch(error=>notify({type:'error',error}));});
+    window.addEventListener('online',()=>{notify({type:'reconnecting'});retryLinkAccess().catch(error=>notify({type:'link-access-error',error}));});
     window.addEventListener('offline',()=>notify({type:'offline',reason:'browser-offline'}));
   }
-  window.RelayOpsCloud={configured,init,retryLinkAccess,reclaimStorageForSharedSession,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{preparePayload,reconcilePayload,semanticKey,canonical,reclaimStorageForSharedSession}};
+  window.RelayOpsCloud={configured,init,retryLinkAccess,reclaimStorageForSharedSession,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{preparePayload,reconcilePayload,semanticKey,canonical,reclaimStorageForSharedSession,withCloudTimeout,pollForUpdates,applyRemoteSnapshot}};
 })();

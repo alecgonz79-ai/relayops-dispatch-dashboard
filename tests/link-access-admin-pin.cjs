@@ -7,6 +7,7 @@ const source=fs.readFileSync('cloud-sync.js','utf8');
 const app=fs.readFileSync('app.js','utf8');
 const migration=fs.readFileSync('supabase/migrations/20260720_link_access_admin_pin.sql','utf8');
 let anonymousCalls=0;
+let clientOptions=null;
 const rpcCalls=[];
 const applied=[];
 const storageMap=new Map([['relayops_sheet_history','x'.repeat(4000)]]);
@@ -34,8 +35,9 @@ const client={
 };
 const context={console,setTimeout,clearTimeout,URL,location:{href:'https://relayops.test/'},window:{
   addEventListener(){},localStorage:{get length(){return storageMap.size;},key(index){return [...storageMap.keys()][index]||null;},getItem(key){return storageMap.get(key)||null;},setItem(key,value){storageMap.set(key,String(value));},removeItem(key){storageMap.delete(key);}},
+  sessionStorage:{getItem(){return null;},setItem(){},removeItem(){}},
   RELAYOPS_CLOUD_CONFIG:{supabaseUrl:'https://relayops.supabase.co',supabaseAnonKey:'public-anon',organizationId:'org-1',stationId:'station-1'},
-  supabase:{createClient:()=>client},
+  supabase:{createClient:(_url,_key,options)=>{clientOptions=options;return client;}},
   RelayOpsApp:{operationDate:()=>'2026-07-20',sharedState:()=>({}),persistentState:()=>({}),applySharedState:value=>applied.push(value),applyPersistentState:value=>applied.push(value)}
 }};
 context.globalThis=context;
@@ -44,6 +46,9 @@ vm.runInNewContext(source,context,{filename:'cloud-sync.js'});
 (async()=>{
   const cloud=context.window.RelayOpsCloud;
   await cloud.init();
+  assert(clientOptions?.auth?.storage===context.window.sessionStorage,'Shared-link auth must use isolated per-tab session storage');
+  assert(typeof clientOptions?.auth?.lock==='function','Shared-link auth must bypass a stale cross-tab Web Lock');
+  assert(await clientOptions.auth.lock('relayops-test',100,async()=>42)===42,'Shared-link auth lock wrapper did not run the requested operation');
   assert(anonymousCalls===2&&cloud.session?.user?.is_anonymous===true,'Quota recovery did not create an anonymous Supabase session on retry');
   assert(!storageMap.has('relayops_sheet_history'),'Quota recovery did not clear the oversized local undo cache');
   assert(cloud.membership?.role==='dispatcher'&&applied.length===2,'Anonymous session did not load the shared station workspace');
@@ -56,6 +61,7 @@ vm.runInNewContext(source,context,{filename:'cloud-sync.js'});
   assert(!app.includes('"6969"')&&!app.includes("'6969'"),'Public app code must not contain the Admin PIN');
   assert(!app.includes('Dispatcher sign in'),'Retired dispatcher sign-in control returned to the UI');
   assert(source.includes('retryLinkAccess')&&source.includes('if(!membership)await replaceWithAnonymousLinkSession()'),'Stale shared-link sessions must recover without email sign-in');
+  assert(source.includes('withCloudTimeout')&&source.includes('initializingSince'),'A stalled initialization must time out and become retryable');
   assert(app.includes('Sync issue · retry')&&app.includes("name==='retry-cloud-link'"),'Cloud failures need a visible one-click recovery path');
   assert(source.includes('reclaimStorageForSharedSession')&&source.includes("key.startsWith('relayops_cloud_queue:')"),'Storage-quota recovery must preserve the current cloud queue in memory and clear redundant caches');
   assert(app.includes("slice(-8),future:(state.sheetHistory?.future||[]).slice(-8)"),'Device-local undo history must stay compact enough for the shared-session token');

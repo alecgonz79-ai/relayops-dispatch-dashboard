@@ -2,7 +2,7 @@ const fs=require('fs');
 const vm=require('vm');
 
 const events=[],rpcCalls=[],applied=[],memberUpdates=[],savedPayload={morningRoutes:[{route:'CX100'}]},persistentPayload={fleetIssues:{EV1:{active:[],history:[]}}};
-let authCallback=null,postgresCallback=null,signInRequest=null;
+let authCallback=null,signInRequest=null,channelCalls=0;
 const row={payload:{morningRoutes:[{route:'CX200'}]},revision:4,updated_at:'2026-07-11T12:00:00Z',updated_by:'user-2'};
 const client={
   auth:{
@@ -17,7 +17,7 @@ const client={
   };},
   rpc:async(name,args)=>{rpcCalls.push({name,args});if(name==='relayops_admin_status')return{data:false,error:null};return{data:{revision:5,updated_at:'2026-07-11T12:01:00Z'},error:null};},
   functions:{invoke:async()=>({data:{ok:true},error:null})},
-  channel(name){const presence=name.startsWith('presence:');return{on(_event,_filter,callback){if(!presence)postgresCallback=callback;return this;},subscribe(callback){if(callback)setTimeout(()=>callback('SUBSCRIBED'),0);return this;},presenceState(){return{};},async track(){}};},
+  channel(){channelCalls++;return{on(){return this;},subscribe(){return this;},presenceState(){return{};},async track(){}};},
   removeChannel(){}
 };
 const context={
@@ -42,9 +42,10 @@ cloud.on(event=>events.push(event));
   await cloud.save('test.save');
   const saveCalls=rpcCalls.filter(call=>call.name==='save_workspace_snapshot');
   if(saveCalls.length!==2||saveCalls[0].args.expected_revision!==4||saveCalls[0].args.target_station!=='station-1'||saveCalls[0].args.new_payload.morningRoutes[0].route!=='CX100'||!saveCalls[0].args.new_payload.__relayopsSync||saveCalls[1].args.target_date!=='2000-01-01'||!saveCalls[1].args.new_payload.fleetIssues||!saveCalls[1].args.new_payload.__relayopsSync||cloud.revision!==5||cloud.persistentRevision!==5)throw new Error('Versioned daily/persistent workspace save failed');
-  postgresCallback({new:{operation_date:'2000-01-01',revision:6,payload:{fleetIssues:{EV9:{active:[{id:'issue-9',text:'Flat tire'}],history:[]}}},updated_at:'2026-07-11T12:01:30Z'}});
+  if(channelCalls!==0)throw new Error('Cloud sync must not open Realtime channels on nano compute');
+  cloud.__test.applyRemoteSnapshot({operation_date:'2000-01-01',revision:6,payload:{fleetIssues:{EV9:{active:[{id:'issue-9',text:'Flat tire'}],history:[]}}},updated_at:'2026-07-11T12:01:30Z'},'2026-07-11');
   if(applied.length!==3||applied[2].kind!=='persistent'||!applied[2].payload.fleetIssues.EV9||cloud.persistentRevision!==6)throw new Error('Station-wide persistent Fleet update failed');
-  postgresCallback({new:{operation_date:'2026-07-11',revision:6,payload:{morningRoutes:[{route:'CX300'}]},updated_at:'2026-07-11T12:02:00Z'}});
+  cloud.__test.applyRemoteSnapshot({operation_date:'2026-07-11',revision:6,payload:{morningRoutes:[{route:'CX300'}]},updated_at:'2026-07-11T12:02:00Z'},'2026-07-11');
   if(applied.length!==4||applied[3].kind!=='daily'||applied[3].payload.morningRoutes[0].route!=='CX300'||cloud.revision!==6||!events.some(event=>event.type==='remote-update'))throw new Error('Realtime dispatcher update failed');
   await cloud.signIn('dispatcher@example.com');
   if(!events.some(event=>event.type==='magic-link-sent'))throw new Error('Passwordless sign-in event missing');
