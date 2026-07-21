@@ -3088,7 +3088,13 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 @media (max-width:700px){.rivian-panel.simplified .rivian-grid.tiny-view,.rivian-panel.simplified .rivian-grid.columns-view{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.rivian-panel.simplified .rivian-grid.detail-view{grid-template-columns:1fr}.rivian-panel.simplified .rivian-card:not(.expanded) .rivian-card-main{grid-template-columns:minmax(0,1fr) 72px}.rivian-panel.simplified .rivian-card:not(.expanded) .rivian-van-art{width:72px;height:38px}}
 
 /* Fleet-team Van Parking link */
-.parking-only-shell .fleet-parking-sidebar .nav-item{cursor:default}
+.parking-only-shell .fleet-parking-sidebar nav{overflow-y:auto;padding-right:3px}
+.parking-only-shell .fleet-parking-sidebar .nav-item:not(.fleet-locked-nav){cursor:pointer}
+.parking-only-shell .fleet-parking-sidebar .fleet-locked-section{margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)}
+.parking-only-shell .fleet-parking-sidebar .fleet-locked-nav{cursor:not-allowed;opacity:.42;filter:saturate(.25)}
+.parking-only-shell .fleet-parking-sidebar .fleet-locked-nav .nav-count{margin-left:auto;font-size:10px;background:rgba(255,255,255,.08)}
+.parking-only-shell .fleet-parking-sidebar .user-card{border-color:rgba(137,202,240,.28);background:rgba(77,155,205,.1)}
+.parking-only-shell .fleet-issues-readonly{grid-template-columns:minmax(0,1fr) auto}
 .parking-only-shell .parking-view-only input[readonly]{cursor:default}
 .parking-only-shell .parking-view-only .parking-van-cell input,
 .parking-only-shell .parking-view-only .parking-battery-mini input{background:rgba(255,255,255,.86)}

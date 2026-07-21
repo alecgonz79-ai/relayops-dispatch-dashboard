@@ -55,8 +55,8 @@ const NAV = [
 const DISPATCHER_SHARE_URL = 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/';
 const DISPATCHER_SHARE_TEXT = `LLOL Dispatch Opening Operations\n${DISPATCHER_SHARE_URL}`;
 const DISPATCHER_SHARE_NOTE = 'Use this exact full link. GitHub Pages will show 404 if the account name is shortened or changed, like AG79.github.io.';
-const FLEET_PARKING_SHARE_URL = `${DISPATCHER_SHARE_URL}?view=parking`;
-const FLEET_PARKING_SHARE_TEXT = `LLOL Van Parking Map\n${FLEET_PARKING_SHARE_URL}`;
+const FLEET_PARKING_SHARE_URL = `${DISPATCHER_SHARE_URL}?view=fleet`;
+const FLEET_PARKING_SHARE_TEXT = `LLOL Fleet Health + Van Parking\n${FLEET_PARKING_SHARE_URL}`;
 const AMAZON_FLEET_PORTAL_URL = 'https://logistics.amazon.com/fleet-management/#vehicles';
 const AMAZON_WORKFORCE_ASSOCIATES_URL = 'https://logistics.amazon.com/workforce?pageId=da_console_associates&station=DJT6&companyId=ab7228f0-51de-4c53-98f3-7d3c3da46724&tabId=da-console-associates-tab';
 const FLEETOS_PORTAL_URL = 'https://business.rivian.com/vehicles/tracker';
@@ -75,7 +75,13 @@ const AMAZON_SCHEDULING_URL = 'https://logistics.amazon.com/scheduling?serviceAr
 const LOW_BATTERY_SECTION_THRESHOLD = 80;
 const DISPATCH_BATTERY_BLOCK_THRESHOLD = 40;
 const initialUrlParams = (()=>{if(typeof URLSearchParams!=='function')return {get:()=>''};try{return new URLSearchParams(location.search||'');}catch{return new URLSearchParams('');}})();
-const PARKING_ONLY_VIEW = ['parking','van-parking','fleet-parking'].includes(String(initialUrlParams.get('view')||initialUrlParams.get('tab')||'').toLowerCase());
+const FLEET_TEAM_VIEW_KEY = String(initialUrlParams.get('view')||initialUrlParams.get('tab')||'').toLowerCase();
+// Compatibility note: PARKING_ONLY_VIEW is retained as the read-only guard
+// name used throughout the existing parking controls. It now represents the
+// dedicated Fleet Team link, which may open Fleet Health or Van Parking.
+const PARKING_ONLY_VIEW = ['fleet','fleet-team','fleet-health','parking','van-parking','fleet-parking'].includes(FLEET_TEAM_VIEW_KEY);
+const FLEET_TEAM_ALLOWED_PAGES = new Set(['fleet','parking']);
+const FLEET_TEAM_START_PAGE = ['parking','van-parking','fleet-parking'].includes(FLEET_TEAM_VIEW_KEY)?'parking':'fleet';
 const DEFAULT_ROSTERING_SERVICES = Object.freeze([
   {id:'xl-donations',name:'Standard Parcel - Extra Large Van - AMZ Donations - Default as station - 10 Hours',confirmed:2,kind:'driver',defaultTime:'11:15 AM'},
   {id:'rivian-helper-route',name:'Standard Parcel Electric - Rivian MEDIUM with Helper - Default as station - 10 Hours',confirmed:4,kind:'driver',defaultTime:'11:15 AM'},
@@ -337,7 +343,7 @@ function normalizeChargerReports(raw=[]) {
 }
 
 let state = {
-  page: PARKING_ONLY_VIEW ? 'parking' : (localStorage.getItem('relayops_page') || 'dashboard'),
+  page: PARKING_ONLY_VIEW ? FLEET_TEAM_START_PAGE : (localStorage.getItem('relayops_page') || 'dashboard'),
   role: localStorage.getItem('relayops_role') || 'viewer',
   phase: Number(localStorage.getItem('relayops_phase') || 2),
   routes: JSON.parse(localStorage.getItem('relayops_routes') || 'null') || [],
@@ -789,12 +795,15 @@ function globalSearchHtml() {
 }
 
 function sidebar() {
-  if(PARKING_ONLY_VIEW)return `<aside class="sidebar fleet-parking-sidebar" id="sidebar">
-    <div class="brand"><div class="brand-mark"></div><div class="brand-copy"><div class="brand-name">RelayOps</div><div class="brand-sub">Fleet view</div></div></div>
-    <div class="station-pill"><div class="station-icon">${esc(state.stationCode.slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(state.stationCode.toUpperCase())} · Van Parking</span></div>${ICONS.chevron}</div>
-    <nav><div class="side-section"><div class="side-label">Shared With Fleet</div><button class="nav-item active" aria-label="Van Parking">${ICONS.parking}<span>Van Parking</span></button></div></nav>
-    <div class="side-bottom"><div class="user-card"><div class="avatar">FT</div><div class="user-copy"><strong>Fleet team view</strong><span>Parking map only</span></div><div class="role-tag">VIEW</div></div></div>
-  </aside>`;
+  if(PARKING_ONLY_VIEW){
+    const lockedItems=NAV.flatMap(group=>group.items).filter(([id])=>!FLEET_TEAM_ALLOWED_PAGES.has(id));
+    return `<aside class="sidebar fleet-parking-sidebar" id="sidebar">
+      <div class="brand"><div class="brand-mark"></div><div class="brand-copy"><div class="brand-name">RelayOps</div><div class="brand-sub">Fleet workspace</div></div></div>
+      <div class="station-pill"><div class="station-icon">${esc(state.stationCode.slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(state.stationCode.toUpperCase())} · Fleet access</span></div>${ICONS.chevron}</div>
+      <nav><div class="side-section"><div class="side-label">Fleet Access</div><button class="nav-item ${state.page==='fleet'?'active':''}" data-page="fleet" aria-label="Fleet Health">${ICONS.battery}<span>Fleet Health</span></button><button class="nav-item ${state.page==='parking'?'active':''}" data-page="parking" aria-label="Van Parking">${ICONS.parking}<span>Van Parking</span></button></div><div class="side-section fleet-locked-section"><div class="side-label">Locked Tabs</div>${lockedItems.map(([id,label,icon])=>`<button class="nav-item fleet-locked-nav" type="button" disabled aria-disabled="true" aria-label="${esc(label)} locked">${ICONS[icon]}<span>${esc(label)}</span><b class="nav-count">🔒</b></button>`).join('')}</div></nav>
+      <div class="side-bottom"><div class="user-card"><div class="avatar">FT</div><div class="user-copy"><strong>Fleet-only access</strong><span>Health + parking · view only</span></div><div class="role-tag">VIEW</div></div></div>
+    </aside>`;
+  }
   return `<aside class="sidebar" id="sidebar">
     <div class="brand"><div class="brand-mark"></div><div class="brand-copy"><div class="brand-name">RelayOps</div><div class="brand-sub">Dispatch command</div></div></div>
     <div class="station-pill"><div class="station-icon">${esc(state.stationCode.slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(state.stationCode.toUpperCase())} · Los Angeles</span></div>${ICONS.chevron}</div>
@@ -841,7 +850,7 @@ function topbarLegacy() {
   const [title,sub] = pageInfo[state.page] || pageInfo.dashboard;
   const fleetClean=state.page==='fleet';
   if(PARKING_ONLY_VIEW)return `<header class="topbar fleet-parking-topbar">
-    <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">${ICONS.menu}</button><div class="page-heading"><h1>Van Parking</h1><p>Read-only parking map, battery levels, and charger status for the fleet team</p></div></div>
+    <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">${ICONS.menu}</button><div class="page-heading"><h1>${esc(title)}</h1><p>${state.page==='fleet'?'Read-only vehicle health, battery, and operational status':'Read-only parking map, battery levels, and charger status'}</p></div></div>
     <div class="top-actions">${cloudStatusControl()}<button class="btn ghost share-link-btn" data-action="copy-fleet-parking-link">${ICONS.link}<span class="hide-mobile">Copy fleet link</span></button></div>
   </header>`;
   return `<header class="topbar">
@@ -1583,6 +1592,7 @@ function issueGroupForCategory(category=''){return FLEET_ISSUE_CATALOG.find(grou
 function allActiveFleetIssueRecords(){return Object.values(state.fleetIssues||{}).flatMap(store=>(store?.active||[]).filter(record=>record?.status!=='fixed'));}
 function fleetIssuesPanel() {
   const issues=allActiveFleetIssueRecords();
+  if(PARKING_ONLY_VIEW)return `<section class="fleet-issues-panel card fleet-issues-readonly"><div class="fleet-issues-copy"><span class="eyebrow">FLEET REPORTS</span><div class="fleet-issues-title"><h2>Van Reports / Issues</h2><strong>${issues.length}</strong></div><p>Read-only issue count from the shared dispatcher workspace.</p></div><div class="fleet-issue-total" aria-label="${issues.length} active van issues"><span>⚠</span><b>${issues.length}</b><small>Active issues</small></div></section>`;
   return `<section class="fleet-issues-panel card"><div class="fleet-issues-copy"><span class="eyebrow">FLEET BOT</span><div class="fleet-issues-title"><h2>Van Reports / Issues</h2><strong>${issues.length}</strong></div><p>Choose a common issue or add a custom one. Every report stays with the van through future imports.</p></div><div class="fleet-issue-entry"><label>Van / EV<input id="fleet-issue-vehicle" placeholder="EV21 or VIN"></label><label>Severity<select id="fleet-issue-severity"><option value="watch">Watch</option><option value="high">High</option><option value="critical">Do not assign</option></select></label><label class="issue-type">Issue<select id="fleet-issue-category">${issueCatalogOptionsHtml()}</select></label><label class="issue-text">Custom details<input id="fleet-issue-text" placeholder="Only needed for Custom issue"></label><button class="btn primary" data-action="save-fleet-issue" onclick="event.stopImmediatePropagation();saveFleetIssue()">Add issue</button></div><div class="fleet-issue-total" aria-label="${issues.length} active van issues"><span>⚠</span><b>${issues.length}</b><small>Active issues</small></div></section>`;
 }
 function saveFleetIssue() {
@@ -1763,15 +1773,16 @@ function filterTeamDirectory(value='') {
 function fleetPage() {
   const vehicles=sortedRivianFleet(),electric=electricFleetVehicles(),gas=rivianFleet.filter(isGasFleetVehicle),low=electric.filter(isFleetLowBattery).length,charge=fleetChargeRows().length;
   const grounded=rivianFleet.filter(v=>v.operational==='Grounded').length,coverage=fleetCoverageStats();
+  const viewOnly=PARKING_ONLY_VIEW;
   const filters=['all','gas','changed','verified','needs-data','missing-fleetos','missing-amazon','amazon-only','fleetos-only','issues','low','grounded','inactive'];
   const labels={'all':'All vehicles','gas':'Gas Vehicles','changed':'Changed only','verified':'Verified only','needs-data':'Needs data','missing-fleetos':'Missing FleetOS','missing-amazon':'Missing Amazon','amazon-only':'Amazon only','fleetos-only':'FleetOS only','issues':'Issues','low':'Low-battery EVs','grounded':'Grounded only','inactive':'Inactive only'};
-  return `${contextBar('<span class="status">Amazon names/status · FleetOS EV battery</span>')}
+  return `${contextBar(`<span class="status">${viewOnly?'Fleet-only · view access':'Amazon names/status · FleetOS EV battery'}</span>`)}
   ${fleetHealthSummary()}
   <section class="fleet-alert-squares"><button class="danger" data-action="fleet-filter-quick" data-filter="grounded"><span>Grounded vehicles</span><strong>${grounded}</strong><small>Red · do not assign</small></button><button class="battery" data-action="fleet-filter-quick" data-filter="low"><span>Low-battery EVs</span><strong>${low}</strong><small>${LOW_BATTERY_SECTION_THRESHOLD}% or lower</small></button><button class="charge" data-action="fleet-filter-quick" data-filter="low"><span>Recommended to charge</span><strong>${charge}</strong><small>${LOW_BATTERY_SECTION_THRESHOLD}% or lower</small></button><button class="review" data-action="fleet-filter-quick" data-filter="needs-data"><span>Needs information</span><strong>${coverage.needsData}</strong><small>Missing source fields</small></button></section>
   ${fleetIssuesPanel()}
-  <article class="card rivian-panel simplified"><div class="card-head fleet-clean-head"><div class="card-title"><h2>All vehicles</h2><p>${electric.length} electric · ${gas.length} gas · names remain the same everywhere in RelayOps</p></div><div class="head-actions fleet-primary-actions"><input class="fleet-search-input" data-fleet-search placeholder="Find vehicle, VIN, or plate" value="${esc(state.fleetSearch)}"><select class="filter-select" data-fleet-filter>${filters.map(value=>`<option value="${value}" ${state.fleetFilter===value?'selected':''}>${labels[value]}</option>`).join('')}</select><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><button class="btn small" data-action="clear-fleet-search">Clear</button><button class="btn small primary" data-action="refresh-fleet">Refresh</button></div></div>
-  <div class="fleet-source-actions"><div class="amazon"><a href="${esc(fleetAmazonPortalUrl())}" target="_blank" rel="noopener">${ICONS.link}<span><b>Amazon Fleet</b><small>Names · VIN · status</small></span></a><button class="fleet-import-button amazon" data-action="fleet-import-amazon">${ICONS.upload}<span><b>Amazon Fleet Import <small>(.xlsx)</small></b><em>VehiclesData files only</em></span></button></div><div class="fleetos"><a href="${esc(fleetFleetosPortalUrl())}" target="_blank" rel="noopener">${ICONS.link}<span><b>FleetOS</b><small>Battery · range</small></span></a><button class="fleet-import-button fleetos" data-action="fleet-import-fleetos">${ICONS.upload}<span><b>FleetOS Import <small>(.csv)</small></b><em>Vehicle_List files only</em></span></button></div></div>
-  <details class="fleet-small-tools" open><summary>More fleet tools</summary><div><label class="fleet-count-label">Expected vehicles<input class="fleet-count-input" data-fleet-expected type="number" min="0" inputmode="numeric" value="${state.fleetExpectedCount||''}" placeholder="all"></label>${fleetViewSwitcher()}<button class="btn small" data-action="fleet-live-setup" title="Set the authenticated Supabase proxy used by Refresh">${ICONS.settings} Authenticated Fleet proxy</button></div></details>
+  <article class="card rivian-panel simplified"><div class="card-head fleet-clean-head"><div class="card-title"><h2>All vehicles</h2><p>${electric.length} electric · ${gas.length} gas · names remain the same everywhere in RelayOps</p></div><div class="head-actions fleet-primary-actions"><input class="fleet-search-input" data-fleet-search placeholder="Find vehicle, VIN, or plate" value="${esc(state.fleetSearch)}"><select class="filter-select" data-fleet-filter>${filters.map(value=>`<option value="${value}" ${state.fleetFilter===value?'selected':''}>${labels[value]}</option>`).join('')}</select><select class="filter-select" data-rivian-sort><option value="normal" ${state.fleetSort==='normal'?'selected':''}>Default order</option><option value="battery-low" ${state.fleetSort==='battery-low'?'selected':''}>Battery: low to high</option></select><button class="btn small" data-action="clear-fleet-search">Clear</button>${viewOnly?'':`<button class="btn small primary" data-action="refresh-fleet">Refresh</button>`}</div></div>
+  <div class="fleet-source-actions"><div class="amazon"><a href="${esc(fleetAmazonPortalUrl())}" target="_blank" rel="noopener">${ICONS.link}<span><b>Amazon Fleet</b><small>Names · VIN · status</small></span></a>${viewOnly?'':`<button class="fleet-import-button amazon" data-action="fleet-import-amazon">${ICONS.upload}<span><b>Amazon Fleet Import <small>(.xlsx)</small></b><em>VehiclesData files only</em></span></button>`}</div><div class="fleetos"><a href="${esc(fleetFleetosPortalUrl())}" target="_blank" rel="noopener">${ICONS.link}<span><b>FleetOS</b><small>Battery · range</small></span></a>${viewOnly?'':`<button class="fleet-import-button fleetos" data-action="fleet-import-fleetos">${ICONS.upload}<span><b>FleetOS Import <small>(.csv)</small></b><em>Vehicle_List files only</em></span></button>`}</div></div>
+  <details class="fleet-small-tools" open><summary>${viewOnly?'View options':'More fleet tools'}</summary><div>${viewOnly?'':`<label class="fleet-count-label">Expected vehicles<input class="fleet-count-input" data-fleet-expected type="number" min="0" inputmode="numeric" value="${state.fleetExpectedCount||''}" placeholder="all"></label>`}${fleetViewSwitcher()}${viewOnly?'':`<button class="btn small" data-action="fleet-live-setup" title="Set the authenticated Supabase proxy used by Refresh">${ICONS.settings} Authenticated Fleet proxy</button>`}</div></details>
   ${fleetResultBar(vehicles.length,labels[state.fleetFilter]||'All vehicles')}<section class="grid rivian-grid ${fleetViewClass()}">${vehicles.length?vehicles.map(v=>rivianCard(v)).join(''):`<div class="empty-state">No vehicles match this search/filter. Press Clear to show every vehicle again.</div>`}</section></article>`;
 }
 
@@ -1945,7 +1956,7 @@ function vanParkingSection() {
 
 function vanParkingPage() {
   const issueCount=Object.values(state.parkingChargerStatus||{}).filter(status=>status==='red').length;
-  const actions=PARKING_ONLY_VIEW?`<span class="status neutral">Fleet team view</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button>`:`<button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Import parking</button><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button><button class="btn small lime" data-action="copy-fleet-parking-link">${ICONS.link} Copy fleet team link</button><button class="btn small ${issueCount?'danger':''}" data-action="report-charging-station">⚡ Report charging station${issueCount?` · ${issueCount} fault${issueCount===1?'':'s'}`:''}</button>`;
+  const actions=PARKING_ONLY_VIEW?`<span class="status neutral">Fleet-only · view access</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button>`:`<button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Import parking</button><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button><button class="btn small lime" data-action="copy-fleet-parking-link">${ICONS.link} Copy fleet-only link</button><button class="btn small ${issueCount?'danger':''}" data-action="report-charging-station">⚡ Report charging station${issueCount?` · ${issueCount} fault${issueCount===1?'':'s'}`:''}</button>`;
   return `${contextBar(actions)}${vanParkingSection()}`;
 }
 
@@ -2695,6 +2706,7 @@ function fleetDisplayName(vehicle={}) {
   return vehicle.vin||vehicle.name||'Unknown EV';
 }
 function fleetNameEditorHtml(vehicle={}) {
+  if(PARKING_ONLY_VIEW)return '';
   const vin=cleanVin(vehicle.vin),editing=state.editingFleetVin===vin,open=state.expandedFleetVin===vin;
   if(!open)return '';
   if(editing)return `<div class="fleet-name-editor"><label><span>Vehicle name</span><input data-fleet-name-input value="${esc(fleetDisplayName(vehicle))}" maxlength="40" aria-label="Vehicle name for ${esc(vin)}"></label><button class="btn small primary" data-action="save-fleet-name" data-vin="${esc(vin)}">Save</button><button class="btn small" data-action="cancel-fleet-name">Cancel</button></div>`;
@@ -2720,7 +2732,7 @@ function fleetCardIssueManagerHtml(vehicle={}) {
   const active=(found.store.active||[]).filter(record=>record.status!=='fixed');
   const history=[...(found.store.history||[])].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
   const recurring=history.reduce((counts,record)=>{const key=record.category||record.text;counts[key]=(counts[key]||0)+1;return counts;},{});
-  return `<section class="fleet-card-issue-manager"><div class="fleet-card-issue-head"><div><span class="eyebrow">VEHICLE ISSUE LOG</span><h4>${active.length} active · ${history.length} total</h4></div>${active.length?'<span class="issue-active-chip">Needs review</span>':'<span class="issue-clear-chip">All fixed</span>'}</div>${active.length?`<div class="fleet-active-issues">${active.map(record=>`<div class="fleet-active-issue ${esc(record.severity||'watch')}"><div><b>${esc(record.text)}</b><span>${esc(record.group||'Other')} · logged ${esc(fleetIssueDate(record.createdAt))}${(recurring[record.category||record.text]||0)>1?` · recurring ×${recurring[record.category||record.text]}`:''}</span></div><button class="btn small" data-action="mark-fleet-issue-fixed" data-issue-key="${esc(found.key)}" data-issue-id="${esc(record.id)}" onclick="event.stopImmediatePropagation();markFleetIssueFixed(this.dataset.issueKey,this.dataset.issueId)">✓ Mark fixed</button></div>`).join('')}</div>`:''}<details class="fleet-issue-history" ${active.length?'':'open'}><summary>Issue history (${history.length})</summary><div>${history.length?history.map(record=>`<span class="${record.status==='fixed'?'fixed':'active'}"><b>${record.status==='fixed'?'✓ Fixed':'⚠ Active'} · ${esc(record.text)}</b><small>Reported ${esc(fleetIssueDate(record.createdAt))}${record.resolvedAt?` · fixed ${esc(fleetIssueDate(record.resolvedAt))}`:''}</small></span>`).join(''):'<em>No issues have been logged for this van.</em>'}</div></details></section>`;
+  return `<section class="fleet-card-issue-manager"><div class="fleet-card-issue-head"><div><span class="eyebrow">VEHICLE ISSUE LOG</span><h4>${active.length} active · ${history.length} total</h4></div>${active.length?'<span class="issue-active-chip">Needs review</span>':'<span class="issue-clear-chip">All fixed</span>'}</div>${active.length?`<div class="fleet-active-issues">${active.map(record=>`<div class="fleet-active-issue ${esc(record.severity||'watch')}"><div><b>${esc(record.text)}</b><span>${esc(record.group||'Other')} · logged ${esc(fleetIssueDate(record.createdAt))}${(recurring[record.category||record.text]||0)>1?` · recurring ×${recurring[record.category||record.text]}`:''}</span></div>${PARKING_ONLY_VIEW?'':`<button class="btn small" data-action="mark-fleet-issue-fixed" data-issue-key="${esc(found.key)}" data-issue-id="${esc(record.id)}" onclick="event.stopImmediatePropagation();markFleetIssueFixed(this.dataset.issueKey,this.dataset.issueId)">✓ Mark fixed</button>`}</div>`).join('')}</div>`:''}<details class="fleet-issue-history" ${active.length?'':'open'}><summary>Issue history (${history.length})</summary><div>${history.length?history.map(record=>`<span class="${record.status==='fixed'?'fixed':'active'}"><b>${record.status==='fixed'?'✓ Fixed':'⚠ Active'} · ${esc(record.text)}</b><small>Reported ${esc(fleetIssueDate(record.createdAt))}${record.resolvedAt?` · fixed ${esc(fleetIssueDate(record.resolvedAt))}`:''}</small></span>`).join(''):'<em>No issues have been logged for this van.</em>'}</div></details></section>`;
 }
 function fleetServiceTypeHtml(vehicle={}) { return vehicle.serviceType?`<span class="fleet-service-type">${esc(vehicle.serviceType)}</span>`:''; }
 function fleetBatteryFreshness(vehicle={}) {
@@ -4231,9 +4243,19 @@ function updateGlobalSearchResults() {
   anchor.innerHTML=globalSearchResultsPanelHtml();
   bindActionControls(anchor);
 }
+function persistFleetPresentation() {
+  if(!PARKING_ONLY_VIEW)return persist();
+  try{
+    localStorage.setItem('relayops_fleet_sort',state.fleetSort||'normal');
+    localStorage.setItem('relayops_fleet_filter',state.fleetFilter||'all');
+    localStorage.setItem('relayops_fleet_view',state.fleetView||'tiny');
+    localStorage.setItem('relayops_fleet_search',state.fleetSearch||'');
+    localStorage.setItem('relayops_expanded_fleet_vin',state.expandedFleetVin||'');
+  }catch{}
+}
 const updateFleetSearchSoon=debounce((value,position)=>{
   state.fleetSearch=value;
-  persist();
+  persistFleetPresentation();
   render();
   restoreInputFocus('[data-fleet-search]',position);
 },220);
@@ -4270,7 +4292,7 @@ function filterVtoRouteSwapOptions(input) {
 
 function render() {
   const previouslyOpen=modalWasOpen;
-  if(PARKING_ONLY_VIEW)state.page='parking';
+  if(PARKING_ONLY_VIEW&&!FLEET_TEAM_ALLOWED_PAGES.has(state.page))state.page=FLEET_TEAM_START_PAGE;
   if(state.page==='admin'&&!hasOwnerAdminAccess()){state.page='dashboard';state.modal='admin-pin';}
   if(state.modal&&!previouslyOpen)modalReturnFocus=captureModalReturnFocus();
   closeDriverProfilePopover();
@@ -4398,11 +4420,11 @@ function bind() {
   document.querySelectorAll('[data-phase]').forEach(el=>el.addEventListener('click',()=>{state.phase=Number(el.dataset.phase);persist();render();}));
   document.querySelectorAll('[data-morning-filter]').forEach(el=>el.addEventListener('change',()=>{const key=el.dataset.morningFilter;if(key!=='dsp')state.morningFilters[key]=el.value;render();}));
   document.querySelectorAll('[data-operation-date]').forEach(el=>el.addEventListener('change',()=>{const date=el.value||defaultOperationDate();loadSharedOperationDate(date,`Google target set to ${operationDateTabNames(date).join(' or ')}`);}));
-  document.querySelectorAll('[data-rivian-sort]').forEach(el=>el.addEventListener('change',()=>{state.fleetSort=el.value;persist();render();}));
-  document.querySelectorAll('[data-fleet-filter]').forEach(el=>el.addEventListener('change',()=>{state.fleetFilter=el.value;persist();render();}));
+  document.querySelectorAll('[data-rivian-sort]').forEach(el=>el.addEventListener('change',()=>{state.fleetSort=el.value;persistFleetPresentation();render();}));
+  document.querySelectorAll('[data-fleet-filter]').forEach(el=>el.addEventListener('change',()=>{state.fleetFilter=el.value;persistFleetPresentation();render();}));
   document.querySelectorAll('[data-inventory-filter]').forEach(el=>el.addEventListener('change',()=>{state.inventoryFilter=el.value;persist();render();}));
-  document.querySelectorAll('[data-fleet-view]').forEach(el=>el.addEventListener('change',()=>{state.fleetView=el.value;persist();render();}));
-  document.querySelectorAll('[data-fleet-search]').forEach(el=>{el.addEventListener('input',()=>{const pos=el.selectionStart??String(el.value||'').length;state.fleetSearch=el.value;updateFleetSearchSoon(el.value,pos);});el.addEventListener('change',()=>{state.fleetSearch=el.value;persist();});});
+  document.querySelectorAll('[data-fleet-view]').forEach(el=>el.addEventListener('change',()=>{state.fleetView=el.value;persistFleetPresentation();render();}));
+  document.querySelectorAll('[data-fleet-search]').forEach(el=>{el.addEventListener('input',()=>{const pos=el.selectionStart??String(el.value||'').length;state.fleetSearch=el.value;updateFleetSearchSoon(el.value,pos);});el.addEventListener('change',()=>{state.fleetSearch=el.value;persistFleetPresentation();});});
   document.querySelectorAll('[data-fleet-expected]').forEach(el=>{el.addEventListener('input',()=>{const pos=el.selectionStart??String(el.value||'').length;state.fleetExpectedCount=Math.max(0,Number(el.value)||0);updateFleetExpectedSoon(el.value,pos);});el.addEventListener('change',()=>{state.fleetExpectedCount=Math.max(0,Number(el.value)||0);persist();});});
   document.querySelectorAll('[data-parking-select]').forEach(el=>el.addEventListener('click',e=>{if(e.target?.matches?.('[data-parking-id]'))return;selectParkingSlot(el.dataset.parkingSelect);}));
   document.querySelectorAll('[data-parking-id]').forEach(el=>{
@@ -5085,8 +5107,8 @@ async function shareDispatcherLink() {
   return ok;
 }
 async function shareFleetParkingLink() {
-  const ok=await writeClipboardText(`LLOL Van Parking Map\n${sharedDashboardUrl('parking')}`);
-  toast(ok?'Fleet team Van Parking link copied':'Clipboard access was blocked — copy the fleet link from Van Parking',ok?'success':'error');
+  const ok=await writeClipboardText(`LLOL Fleet Health + Van Parking\n${sharedDashboardUrl('fleet')}`);
+  toast(ok?'Fleet-only Health + Parking link copied':'Clipboard access was blocked — copy the fleet link from Admin',ok?'success':'error');
   return ok;
 }
 async function cloudSignIn() {
@@ -5219,11 +5241,11 @@ function saveCoachingTemplate() {
 }
 
 function go(page) {
-  if (PARKING_ONLY_VIEW && page!=='parking') return toast('Fleet team link only opens Van Parking','error');
+  if (PARKING_ONLY_VIEW && !FLEET_TEAM_ALLOWED_PAGES.has(page)) return toast('This fleet-only link can open Fleet Health and Van Parking only','error');
   if (page==='admin'&&!hasOwnerAdminAccess()){state.modal='admin-pin';return render();}
   cancelDeferredRenders();
   document.body?.classList?.remove('mobile-sidebar-open');
-  state.page=page; state.search=''; state.modal=null;if(page==='rostering')syncRosteringHelperShifts(currentRosteringPlan());persist(); render();window.scrollTo({top:0,behavior:'smooth'});
+  state.page=page; state.search=''; state.modal=null;if(page==='rostering')syncRosteringHelperShifts(currentRosteringPlan());if(PARKING_ONLY_VIEW)persistFleetPresentation();else persist();render();window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function toggleMobileSidebar() {
@@ -5261,8 +5283,8 @@ function importAcceptForPurpose(purpose='morning') {
 
 function action(name,el) {
   if(PARKING_ONLY_VIEW) {
-    const allowed=new Set(['menu','copy-parking-list','copy-fleet-parking-link','retry-cloud-link','close-modal']);
-    if(!allowed.has(name))return toast('Fleet team view is read-only and limited to Van Parking','error');
+    const allowed=new Set(['menu','copy-parking-list','copy-fleet-parking-link','retry-cloud-link','close-modal','toggle-fleet-card','set-fleet-view','clear-fleet-search','fleet-filter-quick','copy-charge-recommendations','copy-visible-fleet-vins','copy-fleet-attention','copy-fleetos-missing','copy-amazon-missing','copy-refresh-missing-vins']);
+    if(!allowed.has(name))return toast('Fleet-only access is read-only. Fleet Health and Van Parking are available.','error');
   }
   if(OWNER_ADMIN_ACTIONS.has(name)&&!hasOwnerAdminAccess())return toast('Enter the Admin PIN first','error');
   if (name==='menu') return toggleMobileSidebar();
@@ -5436,9 +5458,9 @@ function action(name,el) {
   if (name==='equipment-template-csv') return downloadEquipmentTemplate();
   if (name==='fleet-template-csv') return downloadFleetTemplate();
   if (name==='clear-morning-filters') { state.morningFilters={wave:'all',staging:'all',pad:'all'};render();return; }
-  if (name==='clear-fleet-search') { cancelDeferredRenders();state.fleetSearch='';state.fleetFilter='all';persist();render();return toast('Showing every EV again'); }
-  if (name==='fleet-filter-quick') { state.fleetFilter=el.dataset.filter||'all';state.fleetSearch='';persist();render();return toast(`Fleet filtered: ${state.fleetFilter.replace('-',' ')}`); }
-  if (name==='set-fleet-view') { state.fleetView=el.dataset.view||'tiny';persist();render();return toast(`Fleet view: ${fleetViewLabel()}`); }
+  if (name==='clear-fleet-search') { cancelDeferredRenders();state.fleetSearch='';state.fleetFilter='all';persistFleetPresentation();render();return toast('Showing every EV again'); }
+  if (name==='fleet-filter-quick') { state.fleetFilter=el.dataset.filter||'all';state.fleetSearch='';persistFleetPresentation();render();return toast(`Fleet filtered: ${state.fleetFilter.replace('-',' ')}`); }
+  if (name==='set-fleet-view') { state.fleetView=el.dataset.view||'tiny';persistFleetPresentation();render();return toast(`Fleet view: ${fleetViewLabel()}`); }
   if (name==='reset-fleet-demo') return resetFleetDemo();
   if (name==='toggle-morning-edit') { state.editMode=!state.editMode;if(state.editMode)state.copyMode=false;render();return toast(state.editMode?'Editing is on — columns and rows are labeled':'Edits saved'); }
   if (name==='toggle-morning-copy') { state.copyMode=!state.copyMode;if(state.copyMode)state.editMode=false;sheetSelection={anchor:null,focus:null,dragging:false};render();return toast(state.copyMode?'Copy mode is on — drag cells, then press ⌘C/Ctrl+C':'Copy mode off'); }
@@ -6845,7 +6867,7 @@ function applyGasVehicleAssignment() {
 function toggleFleetCard(vin='') {
   state.editingFleetVin='';
   state.expandedFleetVin=state.expandedFleetVin===vin?'':vin;
-  persist();render();
+  persistFleetPresentation();render();
 }
 function saveFleetName(vin='') {
   const key=cleanVin(vin),input=document.querySelector('[data-fleet-name-input]'),name=String(input?.value||'').trim();
