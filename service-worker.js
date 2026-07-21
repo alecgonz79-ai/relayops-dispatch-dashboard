@@ -1,4 +1,4 @@
-const CACHE='relayops-fast-navigation-v50';
+const CACHE='relayops-driver-team-cards-v51';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{
