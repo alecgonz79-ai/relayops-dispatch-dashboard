@@ -3,13 +3,13 @@
   const configured=Boolean(config.supabaseUrl&&config.supabaseAnonKey&&config.organizationId&&config.stationId&&!config.supabaseUrl.includes('YOUR_PROJECT'));
   const PERSISTENT_DATE='2000-01-01';
   const SYNC_META='__relayopsSync';
-  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,saveTimer=null,applying=false,initializing=false,basePayload={},basePersistentPayload={};
+  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,saveTimer=null,applying=false,initializing=false,basePayload={},basePersistentPayload={},memoryPending=null;
   const listeners=new Set();
   const notify=event=>listeners.forEach(fn=>{try{fn(event);}catch(error){console.error(error);}});
   const queueKey=()=>`relayops_cloud_queue:${config.stationId||'local'}:${operationDate()}`;
   function storage(){try{return window.localStorage||globalThis.localStorage||null;}catch{return null;}}
-  function pendingSnapshot(){try{return JSON.parse(storage()?.getItem(queueKey())||'null');}catch{return null;}}
-  function clearPending(){try{storage()?.removeItem(queueKey());}catch{}}
+  function pendingSnapshot(){try{return JSON.parse(storage()?.getItem(queueKey())||'null')||memoryPending;}catch{return memoryPending;}}
+  function clearPending(){memoryPending=null;try{storage()?.removeItem(queueKey());}catch{}}
   function clone(value){if(value===undefined)return undefined;try{return JSON.parse(JSON.stringify(value));}catch{return value;}}
   function canonical(value){
     if(value===undefined)return 'undefined';if(value===null||typeof value!=='object')return JSON.stringify(value);
@@ -153,7 +153,11 @@
     const remoteMeta=mergeSyncMeta(remote?.[SYNC_META]),localMeta=mergeSyncMeta(local?.[SYNC_META]),baseMeta=mergeSyncMeta(base?.[SYNC_META]),resultMeta=mergeSyncMeta(baseMeta,remoteMeta,localMeta);
     const result=mergeValue(remote||{},local||{},base||{},[],'','',remoteMeta,localMeta,baseMeta,resultMeta)||{};result[SYNC_META]=resultMeta;return result;
   }
-  function writePending(record){try{storage()?.setItem(queueKey(),JSON.stringify(record));}catch{}return record;}
+  function writePending(record){
+    memoryPending=record;
+    try{storage()?.setItem(queueKey(),JSON.stringify(record));memoryPending=null;}catch{}
+    return record;
+  }
   function queueSnapshot(payload,action='workspace.offline',persistentPayload){
     const existing=pendingSnapshot(),now=new Date().toISOString(),dailyBase=existing?.basePayload||basePayload||{},persistentBase=existing?.basePersistentPayload||basePersistentPayload||{};
     const prepared=preparePayload(payload||{},dailyBase,existing?.payload||null,now),preparedPersistent=preparePayload(persistentPayload===undefined?(window.RelayOpsApp?.persistentState?.()||{}):persistentPayload,persistentBase,existing?.persistentPayload||null,now);
@@ -191,13 +195,43 @@
     return error instanceof Error?error:new Error(message||'Unable to send the secure sign-in link');
   }
   const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  function isStorageQuotaError(error){return /quota|storage.*full|exceeded/i.test(String(error?.message||error||''));}
+  function reclaimStorageForSharedSession(){
+    const target=storage();if(!target)return 0;
+    let freed=0;
+    const discard=new Set([
+      'relayops_sheet_history','relayops_achat_messages','relayops_morning_sheets_last_receipt','relayops_morning_sheets_last_dry_run',
+      'relayops_morning_sheets_last_error','relayops_fleet_live_last_error','relayops_cloud_signin_cooldown_until'
+    ]);
+    const redundantOnCloud=new Set([
+      'relayops_routes','relayops_morning','relayops_fleet_import','relayops_fleet_source_uploads','relayops_van_parking',
+      'relayops_driver_contacts','relayops_schedule_entries','relayops_rostering_plans','relayops_whiparound_inspections',
+      'relayops_whiparound_roster_snapshots','relayops_inventory_log','relayops_equipment_import'
+    ]);
+    const entries=[];
+    try{for(let index=0;index<target.length;index++){const key=target.key(index);if(key)entries.push([key,target.getItem(key)||'']);}}catch{}
+    entries.forEach(([key,value])=>{
+      const cloudQueue=key.startsWith('relayops_cloud_queue:');
+      if(cloudQueue&&key===queueKey()&&!memoryPending){try{memoryPending=JSON.parse(value||'null');}catch{}}
+      // Keep queued edits for other operation dates intact. Only the active
+      // date's queue is moved into memory while Safari makes room for the
+      // Supabase session token.
+      if((cloudQueue&&key===queueKey())||discard.has(key)||redundantOnCloud.has(key)){
+        try{target.removeItem(key);freed+=key.length+value.length;}catch{}
+      }
+    });
+    return freed;
+  }
   async function createAnonymousLinkSession(){
     if(typeof client?.auth?.signInAnonymously!=='function')throw new Error('Automatic shared access is unavailable');
     let lastError=null;
     for(let attempt=0;attempt<3;attempt++){
-      const anonymous=await client.auth.signInAnonymously({options:{data:{relayops_link_access:true}}});
+      let anonymous;
+      try{anonymous=await client.auth.signInAnonymously({options:{data:{relayops_link_access:true}}});}
+      catch(error){anonymous={data:null,error};}
       if(!anonymous.error&&anonymous.data?.session)return anonymous.data.session;
       lastError=anonymous.error||new Error('Automatic shared access did not return a session');
+      if(isStorageQuotaError(lastError)){reclaimStorageForSharedSession();if(attempt<2)continue;}
       if(!/load failed|failed to fetch|network|timeout/i.test(String(lastError?.message||lastError)))break;
       if(attempt<2)await pause(500*(attempt+1));
     }
@@ -401,5 +435,5 @@
     window.addEventListener('online',()=>{notify({type:'reconnecting'});if(session)load().catch(error=>notify({type:'error',error}));});
     window.addEventListener('offline',()=>notify({type:'offline',reason:'browser-offline'}));
   }
-  window.RelayOpsCloud={configured,init,retryLinkAccess,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{preparePayload,reconcilePayload,semanticKey,canonical}};
+  window.RelayOpsCloud={configured,init,retryLinkAccess,reclaimStorageForSharedSession,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{preparePayload,reconcilePayload,semanticKey,canonical,reclaimStorageForSharedSession}};
 })();

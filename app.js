@@ -8282,13 +8282,27 @@ function downloadFleetTemplate(){const h=['Source','Vehicle Name','VIN','License
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function persist(){
+const nativeStorage=window.localStorage||globalThis.localStorage;
+const cloudRedundantCaches=new Set(['relayops_fleet_import','relayops_fleet_source_uploads','relayops_van_parking','relayops_driver_contacts','relayops_schedule_entries','relayops_rostering_plans','relayops_whiparound_inspections','relayops_whiparound_roster_snapshots','relayops_inventory_log','relayops_equipment_import']);
+const localStorage={setItem(key,value){
+  if(window.RelayOpsCloud?.session&&cloudRedundantCaches.has(key)){try{nativeStorage.removeItem(key);}catch{}return;}
+  try{nativeStorage.setItem(key,value);}
+  catch(error){
+    if(!/quota|storage.*full|exceeded/i.test(String(error?.message||error||'')))throw error;
+    window.RelayOpsCloud?.reclaimStorageForSharedSession?.();
+    try{if(!cloudRedundantCaches.has(key))nativeStorage.setItem(key,value);}catch{}
+  }
+}};
 localStorage.setItem('relayops_achat_messages',JSON.stringify(state.aChatMessages||[]));
 localStorage.setItem('relayops_driver_name_aliases',JSON.stringify(state.driverNameAliases||{}));
 localStorage.setItem('relayops_driver_profiles',JSON.stringify(normalizeDriverProfiles(state.driverProfiles||{})));
 localStorage.setItem('relayops_rostering_training_matches',JSON.stringify(state.rosteringTrainingMatches||{}));
 localStorage.setItem('relayops_rostering_manual_training',JSON.stringify(state.rosteringManualTraining||{}));
 localStorage.setItem('relayops_equipment_issues',JSON.stringify(normalizeEquipmentIssuesStore(state.equipmentIssues||{})));
-localStorage.setItem('relayops_sheet_history',JSON.stringify({past:(state.sheetHistory?.past||[]).slice(-40),future:(state.sheetHistory?.future||[]).slice(-40)}));
+// Keep only a small device-local undo buffer. The complete operational state
+// remains in Supabase; large local history snapshots can prevent Safari from
+// saving the anonymous shared-session token.
+localStorage.setItem('relayops_sheet_history',JSON.stringify({past:(state.sheetHistory?.past||[]).slice(-8),future:(state.sheetHistory?.future||[]).slice(-8)}));
 localStorage.setItem('relayops_slack_report_room_url',state.slackReportRoomUrl||'https://app.slack.com/client');
 localStorage.setItem('relayops_charger_reports',JSON.stringify(normalizeChargerReports(state.chargerReports||[])));
 localStorage.setItem('relayops_equipment_import',JSON.stringify(state.equipmentImport||null));
