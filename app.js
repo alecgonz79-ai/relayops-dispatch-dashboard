@@ -76,9 +76,9 @@ const LOW_BATTERY_SECTION_THRESHOLD = 80;
 const DISPATCH_BATTERY_BLOCK_THRESHOLD = 40;
 const initialUrlParams = (()=>{if(typeof URLSearchParams!=='function')return {get:()=>''};try{return new URLSearchParams(location.search||'');}catch{return new URLSearchParams('');}})();
 const FLEET_TEAM_VIEW_KEY = String(initialUrlParams.get('view')||initialUrlParams.get('tab')||'').toLowerCase();
-// Compatibility note: PARKING_ONLY_VIEW is retained as the read-only guard
-// name used throughout the existing parking controls. It now represents the
-// dedicated Fleet Team link, which may open Fleet Health or Van Parking.
+// Compatibility note: PARKING_ONLY_VIEW identifies the restricted Fleet Team
+// link. Fleet Health stays read-only, while Van Parking is a live shared editor
+// backed by the same workspace used by dispatchers.
 const PARKING_ONLY_VIEW = ['fleet','fleet-team','fleet-health','parking','van-parking','fleet-parking'].includes(FLEET_TEAM_VIEW_KEY);
 const FLEET_TEAM_ALLOWED_PAGES = new Set(['fleet','parking']);
 const FLEET_TEAM_START_PAGE = ['parking','van-parking','fleet-parking'].includes(FLEET_TEAM_VIEW_KEY)?'parking':'fleet';
@@ -820,7 +820,7 @@ function sidebar() {
       <div class="brand"><div class="brand-mark"></div><div class="brand-copy"><div class="brand-name">RelayOps</div><div class="brand-sub">Fleet workspace</div></div></div>
       <div class="station-pill"><div class="station-icon">${esc(state.stationCode.slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(state.stationCode.toUpperCase())} · Fleet access</span></div>${ICONS.chevron}</div>
       <nav><div class="side-section"><div class="side-label">Fleet Access</div><button class="nav-item ${state.page==='fleet'?'active':''}" data-page="fleet" aria-label="Fleet Health">${ICONS.battery}<span>Fleet Health</span></button><button class="nav-item ${state.page==='parking'?'active':''}" data-page="parking" aria-label="Van Parking">${ICONS.parking}<span>Van Parking</span></button></div><div class="side-section fleet-locked-section"><div class="side-label">Locked Tabs</div>${lockedItems.map(([id,label,icon])=>`<button class="nav-item fleet-locked-nav" type="button" disabled aria-disabled="true" aria-label="${esc(label)} locked">${ICONS[icon]}<span>${esc(label)}</span><b class="nav-count">🔒</b></button>`).join('')}</div></nav>
-      <div class="side-bottom"><div class="user-card"><div class="avatar">FT</div><div class="user-copy"><strong>Fleet-only access</strong><span>Health + parking · view only</span></div><div class="role-tag">VIEW</div></div></div>
+      <div class="side-bottom"><div class="user-card"><div class="avatar">FT</div><div class="user-copy"><strong>Fleet workspace</strong><span>Health + live parking edits</span></div><div class="role-tag">FLEET</div></div></div>
     </aside>`;
   }
   return `<aside class="sidebar" id="sidebar">
@@ -869,7 +869,7 @@ function topbarLegacy() {
   const [title,sub] = pageInfo[state.page] || pageInfo.dashboard;
   const fleetClean=state.page==='fleet';
   if(PARKING_ONLY_VIEW)return `<header class="topbar fleet-parking-topbar">
-    <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">${ICONS.menu}</button><div class="page-heading"><h1>${esc(title)}</h1><p>${state.page==='fleet'?'Read-only vehicle health, battery, and operational status':'Read-only parking map, battery levels, and charger status'}</p></div></div>
+    <div style="display:flex;align-items:center;gap:10px"><button class="icon-button mobile-menu" data-action="menu" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">${ICONS.menu}</button><div class="page-heading"><h1>${esc(title)}</h1><p>${state.page==='fleet'?'Shared vehicle health, battery, and operational status':'Live shared parking map · fleet edits sync to dispatch'}</p></div></div>
     <div class="top-actions">${cloudStatusControl()}<button class="btn ghost share-link-btn" data-action="copy-fleet-parking-link">${ICONS.link}<span class="hide-mobile">Copy fleet link</span></button></div>
   </header>`;
   return `<header class="topbar">
@@ -1795,7 +1795,7 @@ function fleetPage() {
   const viewOnly=PARKING_ONLY_VIEW;
   const filters=['all','gas','changed','verified','needs-data','missing-fleetos','missing-amazon','amazon-only','fleetos-only','issues','low','grounded','inactive'];
   const labels={'all':'All vehicles','gas':'Gas Vehicles','changed':'Changed only','verified':'Verified only','needs-data':'Needs data','missing-fleetos':'Missing FleetOS','missing-amazon':'Missing Amazon','amazon-only':'Amazon only','fleetos-only':'FleetOS only','issues':'Issues','low':'Low-battery EVs','grounded':'Grounded only','inactive':'Inactive only'};
-  return `${contextBar(`<span class="status">${viewOnly?'Fleet-only · view access':'Amazon names/status · FleetOS EV battery'}</span>`)}
+  return `${contextBar(`<span class="status">${viewOnly?'Fleet Health · shared view':'Amazon names/status · FleetOS EV battery'}</span>`)}
   ${fleetHealthSummary()}
   <section class="fleet-alert-squares"><button class="danger" data-action="fleet-filter-quick" data-filter="grounded"><span>Grounded vehicles</span><strong>${grounded}</strong><small>Red · do not assign</small></button><button class="battery" data-action="fleet-filter-quick" data-filter="low"><span>Low-battery EVs</span><strong>${low}</strong><small>${LOW_BATTERY_SECTION_THRESHOLD}% or lower</small></button><button class="charge" data-action="fleet-filter-quick" data-filter="low"><span>Recommended to charge</span><strong>${charge}</strong><small>${LOW_BATTERY_SECTION_THRESHOLD}% or lower</small></button><button class="review" data-action="fleet-filter-quick" data-filter="needs-data"><span>Needs information</span><strong>${coverage.needsData}</strong><small>Missing source fields</small></button></section>
   ${fleetIssuesPanel()}
@@ -1869,8 +1869,7 @@ function applyParkingBatteryTone(input,value) {
 }
 function parkingChargerButton(key,label='Charger',spotNumber='') {
   const status=state.parkingChargerStatus[key]||'unknown',text=status==='green'?'CHG':status==='red'?'FAULT':'SET',reports=(state.chargerReports||[]).filter(report=>report.chargerKey===key).length,location=spotNumber!==''?`spot #${spotNumber}`:label;
-  const disabled=PARKING_ONLY_VIEW?' disabled aria-disabled="true"':'';
-  return `<span class="parking-charger-control"><button type="button" class="parking-charger-toggle charger-${status}" data-parking-charger="${esc(key)}" title="${esc(label)}${PARKING_ONLY_VIEW?': status only':': click for green, red, or clear'}"${disabled}>${spotNumber!==''?`<small class="parking-spot-number">#${esc(spotNumber)}</small>`:''}<i></i><span>${text}</span></button>${PARKING_ONLY_VIEW?'':`<button type="button" class="charger-report-trigger" data-action="report-charging-station" data-charger-key="${esc(key)}" title="Report charging station at ${esc(location)}" aria-label="Report charging station at ${esc(location)}">!${reports?`<small>${reports}</small>`:''}</button>`}</span>`;
+  return `<span class="parking-charger-control"><button type="button" class="parking-charger-toggle charger-${status}" data-parking-charger="${esc(key)}" title="${esc(label)}: click for green, red, or clear">${spotNumber!==''?`<small class="parking-spot-number">#${esc(spotNumber)}</small>`:''}<i></i><span>${text}</span></button><button type="button" class="charger-report-trigger" data-action="report-charging-station" data-charger-key="${esc(key)}" title="Report charging station at ${esc(location)}" aria-label="Report charging station at ${esc(location)}">!${reports?`<small>${reports}</small>`:''}</button></span>`;
 }
 function parkingSpotNumber(zone='',index=0) {
   if(zone==='west'){
@@ -1914,9 +1913,9 @@ function parkingSlotInput(slot) {
   const status=battery!==''?`${esc(battery)}%`:blocked?'BLOCK':charging?'CHG':'';
   const upperIndex=['northLeft','northRight'].includes(slot.zone)?parkingSlots(slot.zone).findIndex(item=>item.id===slot.id):-1;
   const upperCharger=upperIndex>=0?parkingChargerButton(`upper-${slot.id}`,`${slot.label} charger`,parkingSpotNumber(slot.zone,upperIndex)):'';
-  const selectAttr=PARKING_ONLY_VIEW?'':` data-parking-select="${esc(slot.id)}"`;
-  const vanInputAttrs=PARKING_ONLY_VIEW?' readonly tabindex="-1"':` data-parking-id="${esc(slot.id)}"`;
-  const batteryInputAttrs=PARKING_ONLY_VIEW?' readonly tabindex="-1"':` data-parking-battery="${esc(slot.id)}"`;
+  const selectAttr=` data-parking-select="${esc(slot.id)}"`;
+  const vanInputAttrs=` data-parking-id="${esc(slot.id)}"`;
+  const batteryInputAttrs=` data-parking-battery="${esc(slot.id)}"`;
   return `<div class="parking-slot parking-slot-row zone-${esc(slot.zone)}${tone}${selected}${blocked?' blocked':''}${charging?' charging':''}${hasVehicle?' has-vehicle':''}${slot.zone==='gas'?' gas-vehicle':' ev-vehicle'}" title="${esc(slot.label)}"><label class="parking-van-cell"${selectAttr}><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}"${vanInputAttrs} value="${esc(slot.value||'')}" placeholder="${slot.kind==='street'?'STREET':''}">${!showBatteryBox&&status?`<em>${status}</em>`:''}</label>${showBatteryBox?`<label class="parking-battery-mini battery-${batteryTone}" title="Battery % for ${esc(slot.value||slot.label)}"><input aria-label="Battery percent for ${esc(slot.value||slot.label)}"${batteryInputAttrs} type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="--"></label>`:''}${upperCharger}</div>`;
 }
 function parkingStack(zone,title,subtitle='') {
@@ -1938,7 +1937,6 @@ function selectedParkingSlot() {
   return (state.vanParking||[]).find(s=>s.id===state.selectedParkingId) || (state.vanParking||[]).find(s=>String(s.value||'').trim()) || (state.vanParking||[])[0];
 }
 function parkingBatteryEditor() {
-  if(PARKING_ONLY_VIEW)return '';
   const slot=selectedParkingSlot();
   if(!slot)return '';
   const battery=parkingBatteryForSlot(slot);
@@ -1946,17 +1944,16 @@ function parkingBatteryEditor() {
   return `<div class="parking-selected-card"><div><span class="eyebrow">Selected van</span><strong>${esc(slot.value||'Empty spot')}</strong><small>${esc(slot.label)} · ${esc(slot.zone)}</small></div><label>Battery %<input data-parking-battery="${esc(slot.id)}" type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="Type %"></label><label>Spot type<select data-parking-kind="${esc(slot.id)}">${kinds.map(k=>`<option value="${k}" ${slot.kind===k?'selected':''}>${k}</option>`).join('')}</select></label><div class="parking-selected-actions"><button class="btn small" data-action="clear-selected-parking">Clear selected</button><button class="btn small ghost" data-action="remove-selected-parking">Remove temp spot</button></div></div>`;
 }
 function parkingModeControls() {
-  if(PARKING_ONLY_VIEW)return '';
   const modes=[['auto','Auto','Reset to base layout'],['assisted','Assisted','Edit vans + battery'],['manual','Manual','Add/remove custom spots']];
   return `<div class="parking-mode-controls">${modes.map(([mode,label,detail])=>`<button class="${state.parkingMode===mode?'active':''}" data-action="set-parking-mode" data-mode="${mode}"><b>${esc(label)}</b><span>${esc(detail)}</span></button>`).join('')}<button class="add-temp-spot" data-action="add-parking-spot">${ICONS.plus} Add temp spot</button></div>`;
 }
 function vanParkingSectionLegacy() {
   const stats=vanParkingStats();
-  const headActions=`<span class="parking-updated">Updated ${esc(state.vanParkingUpdated||'today')}</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking list</button>${PARKING_ONLY_VIEW?'':`<button class="btn small ghost" data-action="reset-parking">Reset mockup</button>`}`;
-  const editTools=PARKING_ONLY_VIEW?'':`<div class="parking-import-row"><div class="parking-drop" id="parking-drop" tabindex="0"><b>Drop parking list here</b><span>CSV, XLSX, TXT, or a copied Google Sheets export. One EV per row works best.</span><button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Choose file</button></div>${parkingBatteryEditor()}<div class="parking-paste-box"><label for="parking-paste-text">Paste parking list</label><textarea id="parking-paste-text" placeholder="57&#10;2&#10;1&#10;4&#10;...">${esc(state.vanParkingPasteText)}</textarea><button class="btn small" data-action="parse-parking-paste">Fill parking spots</button></div></div>`;
-  const helperText=PARKING_ONLY_VIEW?'<strong>View only</strong><span>Parking and battery data for fleet team.</span>':'<strong>Click a van</strong><span>Type EV number, battery %, or spot type.</span>';
-  const mapHint=PARKING_ONLY_VIEW?'Fleet team view: arrangement, battery, and charger status':'Click any stall to edit the van and battery';
-  return `<article class="van-parking-card ${PARKING_ONLY_VIEW?'parking-view-only':''}" id="van-parking"><div class="van-parking-head"><div><span class="eyebrow">Van Parking</span><h2>Parking Map</h2><p>Closing dispatcher updates this at night. Morning dispatcher uses it to keep each wave parked together and avoid drivers hunting for vans.</p></div><div class="parking-head-actions">${headActions}</div></div>${parkingModeControls()}<div class="parking-helper-grid park-easy-stats"><div><strong>${stats.filled}</strong><span>occupied / assigned</span></div><div><strong>${stats.overflow}</strong><span>overflow + crosswalk spots</span></div><div>${helperText}</div></div>${editTools}<div class="parking-lot park-easy-map"><div class="parking-map-toolbar"><div><strong>Overhead lot view</strong><span>${mapHint}</span></div><div class="parking-map-legend"><span><i class="ready"></i>Standard stall</span><span><i class="cross"></i>Crosswalk / overflow</span><span><i class="charge"></i>Charging</span></div></div><div class="parking-map-grid"><div class="parking-empty-grid"><span class="lot-entry">ENTRY</span><span class="lane-arrow arrow-east">→</span><span class="lane-arrow arrow-north">↑</span><small>DRIVE LANE</small></div><div class="parking-top-block"><div class="parking-lane"></div>${parkingStack('northLeft','', '')}<div class="parking-lane skinny"><span class="lane-arrow">↕</span></div>${parkingStack('northRight','', '')}<div class="parking-lane"></div></div><div class="parking-street-zone">${parkingStreetRows()}</div><div class="parking-main-block"><div class="parking-lane vertical"><span class="lane-arrow">↓</span></div>${parkingStack('west','', '')}<div class="parking-crosswalk"><div class="tent-icon">TENT</div><strong>TENT</strong>${parkingStack('crosswalk','', '')}</div>${parkingStack('east','', '')}<div class="parking-lane vertical"><span class="lane-arrow">↑</span></div></div><div class="parking-side-area"><div class="parking-date-box"><strong>MAP UPDATED</strong><span>${esc(state.vanParkingUpdated||'')}</span></div><div class="lot-exit"><span>EXIT</span><b>→</b></div></div></div></div></article>`;
+  const headActions=`<span class="parking-updated">Updated ${esc(state.vanParkingUpdated||'today')}</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking list</button><button class="btn small ghost" data-action="reset-parking">Reset mockup</button>`;
+  const editTools=`<div class="parking-import-row"><div class="parking-drop" id="parking-drop" tabindex="0"><b>Drop parking list here</b><span>CSV, XLSX, TXT, or a copied Google Sheets export. One EV per row works best.</span><button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Choose file</button></div>${parkingBatteryEditor()}<div class="parking-paste-box"><label for="parking-paste-text">Paste parking list</label><textarea id="parking-paste-text" placeholder="57&#10;2&#10;1&#10;4&#10;...">${esc(state.vanParkingPasteText)}</textarea><button class="btn small" data-action="parse-parking-paste">Fill parking spots</button></div></div>`;
+  const helperText='<strong>Click a van</strong><span>Type EV number, battery %, or spot type.</span>';
+  const mapHint='Click any stall to edit the van and battery';
+  return `<article class="van-parking-card" id="van-parking"><div class="van-parking-head"><div><span class="eyebrow">Van Parking</span><h2>Parking Map</h2><p>Closing dispatcher and fleet share this live map. Every saved move, battery, note, and charger update appears in both workspaces.</p></div><div class="parking-head-actions">${headActions}</div></div>${parkingModeControls()}<div class="parking-helper-grid park-easy-stats"><div><strong>${stats.filled}</strong><span>occupied / assigned</span></div><div><strong>${stats.overflow}</strong><span>overflow + crosswalk spots</span></div><div>${helperText}</div></div>${editTools}<div class="parking-lot park-easy-map"><div class="parking-map-toolbar"><div><strong>Overhead lot view</strong><span>${mapHint}</span></div><div class="parking-map-legend"><span><i class="ready"></i>Standard stall</span><span><i class="cross"></i>Crosswalk / overflow</span><span><i class="charge"></i>Charging</span></div></div><div class="parking-mobile-gesture-hint" aria-hidden="true"><b>↔</b><span>Swipe the map · pinch to zoom</span></div><div class="parking-map-grid"><div class="parking-empty-grid"><span class="lot-entry">ENTRY</span><span class="lane-arrow arrow-east">→</span><span class="lane-arrow arrow-north">↑</span><small>DRIVE LANE</small></div><div class="parking-top-block"><div class="parking-lane"></div>${parkingStack('northLeft','', '')}<div class="parking-lane skinny"><span class="lane-arrow">↕</span></div>${parkingStack('northRight','', '')}<div class="parking-lane"></div></div><div class="parking-street-zone">${parkingStreetRows()}</div><div class="parking-main-block"><div class="parking-lane vertical"><span class="lane-arrow">↓</span></div>${parkingStack('west','', '')}<div class="parking-crosswalk"><div class="tent-icon">TENT</div><strong>TENT</strong>${parkingStack('crosswalk','', '')}</div>${parkingStack('east','', '')}<div class="parking-lane vertical"><span class="lane-arrow">↑</span></div></div><div class="parking-side-area"><div class="parking-date-box"><strong>MAP UPDATED</strong><span>${esc(state.vanParkingUpdated||'')}</span></div><div class="lot-exit"><span>EXIT</span><b>→</b></div></div></div></div></article>`;
 }
 function parkingDateInputValue() { const value=String(state.vanParkingUpdated||'');if(/^\d{4}-\d{2}-\d{2}$/.test(value))return value;const m=value.match(/(\d{1,2})\/(\d{1,2})/);return m?`${new Date().getFullYear()}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`:defaultOperationDate(); }
 function chargingCheckDateInputValue() { const value=String(state.chargingStationChecked||'');return /^\d{4}-\d{2}-\d{2}$/.test(value)?value:''; }
@@ -1966,7 +1963,6 @@ function vanParkingSection() {
   const withChargers=vanParkingSectionLegacy()
     .replace(/<div class="parking-crosswalk">[\s\S]*?(?=<section class="parking-stack east">)/,parkingChargerColumn())
     .replace(/<div class="lot-exit"><span>EXIT<\/span><b>→<\/b><\/div>/,`<div class="lot-exit"><span>EXIT</span><b>→</b></div>${parkingGasArea()}`);
-  if(PARKING_ONLY_VIEW)return withChargers;
   return withChargers
     .replace(/<span class="parking-updated">Updated [\s\S]*?<\/span>/,`<label class="parking-updated parking-date-edit"><span>Last edit</span><input type="date" data-parking-date value="${esc(parkingDateInputValue())}"></label>`)
     .replace(/<div class="parking-empty-grid">[\s\S]*?<\/div><div class="parking-top-block">/,`<div class="parking-empty-grid parking-notes-area"><label><span>Add notes</span><textarea data-parking-notes placeholder="Charging issues, blocked lanes, keys, or closing notes…">${esc(state.parkingNotes||'')}</textarea></label></div><div class="parking-top-block">`)
@@ -1975,7 +1971,8 @@ function vanParkingSection() {
 
 function vanParkingPage() {
   const issueCount=Object.values(state.parkingChargerStatus||{}).filter(status=>status==='red').length;
-  const actions=PARKING_ONLY_VIEW?`<span class="status neutral">Fleet-only · view access</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button>`:`<button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Import parking</button><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button><button class="btn small lime" data-action="copy-fleet-parking-link">${ICONS.link} Copy fleet-only link</button><button class="btn small ${issueCount?'danger':''}" data-action="report-charging-station">⚡ Report charging station${issueCount?` · ${issueCount} fault${issueCount===1?'':'s'}`:''}</button>`;
+  const sharedStatus=PARKING_ONLY_VIEW?'<span class="status">Live shared editing</span>':'';
+  const actions=`${sharedStatus}<button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Import parking</button><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button><button class="btn small lime" data-action="copy-fleet-parking-link">${ICONS.link} Copy fleet link</button><button class="btn small ${issueCount?'danger':''}" data-action="report-charging-station">⚡ Report charging station${issueCount?` · ${issueCount} fault${issueCount===1?'':'s'}`:''}</button>`;
   return `${contextBar(actions)}${vanParkingSection()}`;
 }
 
@@ -4623,13 +4620,11 @@ async function importEquipmentFromClipboard() {
 }
 
 function readParkingFiles(files) {
-  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   state.importPurpose='parking';
   return readFiles(files);
 }
 
 function updateParkingSlot(id,value,rerender=true) {
-  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const slot=(state.vanParking||[]).find(s=>s.id===id);
   if(!slot)return;
   slot.value=String(value||'').trim().toUpperCase();
@@ -4641,7 +4636,6 @@ function updateParkingSlot(id,value,rerender=true) {
 }
 
 function selectParkingSlot(id,rerender=true) {
-  if(PARKING_ONLY_VIEW)return;
   if(!id)return;
   state.selectedParkingId=id;
   persist();
@@ -4649,7 +4643,6 @@ function selectParkingSlot(id,rerender=true) {
 }
 
 function updateParkingBattery(id,value) {
-  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const clean=String(value||'').replace(/[^\d]/g,'').slice(0,3);
   const n=clean===''?'':Math.max(0,Math.min(100,Number(clean)));
   state.vanParkingBatteries={...(state.vanParkingBatteries||{}),[id]:n};
@@ -4657,7 +4650,6 @@ function updateParkingBattery(id,value) {
   persistSoon();
 }
 function toggleParkingCharger(key='') {
-  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   if(!key)return;const current=state.parkingChargerStatus[key]||'unknown',next=current==='unknown'?'green':current==='green'?'red':'unknown';
   state.parkingChargerStatus={...(state.parkingChargerStatus||{}),[key]:next};state.vanParkingUpdated=defaultOperationDate();persist();render();toast(next==='green'?'Charger marked working / charging':next==='red'?'Charger marked issue':'Charger status cleared',next==='red'?'error':'success');
 }
@@ -4667,7 +4659,6 @@ function parkingChargerReportSpot(key='') {
   return {spot:'',chargePort:''};
 }
 function openChargerReport(key='') {
-  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const issueKey=key||Object.entries(state.parkingChargerStatus||{}).find(([,status])=>status==='red')?.[0]||'',location=parkingChargerReportSpot(issueKey),previous=[...(state.chargerReports||[])].reverse().find(report=>report.chargerKey===issueKey);
   state.pendingChargerReport={key:issueKey,company:'LLOL',chargePort:location.chargePort||previous?.chargePort||'',parkingSpot:location.spot||previous?.parkingSpot||'',stationId:previous?.stationId||'',lights:'',color:'',vanPlugged:'',display:'',replugged:'',restored:'',otherVan:'',testResult:'',concern:''};state.modal='charger-report';render();
 }
@@ -4708,7 +4699,6 @@ async function copyChargerReportOnly() {
 }
 
 function updateParkingKind(id,kind='spot') {
-  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const slot=(state.vanParking||[]).find(s=>s.id===id);
   if(!slot)return;
   slot.kind=kind;
@@ -4718,7 +4708,6 @@ function updateParkingKind(id,kind='spot') {
 }
 
 function addParkingSpot() {
-  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const id=`manual-${Date.now().toString().slice(-6)}`;
   const slot={id,zone:'crosswalk',label:`Manual spot ${parkingSlots('crosswalk').length+1}`,value:'',kind:'crosswalk',manual:true};
   state.vanParking=[...(state.vanParking||[]),slot];
@@ -4730,7 +4719,6 @@ function addParkingSpot() {
 }
 
 function removeSelectedParkingSpot() {
-  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const slot=selectedParkingSlot();
   if(!slot)return toast('No parking spot selected','error');
   if(!slot.manual) {
@@ -4750,7 +4738,6 @@ function removeSelectedParkingSpot() {
 }
 
 function setParkingMode(mode='manual') {
-  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   state.parkingMode=mode;
   if(mode==='auto') {
     state.vanParking=defaultVanParkingSlots();
@@ -4780,7 +4767,6 @@ function parkingImportValuesFromText(text='') {
 }
 
 function applyParkingText(text='') {
-  if(PARKING_ONLY_VIEW)return 0;
   const values=parkingImportValuesFromText(text);
   if(!values.length) return 0;
   const editable=(state.vanParking||[]).filter(slot=>!['street'].includes(slot.kind)||String(slot.value||'').trim());
@@ -4791,7 +4777,6 @@ function applyParkingText(text='') {
 }
 
 function parseParkingPasteAction() {
-  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   const count=applyParkingText(state.vanParkingPasteText);
   render();
   toast(count?`${count} parking spot${count===1?'':'s'} filled`:'No EV parking values found — paste one EV number per row',count?'success':'error');
@@ -4808,7 +4793,6 @@ async function copyParkingList() {
 }
 
 function resetVanParking() {
-  if(PARKING_ONLY_VIEW)return toast('Fleet team view is read-only and limited to Van Parking','error');
   state.vanParking=defaultVanParkingSlots();
   state.vanParkingUpdated='7/6';
   state.vanParkingPasteText='';
@@ -5354,8 +5338,16 @@ function importAcceptForPurpose(purpose='morning') {
 
 function action(name,el) {
   if(PARKING_ONLY_VIEW) {
-    const allowed=new Set(['menu','copy-parking-list','copy-fleet-parking-link','retry-cloud-link','close-modal','toggle-fleet-card','set-fleet-view','clear-fleet-search','fleet-filter-quick','copy-charge-recommendations','copy-visible-fleet-vins','copy-fleet-attention','copy-fleetos-missing','copy-amazon-missing','copy-refresh-missing-vins']);
-    if(!allowed.has(name))return toast('Fleet-only access is read-only. Fleet Health and Van Parking are available.','error');
+    const allowed=new Set([
+      'menu','retry-cloud-link','close-modal','copy-fleet-parking-link',
+      'toggle-fleet-card','set-fleet-view','clear-fleet-search','fleet-filter-quick',
+      'copy-charge-recommendations','copy-visible-fleet-vins','copy-fleet-attention',
+      'copy-fleetos-missing','copy-amazon-missing','copy-refresh-missing-vins',
+      'parking-choose-file','copy-parking-list','reset-parking','parse-parking-paste',
+      'clear-selected-parking','add-parking-spot','remove-selected-parking','set-parking-mode',
+      'report-charging-station','copy-charger-report','copy-open-charger-slack'
+    ]);
+    if(!allowed.has(name))return toast('This fleet link can edit Van Parking. Other dashboard tools stay locked.','error');
   }
   if(OWNER_ADMIN_ACTIONS.has(name)&&!hasOwnerAdminAccess())return toast('Enter the Admin PIN first','error');
   if (name==='menu') return toggleMobileSidebar();

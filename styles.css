@@ -3097,12 +3097,35 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .parking-only-shell .fleet-parking-sidebar .fleet-locked-nav .nav-count{margin-left:auto;font-size:10px;background:rgba(255,255,255,.08)}
 .parking-only-shell .fleet-parking-sidebar .user-card{border-color:rgba(137,202,240,.28);background:rgba(77,155,205,.1)}
 .parking-only-shell .fleet-issues-readonly{grid-template-columns:minmax(0,1fr) auto}
-.parking-only-shell .parking-view-only input[readonly]{cursor:default}
-.parking-only-shell .parking-view-only .parking-van-cell input,
-.parking-only-shell .parking-view-only .parking-battery-mini input{background:rgba(255,255,255,.86)}
-.parking-only-shell .parking-view-only .parking-charger-toggle:disabled{cursor:default;opacity:1}
-.parking-only-shell .parking-view-only .parking-map-toolbar span{color:#6d7d87}
-.parking-only-shell .parking-view-only .park-easy-stats>div:last-child{border-color:#bfd7e9;background:#f2f8fc}
+.parking-only-shell .van-parking-card{width:100%;max-width:100%}
+.parking-only-shell .parking-lot{width:100%;max-width:100%}
+
+/* One interactive parking canvas for dispatch and the restricted fleet link. */
+body .parking-lot{
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-x:contain;
+  overscroll-behavior-y:auto;
+  touch-action:pan-x pan-y pinch-zoom;
+}
+body .parking-map-grid{transform-origin:top left;touch-action:pan-x pan-y pinch-zoom}
+.parking-mobile-gesture-hint{display:none}
+@media screen and (max-width:760px){
+  body .parking-lot{
+    width:100%;max-width:100%;overflow-x:auto;overflow-y:visible;
+    padding:8px 8px 14px;scrollbar-gutter:stable;
+    touch-action:pan-x pan-y pinch-zoom;
+  }
+  body .parking-map-toolbar{min-width:1280px;position:relative;left:auto}
+  body .parking-mobile-gesture-hint{
+    position:sticky;left:8px;z-index:12;width:max-content;display:flex;align-items:center;gap:7px;
+    margin:0 0 8px;padding:7px 10px;border:1px solid rgba(129,199,242,.32);border-radius:999px;
+    background:rgba(10,23,33,.9);color:#dff3ff;box-shadow:0 8px 22px rgba(0,0,0,.22);
+    font-size:10px;font-weight:800;letter-spacing:.02em;pointer-events:none;
+  }
+  body .parking-mobile-gesture-hint b{color:#79c7f5;font-size:14px}
+  body .parking-map-grid{min-width:1280px}
+  .parking-only-shell .parking-import-row{grid-template-columns:1fr}
+}
 
 /* Van Parking top rows: reserve a real column for charger status + report button. */
 body .parking-top-block{grid-template-columns:24px 202px 28px 202px 24px}
