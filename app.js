@@ -1759,26 +1759,48 @@ function driverKnownNamesHtml(name='') {
   return known.length?`<div class="driver-known-names"><span>Linked names</span><strong>${known.map(esc).join(' · ')}</strong></div>`:'';
 }
 
+function teamDriverMetrics(drivers=[]) {
+  const identityByName=new Map(),metrics=new Map(),profiles=Object.values(state.driverProfiles||{});
+  drivers.forEach(driver=>{
+    const canonical=nameKey(driver.name);if(!canonical)return;
+    identityByName.set(canonical,canonical);metrics.set(canonical,{stayRows:[],stayTotal:0,whipMissed:0,whipDays:0,whipChecks:0});
+    const profile=profiles.find(row=>nameKey(row?.canonical)===canonical||String(row?.transporterId||'').trim().toUpperCase()===String(driver.id||'').trim().toUpperCase());
+    [profile?.canonical,profile?.nickname,...(profile?.names||[])].map(nameKey).filter(Boolean).forEach(alias=>identityByName.set(alias,canonical));
+  });
+  const resolve=value=>identityByName.get(nameKey(value))||nameKey(value),anchor=Date.parse(`${state.morningOperationDate||defaultOperationDate()}T12:00:00Z`);
+  stayHomeHistoryEntries().forEach(row=>{
+    const metric=metrics.get(resolve(row.name));if(!metric)return;
+    metric.stayTotal++;const time=Date.parse(`${row.date}T12:00:00Z`),delta=(anchor-time)/86400000;
+    if(Number.isFinite(delta)&&delta>=0&&delta<=13)metric.stayRows.push(row);
+  });
+  Object.values(state.whiparoundComplianceHistory||{}).forEach(row=>{
+    const metric=metrics.get(resolve(row.name));if(!metric)return;
+    const missed=Number(Boolean(row.missingPre))+Number(Boolean(row.missingPost));metric.whipChecks++;metric.whipMissed+=missed;if(missed)metric.whipDays++;
+  });
+  metrics.forEach(metric=>metric.stayRows.sort((a,b)=>String(b.date).localeCompare(String(a.date))));
+  return metrics;
+}
+
 const DESIGNATED_DISPATCHER_NAMES=['Alec Gonzalez','Gerardo Godinez','Javier Navarrete','Jennifer Ceja','Jose Lopez','Edwin Gomez'];
 function isDesignatedDispatcher(name='') {
   const parts=(driverIdentityKey(name)||nameKey(name)).split(' ').filter(Boolean);
   return DESIGNATED_DISPATCHER_NAMES.some(dispatcher=>nameKey(dispatcher).split(' ').filter(Boolean).every(part=>parts.includes(part)));
 }
 
-function driverTeamCardHtml(d={}) {
-  const whip=driverWhiparoundStats(d.name),stay=driverStayHomeStats(d.name),display=driverDisplayName(d.name),dispatcher=isDesignatedDispatcher(d.name),identity=driverIdentityKey(d.name),expanded=state.expandedDriverKey===identity,profile=driverProfileEntry(d.name)?.profile||{},searchValue=nameKey([d.name,display,...(profile.names||[])].join(' ')),active=/^active$/i.test(String(d.status||'').trim());
+function driverTeamCardHtml(d={},metrics=null) {
+  const metric=metrics?.get?.(nameKey(d.name)),whip=metric?{missed:metric.whipMissed,missedDays:metric.whipDays,checks:metric.whipChecks,frequent:metric.whipMissed>=3||metric.whipDays>=2}:driverWhiparoundStats(d.name),stay=metric?{count:metric.stayRows.length,total:metric.stayTotal,recent:metric.stayRows,frequent:metric.stayRows.length>=2,lastDate:metric.stayRows[0]?.date||''}:driverStayHomeStats(d.name),display=driverDisplayName(d.name),dispatcher=isDesignatedDispatcher(d.name),identity=driverIdentityKey(d.name),expanded=state.expandedDriverKey===identity,profile=driverProfileEntry(d.name)?.profile||{},searchValue=nameKey([d.name,display,...(profile.names||[])].join(' ')),active=/^active$/i.test(String(d.status||'').trim());
   const statusHtml=d.status&&!active?`<span class="status ${statusClass(d.status)}">${esc(d.status)}</span>`:'';
   const details=[['Transporter ID',d.id||'—'],['Role',d.role||'—'],['Phone',d.phone||'Not imported'],['Email',d.email||'Not imported'],['Qualifications',d.qualifications||'Not imported']];
-  return `<article class="card entity-card driver-card ${expanded?'expanded':''} ${dispatcher?'dispatcher-driver-card':''} ${whip.frequent?'whip-frequent-driver':''} ${stay.frequent?'stay-home-frequent-driver':''}" data-team-driver-name="${esc(searchValue)}" data-driver-card-toggle="true" data-driver-name="${esc(d.name)}" role="button" tabindex="0" aria-expanded="${expanded?'true':'false'}" ${driverProfileAttrs(d.name)}><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(display)}</div><div class="driver-card-actions">${dispatcher?'<span class="dispatcher-badge">Dispatcher</span>':''}${statusHtml}<button class="driver-note-button" data-action="open-driver-flags" data-driver-name="${esc(d.name)}" aria-label="Driver notes for ${esc(d.name)}" title="Driver notes">⚑${driverProfileFlags(d.name).length||''}</button><button class="driver-alias-button" data-action="open-driver-alias" data-driver-name="${esc(d.name)}" aria-label="Edit driver profile for ${esc(d.name)}" title="Nickname, known names, and preferred vans">Aa</button><button class="driver-delete-button" data-action="request-driver-removal" data-driver-key="${esc(nameKey(d.name))}" aria-label="Remove ${esc(d.name)}" title="Remove Delivery Associate">${ICONS.trash}</button></div></div><h3>${esc(d.name)}</h3><p>${esc(d.role)} · ${esc(d.id)}</p><div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div><span class="driver-card-expand-cue">${expanded?'Hide details':'Click card for details'} <b>${expanded?'↑':'↓'}</b></span><div class="driver-card-expanded" aria-hidden="${expanded?'false':'true'}">${display!==d.name?`<span class="driver-alias-preview">Nickname: ${esc(display)}</span>`:''}${driverKnownNamesHtml(d.name)}${driverPreferredVehiclesHtml(d.name)}<div class="driver-detail-grid">${details.map(([label,value])=>`<span><small>${esc(label)}</small><strong>${esc(value)}</strong></span>`).join('')}</div>${driverCapabilityButtonsHtml(d.name)}${stay.count?`<div class="driver-stay-home-history ${stay.frequent?'frequent':''}"><b>${stay.count}</b><span><strong>Told to stay home · last 14 days</strong><small>${stay.recent.map(row=>formatShortOperationDate(row.date)).join(' · ')}${stay.total>stay.count?` · ${stay.total} all-time`:''}</small></span></div>`:''}${whip.missed?`<div class="driver-whiparound-flag ${whip.frequent?'frequent':''}">${ICONS.whiparound}<span><b>${whip.frequent?'Frequent Whiparound follow-up':'Whiparound follow-up'}</b><small>${whip.missed} missed form${whip.missed===1?'':'s'} across ${whip.missedDays} day${whip.missedDays===1?'':'s'}</small></span></div>`:''}<div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></div></article>`;
+  return `<article class="card entity-card driver-card ${expanded?'expanded':''} ${dispatcher?'dispatcher-driver-card':''} ${whip.frequent?'whip-frequent-driver':''} ${stay.frequent?'stay-home-frequent-driver':''}" data-team-driver-name="${esc(searchValue)}" data-driver-card-toggle="true" data-driver-name="${esc(d.name)}" role="button" tabindex="0" aria-expanded="${expanded?'true':'false'}" ${driverProfileAttrs(d.name)}><div class="entity-top"><div class="driver-avatar" style="width:38px;height:38px;border-radius:12px">${initials(display)}</div><div class="driver-card-actions">${dispatcher?'<span class="dispatcher-badge">Dispatcher</span>':''}${statusHtml}<button class="driver-note-button" data-action="open-driver-flags" data-driver-name="${esc(d.name)}" aria-label="Driver notes for ${esc(d.name)}" title="Driver notes">⚑${driverProfileFlags(d.name).length||''}</button><button class="driver-alias-button" data-action="open-driver-alias" data-driver-name="${esc(d.name)}" aria-label="Edit driver profile for ${esc(d.name)}" title="Nickname, known names, and preferred vans">Aa</button><button class="driver-delete-button" data-action="request-driver-removal" data-driver-key="${esc(nameKey(d.name))}" aria-label="Remove ${esc(d.name)}" title="Remove Delivery Associate">${ICONS.trash}</button></div></div><h3>${esc(d.name)}</h3><p>${esc(d.role)} · ${esc(d.id)}</p><div class="driver-phone-line">${ICONS.phone}<span>${d.phone?esc(d.phone):'No phone imported yet'}</span></div><button class="btn small driver-text-button" data-action="text-driver" data-driver-key="${esc(nameKey(d.name))}" ${d.phone?'':'disabled'}>${ICONS.phone}<span>${d.phone?'Text driver':'Add phone to text'}</span></button><span class="driver-card-expand-cue">${expanded?'Hide details':'Click card for details'} <b>${expanded?'↑':'↓'}</b></span><div class="driver-card-expanded" aria-hidden="${expanded?'false':'true'}">${display!==d.name?`<span class="driver-alias-preview">Nickname: ${esc(display)}</span>`:''}${driverKnownNamesHtml(d.name)}${driverPreferredVehiclesHtml(d.name)}<div class="driver-detail-grid">${details.map(([label,value])=>`<span><small>${esc(label)}</small><strong>${esc(value)}</strong></span>`).join('')}</div>${driverCapabilityButtonsHtml(d.name)}${stay.count?`<div class="driver-stay-home-history ${stay.frequent?'frequent':''}"><b>${stay.count}</b><span><strong>Told to stay home · last 14 days</strong><small>${stay.recent.map(row=>formatShortOperationDate(row.date)).join(' · ')}${stay.total>stay.count?` · ${stay.total} all-time`:''}</small></span></div>`:''}${whip.missed?`<div class="driver-whiparound-flag ${whip.frequent?'frequent':''}">${ICONS.whiparound}<span><b>${whip.frequent?'Frequent Whiparound follow-up':'Whiparound follow-up'}</b><small>${whip.missed} missed form${whip.missed===1?'':'s'} across ${whip.missedDays} day${whip.missedDays===1?'':'s'}</small></span></div>`:''}<div class="entity-meta"><div class="entity-stat"><span>Delivery quality</span><strong>${esc(d.quality)}</strong></div><div class="entity-stat"><span>Last coaching</span><strong>${esc(d.coaching)}</strong></div></div></div></article>`;
 }
 
 function teamPage() {
-  const drivers=teamDriverRows(), contacts=state.driverContacts||[];
+  const drivers=teamDriverRows(), contacts=state.driverContacts||[],metrics=teamDriverMetrics(drivers);
   const onRouteNames=new Set(filteredMorningRows().map(r=>nameKey(r.driver)).filter(Boolean));
   return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar team-toolbar"><div class="toolbar-left"><label class="team-name-search">${ICONS.search}<input type="search" data-team-search autocomplete="off" placeholder="Search driver names" aria-label="Search Drivers and Team by name"><button type="button" data-action="clear-team-search" aria-label="Clear driver search">×</button></label><span class="filter-note" data-team-search-count>${drivers.length} drivers</span><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import Drivers CSV / Excel</button><button class="btn lime" data-action="add-delivery-associate">${ICONS.plus} Add Delivery Associate</button></div></div>
   <div class="driver-workforce-import card"><div><strong>Driver & phone import</strong><span>Drop in an AssociateData CSV or Excel workbook (.xlsx). RelayOps finds the associate sheet, matches Name with Personal Phone, and keeps Position, Transporter ID, and Active status.</span></div><div><button class="btn small primary" data-action="driver-import">Choose CSV or Excel</button><button class="btn small" data-action="add-delivery-associate">Add one manually</button></div><small>Contacts are never embedded in the public website. Signed-in dispatchers share them only through the protected station workspace; signed-out use stays in this browser.</small></div>
   <div class="driver-message-readiness card"><div><strong>Future text reminder prep</strong><span>After the Morning Sheet is finalized, RelayOps can identify on-route drivers by the visible Morning Sheet names. Texting will need a secure SMS connector and driver opt-in before it sends anything.</span></div><div><b>${drivers.filter(d=>onRouteNames.has(nameKey(d.name))).length}</b><small>current team cards recognized on the Morning Sheet</small></div></div>
-  <div class="team-directory-layout"><section class="grid team-grid">${drivers.map(driverTeamCardHtml).join('')}<div class="team-search-empty" data-team-search-empty hidden><strong>No driver found</strong><span>Try the legal name, nickname, or another linked name.</span></div></section><aside class="team-message-column">${morningMessageQueueHtml()}</aside></div>`;
+  <div class="team-directory-layout"><section class="grid team-grid">${drivers.map(driver=>driverTeamCardHtml(driver,metrics)).join('')}<div class="team-search-empty" data-team-search-empty hidden><strong>No driver found</strong><span>Try the legal name, nickname, or another linked name.</span></div></section><aside class="team-message-column">${morningMessageQueueHtml()}</aside></div>`;
 }
 
 function filterTeamDirectory(value='') {
@@ -3574,9 +3596,11 @@ function morningMessageQueueHtml() {
 function enhanceDriverTextButtons() {
   if(state.page!=='team')return;
   if(!document.querySelector?.('.team-message-column .morning-message-queue'))document.querySelector?.('.team-grid')?.insertAdjacentHTML('beforebegin',morningMessageQueueHtml());
+  const drivers=new Map(teamDriverRows().map(driver=>[nameKey(driver.name),driver]));
   document.querySelectorAll('.driver-card').forEach(card=>{
+    if(card.querySelector('.driver-text-button'))return;
     const name=card.querySelector('h3')?.textContent?.trim()||'';
-    const driver=teamDriverRows().find(row=>nameKey(row.name)===nameKey(name));
+    const driver=drivers.get(nameKey(name));
     const button=document.createElement('button');
     button.className='btn small driver-text-button';
     button.dataset.action='text-driver';
@@ -4376,6 +4400,27 @@ function render() {
   scheduleOperationalReminderCheck();
 }
 
+function renderNavigationPage() {
+  const content=document.querySelector?.('.content'),currentTopbar=document.querySelector?.('.topbar'),currentSidebar=document.getElementById?.('sidebar');
+  if(!content||!currentTopbar||!currentSidebar)return render();
+  document.querySelector?.('.modal-backdrop')?.remove?.();
+  modalWasOpen=false;modalReturnFocus=null;
+  closeDriverProfilePopover();closeDriverRouteContextMenu();closeDriverSuggestions();
+  currentSidebar.querySelectorAll?.('.nav-item[data-page]').forEach(item=>{
+    const active=item.dataset.page===state.page;item.classList.toggle('active',active);
+    if(active)item.setAttribute('aria-current','page');else item.removeAttribute('aria-current');
+  });
+  currentTopbar.outerHTML=topbar();
+  content.innerHTML=pageContent();
+  enhanceDriverTextButtons();
+  enhanceDriverStayHomeControls();
+  enhanceOpeningRoster();
+  enhanceMorningParkingAssignment();
+  enhanceItineraryRtsModal();
+  bind();
+  scheduleOperationalReminderCheck();
+}
+
 function enhanceItineraryRtsModal() {
   if(state.modal!=='import'||state.importPurpose!=='itinerary-rts')return;
   const dialog=document.querySelector('.import-modal');if(!dialog)return;
@@ -4414,7 +4459,11 @@ function bind() {
   window.removeEventListener?.('scroll',closeDriverRouteContextOnScroll,true);
   if(state.modal)document.addEventListener?.('keydown',handleModalKeydown);
   else document.addEventListener?.('keydown',handleSheetHistoryKeyboard);
-  document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>go(el.dataset.page)));
+  document.querySelectorAll('[data-page]').forEach(el=>{
+    if(el.dataset.relayopsPageBound==='true')return;
+    el.dataset.relayopsPageBound='true';
+    el.addEventListener('click',()=>go(el.dataset.page));
+  });
   document.querySelectorAll('[data-action="save-fleet-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();saveFleetIssue();}));
   document.querySelectorAll('[data-action="mark-fleet-issue-fixed"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();markFleetIssueFixed(el.dataset.issueKey||'',el.dataset.issueId||'');}));
   document.querySelectorAll('[data-action="open-morning-vehicle-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();openMorningVehicleIssue(el.dataset.route||'',el.dataset.equipment||'');}));
@@ -5300,7 +5349,14 @@ function go(page) {
   if (page==='admin'&&!hasOwnerAdminAccess()){state.modal='admin-pin';return render();}
   cancelDeferredRenders();
   document.body?.classList?.remove('mobile-sidebar-open');
-  state.page=page; state.search=''; state.modal=null;if(page==='rostering')syncRosteringHelperShifts(currentRosteringPlan());if(PARKING_ONLY_VIEW)persistFleetPresentation();else persist();render();window.scrollTo({top:0,behavior:'smooth'});
+  state.page=page; state.search=''; state.modal=null;const helperAdded=page==='rostering'?syncRosteringHelperShifts(currentRosteringPlan()):0;
+  // Changing tabs is presentation state, not an operational edit. Saving the
+  // entire workspace here serialized every route, driver, vehicle, inspection,
+  // and history record before the next page could appear. Keep only the small
+  // local view preference and leave shared/cloud saves to actual edits.
+  try{localStorage.setItem('relayops_page',state.page);if(PARKING_ONLY_VIEW)persistFleetPresentation();}catch{}
+  if(helperAdded)persistRosteringSlice();
+  renderNavigationPage();window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function toggleMobileSidebar() {
