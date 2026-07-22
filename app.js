@@ -4144,6 +4144,13 @@ function commitSheetInputHistory(el) { const draft=el?sheetInputHistoryDrafts.ge
 function undoSheetChange() { const item=state.sheetHistory?.past?.pop();if(!item)return toast('Nothing to undo','error');state.sheetHistory.future=state.sheetHistory.future||[];state.sheetHistory.future.push({...item,snapshot:operationalSheetSnapshot()});restoreOperationalSheetSnapshot(item.snapshot);persist();render();toast(`Undid: ${item.label}`); }
 function redoSheetChange() { const item=state.sheetHistory?.future?.pop();if(!item)return toast('Nothing to redo','error');state.sheetHistory.past=state.sheetHistory.past||[];state.sheetHistory.past.push({...item,snapshot:operationalSheetSnapshot()});restoreOperationalSheetSnapshot(item.snapshot);persist();render();toast(`Redid: ${item.label}`); }
 function requestClearOperationalSheet(scope='morning') { state.pendingSheetClear=scope==='picklist'?'picklist':'morning';state.modal='clear-operational-sheet';render(); }
+function flushOperationalSheetClear(scope='morning') {
+  const cloud=window.RelayOpsCloud;
+  if(!cloud?.configured||!cloud?.session||typeof cloud.save!=='function')return;
+  Promise.resolve(cloud.save(`sheet.clear.${scope}`)).then(result=>{
+    if(result)toast(`${scope==='picklist'?'Opening Picklist':'Morning Sheet'} clear synced for everyone`);
+  }).catch(error=>toast(`Sheet cleared here · cloud retrying: ${error?.message||'sync unavailable'}`,'error'));
+}
 function confirmClearOperationalSheet() {
   const scope=state.pendingSheetClear||'morning',datePrefix=`${state.morningOperationDate}|`,waveAnchors=scope==='morning'?morningBlankWaveAnchors():[];ensureMorningRouteUids();pushSheetHistory(scope==='picklist'?'Clear Opening Picklist':'Clear Morning Sheet',scope);
   if(scope==='picklist'){
@@ -4161,7 +4168,7 @@ function confirmClearOperationalSheet() {
     state.scheduleBackupRecords=Object.fromEntries(Object.entries(state.scheduleBackupRecords||{}).filter(([key])=>!key.startsWith(datePrefix)));
     state.scheduleDriverMarks=Object.fromEntries(Object.entries(state.scheduleDriverMarks||{}).filter(([key,value])=>!(key.startsWith(datePrefix)&&value==='backup')));
   }
-  state.pendingSheetClear=null;state.modal=null;persist();render();toast(`${scope==='picklist'?'Opening Picklist':'Morning Sheet'} cleared · Undo is available`);
+  state.pendingSheetClear=null;state.modal=null;persist();render();toast(`${scope==='picklist'?'Opening Picklist':'Morning Sheet'} cleared · Undo is available`);flushOperationalSheetClear(scope);
 }
 function normalizedPicklistWave(value='',fallback='') {
   let clean=String(value||'').replace(/\s*\(\d+\)\s*$/,'').trim();if(!clean)return fallback;
@@ -4390,7 +4397,13 @@ function renderRosteringContent() {
   window.requestAnimationFrame?.(()=>window.scrollTo?.(0,scrollTop));
 }
 function bindActionControls(root=document) {
-  root.querySelectorAll?.('[data-action]').forEach(el=>el.addEventListener('click',()=>action(el.dataset.action,el)));
+  root.querySelectorAll?.('[data-action]').forEach(el=>el.addEventListener('click',event=>{
+    // Modal actions must not bubble into the backdrop's close action. A clear
+    // confirmation used to run both handlers, causing a second render while
+    // the critical shared-workspace save was starting.
+    if(el.closest?.('.modal')&&el.dataset.action!=='close-modal')event.stopPropagation();
+    action(el.dataset.action,el);
+  }));
 }
 function updateGlobalSearchResults() {
   const anchor=document.getElementById?.('global-search-results-anchor');

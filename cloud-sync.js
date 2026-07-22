@@ -401,6 +401,9 @@
     }catch(error){queueSnapshot(currentPayload,action,currentPersistentPayload);notify({type:'offline',reason:'save-failed',error});throw error;}
   }
   function save(action='workspace.save'){
+    // Explicit critical saves (for example, clearing a shared sheet) replace
+    // the delayed autosave instead of racing it with a duplicate write.
+    clearTimeout(saveTimer);saveTimer=null;
     if(saveInFlight){pendingSaveAction=action;return saveInFlight;}
     saveInFlight=performSave(action);
     return saveInFlight.then(result=>{

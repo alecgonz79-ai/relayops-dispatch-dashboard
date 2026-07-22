@@ -25,6 +25,7 @@ function appContext() {
 function testPicklistClearUndoRedoAndScope() {
   const context = appContext();
   vm.runInContext(`
+    window.RelayOpsCloud={configured:true,session:{user:{id:'dispatcher-clear-test'}},save:action=>{globalThis.__criticalClearSave=action;return Promise.resolve(null);}};
     state.dspCode='LLOL';state.morningOperationDate='2026-07-16';state.fitMorningRows=true;state.openingPicklistWaveSlots=5;state.openingPicklistShowAdhoc=true;
     state.morningRoutes=[
       {routeUid:'uid-a',dsp:'LLOL',driver:'First Driver',route:'CX100',wave:'11:15 AM',service:'Standard Parcel',ev:'1'},
@@ -51,6 +52,7 @@ function testPicklistClearUndoRedoAndScope() {
   assert(!context.__afterClear.backups['2026-07-16|backup'] && context.__afterClear.backups['2026-07-15|prior'], 'Picklist clear must reset only current-date backups');
   assert(context.__afterClear.marks['2026-07-16|other'] === 'adhoc' && !context.__afterClear.marks['2026-07-16|backup'], 'Picklist clear must preserve non-backup roster marks');
   assert(context.__afterClear.notes === '' && context.__afterClear.rows.join(',') === '6,4,21' && context.__afterClear.past === 1, 'Picklist clear must reset editable side boxes and create one history entry');
+  assert(context.__criticalClearSave === 'sheet.clear.picklist', 'Picklist clear must immediately flush the critical deletion to the shared workspace');
   assert(context.__afterUndo.uids.join(',') === 'uid-a,uid-b,uid-helper,uid-other' && context.__afterUndo.notes === 'Keys' && context.__afterUndo.rows.join(',') === '9,7,25', 'Undo must restore exact routes and Picklist side-box state');
   assert(context.__afterUndo.calloffs['2026-07-16|today'] && context.__afterUndo.backups['2026-07-16|backup'] && context.__afterUndo.marks['2026-07-16|backup'] === 'backup', 'Undo must restore date-scoped calloff and backup state');
   assert(context.__afterRedo.uids.join(',') === 'uid-helper,uid-other' && context.__afterRedo.future === 0, 'Redo must safely reapply the clear');
@@ -59,6 +61,7 @@ function testPicklistClearUndoRedoAndScope() {
 function testMorningClearAndRouteUidVehicleClear() {
   const context = appContext();
   vm.runInContext(`
+    window.RelayOpsCloud={configured:true,session:{user:{id:'dispatcher-clear-test'}},save:action=>{globalThis.__criticalClearSave=action;return Promise.resolve(null);}};
     state.dspCode='LLOL';state.morningOperationDate='2026-07-16';state.fitMorningRows=true;state.sheetHistory={past:[],future:[]};
     state.morningRoutes=[
       {routeUid:'uid-visible',dsp:'LLOL',driver:'Visible Driver',route:'CX777',wave:'11:15 AM',service:'Standard Parcel',ev:'1',deviceName:'1',portable:'2'},
@@ -75,6 +78,7 @@ function testMorningClearAndRouteUidVehicleClear() {
   assert(context.__afterMorning.uids[0] === 'uid-other' && context.__afterMorning.uids.length === 6, 'Morning clear must preserve other DSP rows and add exactly five blank current-DSP wave anchors');
   assert(context.__afterMorning.sections.join(',') === 'WAVE 1,WAVE 2,WAVE 3,WAVE 4,WAVE 5', 'Morning clear must retain all five core wave sections');
   assert(context.__afterMorning.times.every(value=>/\(0\)$/.test(value)) && context.__afterMorning.fit === false, 'Cleared wave footers must remain visible with zero drivers and the full blank template');
+  assert(context.__criticalClearSave === 'sheet.clear.morning', 'Morning clear must immediately flush the critical deletion to the shared workspace');
   assert(context.__morningUndo.uids.join(',') === 'uid-visible,uid-duplicate,uid-other' && context.__morningUndo.fit === true, 'Morning clear must be fully undoable, including Fit Rows state');
 }
 

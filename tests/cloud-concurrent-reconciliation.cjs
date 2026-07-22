@@ -86,4 +86,14 @@ const newerEdit=preparePayload({inventoryItems:[{id:'delete-me',name:'Delete me'
 const editWins=reconcilePayload(deleted,newerEdit,deleteBase);
 if(editWins.inventoryItems.length!==1||editWins.inventoryItems[0].available!==1||editWins.__relayopsSync.tombstones.inventoryItems?.['id:delete-me'])throw new Error('A newer edit did not supersede an older tombstone');
 
+const sheetBaseRaw={morningRoutes:[
+  {routeUid:'clear-route-1',dsp:'LLOL',route:'CX401',wave:'11:15 AM',driver:'Driver One'},
+  {routeUid:'clear-route-2',dsp:'LLOL',route:'CX402',wave:'11:20 AM',driver:'Driver Two'}
+]};
+const sheetBase=preparePayload(sheetBaseRaw,{},null,'2026-07-15T13:00:00.000Z');
+const sheetCleared=preparePayload({morningRoutes:[]},sheetBase,null,'2026-07-15T13:02:00.000Z');
+const staleSheet=preparePayload(sheetBaseRaw,sheetBase,null,'2026-07-15T13:01:00.000Z');
+const sheetMerged=reconcilePayload(staleSheet,sheetCleared,sheetBase);
+if(sheetMerged.morningRoutes.length!==0||Object.keys(sheetMerged.__relayopsSync.tombstones.morningRoutes||{}).length!==2)throw new Error('A shared Morning Sheet clear was resurrected by a stale dispatcher snapshot');
+
 console.log('Cloud concurrent reconciliation and tombstone test passed');
