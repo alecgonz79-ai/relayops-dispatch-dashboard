@@ -18,8 +18,11 @@ assert(app.includes("matches?.('[data-device-sheet-field]") && app.includes('[da
 assert(app.includes("state.modal=null;state.page='morning'") && !app.includes("state.modal='pad-check-reminder';state.page='morning'"), 'Day-file import must no longer force the pad reminder');
 assert(app.includes('recordPicklistRosterChange({from:outgoing,to:incoming') && app.includes("from:'Unassigned Adhoc'"), 'Route swaps and Adhoc additions must be recorded for the Cortex review');
 assert(app.includes('picklistSwapAudit:state.picklistSwapAudit') && app.includes("'picklistSwapAudit'"), 'Cortex swap review history must be included in the shared daily workspace');
+assert(app.includes('function syncManualAdhocRosterAssignment') && app.includes("reconcileDailyRosterFlags(exact,'adhoc')") && app.includes("state.scheduleDriverMarks[scheduleDriverMarkKey(exact)]='adhoc'"), 'Typing an Adhoc driver must remove that person from VTO and reconcile their shared roster status');
+assert(app.includes('CORTEX SWAP TRACKER') && app.includes('data-picklist-swap-check=') && app.includes('function setPicklistSwapAuditChecked'), 'The Picklist must show a persistent side-by-side Cortex swap checklist');
 
 assert(app.includes("document.querySelectorAll?.('.picklist-vto-driver.is-popup-open,.picklist-vto-driver.linger-open')") && css.includes('.picklist-vto-driver:not(.is-popup-open) .picklist-vto-actions{display:none!important}'), 'VTO hover menus must close every other driver popup before opening the active one');
 assert(css.includes('.picklist-review-grid') && css.includes('.cortex-swap-review-list'), 'The combined safety review must have a responsive, scrollable layout');
+assert(css.includes('.picklist-swap-tracker-list') && css.includes('label.confirmed'), 'The side-by-side Cortex tracker must visually distinguish checked swaps');
 
 console.log('Stable editor scroll, single VTO popup, and screenshot safety review contracts passed');

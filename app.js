@@ -1000,7 +1000,8 @@ function openingPicklistRightHtml() {
   const backupRows=Array.from({length:backupCount},(_,index)=>{const left=backupValue('vto2',index,vto2[index]?.name||''),right=backupValue('vto4',index,vto4[index]?.name||'');return `<tr><td>${picklistVtoDriverCell('vto2',index,vto2[index],left)}</td><td>${picklistVtoDriverCell('vto4',index,vto4[index],right)}</td></tr>`;}).join('');
   const calloffs=openingPicklistCallOffRows(),drafts=Array.isArray(state.openingPicklistCalloffDrafts)?state.openingPicklistCalloffDrafts:[],filledDrafts=drafts.filter(row=>String(row?.name||row?.reason||'').trim()).length,calloffCount=Math.max(1,state.openingPicklistCalloffRows||6,calloffs.length+filledDrafts),calloffRows=Array.from({length:calloffCount},(_,index)=>{const row=calloffs[index],draftIndex=index-calloffs.length,draft=draftIndex>=0?(drafts[draftIndex]||{}):null;return `<tr><td><input ${row?`data-picklist-calloff-name="${esc(row.key)}"`:`data-picklist-calloff-draft="${draftIndex}" data-picklist-calloff-field="name"`} data-driver-name-input="true" value="${esc(row?.name||draft?.name||'')}" aria-label="Call off ${index+1}" placeholder="Driver"></td><td><input ${row?`data-picklist-calloff-reason="${esc(row.key)}"`:`data-picklist-calloff-draft="${draftIndex}" data-picklist-calloff-field="reason"`} value="${esc(row?.reason||draft?.reason||'')}" aria-label="Reason ${index+1}" placeholder="Reason"></td></tr>`;}).join('');
   const topicValues=state.openingPicklistTopics||[],lastTopic=Math.max(0,...topicValues.map((value,index)=>String(value||'').trim()?index+1:0)),topicCount=Math.max(1,state.openingPicklistTopicRows||4,lastTopic),topics=Array.from({length:topicCount},(_,index)=>`<tr><td colspan="2"><input data-picklist-topic="${index}" value="${esc(topicValues[index]||'')}" aria-label="Stand up topic ${index+1}" placeholder="Stand up topic"></td></tr>`).join('');
-  return `<aside class="opening-picklist-right"><table class="picklist-side-table backup-table"><thead><tr><th colspan="2"><span>Back Ups</span>${controls('backup')}</th></tr><tr><th>VTO 2</th><th>VTO 4</th></tr></thead><tbody>${backupRows}</tbody></table><table class="picklist-side-table calloff-table"><thead><tr><th>CALL OFF</th><th><span>REASON</span>${controls('calloff')}</th></tr></thead><tbody>${calloffRows}</tbody></table><table class="picklist-side-table topics-table"><thead><tr><th colspan="2"><span>STAND UP TOPICS</span>${controls('topic')}</th></tr></thead><tbody>${topics}</tbody></table><section class="picklist-notes"><strong>NOTES</strong><textarea data-picklist-notes aria-label="Opening picklist notes" placeholder="Opening notes">${esc(state.openingPicklistNotes||'')}</textarea></section><label class="picklist-date"><span>DATE</span><input data-picklist-date value="${esc(openingPicklistDateText())}" inputmode="numeric" aria-label="Opening picklist date" placeholder="Month/Day/Year"></label></aside>`;
+  const changes=currentPicklistRosterChanges(),confirmed=changes.filter(change=>change.cortexConfirmed).length,tracker=`<section class="picklist-swap-tracker"><header><span><strong>CORTEX SWAP TRACKER</strong><small>${confirmed}/${changes.length} confirmed</small></span><b>${changes.length}</b></header><div class="picklist-swap-tracker-list">${changes.length?changes.map(change=>`<label class="${change.cortexConfirmed?'confirmed':''}" title="${esc(`${change.from} to ${change.to} · ${change.route}`)}"><span><em>${esc(driverDisplayName(change.from)||change.from)}</em><i aria-hidden="true">→</i><em>${esc(driverDisplayName(change.to)||change.to)}</em><small>${esc(change.route)}${change.wave?` · ${esc(change.wave)}`:''}${change.kind==='adhoc'?' · ADHOC':''}</small></span><input type="checkbox" data-picklist-swap-check="${esc(change.id)}" ${change.cortexConfirmed?'checked':''} aria-label="Confirm ${esc(change.from)} to ${esc(change.to)} was updated in Cortex"><b>✓</b></label>`).join(''):'<div class="picklist-swap-empty">Driver swaps and Adhoc additions will appear here.</div>'}</div></section>`;
+  return `<aside class="opening-picklist-right">${tracker}<table class="picklist-side-table backup-table"><thead><tr><th colspan="2"><span>Back Ups</span>${controls('backup')}</th></tr><tr><th>VTO 2</th><th>VTO 4</th></tr></thead><tbody>${backupRows}</tbody></table><table class="picklist-side-table calloff-table"><thead><tr><th>CALL OFF</th><th><span>REASON</span>${controls('calloff')}</th></tr></thead><tbody>${calloffRows}</tbody></table><table class="picklist-side-table topics-table"><thead><tr><th colspan="2"><span>STAND UP TOPICS</span>${controls('topic')}</th></tr></thead><tbody>${topics}</tbody></table><section class="picklist-notes"><strong>NOTES</strong><textarea data-picklist-notes aria-label="Opening picklist notes" placeholder="Opening notes">${esc(state.openingPicklistNotes||'')}</textarea></section><label class="picklist-date"><span>DATE</span><input data-picklist-date value="${esc(openingPicklistDateText())}" inputmode="numeric" aria-label="Opening picklist date" placeholder="Month/Day/Year"></label></aside>`;
 }
 function openingPicklistDateText() { const [year,month,day]=String(state.morningOperationDate||defaultOperationDate()).split('-').map(Number);return year&&month&&day?`${month}/${day}/${year}`:''; }
 function openingPicklistHtml() {
@@ -3504,7 +3505,7 @@ function clearRouteAssignmentVacancy(route={}) {
   delete route.assignmentStatus;delete route.missingDriver;delete route.vacancyReason;delete route.vacatedDriver;delete route.vacatedAt;
   return route;
 }
-function applyDriverCellEdit(route={},value='',reason='Driver manually edited') {
+function applyDriverCellEdit(route={},value='',reason='Driver manually edited',options={}) {
   const previous=canonicalDriverValue(route.driver||''),clean=canonicalDriverEntryValue(value),changed=nameKey(clean)!==nameKey(previous),hasQuestion=morningDriverNames(value).some(name=>String(name).trim()==='?'),helperService=/helper/i.test(`${route.service||''} ${route.wave||''}`);
   route.driver=clean;
   if(!clean){
@@ -3517,7 +3518,7 @@ function applyDriverCellEdit(route={},value='',reason='Driver manually edited') 
     if(helperService||!String(value).trim().startsWith('?'))route.missingHelper=true;
     else flagRouteAssignmentVacant(route,reason);
   }
-  if(changed&&clean&&!hasQuestion)recordPicklistRosterChange({from:previous||'Unassigned',to:clean,route:route.route,wave:route.wave,kind:previous?'manual':'assignment'});
+  if(changed&&clean&&!hasQuestion){const kind=options.kind|| (previous?'manual':'assignment');recordPicklistRosterChange({from:previous||(kind==='adhoc'?'Unassigned Adhoc':'Unassigned'),to:clean,route:route.route||(kind==='adhoc'?'AX':''),wave:route.wave,kind});}
   return clean;
 }
 const ROUTE_DATA_PROTECTED_FIELDS=['route','staging','stops','packages','plannedRts','plannedRtsSource','wave','service','pad','padOverride'];
@@ -3690,14 +3691,18 @@ function saveScreenshotReviewPad(input,commit=false) {
 function recordPicklistRosterChange({from='',to='',route='',wave='',kind='swap'}={}) {
   const original=canonicalDriverName(from)||String(from||'').trim()||'Unassigned',replacement=canonicalDriverName(to)||String(to||'').trim();
   if(!replacement||driverIdentityKey(original)===driverIdentityKey(replacement))return null;
-  const record={id:`picklist-change-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,date:state.morningOperationDate,from:original,to:replacement,route:String(route||'').trim()||'—',wave:String(wave||'').trim(),kind,at:new Date().toISOString()};
+  const record={id:`picklist-change-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,date:state.morningOperationDate,from:original,to:replacement,route:String(route||'').trim()||'—',wave:String(wave||'').trim(),kind,at:new Date().toISOString(),cortexConfirmed:false};
   state.picklistSwapAudit=Array.isArray(state.picklistSwapAudit)?state.picklistSwapAudit:[];
   const duplicate=state.picklistSwapAudit.find(item=>item.date===record.date&&item.from===record.from&&item.to===record.to&&item.route===record.route&&item.kind===record.kind);
-  if(duplicate){duplicate.at=record.at;duplicate.wave=record.wave||duplicate.wave;return duplicate;}
+  if(duplicate){duplicate.at=record.at;duplicate.wave=record.wave||duplicate.wave;duplicate.cortexConfirmed=false;delete duplicate.cortexConfirmedAt;return duplicate;}
   state.picklistSwapAudit=[...state.picklistSwapAudit,record].slice(-160);return record;
 }
 function currentPicklistRosterChanges() {
   return (Array.isArray(state.picklistSwapAudit)?state.picklistSwapAudit:[]).filter(item=>item?.date===state.morningOperationDate).sort((a,b)=>String(a.at||'').localeCompare(String(b.at||'')));
+}
+function setPicklistSwapAuditChecked(id='',checked=false) {
+  const record=(state.picklistSwapAudit||[]).find(item=>item?.id===id&&item?.date===state.morningOperationDate);if(!record)return false;
+  record.cortexConfirmed=Boolean(checked);record.cortexConfirmedAt=checked?new Date().toISOString():'';persist();return true;
 }
 function acknowledgePadCheckReminder() {
   const key=String(state.lastMorningImportFingerprint||'');if(key){state.padCheckAcknowledgements=state.padCheckAcknowledgements&&typeof state.padCheckAcknowledgements==='object'?state.padCheckAcknowledgements:{};state.padCheckAcknowledgements[key]={date:state.morningOperationDate,acknowledgedAt:new Date().toISOString()};}
@@ -3752,6 +3757,15 @@ function reconcileDailyRosterFlags(name='',keep='') {
     const helperKeys=dailyRosterIdentityKeys(state.scheduleHelpers,name);removeHelperFromMatchedDriver(name);helperKeys.forEach(key=>delete state.scheduleHelpers[key]);
     state.morningRoutes=state.morningRoutes.filter(row=>!(helperKeys.includes(row.helperAssignmentKey)&&/helper/i.test(`${row.service||''} ${row.wave||''}`)));
   }
+}
+function syncManualAdhocRosterAssignment(route={},previous='',assigned='') {
+  const routeIndex=state.morningRoutes.indexOf(route),before=morningDriverNames(previous).filter(name=>name!=='?'),after=morningDriverNames(assigned).filter(name=>name!=='?'),afterKeys=new Set(after.map(driverIdentityKey).filter(Boolean));
+  before.filter(name=>!afterKeys.has(driverIdentityKey(name))).forEach(name=>reconcileDailyRosterFlags(name,'paycom'));
+  after.forEach(name=>{const exact=contactForMorningDriver(name)?.name||canonicalDriverName(name)||name;reconcileDailyRosterFlags(exact,'adhoc');state.scheduleDriverMarks[scheduleDriverMarkKey(exact)]='adhoc';});
+  route.wave='Ad hoc';route.route=String(route.route||'').trim()||'AX';route.service=route.service||'Adhoc';
+  if(after.length===1)route.adhocKey=adhocIdentityKey(after[0]);else delete route.adhocKey;
+  if(!state.morningRoutes.includes(route))state.morningRoutes.splice(routeIndex>=0?Math.min(routeIndex,state.morningRoutes.length):state.morningRoutes.length,0,route);
+  return after;
 }
 function markPaycomBackup(name='',role='') {
   if(isNonRosterableOtherShift(role))return toast(`${name} has an Other role shift and cannot be marked as a backup`,'error');
@@ -4161,7 +4175,11 @@ function saveOpeningPicklistCell(el) {
   pushSheetHistory(`Edit ${field} on ${route.route||sectionKey}`,'both');
   const clean=field==='driver'?canonicalDriverEntryValue(value):['route','staging','ev','deviceName','portable'].includes(field)?value.toUpperCase():value;
   if(field==='ev'){const parts=clean.split('/').map(part=>part.trim()).filter(Boolean);route.ev=parts[0]||'';if(parts[1])route.helperBag=parts[1];}
-  else if(field==='driver')applyDriverCellEdit(route,value,'Driver cleared in Picklist');
+  else if(field==='driver'){
+    const previous=route.driver||'',adhoc=sectionKey==='adhoc'||isExplicitAdhocMorningRoute(route);
+    applyDriverCellEdit(route,value,'Driver cleared in Picklist',{kind:adhoc?'adhoc':''});
+    if(adhoc)syncManualAdhocRosterAssignment(route,previous,route.driver||'');
+  }
   else route[field]=clean;
   if(field==='ev'){fillEquipmentForRoute(route);setTimeout(()=>warnDuplicateMorningEquipment(route.ev),0);}
   if(field==='deviceName'||field==='portable')recalculateEquipmentReadiness();
@@ -4582,6 +4600,7 @@ function bind() {
   });
   document.querySelectorAll('[data-picklist-topic]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist stand-up topic'));el.addEventListener('input',()=>{const index=Number(el.dataset.picklistTopic);state.openingPicklistTopics=Array.isArray(state.openingPicklistTopics)?state.openingPicklistTopics:['','','',''];state.openingPicklistTopics[index]=el.value;persistSoon();});el.addEventListener('change',()=>{commitSheetInputHistory(el);persist();});});
   document.querySelectorAll('[data-picklist-notes]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist notes'));el.addEventListener('input',()=>{state.openingPicklistNotes=el.value;persistSoon();});el.addEventListener('change',()=>{commitSheetInputHistory(el);persist();});});
+  document.querySelectorAll('[data-picklist-swap-check]').forEach(el=>el.addEventListener('change',()=>{if(setPicklistSwapAuditChecked(el.dataset.picklistSwapCheck||'',el.checked)){const label=el.closest('label');label?.classList.toggle('confirmed',el.checked);const tracker=el.closest('.picklist-swap-tracker'),total=tracker?.querySelectorAll('[data-picklist-swap-check]').length||0,done=tracker?.querySelectorAll('[data-picklist-swap-check]:checked').length||0;const count=tracker?.querySelector('header small');if(count)count.textContent=`${done}/${total} confirmed`;toast(el.checked?'Cortex swap checked':'Cortex swap check reopened');}}));
   document.querySelectorAll('[data-screenshot-review-pad]').forEach(el=>{
     el.addEventListener('focus',()=>{beginSheetInputHistory(el,`Edit ${el.dataset.screenshotReviewPad} pad from screenshot review`,'both');el.select?.();});
     el.addEventListener('input',()=>saveScreenshotReviewPad(el));
@@ -8492,6 +8511,7 @@ function acknowledgeScreenshotReview(check='') {
   if(check==='pads'){
     const key=String(state.lastMorningImportFingerprint||'');if(key){state.padCheckAcknowledgements=state.padCheckAcknowledgements&&typeof state.padCheckAcknowledgements==='object'?state.padCheckAcknowledgements:{};state.padCheckAcknowledgements[key]={date:state.morningOperationDate,acknowledgedAt:new Date().toISOString(),source:'picklist-screenshot'};persist();}
   }
+  if(check==='cortex'){const now=new Date().toISOString();currentPicklistRosterChanges().forEach(change=>{change.cortexConfirmed=true;change.cortexConfirmedAt=now;});persist();}
   render();
 }
 function continuePicklistScreenshot() {
