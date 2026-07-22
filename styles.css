@@ -3187,3 +3187,25 @@ body .parking-top-block .charger-report-trigger{width:18px;min-width:18px}
 .route-trainer-picker,.route-vto-picker{display:grid;gap:7px}.route-trainer-picker>span,.route-vto-picker>span{color:#27465a;font-size:9px;font-weight:900}.route-trainer-picker select,.route-vto-picker select{width:100%;min-height:132px;border:1px solid #cbd9e2;border-radius:11px;background:#fff;padding:7px;font:800 10px Manrope,sans-serif;color:#18384f}
 @media (max-width:620px){.driver-route-context-menu{width:calc(100vw - 16px);border-radius:14px}.driver-route-context-actions button{min-height:54px}.driver-route-context-actions button b{font-size:10px}.driver-route-context-actions button small{font-size:8px}}
 @media print{.driver-route-context-menu{display:none!important}}
+
+/* Keep exactly one VTO action menu open at a time. JavaScript owns the active row. */
+.picklist-vto-driver:not(.is-popup-open) .picklist-vto-actions{display:none!important}
+.picklist-vto-driver.is-popup-open .picklist-vto-actions{display:block!important}
+
+/* Final pre-screenshot safety review: pads and Cortex changes side by side. */
+.picklist-screenshot-review-modal{width:min(980px,100%);border-radius:24px}
+.picklist-screenshot-review-modal .modal-head{background:linear-gradient(135deg,#f7fbfe,#eef6fb)}
+.picklist-review-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:14px}
+.picklist-review-panel{display:grid;align-content:start;gap:12px;min-width:0;padding:16px;border:1px solid #d7e2e9;border-radius:17px;background:#f8fafb;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease}
+.picklist-review-panel.confirmed{border-color:#8ed3aa;background:#f2fbf5;box-shadow:inset 0 0 0 1px rgba(54,151,93,.09)}
+.picklist-review-panel>header{display:grid;grid-template-columns:34px minmax(0,1fr);align-items:center;gap:10px}
+.picklist-review-panel>header>span{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:#dceef9;color:#225c80;font:900 13px Manrope,sans-serif}
+.picklist-review-panel.cortex-panel>header>span{background:#ede5fb;color:#69489b}
+.picklist-review-panel header div{display:grid;gap:2px}.picklist-review-panel header strong{color:#203c50;font:900 12px Manrope,sans-serif}.picklist-review-panel header small{color:#718591;font:700 8px/1.35 Manrope,sans-serif}
+.pad-check-grid.compact{grid-template-columns:repeat(5,minmax(54px,1fr));gap:6px}.pad-check-grid.compact article{padding:8px 5px}.pad-check-grid.compact article strong{font-size:18px}
+.cortex-swap-review-list{display:grid;gap:7px;max-height:265px;overflow:auto;overscroll-behavior:contain;padding-right:3px;scrollbar-gutter:stable}
+.cortex-swap-review-list article{display:grid;gap:4px;padding:9px 10px;border:1px solid #dce4ea;border-radius:11px;background:#fff}
+.cortex-swap-review-list article>div{display:grid;grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr);align-items:center;gap:5px}.cortex-swap-review-list article strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#27485e;font:900 9px Manrope,sans-serif}.cortex-swap-review-list article strong:last-child{color:#237046}.cortex-swap-review-list article b{color:#7e5bad;text-align:center;font-size:15px}.cortex-swap-review-list article small{color:#788b97;font:700 7px Manrope,sans-serif}
+.review-empty{display:grid;place-content:center;gap:4px;min-height:82px;padding:12px;border:1px dashed #cbd8e0;border-radius:11px;background:#fff;text-align:center;color:#70838f;font:700 8px/1.4 Manrope,sans-serif}.review-empty strong{font-size:9px}.review-empty span{font-size:8px}
+.picklist-review-panel>.btn{justify-self:stretch;min-height:40px}.pad-confirm-button{border-color:#eab3bd;background:#fff1f4;color:#8c3446}.cortex-confirm-button{border-color:#c9b5ed;background:#f7f2ff;color:#60408f}.picklist-review-actions{justify-content:flex-end}.picklist-review-actions .btn[disabled]{opacity:.45;cursor:not-allowed}
+@media (max-width:760px){.picklist-review-grid{grid-template-columns:1fr}.pad-check-grid.compact{grid-template-columns:repeat(5,minmax(48px,1fr))}.cortex-swap-review-list{max-height:210px}.picklist-screenshot-review-modal{border-radius:18px}}

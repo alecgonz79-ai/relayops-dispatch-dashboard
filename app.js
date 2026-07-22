@@ -469,6 +469,8 @@ let state = {
   openingPicklistCalloffDrafts: JSON.parse(localStorage.getItem('relayops_opening_picklist_calloff_drafts') || 'null') || [],
   openingPicklistBackupOverrides: JSON.parse(localStorage.getItem('relayops_opening_picklist_backup_overrides') || 'null') || {},
   openingPicklistLabels: JSON.parse(localStorage.getItem('relayops_opening_picklist_labels') || 'null') || {},
+  picklistSwapAudit: JSON.parse(localStorage.getItem('relayops_picklist_swap_audit') || 'null') || [],
+  screenshotReview: {pads:false,cortex:false},
   pendingPicklistWaveDelete: null,
   pendingSheetClear: null,
   sheetHistory: JSON.parse(localStorage.getItem('relayops_sheet_history') || 'null') || {past:[],future:[]},
@@ -986,7 +988,7 @@ function picklistVtoDriverCell(group='',index=0,row=null,value='') {
   if(!name)return input;
   const action=(target,text,tone='')=>`<button type="button" class="${esc(tone)}" data-action="picklist-vto-action" data-vto-target="${esc(target)}" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}">${esc(text)}</button>`;
   const swap=`<button type="button" class="swap-route" data-action="open-vto-route-swap" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}" data-vto-label="${esc(label)}">Swap To Route</button>`;
-  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('adhoc','Adhoc','adhoc')}</div></div></div>`;
+  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}" aria-haspopup="menu" aria-expanded="false">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('adhoc','Adhoc','adhoc')}</div></div></div>`;
 }
 function openingPicklistCallOffRows() {
   return Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([key,value])=>({key,name:value.name||'',reason:state.callOffReasons?.[key]||'',route:value.route||''})).sort((a,b)=>a.name.localeCompare(b.name));
@@ -3257,6 +3259,10 @@ function modal() {
     const rows=morningPadCheckRows();
     return `<div class="modal-backdrop required-reminder-backdrop pad-reminder-backdrop"><div class="modal operational-reminder-modal pad-check-modal" role="alertdialog" aria-modal="true" aria-labelledby="pad-check-reminder-title" onclick="event.stopPropagation()"><div class="operational-reminder-icon">PAD</div><div class="modal-head"><div><span class="eyebrow">MORNING FILES IMPORTED</span><h2 id="pad-check-reminder-title">Double check pads</h2><p>Verify each pad letter against today’s station plan before assigning vans or sending the Morning Sheet.</p></div></div><div class="modal-body"><div class="pad-check-grid">${rows.map(row=>`<article><span>${esc(row.label)}</span><strong>${esc(row.pad)}</strong><small>${esc(row.wave)} · ${row.count} driver${row.count===1?'':'s'}</small></article>`).join('')}</div><div class="required-reminder-note"><b>Light-pink cells need a human check</b><span>If a letter is wrong, acknowledge this reminder and edit the Pad cell directly on the Morning Sheet.</span></div><div class="modal-actions"><button class="btn primary acknowledge-reminder-button" data-action="acknowledge-pad-check-reminder">I checked every pad</button></div></div></div></div>`;
   }
+  if (state.modal === 'picklist-screenshot-review') {
+    const pads=morningPadCheckRows(),changes=currentPicklistRosterChanges(),review=state.screenshotReview||{pads:false,cortex:false},ready=review.pads&&review.cortex;
+    return `<div class="modal-backdrop required-reminder-backdrop picklist-review-backdrop"><div class="modal picklist-screenshot-review-modal" role="alertdialog" aria-modal="true" aria-labelledby="picklist-screenshot-review-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">FINAL CHECK BEFORE SCREENSHOT</span><h2 id="picklist-screenshot-review-title">Confirm pads and Cortex swaps</h2><p>Complete both checks before RelayOps creates the Waves + Adhocs JPEG.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="picklist-review-grid"><section class="picklist-review-panel pad-panel ${review.pads?'confirmed':''}"><header><span>1</span><div><strong>Double check pads</strong><small>Compare every letter with today’s station plan.</small></div></header><div class="pad-check-grid compact">${pads.length?pads.map(row=>`<article><span>${esc(row.label)}</span><strong>${esc(row.pad)}</strong><small>${esc(row.wave)} · ${row.count}</small></article>`).join(''):'<div class="review-empty">No Wave 1–5 pad rows are loaded.</div>'}</div><button class="btn ${review.pads?'lime':'pad-confirm-button'}" data-action="acknowledge-screenshot-review" data-review-check="pads">${review.pads?'✓ Pads confirmed':'I checked every pad'}</button></section><section class="picklist-review-panel cortex-panel ${review.cortex?'confirmed':''}"><header><span>2</span><div><strong>Confirm swaps in Cortex</strong><small>Make sure every new route or Adhoc name below also changed in Cortex.</small></div></header><div class="cortex-swap-review-list">${changes.length?changes.map(change=>`<article><div><strong>${esc(driverDisplayName(change.from)||change.from)}</strong><b aria-hidden="true">→</b><strong>${esc(driverDisplayName(change.to)||change.to)}</strong></div><small>${esc(change.route)}${change.wave?` · ${esc(change.wave)}`:''} · ${change.kind==='adhoc'?'Added to Adhocs':'Driver change'}</small></article>`).join(''):'<div class="review-empty"><strong>No recorded swaps or Adhoc additions</strong><span>Confirm Cortex has no other manual driver changes.</span></div>'}</div><button class="btn ${review.cortex?'lime':'cortex-confirm-button'}" data-action="acknowledge-screenshot-review" data-review-check="cortex">${review.cortex?'✓ Cortex changes confirmed':'I confirmed Cortex swaps'}</button></section></div><div class="modal-actions picklist-review-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="continue-picklist-screenshot" ${ready?'':'disabled'}>Preview Waves + Adhocs JPEG</button></div></div></div></div>`;
+  }
   if (state.modal === 'rostering-driver-swap' && state.pendingRosteringSwap) {
     const pending=state.pendingRosteringSwap,assignments=currentRosteringPlan().assignments.filter(row=>String(row.associate||'').trim());
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal rostering-swap-modal" role="dialog" aria-modal="true" aria-labelledby="rostering-driver-swap-title" onclick="event.stopPropagation()"><div class="modal-head"><div><span class="eyebrow">ROSTER SWAP</span><h2 id="rostering-driver-swap-title">Add ${esc(driverDisplayName(pending.name))}</h2><p>Choose who comes off the roster. The confirmed shift, time, route, and service block stay in place.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="rostering-swap-field"><span>Swap with rostered driver</span><select id="rostering-swap-assignment"><option value="">Choose a rostered driver…</option>${assignments.map(row=>{const service=rosteringService(row.serviceId);return `<option value="${esc(row.id)}">${esc(driverDisplayName(row.associate))} · ${esc(row.start)} · ${esc(service?.name||'Roster')}</option>`;}).join('')}</select></label><div class="private-contact-note"><b>One-for-one replacement</b><span>${esc(driverDisplayName(pending.name))} takes the selected confirmed position. The selected driver returns to the PAYCOM unrostered list without creating a duplicate.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-rostering-driver-swap">Confirm swap</button></div></div></div></div>`;
@@ -3511,6 +3517,7 @@ function applyDriverCellEdit(route={},value='',reason='Driver manually edited') 
     if(helperService||!String(value).trim().startsWith('?'))route.missingHelper=true;
     else flagRouteAssignmentVacant(route,reason);
   }
+  if(changed&&clean&&!hasQuestion)recordPicklistRosterChange({from:previous||'Unassigned',to:clean,route:route.route,wave:route.wave,kind:previous?'manual':'assignment'});
   return clean;
 }
 const ROUTE_DATA_PROTECTED_FIELDS=['route','staging','stops','packages','plannedRts','plannedRtsSource','wave','service','pad','padOverride'];
@@ -3667,6 +3674,18 @@ function acknowledgeEarlyCalloffReminder() {
 function morningPadCheckRows() {
   return morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-5]$/i.test(section.label)).slice(0,5).map(section=>({label:section.label,wave:section.wave||'',pad:section.rows?.[0]?.padOverride||section.rows?.[0]?.pad||section.pad||'—',count:section.rows?.filter(row=>!row._blank&&isCxMorningRoute(row)).length||0}));
 }
+function recordPicklistRosterChange({from='',to='',route='',wave='',kind='swap'}={}) {
+  const original=canonicalDriverName(from)||String(from||'').trim()||'Unassigned',replacement=canonicalDriverName(to)||String(to||'').trim();
+  if(!replacement||driverIdentityKey(original)===driverIdentityKey(replacement))return null;
+  const record={id:`picklist-change-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,date:state.morningOperationDate,from:original,to:replacement,route:String(route||'').trim()||'—',wave:String(wave||'').trim(),kind,at:new Date().toISOString()};
+  state.picklistSwapAudit=Array.isArray(state.picklistSwapAudit)?state.picklistSwapAudit:[];
+  const duplicate=state.picklistSwapAudit.find(item=>item.date===record.date&&item.from===record.from&&item.to===record.to&&item.route===record.route&&item.kind===record.kind);
+  if(duplicate){duplicate.at=record.at;duplicate.wave=record.wave||duplicate.wave;return duplicate;}
+  state.picklistSwapAudit=[...state.picklistSwapAudit,record].slice(-160);return record;
+}
+function currentPicklistRosterChanges() {
+  return (Array.isArray(state.picklistSwapAudit)?state.picklistSwapAudit:[]).filter(item=>item?.date===state.morningOperationDate).sort((a,b)=>String(a.at||'').localeCompare(String(b.at||'')));
+}
 function acknowledgePadCheckReminder() {
   const key=String(state.lastMorningImportFingerprint||'');if(key){state.padCheckAcknowledgements=state.padCheckAcknowledgements&&typeof state.padCheckAcknowledgements==='object'?state.padCheckAcknowledgements:{};state.padCheckAcknowledgements[key]={date:state.morningOperationDate,acknowledgedAt:new Date().toISOString()};}
   state.modal=null;persist();render();toast('Pad letters acknowledged');
@@ -3675,8 +3694,6 @@ let operationalReminderTimer=null;
 function scheduleOperationalReminderCheck() {
   clearTimeout(operationalReminderTimer);operationalReminderTimer=setTimeout(()=>{
     if(state.modal)return;
-    const padKey=String(state.lastMorningImportFingerprint||'');
-    if(padKey&&!state.padCheckAcknowledgements?.[padKey]){state.modal='pad-check-reminder';render();return;}
     if(earlyCalloffReminderRows().length){state.modal='early-calloff-reminder';render();}
   },0);
 }
@@ -3735,6 +3752,7 @@ function markPaycomAdhoc(name='',role='') {
   const key=scheduleDriverMarkKey(name),adhocKey=adhocIdentityKey(name),legacy=legacyAdhocRoute(name),current=state.scheduleDriverMarks[key];
   if(current==='adhoc'){delete state.scheduleDriverMarks[key];removeDriverAdhocRoute(name);persist();render();return toast(`${name} removed from Adhoc`);}
   reconcileDailyRosterFlags(name,'adhoc');state.scheduleDriverMarks[key]='adhoc';state.openingPicklistShowAdhoc=true;let route=state.morningRoutes.find(row=>row.adhocKey===adhocKey||row.route===legacy);if(!route)route=createManualMorningRoute({route:'AX',wave:'Ad hoc'});route.route='AX';route.adhocKey=adhocKey;route.driver=contactForMorningDriver(name)?.name||name;route.service=role||'Adhoc';
+  recordPicklistRosterChange({from:'Unassigned Adhoc',to:route.driver,route:'AX',wave:'Ad hoc',kind:'adhoc'});
   persist();render();toast(`${name} added to the Morning Sheet as Adhoc`);
 }
 function markPaycomStayHome(name='',role='') {
@@ -3769,6 +3787,7 @@ function restoreReductionToOriginalRoute(name='') {
     if(!alreadyAssigned)route.driver=[exactName,...people.filter(person=>nameKey(person)!==nameKey(exactName))].filter(Boolean).join(' + ');
     clearRouteAssignmentVacancy(route);
   });
+  if(!alreadyAssigned)recordPicklistRosterChange({from:'Unassigned',to:exactName,route:route.route,wave:route.wave,kind:'assignment'});
   reconcileDailyRosterFlags(exactName,'on-route');delete state.scheduleReductions[key];persist();render();toast(`${exactName} restored to original route ${routeCode}`);return true;
 }
 function restoreRosterStatus(name='',status='') {
@@ -3907,8 +3926,9 @@ function enhanceOpeningRoster() {
   document.querySelectorAll?.('.picklist-vto-driver').forEach(card=>{
     const menu=card.querySelector?.('.picklist-vto-actions');if(!menu)return;
     let closeTimer=null;
-    const keepOpen=()=>{clearTimeout(closeTimer);closeTimer=null;card.classList.add('linger-open');};
-    const closeSoon=()=>{clearTimeout(closeTimer);closeTimer=setTimeout(()=>card.classList.remove('linger-open'),700);};
+    const closeCard=target=>{target.classList.remove('is-popup-open','linger-open');target.setAttribute('aria-expanded','false');};
+    const keepOpen=()=>{clearTimeout(closeTimer);closeTimer=null;document.querySelectorAll?.('.picklist-vto-driver.is-popup-open,.picklist-vto-driver.linger-open').forEach(other=>{if(other!==card)closeCard(other);});card.classList.add('is-popup-open','linger-open');card.setAttribute('aria-expanded','true');};
+    const closeSoon=()=>{clearTimeout(closeTimer);closeTimer=setTimeout(()=>closeCard(card),700);};
     card.addEventListener('pointerenter',keepOpen);card.addEventListener('pointerleave',closeSoon);
     menu.addEventListener('pointerenter',keepOpen);menu.addEventListener('pointerleave',closeSoon);
     card.addEventListener('focusin',keepOpen);card.addEventListener('focusout',closeSoon);
@@ -3944,6 +3964,7 @@ function performVtoRouteSwap(routeUid='') {
   const applied=protectRouteOperationalData(route,()=>{people[0]=incoming;route.driver=people.join(' + ');clearRouteAssignmentVacancy(route);return true;});
   if(!applied)return {ok:false,error:'The route swap could not be completed'};
   reconcileDailyRosterFlags(incoming,'on-route');setRosterBackupState(outgoing,outgoingRole,outgoingVto);
+  recordPicklistRosterChange({from:outgoing,to:incoming,route:route.route,wave:route.wave,kind:'swap'});
   return {ok:true,incoming,outgoing,outgoingVto,route:route.route,wave:route.wave};
 }
 function applyVtoRouteSwap() {
@@ -3968,6 +3989,7 @@ function applyRosterSwap() {
   reconcileDailyRosterFlags(replacement,'on-route');
   const calledOffName=swap.driverLabel||contactForMorningDriver(swap.driverName)?.name||swap.driverName;
   if(swap.mode==='calloff'){reconcileDailyRosterFlags(calledOffName,'calloff');state.callOffDriverKeys[callOffStatusKey(calledOffName)]={name:calledOffName,route:swap.route,at:new Date().toISOString()};}
+  recordPicklistRosterChange({from:isVacancy?'Unassigned':calledOffName,to:exactReplacement,route:route.route,wave:route.wave,kind:isVacancy?'assignment':'swap'});
   state.pendingRosterSwap=null;state.modal=null;persist();render();toast(`${calledOffName} replaced by ${replacement} on ${swap.route}`);
 }
 function leaveRosterRouteUnassigned() {
@@ -4052,7 +4074,7 @@ function applyRouteVtoSwap() {
   if(people.some(name=>driverIdentityKey(name)===driverIdentityKey(incoming)))return toast('That VTO driver is already on this route','error');
   const outgoing=canonicalDriverName(people[index]),outgoingRole=routeContextDriverRole(outgoing),outgoingVto=scheduleBackupLabel(outgoingRole);
   reconcileDailyRosterFlags(incoming,'on-route');const applied=protectRouteOperationalData(route,()=>{people[index]=incoming;route.driver=people.join(' + ');if(index===0)clearRouteAssignmentVacancy(route);else {delete route.missingHelper;delete route.vacatedHelper;}return true;});if(!applied)return toast('The VTO route swap could not be completed','error');
-  setRosterBackupState(outgoing,outgoingRole,outgoingVto);state.pendingRouteVtoSwap=null;state.modal=null;persist();render();toast(`${driverDisplayName(incoming)} took ${route.route} · ${driverDisplayName(outgoing)} moved to ${outgoingVto}`);return true;
+  setRosterBackupState(outgoing,outgoingRole,outgoingVto);recordPicklistRosterChange({from:outgoing,to:incoming,route:route.route,wave:route.wave,kind:'swap'});state.pendingRouteVtoSwap=null;state.modal=null;persist();render();toast(`${driverDisplayName(incoming)} took ${route.route} · ${driverDisplayName(outgoing)} moved to ${outgoingVto}`);return true;
 }
 function applyDriverRouteContextAction(target='',el=null) {
   const menu=el?.closest?.('#driver-route-context-menu')||document.getElementById?.('driver-route-context-menu'),routeUid=el?.dataset?.routeUid||'',name=menu?.querySelector?.('#driver-route-context-person')?.value||'',route=morningRouteByUid(routeUid);closeDriverRouteContextMenu();if(!route||!name)return toast('That driver assignment is no longer available','error');
@@ -4073,7 +4095,6 @@ function startOpeningPicklistCellEdit(source) {
   if(target.dataset.picklistField==='driver'){const route=morningRouteByUid(target.dataset.picklistRouteUid)||(Number(target.dataset.picklistRouteIndex)>=0?state.morningRoutes[Number(target.dataset.picklistRouteIndex)]:null);if(route)target.textContent=driverDisplayValue(route.driver||'');}
   target.focus({preventScroll:true});
   const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
-  target.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 function operationalSheetSnapshot() {
   return JSON.parse(JSON.stringify({morningRoutes:state.morningRoutes||[],morningOperationDate:state.morningOperationDate,morningWaveTimeOverrides:state.morningWaveTimeOverrides||{},fitMorningRows:state.fitMorningRows,fitOpeningPicklistRows:state.fitOpeningPicklistRows,callOffDriverKeys:state.callOffDriverKeys||{},callOffReasons:state.callOffReasons||{},scheduleDriverMarks:state.scheduleDriverMarks||{},scheduleBackupRecords:state.scheduleBackupRecords||{},openingPicklistTopics:state.openingPicklistTopics||[],openingPicklistNotes:state.openingPicklistNotes||'',openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts||[],openingPicklistBackupOverrides:state.openingPicklistBackupOverrides||{},openingPicklistLabels:state.openingPicklistLabels||{}}));
@@ -4384,14 +4405,42 @@ function filterVtoRouteSwapOptions(input) {
   const confirm=document.querySelector('[data-action="apply-vto-route-swap"]');if(confirm)confirm.disabled=!count;
 }
 
+const UI_SCROLL_MEMORY_SELECTORS=['.sheet-scroll','.opening-picklist-scroll','.device-sheet-table-wrap'];
+let deferredCloudRender=false;
+function activeOperationalEditor() {
+  const el=document.activeElement;
+  return Boolean(el&&el!==document.body&&el.matches?.('[data-device-sheet-field],[data-device-custom-field],[data-picklist-edit],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes]'));
+}
+function captureUiScrollMemory() {
+  const containers=[];
+  UI_SCROLL_MEMORY_SELECTORS.forEach(selector=>document.querySelectorAll?.(selector).forEach((el,index)=>containers.push({selector,index,left:el.scrollLeft||0,top:el.scrollTop||0})));
+  const renderedPage=document.querySelector?.('.nav-item.active[data-page]')?.dataset?.page||state.page;
+  return {page:renderedPage,x:window.scrollX||0,y:window.scrollY||0,containers};
+}
+function restoreUiScrollMemory(memory) {
+  if(!memory||memory.page!==state.page)return;
+  memory.containers.forEach(item=>{const el=document.querySelectorAll?.(item.selector)?.[item.index];if(el){el.scrollLeft=item.left;el.scrollTop=item.top;}});
+  window.scrollTo?.({left:memory.x,top:memory.y,behavior:'instant'});
+}
+function renderFromCloudEvent() {
+  if(activeOperationalEditor()){deferredCloudRender=true;return false;}
+  render();return true;
+}
+function flushDeferredCloudRender() {
+  if(!deferredCloudRender||activeOperationalEditor())return;
+  deferredCloudRender=false;render();
+}
+document.addEventListener?.('focusout',()=>setTimeout(flushDeferredCloudRender,80),true);
+
 function render() {
+  closeDriverProfilePopover();
+  closeDriverRouteContextMenu();
+  closeDriverSuggestions();
+  const scrollMemory=captureUiScrollMemory();deferredCloudRender=false;
   const previouslyOpen=modalWasOpen;
   if(PARKING_ONLY_VIEW&&!FLEET_TEAM_ALLOWED_PAGES.has(state.page))state.page=FLEET_TEAM_START_PAGE;
   if(state.page==='admin'&&!hasOwnerAdminAccess()){state.page='dashboard';state.modal='admin-pin';}
   if(state.modal&&!previouslyOpen)modalReturnFocus=captureModalReturnFocus();
-  closeDriverProfilePopover();
-  closeDriverRouteContextMenu();
-  closeDriverSuggestions();
   app.innerHTML = `<div class="app-shell ${PARKING_ONLY_VIEW?'parking-only-shell':''}">${sidebar()}<main class="main">${topbar()}<div class="content">${pageContent()}</div></main></div>${modal()}<div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>`;
   enhanceDriverTextButtons();
   enhanceDriverStayHomeControls();
@@ -4400,15 +4449,17 @@ function render() {
   enhanceItineraryRtsModal();
   bind();
   syncModalFocus(previouslyOpen);
+  restoreUiScrollMemory(scrollMemory);
   scheduleOperationalReminderCheck();
 }
 
 function renderNavigationPage() {
+  closeDriverProfilePopover();closeDriverRouteContextMenu();closeDriverSuggestions();
+  const scrollMemory=captureUiScrollMemory();deferredCloudRender=false;
   const content=document.querySelector?.('.content'),currentTopbar=document.querySelector?.('.topbar'),currentSidebar=document.getElementById?.('sidebar');
   if(!content||!currentTopbar||!currentSidebar)return render();
   document.querySelector?.('.modal-backdrop')?.remove?.();
   modalWasOpen=false;modalReturnFocus=null;
-  closeDriverProfilePopover();closeDriverRouteContextMenu();closeDriverSuggestions();
   currentSidebar.querySelectorAll?.('.nav-item[data-page]').forEach(item=>{
     const active=item.dataset.page===state.page;item.classList.toggle('active',active);
     if(active)item.setAttribute('aria-current','page');else item.removeAttribute('aria-current');
@@ -4421,6 +4472,7 @@ function renderNavigationPage() {
   enhanceMorningParkingAssignment();
   enhanceItineraryRtsModal();
   bind();
+  restoreUiScrollMemory(scrollMemory);
   scheduleOperationalReminderCheck();
 }
 
@@ -4883,7 +4935,6 @@ function startMorningCellEdit(source) {
   selectSheetCell(target);
   const range=document.createRange();range.selectNodeContents(target);range.collapse(false);
   const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
-  target.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 
 function saveMorningEditCell(el) {
@@ -5467,13 +5518,15 @@ function action(name,el) {
   if (name==='remove-driver-custom-flag') return removeDriverCustomFlag(el.dataset.driverName||'',el.dataset.driverFlag||'');
   if (name==='acknowledge-early-calloff-reminder') return acknowledgeEarlyCalloffReminder();
   if (name==='acknowledge-pad-check-reminder') return acknowledgePadCheckReminder();
+  if (name==='acknowledge-screenshot-review') return acknowledgeScreenshotReview(el.dataset.reviewCheck||'');
+  if (name==='continue-picklist-screenshot') return continuePicklistScreenshot();
   if (name==='parking-choose-file') { state.importPurpose='parking';fileInput.accept=importAcceptForPurpose('parking');return fileInput.click(); }
   if (name==='report-charging-station') return openChargerReport(el.dataset.chargerKey||'');
   if (name==='copy-charger-report') return copyChargerReportOnly();
   if (name==='copy-open-charger-slack') return copyChargerReportAndOpenSlack();
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingRouteTrainer=null;state.pendingRouteVtoSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.fleetRefreshPreview=null;return render(); }
+  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingRouteTrainer=null;state.pendingRouteVtoSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=importAcceptForPurpose(state.importPurpose);return fileInput.click(); }
   if (name==='schedule-import') { state.scheduleImportDestination=state.page==='rostering'?'rostering':'roster';state.importPurpose='schedule';fileInput.accept='.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf';return fileInput.click(); }
   if (name==='rostering-import-screenshot') { state.importPurpose='rostering-screenshot';fileInput.accept=importAcceptForPurpose('rostering-screenshot');return fileInput.click(); }
@@ -6728,7 +6781,7 @@ function applyImport() {
     }).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||routeCompare(a.route,b.route)||a.staging.localeCompare(b.staging,undefined,{numeric:true}));
     state.routes=state.morningRoutes.map((r,i)=>({route:r.route,driver:r.driver,id:`DA-${1100+i}`,wave:r.wave,staging:r.staging,van:'Unassigned',device:'Unassigned',stops:r.stops,packages:r.packages,progress:0,delta:0,status:r.driver==='Unassigned driver'?'Needs review':'Assigned',rescue:'—'}));
     const importedWaves=[...new Set(state.morningRoutes.filter(row=>!isExplicitAdhocMorningRoute(row)&&!isExplicitHelperMorningRoute(row)).map(row=>row.wave).filter(Boolean))];state.openingPicklistWaveSlots=Math.min(5,importedWaves.length);state.openingPicklistShowAdhoc=true;
-    state.lastImportExcluded=excluded;state.lastMorningImportFingerprint=`${state.morningOperationDate}|${Date.now()}|${String(f.name||'morning-files').slice(0,120)}`;state.modal='pad-check-reminder';state.page='morning';state.morningFilters={wave:'all',staging:'all',pad:'all'};state.rosterPublished=false;persist();render();return toast(`${state.morningRoutes.length} ${state.dspCode} routes loaded across every Service Type · ${excluded} other-DSP or non-route rows skipped`);
+    state.lastImportExcluded=excluded;state.lastMorningImportFingerprint=`${state.morningOperationDate}|${Date.now()}|${String(f.name||'morning-files').slice(0,120)}`;state.modal=null;state.page='morning';state.morningFilters={wave:'all',staging:'all',pad:'all'};state.rosterPublished=false;persist();render();return toast(`${state.morningRoutes.length} ${state.dspCode} routes loaded across every Service Type · ${excluded} other-DSP or non-route rows skipped`);
   }
   state.routes=f.rows.map((r,i)=>({route:r[ix.route]||`IMP-${i+1}`,driver:firstDriverName(r[ix.driver]||'Unassigned driver'),id:`DA-${1100+i}`,wave:r[ix.wave]||'Wave pending',staging:r[ix.staging]||'—',van:r[ix.van]||'Unassigned',device:r[ix.device]||'Unassigned',stops:Number(r[ix.stops])||0,packages:Number(r[ix.packages])||0,progress:0,delta:0,status:(r[ix.driver]&&r[ix.van])?'Assigned':'Needs review',rescue:'—'}));
   state.modal=null;state.page='roster';state.rosterPublished=false;persist();render();toast(`${state.routes.length} routes imported — review before publishing`);
@@ -6810,7 +6863,7 @@ function moveDeviceEntryDown(el) {
   const row=el?.closest?.('tr'),table=el?.closest?.('table');if(!row||!table)return el?.blur?.();
   const rows=[...(table.tBodies?.[0]?.rows||[])],rowIndex=rows.indexOf(row),column=el.closest('td,th')?.cellIndex??-1;
   const next=rows[rowIndex+1]?.cells?.[column]?.querySelector?.('input');
-  if(next){next.focus();next.select?.();}else el.blur();
+  if(next){next.focus({preventScroll:true});next.select?.();}else el.blur();
 }
 function removeCustomDeviceRow(uid='') {
   for(const section of ['ev','gas','helper']){
@@ -8413,7 +8466,19 @@ function buildPicklistScreenshot() {
   return canvas.toDataURL('image/jpeg',.94);
 }
 function previewWaveScreenshot(){const rows=filteredMorningRows();if(!rows.length)return toast('No wave rows are visible to capture','error');state.screenshotKind='morning';state.screenshotPreview=buildWaveScreenshot(rows);state.modal='screenshot';render();}
-function previewPicklistScreenshot(){const rows=openingPicklistSections().flatMap(section=>section.rows);if(!rows.length)return toast('No Picklist waves are available to capture','error');state.screenshotKind='picklist';state.screenshotPreview=buildPicklistScreenshot();state.modal='screenshot';render();}
+function previewPicklistScreenshot(){const rows=openingPicklistSections().flatMap(section=>section.rows);if(!rows.length)return toast('No Picklist waves are available to capture','error');state.screenshotReview={pads:false,cortex:false};state.screenshotPreview=null;state.screenshotKind='picklist';state.modal='picklist-screenshot-review';render();}
+function acknowledgeScreenshotReview(check='') {
+  if(!['pads','cortex'].includes(check))return;
+  state.screenshotReview={...(state.screenshotReview||{pads:false,cortex:false}),[check]:true};
+  if(check==='pads'){
+    const key=String(state.lastMorningImportFingerprint||'');if(key){state.padCheckAcknowledgements=state.padCheckAcknowledgements&&typeof state.padCheckAcknowledgements==='object'?state.padCheckAcknowledgements:{};state.padCheckAcknowledgements[key]={date:state.morningOperationDate,acknowledgedAt:new Date().toISOString(),source:'picklist-screenshot'};persist();}
+  }
+  render();
+}
+function continuePicklistScreenshot() {
+  if(!state.screenshotReview?.pads||!state.screenshotReview?.cortex)return toast('Confirm pads and Cortex swaps first','error');
+  state.screenshotPreview=buildPicklistScreenshot();state.screenshotKind='picklist';state.modal='screenshot';render();
+}
 function saveWaveScreenshot(){if(!state.screenshotPreview)return;const a=document.createElement('a');a.href=state.screenshotPreview;a.download=state.screenshotKind==='picklist'?`${state.dspCode}-opening-picklist-${state.morningOperationDate}.jpg`:`${state.dspCode}-${state.morningFilters.wave==='all'?'all-waves':state.morningFilters.wave.replace(/[^a-z0-9]+/gi,'-')}.jpg`;document.body.appendChild(a);a.click();a.remove();state.modal=null;state.screenshotPreview=null;state.screenshotKind='';render();toast('Approved JPEG saved — ready for GroupMe');}
 function printOpeningPicklistOnePage() {
   const sheet=document.querySelector?.('.opening-picklist-sheet'),frame=document.querySelector?.('.opening-picklist-scroll');
@@ -8494,6 +8559,7 @@ localStorage.setItem('relayops_fit_picklist_rows',String(Boolean(state.fitOpenin
 localStorage.setItem('relayops_opening_picklist_calloff_drafts',JSON.stringify(state.openingPicklistCalloffDrafts||[]));
 localStorage.setItem('relayops_opening_picklist_backup_overrides',JSON.stringify(state.openingPicklistBackupOverrides||{}));
 localStorage.setItem('relayops_opening_picklist_labels',JSON.stringify(state.openingPicklistLabels||{}));
+localStorage.setItem('relayops_picklist_swap_audit',JSON.stringify((state.picklistSwapAudit||[]).slice(-160)));
 localStorage.setItem('relayops_morning_wave_time_overrides',JSON.stringify(state.morningWaveTimeOverrides||{}));
 localStorage.setItem('relayops_schedule_helpers',JSON.stringify(state.scheduleHelpers||{}));
 localStorage.setItem('relayops_whiparound_inspections',JSON.stringify(state.whiparoundInspections||[]));
@@ -8531,7 +8597,7 @@ function sharedWorkspaceState() {
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),
     messageQueueTemplate:state.messageQueueTemplate,messageQueueStatus:state.messageQueueStatus,coachingQueue:normalizeCoachingQueue(state.coachingQueue),coachingTemplate:state.coachingTemplate,
-    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringHelperPool:state.rosteringHelperPool,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleBackupRecords:state.scheduleBackupRecords,scheduleStayHome:state.scheduleStayHome,scheduleStayHomeHistory:state.scheduleStayHomeHistory,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,morningWaveTimeOverrides:state.morningWaveTimeOverrides,earlyCalloffAcknowledgements:state.earlyCalloffAcknowledgements,padCheckAcknowledgements:state.padCheckAcknowledgements,lastMorningImportFingerprint:state.lastMorningImportFingerprint,fitMorningRows:state.fitMorningRows,fitOpeningPicklistRows:state.fitOpeningPicklistRows,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,sheetHistory:state.sheetHistory,
+    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringHelperPool:state.rosteringHelperPool,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleBackupRecords:state.scheduleBackupRecords,scheduleStayHome:state.scheduleStayHome,scheduleStayHomeHistory:state.scheduleStayHomeHistory,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,morningWaveTimeOverrides:state.morningWaveTimeOverrides,earlyCalloffAcknowledgements:state.earlyCalloffAcknowledgements,padCheckAcknowledgements:state.padCheckAcknowledgements,lastMorningImportFingerprint:state.lastMorningImportFingerprint,fitMorningRows:state.fitMorningRows,fitOpeningPicklistRows:state.fitOpeningPicklistRows,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,picklistSwapAudit:state.picklistSwapAudit,sheetHistory:state.sheetHistory,
     whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
     inventoryItems:state.inventoryItems,inventoryLog:state.inventoryLog,
     morningSheetsEndpoint:state.morningSheetsEndpoint,slackReportRoomUrl:state.slackReportRoomUrl,chargerReports:normalizeChargerReports(state.chargerReports||[])
@@ -8552,7 +8618,7 @@ function persistentWorkspaceState() {
   };
 }
 function applySharedWorkspaceState(payload={}) {
-  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','messageQueueTemplate','messageQueueStatus','coachingQueue','coachingTemplate','scheduleEntries','scheduleImportName','rosteringDate','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleStayHomeHistory','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','fitMorningRows','fitOpeningPicklistRows','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','messageQueueTemplate','messageQueueStatus','coachingQueue','coachingTemplate','scheduleEntries','scheduleImportName','rosteringDate','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleStayHomeHistory','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','fitMorningRows','fitOpeningPicklistRows','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','picklistSwapAudit','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
   state.equipmentIssues=normalizeEquipmentIssuesStore(state.equipmentIssues||{});
@@ -8584,6 +8650,7 @@ function applySharedWorkspaceState(payload={}) {
   state.openingPicklistCalloffDrafts=Array.isArray(state.openingPicklistCalloffDrafts)?state.openingPicklistCalloffDrafts:[];
   state.openingPicklistBackupOverrides=state.openingPicklistBackupOverrides&&typeof state.openingPicklistBackupOverrides==='object'?state.openingPicklistBackupOverrides:{};
   state.openingPicklistLabels=state.openingPicklistLabels&&typeof state.openingPicklistLabels==='object'?state.openingPicklistLabels:{};
+  state.picklistSwapAudit=Array.isArray(state.picklistSwapAudit)?state.picklistSwapAudit.slice(-160):[];
   state.inventoryItems=normalizeInventoryItems(state.inventoryItems);state.inventoryLog=normalizeInventoryLog(state.inventoryLog);
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   persist();
@@ -8611,19 +8678,19 @@ function applyPersistentWorkspaceState(payload={}) {
 }
 window.RelayOpsApp={sharedState:sharedWorkspaceState,persistentState:persistentWorkspaceState,applySharedState:applySharedWorkspaceState,applyPersistentState:applyPersistentWorkspaceState,operationDate:()=>state.morningOperationDate,morningSheetsPayload:()=>morningSheetsConnectorPayload()};
 window.RelayOpsCloud?.on?.(event=>{
-  if(event.type==='offline'){state.cloudStatus='offline';render();}
-  if(event.type==='reconnecting'){state.cloudStatus='connecting';render();}
-  if(event.type==='auth'){state.cloudStatus=event.session?'connecting':'connecting';state.cloudUser=event.session?.user?.is_anonymous?'Shared link':event.session?.user?.email||'Shared link';state.cloudAccessError='';state.cloudSigninError='';state.cloudSigninCooldownUntil=0;localStorage.removeItem('relayops_cloud_signin_cooldown_until');if(!event.session)state.role='viewer';render();}
-  if(event.type==='admin-status'){state.adminPinUnlocked=Boolean(event.unlocked);render();}
-  if(event.type==='access-granted'){state.cloudAccessError='';state.role=['fleet_lead','viewer'].includes(event.membership?.role)?event.membership.role:'dispatcher';render();}
-  if(event.type==='access-denied'){state.cloudStatus='access-denied';state.cloudAccessError='Automatic shared-link access has not been provisioned for this browser.';render();toast('Shared link access needs repair in Supabase','error');}
-  if(event.type==='link-access-error'){state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';render();toast(`Shared access failed: ${state.cloudAccessError}`,'error');if(cloudAutoRetryAttempts<2){cloudAutoRetryAttempts++;setTimeout(()=>retryCloudLinkAccess(true),750*cloudAutoRetryAttempts);}}
-  if(event.type==='workspace-empty'){state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';render();toast('Shared workspace is not initialized for this day yet','error');}
-  if(event.type==='presence'){state.cloudPresence=event.users||[];render();}
-  if(event.type==='loaded'||event.type==='saved'){state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;render();}
-  if(event.type==='remote-update'){state.cloudStatus='synced';render();toast('Another dispatcher updated today’s workspace');}
+  if(event.type==='offline'){state.cloudStatus='offline';renderFromCloudEvent();}
+  if(event.type==='reconnecting'){state.cloudStatus='connecting';renderFromCloudEvent();}
+  if(event.type==='auth'){state.cloudStatus=event.session?'connecting':'connecting';state.cloudUser=event.session?.user?.is_anonymous?'Shared link':event.session?.user?.email||'Shared link';state.cloudAccessError='';state.cloudSigninError='';state.cloudSigninCooldownUntil=0;localStorage.removeItem('relayops_cloud_signin_cooldown_until');if(!event.session)state.role='viewer';renderFromCloudEvent();}
+  if(event.type==='admin-status'){state.adminPinUnlocked=Boolean(event.unlocked);renderFromCloudEvent();}
+  if(event.type==='access-granted'){state.cloudAccessError='';state.role=['fleet_lead','viewer'].includes(event.membership?.role)?event.membership.role:'dispatcher';renderFromCloudEvent();}
+  if(event.type==='access-denied'){state.cloudStatus='access-denied';state.cloudAccessError='Automatic shared-link access has not been provisioned for this browser.';renderFromCloudEvent();toast('Shared link access needs repair in Supabase','error');}
+  if(event.type==='link-access-error'){state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';renderFromCloudEvent();toast(`Shared access failed: ${state.cloudAccessError}`,'error');if(cloudAutoRetryAttempts<2){cloudAutoRetryAttempts++;setTimeout(()=>retryCloudLinkAccess(true),750*cloudAutoRetryAttempts);}}
+  if(event.type==='workspace-empty'){state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';renderFromCloudEvent();toast('Shared workspace is not initialized for this day yet','error');}
+  if(event.type==='presence'){state.cloudPresence=event.users||[];renderFromCloudEvent();}
+  if(event.type==='loaded'||event.type==='saved'){state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;renderFromCloudEvent();}
+  if(event.type==='remote-update'){state.cloudStatus='synced';renderFromCloudEvent();toast('Another dispatcher updated today’s workspace');}
   if(event.type==='conflict')toast('A newer dispatcher update was loaded before saving','error');
-  if(event.type==='error'){state.cloudStatus='error';render();toast(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
+  if(event.type==='error'){state.cloudStatus='error';renderFromCloudEvent();toast(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
 });
 render();
 window.RelayOpsCloud?.init?.().catch(error=>console.error('RelayOps cloud initialization failed',error));
