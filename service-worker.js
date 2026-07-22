@@ -1,4 +1,4 @@
-const CACHE='relayops-shared-sync-recovery-v53';
+const CACHE='relayops-adhoc-cortex-tracker-v54';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{
