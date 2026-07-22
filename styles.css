@@ -2521,7 +2521,7 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 }
 
 /* Opening Picklist: exact Morning Sheet setup columns, with room beside it for future tools. */
-.picklist-more-tools,.opening-picklist-print { width:min(100%,1080px); max-width:1080px; box-sizing:border-box; }
+.picklist-more-tools,.opening-picklist-print { width:min(100%,1450px); max-width:1450px; box-sizing:border-box; }
 .picklist-more-tools { margin-top:16px; padding:0; overflow:hidden; }
 .picklist-more-tools > summary { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 16px; cursor:pointer; list-style:none; }
 .picklist-more-tools > summary span { display:grid; gap:2px; }
@@ -2535,7 +2535,7 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .print-picklist-button { min-height:36px; white-space:nowrap; }
 .picklist-edit-help { padding:9px 15px; color:#254f6d; background:#e9f6ff; border-bottom:1px solid #bedcf0; font-size:9px; font-weight:800; }
 .opening-picklist-scroll { width:100%; max-width:100%; overflow:auto; background:#dfe6ea; -webkit-overflow-scrolling:touch; }
-.opening-picklist-sheet { min-width:1014px; width:1014px; display:grid; grid-template-columns:702px 300px; gap:12px; align-items:stretch; background:#000; font-family:Arial,Helvetica,sans-serif; color:#050505; }
+.opening-picklist-sheet { min-width:1386px; width:1386px; display:grid; grid-template-columns:702px 300px 360px; gap:12px; align-items:start; background:linear-gradient(90deg,#000 0 1014px,#e9f0f4 1014px); font-family:Arial,Helvetica,sans-serif; color:#050505; }
 .opening-picklist-main,.picklist-side-table { width:100%; min-width:0; border-collapse:collapse; table-layout:fixed; background:#fff; }
 .opening-picklist-main { width:702px; font-size:12px; font-weight:700; }
 .opening-picklist-main .pick-col-wave { width:62px; }
@@ -2602,6 +2602,24 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .opening-picklist-main .reported-van-cell { background:#fff1c8!important; }
 .opening-picklist-right { min-width:0; display:flex; flex-direction:column; background:#fff; }
 .picklist-swap-tracker{flex:0 0 auto;border:1px solid #111;background:#f7fafc;font-family:Manrope,Arial,sans-serif}.picklist-swap-tracker>header{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:36px;padding:6px 8px;background:#1f3d52;color:#fff}.picklist-swap-tracker>header>span{display:grid;gap:1px}.picklist-swap-tracker>header strong{font-size:8px;letter-spacing:.08em}.picklist-swap-tracker>header small{color:#c8dae5;font-size:6px}.picklist-swap-tracker>header>b{display:grid;place-items:center;min-width:22px;height:22px;border-radius:7px;background:#78c7ef;color:#123d58;font-size:9px}.picklist-swap-tracker-list{display:grid;max-height:178px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}.picklist-swap-tracker-list>label{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 25px;align-items:center;gap:4px;min-height:39px;padding:5px 5px 5px 8px;border-bottom:1px solid #cdd8df;background:#fff;cursor:pointer}.picklist-swap-tracker-list>label:hover{background:#f0f8fc}.picklist-swap-tracker-list>label.confirmed{background:#effaf2}.picklist-swap-tracker-list>label>span{display:grid;grid-template-columns:minmax(0,1fr) 17px minmax(0,1fr);align-items:center;gap:3px;min-width:0}.picklist-swap-tracker-list em{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#29495e;font-size:7px;font-style:normal;font-weight:900}.picklist-swap-tracker-list em:nth-of-type(2){color:#23704a}.picklist-swap-tracker-list i{color:#8061aa;text-align:center;font-size:11px;font-style:normal;font-weight:900}.picklist-swap-tracker-list small{grid-column:1/-1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#718691;font-size:6px}.picklist-swap-tracker-list input{position:absolute;opacity:0;pointer-events:none}.picklist-swap-tracker-list label>b{display:grid;place-items:center;width:20px;height:20px;border:1.5px solid #91a5b2;border-radius:6px;background:#fff;color:transparent;font-size:10px}.picklist-swap-tracker-list label.confirmed>b{border-color:#48a76c;background:#48a76c;color:#fff}.picklist-swap-tracker-list label:focus-within>b{outline:2px solid #4d9dcc;outline-offset:1px}.picklist-swap-empty{padding:16px 10px;color:#778b96;text-align:center;font-size:7px;font-weight:700}
+.opening-picklist-swap-rail { min-width:0; align-self:start; padding:0 0 18px; background:#e9f0f4; }
+.opening-picklist-swap-rail .picklist-swap-tracker { position:sticky; top:12px; overflow:hidden; border:1px solid #b8ccd8; border-radius:16px; background:#fff; box-shadow:0 14px 34px rgba(29,63,84,.16); font-family:Manrope,Arial,sans-serif; }
+.opening-picklist-swap-rail .picklist-swap-tracker > header { min-height:66px; padding:12px 14px; background:linear-gradient(135deg,#173d56,#245d7b); }
+.opening-picklist-swap-rail .picklist-swap-tracker > header > span { gap:4px; min-width:0; }
+.opening-picklist-swap-rail .picklist-swap-tracker > header strong { font-size:12px; letter-spacing:.08em; }
+.opening-picklist-swap-rail .picklist-swap-tracker > header small { color:#d3e6f1; font-size:8px; line-height:1.35; }
+.opening-picklist-swap-rail .picklist-swap-tracker > header > b { min-width:34px; height:34px; border-radius:11px; background:#82d0f5; color:#123d58; font-size:15px; }
+.opening-picklist-swap-rail .picklist-swap-tracker-list { max-height:min(620px,calc(100vh - 210px)); }
+.opening-picklist-swap-rail .picklist-swap-tracker-list > label { grid-template-columns:minmax(0,1fr) 34px; gap:10px; min-height:66px; padding:10px 11px 10px 14px; border-bottom-color:#d9e3e9; }
+.opening-picklist-swap-rail .picklist-swap-tracker-list > label > span { grid-template-columns:minmax(0,1fr) 26px minmax(0,1fr); gap:5px; }
+.opening-picklist-swap-rail .picklist-swap-tracker-list em { overflow:visible; white-space:normal; text-overflow:clip; font-size:10px; line-height:1.25; }
+.opening-picklist-swap-rail .picklist-swap-tracker-list i { color:#8264b6; font-size:17px; }
+.opening-picklist-swap-rail .picklist-swap-tracker-list small { margin-top:4px; color:#6d8492; font-size:8px; }
+.opening-picklist-swap-rail .picklist-swap-tracker-list label > b { width:28px; height:28px; border-width:2px; border-radius:9px; font-size:14px; }
+.opening-picklist-swap-rail .picklist-swap-empty { display:grid; justify-items:center; gap:5px; padding:34px 18px; color:#718794; }
+.opening-picklist-swap-rail .picklist-swap-empty > b { display:grid; place-items:center; width:34px; height:34px; border-radius:50%; background:#e8f6ed; color:#2e8654; font-size:17px; }
+.opening-picklist-swap-rail .picklist-swap-empty strong { color:#35566b; font-size:11px; }
+.opening-picklist-swap-rail .picklist-swap-empty span { font-size:9px; }
 .picklist-side-table { flex:0 0 auto; font-size:10px; }
 .picklist-side-table th { height:23px; background:#bdbdbd; text-align:center; font-weight:800; }
 .picklist-side-table th > span:first-child { vertical-align:middle; }
@@ -2689,6 +2707,12 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
   .print-picklist-button { width:100%; }
   .picklist-tool-actions { align-items:stretch; flex-direction:column; }
   .picklist-tool-actions .btn { width:100%; }
+  .opening-picklist-sheet { min-width:1014px; width:1014px; grid-template-columns:702px 300px; grid-template-rows:auto auto; background:#000; }
+  .opening-picklist-main { grid-column:1; grid-row:2; }
+  .opening-picklist-right { grid-column:2; grid-row:2; }
+  .opening-picklist-swap-rail { grid-column:1/-1; grid-row:1; display:flex; justify-content:flex-start; padding:10px; background:#e9f0f4; }
+  .opening-picklist-swap-rail .picklist-swap-tracker { position:static; width:360px; max-width:calc(100vw - 48px); box-sizing:border-box; }
+  .opening-picklist-swap-rail .picklist-swap-tracker-list { max-height:220px; }
   .training-browser { min-height:calc(100vh - 120px); border-radius:12px; }
   .training-browser-bar { grid-template-columns:1fr auto; }
   .training-browser-dots { display:none; }
@@ -2896,6 +2920,7 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
   .opening-picklist-toolbar,.picklist-edit-help { display:none!important; }
   .opening-picklist-scroll { position:relative!important; width:var(--picklist-print-width,1000px)!important; height:var(--picklist-print-height,1530px)!important; overflow:hidden!important; background:#fff!important; break-inside:avoid-page!important; page-break-inside:avoid!important; }
   .opening-picklist-sheet { position:absolute!important; left:0!important; top:0!important; min-width:1014px!important; width:1014px!important; grid-template-columns:702px 300px!important; gap:12px!important; zoom:1!important; transform:scale(var(--picklist-print-scale,.72))!important; transform-origin:top left!important; break-inside:avoid-page!important; page-break-inside:avoid!important; print-color-adjust:exact!important; -webkit-print-color-adjust:exact!important; }
+  .opening-picklist-swap-rail { display:none!important; }
   .opening-picklist-main,.picklist-side-table,.opening-picklist-right,.picklist-notes { break-inside:avoid!important; print-color-adjust:exact!important; -webkit-print-color-adjust:exact!important; }
   .picklist-side-table input,.picklist-notes textarea,.picklist-date input { color:#000!important; -webkit-text-fill-color:#000!important; opacity:1!important; }
   .picklist-wave-delete,.vehicle-issue-popover,.van-issue-mark { display:none!important; }
