@@ -439,6 +439,7 @@ let state = {
   scheduleImportName: localStorage.getItem('relayops_schedule_import_name') || '',
   scheduleFilter: localStorage.getItem('relayops_schedule_filter') || 'all',
   openingRosterPaycomTab: ['scheduled','marked','unmarked'].includes(localStorage.getItem('relayops_opening_roster_paycom_tab')) ? localStorage.getItem('relayops_opening_roster_paycom_tab') : 'scheduled',
+  openingRosterControlsOpen: localStorage.getItem('relayops_opening_roster_controls_open') === 'true',
   scheduleImportDestination: '',
   rosteringDate: localStorage.getItem('relayops_rostering_date') || defaultOperationDate(),
   rosteringPlans: JSON.parse(localStorage.getItem('relayops_rostering_plans') || 'null') || {},
@@ -843,7 +844,10 @@ const pageInfo = {
   reports:['Reports & export','Google Sheets-ready operational data'], achat:['A-Chat','A small dispatcher helper for quick operational answers'], admin:['Admin access','People, permissions, connections, and audit history']
 };
 
+let operationalAlertGroupsCache=null;
+function invalidateOperationalAlertGroups() { operationalAlertGroupsCache=null; }
 function operationalAlertGroups() {
+  if(operationalAlertGroupsCache)return operationalAlertGroupsCache;
   const preview=rows=>rows.slice(0,3).map(vehicle=>fleetDisplayName(vehicle)||vehicle.name||vehicle.vin).join(', ')+(rows.length>3?` +${rows.length-3}`:'');
   const grounded=rivianFleet.filter(vehicle=>String(vehicle.operational||'').toLowerCase()==='grounded');
   const inactive=rivianFleet.filter(vehicle=>String(vehicle.active||'').toLowerCase()==='inactive');
@@ -851,7 +855,7 @@ function operationalAlertGroups() {
   const issueVans=Object.values(state.fleetIssues||{}).filter(group=>group?.active?.length),issueRows=issueVans.flatMap(group=>group.active);
   const rts=(state.morningRoutes||[]).filter(route=>route.dsp===state.dspCode&&route.plannedRtsIssue);
   let whip={missingPre:[],missingPost:[]};try{whip=whiparoundStatus();}catch(error){console.warn('Alert center could not build Whiparound summary',error);}
-  return [
+  operationalAlertGroupsCache=[
     {id:'grounded',label:'Grounded vehicles',count:grounded.length,detail:preview(grounded)||'No grounded vans',tone:'danger',page:'fleet',filter:'grounded'},
     {id:'inactive',label:'Inactive vehicles',count:inactive.length,detail:preview(inactive)||'No inactive vans',tone:'danger',page:'fleet',filter:'inactive'},
     {id:'low',label:'Low-battery EVs',count:low.length,detail:preview(low)||`No EVs at or below ${LOW_BATTERY_SECTION_THRESHOLD}%`,tone:'warn',page:'fleet',filter:'low'},
@@ -859,7 +863,7 @@ function operationalAlertGroups() {
     {id:'rts',label:'Morning RTS flags',count:rts.length,detail:rts.length?rts.slice(0,3).map(route=>route.route).join(', ')+(rts.length>3?` +${rts.length-3}`:''):'No irregular Planned RTS times',tone:'warn',page:'morning'},
     {id:'whip-pre',label:'Missing Pre-Trip DVIR',count:whip.missingPre.length,detail:whip.missingPre.length?whip.missingPre.slice(0,3).map(row=>row.name).join(', ')+(whip.missingPre.length>3?` +${whip.missingPre.length-3}`:''):'Pre-Trip checks complete',tone:'info',page:'inbox'},
     {id:'whip-post',label:'Missing Post-Trip DVIR',count:whip.missingPost.length,detail:whip.missingPost.length?whip.missingPost.slice(0,3).map(row=>row.name).join(', ')+(whip.missingPost.length>3?` +${whip.missingPost.length-3}`:''):'Post-Trip checks complete',tone:'info',page:'inbox'}
-  ];
+  ];return operationalAlertGroupsCache;
 }
 function operationalAlertCount() { return operationalAlertGroups().reduce((sum,group)=>sum+group.count,0); }
 function notificationButtonHtml() {
@@ -1013,7 +1017,8 @@ function openingPicklistHtml() {
   return `${tools}<article class="card opening-picklist-print"><div class="opening-picklist-toolbar"><div><span class="eyebrow">UNIVERSAL OPENING VIEW</span><h2>Opening Picklist</h2><p>${routeCount} Morning Sheet routes · ${backups.length} backups · ${calloffs.length} call offs · Helpers and DSP excluded</p></div></div>${state.editMode?`<div class="picklist-edit-help">Editing is on. Click any worksheet cell and press Enter to save. Every route edit immediately updates the Morning Sheet.</div>`:''}<div class="opening-picklist-scroll"><div class="opening-picklist-sheet"><table class="opening-picklist-main"><colgroup><col class="pick-col-wave"><col class="pick-col-driver"><col class="pick-col-route"><col class="pick-col-staging"><col class="pick-col-pad"><col class="pick-col-ev"><col class="pick-col-device"><col class="pick-col-portable"></colgroup><thead><tr><th>WAVE</th><th>DRIVER</th><th>ROUTE</th><th>STAGING</th><th>PAD</th><th>EV</th><th>DEVICE</th><th>PORTABLE</th></tr></thead>${sections.map(openingPicklistSectionHtml).join('')}</table>${openingPicklistRightHtml()}<aside class="opening-picklist-swap-rail" aria-label="Cortex driver swap review">${openingPicklistSwapTrackerHtml()}</aside></div></div></article>`;
 }
 function rosterPage() {
-  return `${contextBar(`<span class="status ${state.rosterPublished?'':'warn'}">${state.rosterPublished?'Published to team':'Draft · not sent'}</span>`)}${openingPicklistHtml()}<details class="card opening-roster-tools" open><summary><span><strong>Opening roster controls</strong><small>PAYCOM schedule, route swaps, backups, call offs, stay-home, and reductions</small></span><b>Tools</b></summary>${openingRosterScheduleHtml()}</details>`;
+  const controlsOpen=Boolean(state.openingRosterControlsOpen);
+  return `${contextBar(`<span class="status ${state.rosterPublished?'':'warn'}">${state.rosterPublished?'Published to team':'Draft · not sent'}</span>`)}${openingPicklistHtml()}<details class="card opening-roster-tools" data-opening-roster-controls ${controlsOpen?'open':''}><summary><span><strong>Opening roster controls</strong><small>PAYCOM schedule, route swaps, backups, call offs, stay-home, and reductions</small></span><b>${controlsOpen?'Close':'Open tools'}</b></summary><div class="opening-roster-controls-body" data-opening-roster-controls-body>${controlsOpen?openingRosterScheduleHtml():'<div class="opening-roster-controls-lazy"><strong>Open only when you need roster controls</strong><span>The Picklist stays fast while the large PAYCOM and status lists remain tucked away.</span></div>'}</div></details>`;
 }
 
 function rosteringId(prefix='slot') { return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`; }
@@ -4323,6 +4328,7 @@ function frameThrottle(fn) {
 }
 const persistSoon=debounce(()=>persist(),320);
 function persistRosteringSlice() {
+  invalidateNavigationPageCache();
   localStorage.setItem('relayops_rostering_date',state.rosteringDate||defaultOperationDate());
   localStorage.setItem('relayops_rostering_plans',JSON.stringify(state.rosteringPlans||{}));
   localStorage.setItem('relayops_rostering_helper_pool',JSON.stringify(state.rosteringHelperPool||{}));
@@ -4440,7 +4446,25 @@ function filterVtoRouteSwapOptions(input) {
 }
 
 const UI_SCROLL_MEMORY_SELECTORS=['.sheet-scroll','.opening-picklist-scroll','.device-sheet-table-wrap'];
+const NAVIGATION_PAGE_CACHE_LIMIT=3;
+const navigationPageCache=new Map();
+let navigationRenderToken=0;
 let deferredCloudRender=false;
+function invalidateNavigationPageCache() { navigationPageCache.clear();navigationRenderToken+=1; }
+function rememberNavigationPage(page='',content=null) {
+  if(!page||!content||content.dataset.page!==page||content.dataset.ready!=='true')return;
+  navigationPageCache.delete(page);
+  navigationPageCache.set(page,{nodes:[...content.childNodes]});
+  while(navigationPageCache.size>NAVIGATION_PAGE_CACHE_LIMIT)navigationPageCache.delete(navigationPageCache.keys().next().value);
+}
+function takeNavigationPage(page='') { const entry=navigationPageCache.get(page)||null;if(entry)navigationPageCache.delete(page);return entry; }
+function navigationLoadingHtml() {
+  return `<section class="navigation-skeleton" role="status" aria-live="polite" aria-label="Opening ${esc(pageInfo[state.page]?.[0]||'workspace')}"><div class="navigation-skeleton-title"></div><div class="navigation-skeleton-grid"><i></i><i></i><i></i></div><span>Opening ${esc(pageInfo[state.page]?.[0]||'workspace')}…</span></section>`;
+}
+function recordNavigationTiming(page='',startedAt=Date.now(),cached=false) {
+  const metric={page,ms:Math.max(0,Date.now()-startedAt),cached,at:new Date().toISOString()},content=document.querySelector?.('.content');
+  window.__relayOpsLastNavigation=metric;if(content){content.dataset.navigationMs=String(metric.ms);content.dataset.navigationCached=String(cached);}
+}
 function activeOperationalEditor() {
   const el=document.activeElement;
   return Boolean(el&&el!==document.body&&el.matches?.('[data-device-sheet-field],[data-device-custom-field],[data-picklist-edit],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad]'));
@@ -4470,6 +4494,8 @@ function render() {
   closeDriverProfilePopover();
   closeDriverRouteContextMenu();
   closeDriverSuggestions();
+  invalidateOperationalAlertGroups();
+  invalidateNavigationPageCache();
   const scrollMemory=captureUiScrollMemory();deferredCloudRender=false;
   const previouslyOpen=modalWasOpen;
   if(PARKING_ONLY_VIEW&&!FLEET_TEAM_ALLOWED_PAGES.has(state.page))state.page=FLEET_TEAM_START_PAGE;
@@ -4482,16 +4508,19 @@ function render() {
   enhanceMorningParkingAssignment();
   enhanceItineraryRtsModal();
   bind();
+  const renderedContent=document.querySelector?.('.content');if(renderedContent){renderedContent.dataset.page=state.page;renderedContent.dataset.ready='true';renderedContent.classList.remove('navigation-loading');renderedContent.removeAttribute('aria-busy');}
   syncModalFocus(previouslyOpen);
   restoreUiScrollMemory(scrollMemory);
   scheduleOperationalReminderCheck();
 }
 
-function renderNavigationPage() {
+function renderNavigationPage(previousPage='') {
+  const startedAt=Date.now(),targetPage=state.page,token=++navigationRenderToken;
   closeDriverProfilePopover();closeDriverRouteContextMenu();closeDriverSuggestions();
-  const scrollMemory=captureUiScrollMemory();deferredCloudRender=false;
   const content=document.querySelector?.('.content'),currentTopbar=document.querySelector?.('.topbar'),currentSidebar=document.getElementById?.('sidebar');
   if(!content||!currentTopbar||!currentSidebar)return render();
+  rememberNavigationPage(previousPage,content);
+  deferredCloudRender=false;
   document.querySelector?.('.modal-backdrop')?.remove?.();
   modalWasOpen=false;modalReturnFocus=null;
   currentSidebar.querySelectorAll?.('.nav-item[data-page]').forEach(item=>{
@@ -4499,15 +4528,19 @@ function renderNavigationPage() {
     if(active)item.setAttribute('aria-current','page');else item.removeAttribute('aria-current');
   });
   currentTopbar.outerHTML=topbar();
-  content.innerHTML=pageContent();
-  enhanceDriverTextButtons();
-  enhanceDriverStayHomeControls();
-  enhanceOpeningRoster();
-  enhanceMorningParkingAssignment();
-  enhanceItineraryRtsModal();
-  bind();
-  restoreUiScrollMemory(scrollMemory);
-  scheduleOperationalReminderCheck();
+  const cached=takeNavigationPage(targetPage);
+  if(cached){
+    content.replaceChildren(...cached.nodes);content.dataset.page=targetPage;content.dataset.ready='true';content.classList.remove('navigation-loading');content.removeAttribute('aria-busy');
+    bindGlobalDocumentControls();bindNavigationTopbar(document.querySelector?.('.topbar'));scheduleOperationalReminderCheck();recordNavigationTiming(targetPage,startedAt,true);return;
+  }
+  content.dataset.page=targetPage;content.dataset.ready='false';content.classList.add('navigation-loading');content.setAttribute('aria-busy','true');content.innerHTML=navigationLoadingHtml();
+  const build=()=>{
+    if(token!==navigationRenderToken||state.page!==targetPage||content.dataset.page!==targetPage)return;
+    content.innerHTML=pageContent();
+    enhanceDriverTextButtons();enhanceDriverStayHomeControls();enhanceOpeningRoster();enhanceMorningParkingAssignment();enhanceItineraryRtsModal();bind();
+    content.dataset.ready='true';content.classList.remove('navigation-loading');content.removeAttribute('aria-busy');window.scrollTo?.({top:0,behavior:'auto'});scheduleOperationalReminderCheck();recordNavigationTiming(targetPage,startedAt,false);
+  };
+  if(window.requestAnimationFrame)window.requestAnimationFrame(()=>window.requestAnimationFrame(build));else build();
 }
 
 function enhanceItineraryRtsModal() {
@@ -4533,7 +4566,7 @@ function enhanceDriverStayHomeControls() {
   });
 }
 
-function bind() {
+function bindGlobalDocumentControls() {
   document.removeEventListener?.('paste',handleEquipmentPaste);
   document.removeEventListener?.('mousemove',handleSheetPointerMove);
   document.removeEventListener?.('pointermove',handleSheetPointerMove);
@@ -4548,10 +4581,32 @@ function bind() {
   window.removeEventListener?.('scroll',closeDriverRouteContextOnScroll,true);
   if(state.modal)document.addEventListener?.('keydown',handleModalKeydown);
   else document.addEventListener?.('keydown',handleSheetHistoryKeyboard);
+  document.addEventListener?.('pointerdown',closeDriverRouteContextOnOutside);
+  document.addEventListener?.('keydown',closeDriverRouteContextOnKey);
+  window.addEventListener?.('resize',closeDriverRouteContextMenu);
+  window.addEventListener?.('scroll',closeDriverRouteContextOnScroll,true);
   document.querySelectorAll('[data-page]').forEach(el=>{
     if(el.dataset.relayopsPageBound==='true')return;
     el.dataset.relayopsPageBound='true';
     el.addEventListener('click',()=>go(el.dataset.page));
+  });
+}
+function bindNavigationTopbar(root=null) {
+  if(!root)return;
+  bindActionControls(root);
+  const search=root.querySelector?.('#global-search');if(search)search.addEventListener('input',event=>{state.search=event.target.value;updateGlobalSearchResults();});
+}
+function bind() {
+  bindGlobalDocumentControls();
+  const openingRosterControls=document.querySelector?.('[data-opening-roster-controls]');
+  if(openingRosterControls)openingRosterControls.addEventListener('toggle',()=>{
+    const open=openingRosterControls.open;if(open===state.openingRosterControlsOpen)return;
+    state.openingRosterControlsOpen=open;localStorage.setItem('relayops_opening_roster_controls_open',String(open));
+    if(!open)return;
+    const body=openingRosterControls.querySelector('[data-opening-roster-controls-body]');if(body)body.innerHTML='<div class="opening-roster-controls-loading"><i></i><span>Loading today’s roster controls…</span></div>';
+    openingRosterControls.setAttribute('aria-busy','true');
+    const hydrate=()=>{if(state.page==='roster'&&state.openingRosterControlsOpen)render();};
+    if(window.requestAnimationFrame)window.requestAnimationFrame(()=>window.requestAnimationFrame(hydrate));else hydrate();
   });
   document.querySelectorAll('[data-action="save-fleet-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();saveFleetIssue();}));
   document.querySelectorAll('[data-action="mark-fleet-issue-fixed"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();markFleetIssueFixed(el.dataset.issueKey||'',el.dataset.issueId||'');}));
@@ -4565,10 +4620,6 @@ function bind() {
   });
   document.querySelectorAll('[data-driver-profile-name]').forEach(el=>{el.addEventListener('mouseenter',()=>showDriverProfilePopover(el));el.addEventListener('mouseleave',closeDriverProfilePopover);el.addEventListener('pointerleave',closeDriverProfilePopover);el.addEventListener('focusin',()=>showDriverProfilePopover(el));el.addEventListener('focusout',closeDriverProfilePopover);});
   document.querySelectorAll('.morning-template-sheet [data-view-field="driver"], .opening-picklist-main [data-picklist-field="driver"]').forEach(el=>el.addEventListener('contextmenu',event=>openDriverRouteContextMenu(event,el)));
-  document.addEventListener?.('pointerdown',closeDriverRouteContextOnOutside);
-  document.addEventListener?.('keydown',closeDriverRouteContextOnKey);
-  window.addEventListener?.('resize',closeDriverRouteContextMenu);
-  window.addEventListener?.('scroll',closeDriverRouteContextOnScroll,true);
   const aChatInput=document.querySelector?.('[data-achat-input]');
   if(aChatInput)aChatInput.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAChatMessage();}});
   const aChatStream=document.querySelector?.('[data-achat-stream]');if(aChatStream)aChatStream.scrollTop=aChatStream.scrollHeight;
@@ -5442,8 +5493,10 @@ function saveCoachingTemplate() {
 function go(page) {
   if (PARKING_ONLY_VIEW && !FLEET_TEAM_ALLOWED_PAGES.has(page)) return toast('This fleet-only link can open Fleet Health and Van Parking only','error');
   if (page==='admin'&&!hasOwnerAdminAccess()){state.modal='admin-pin';return render();}
-  cancelDeferredRenders();
+  cancelDeferredRenders();const previousPage=state.page;
   document.body?.classList?.remove('mobile-sidebar-open');
+  document.getElementById('sidebar')?.classList?.remove('open');
+  document.querySelector?.('[data-action="menu"]')?.setAttribute?.('aria-expanded','false');
   state.page=page; state.search=''; state.modal=null;const helperAdded=page==='rostering'?syncRosteringHelperShifts(currentRosteringPlan()):0;
   // Changing tabs is presentation state, not an operational edit. Saving the
   // entire workspace here serialized every route, driver, vehicle, inspection,
@@ -5451,7 +5504,7 @@ function go(page) {
   // local view preference and leave shared/cloud saves to actual edits.
   try{localStorage.setItem('relayops_page',state.page);if(PARKING_ONLY_VIEW)persistFleetPresentation();}catch{}
   if(helperAdded)persistRosteringSlice();
-  renderNavigationPage();window.scrollTo({top:0,behavior:'smooth'});
+  renderNavigationPage(previousPage);
 }
 
 function toggleMobileSidebar() {
@@ -8542,6 +8595,8 @@ function downloadFleetTemplate(){const h=['Source','Vehicle Name','VIN','License
 function xmlEscape(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function persist(){
+invalidateNavigationPageCache();
+invalidateOperationalAlertGroups();
 const nativeStorage=window.localStorage||globalThis.localStorage;
 const cloudRedundantCaches=new Set(['relayops_fleet_import','relayops_fleet_source_uploads','relayops_van_parking','relayops_driver_contacts','relayops_schedule_entries','relayops_rostering_plans','relayops_whiparound_inspections','relayops_whiparound_roster_snapshots','relayops_inventory_log','relayops_equipment_import']);
 const localStorage={setItem(key,value){

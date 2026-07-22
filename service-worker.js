@@ -1,4 +1,4 @@
-const CACHE='relayops-picklist-no-phase-strip-v56';
+const CACHE='relayops-fluid-navigation-v57';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{

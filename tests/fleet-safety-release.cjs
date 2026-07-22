@@ -77,6 +77,7 @@ vm.runInContext(`
   globalThis.__unknownCard=rivianCard(globalThis.__unknown);
   globalThis.__manualWarnings={low:vehicleIssueForEquipmentId('5'),reported:vehicleIssueForEquipmentId('7')};
   state.fleetFilter='low';
+  invalidateOperationalAlertGroups();
   globalThis.__lowBatterySection={
     threshold:LOW_BATTERY_SECTION_THRESHOLD,
     filtered:sortedRivianFleet().map(vehicle=>vehicle.name),

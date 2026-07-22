@@ -476,6 +476,16 @@ body .lot-exit b { font-size:18px; }
 .mobile-menu { display:none; }
 
 .content { padding:22px 28px 42px; max-width:1600px; margin:0 auto; }
+.content.navigation-loading{min-height:72vh;overflow:hidden}
+.navigation-skeleton{min-height:360px;border:1px solid #d8e3eb;border-radius:24px;background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(239,247,252,.96));box-shadow:0 14px 34px rgba(31,71,99,.08);padding:30px;display:grid;align-content:start;gap:20px;color:#61717e}
+.navigation-skeleton-title,.navigation-skeleton-grid i{display:block;background:linear-gradient(90deg,#e7eef3 20%,#f8fbfd 48%,#e7eef3 76%);background-size:220% 100%;animation:relayops-navigation-shimmer 1.05s ease-in-out infinite}
+.navigation-skeleton-title{width:min(420px,72%);height:30px;border-radius:12px}
+.navigation-skeleton-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.navigation-skeleton-grid i{height:150px;border-radius:18px}
+.navigation-skeleton>span{font-size:13px;font-weight:800;letter-spacing:.02em}
+@keyframes relayops-navigation-shimmer{to{background-position:-220% 0}}
+@media (max-width:760px){.navigation-skeleton{min-height:280px;padding:20px;border-radius:20px}.navigation-skeleton-grid{grid-template-columns:1fr}.navigation-skeleton-grid i{height:84px}.navigation-skeleton-grid i:nth-child(n+3){display:none}}
+@media (prefers-reduced-motion:reduce){.navigation-skeleton-title,.navigation-skeleton-grid i{animation:none}}
 .context-bar { display:flex; justify-content:space-between; align-items:center; gap:15px; margin-bottom:19px; }
 .date-nav { display:flex; align-items:center; gap:8px; }
 .date-chip { border:1px solid var(--line); background:#fff; border-radius:11px; padding:9px 12px; display:flex; gap:8px; align-items:center; font-size:11px; font-weight:700; }
@@ -2674,6 +2684,11 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .opening-roster-tools > summary small { color:#748692; font-size:9px; font-weight:600; }
 .opening-roster-tools > summary > b { padding:5px 9px; border-radius:999px; background:#edf3f6; color:#536b7a; font-size:8px; text-transform:uppercase; }
 .opening-roster-tools .opening-schedule-board { margin:0; padding:0 14px 14px; }
+.opening-roster-controls-lazy,.opening-roster-controls-loading{margin:0 14px 14px;border:1px solid #dce7ed;border-radius:16px;background:#f7fafc;padding:16px;display:grid;gap:4px;color:#526b79}
+.opening-roster-controls-lazy strong{font-size:12px;color:#263d49}.opening-roster-controls-lazy span,.opening-roster-controls-loading span{font-size:10px;font-weight:650}
+.opening-roster-controls-loading{grid-template-columns:auto 1fr;align-items:center}.opening-roster-controls-loading i{width:15px;height:15px;border:2px solid #c8d8e2;border-top-color:#1976bd;border-radius:50%;animation:relayops-roster-spin .7s linear infinite}
+@keyframes relayops-roster-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.opening-roster-controls-loading i{animation:none}}
 .driver-alias-button { min-width:34px; padding-inline:8px!important; font-weight:900!important; letter-spacing:.02em; }
 .driver-alias-preview,.helper-alias-preview { display:block; margin-top:3px; color:#4a748e; font-size:9px; font-weight:800; }
 .driver-preferred-vehicles{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 2px;padding:7px 9px;border:1px solid #c9ddeb;border-radius:9px;background:#f2f8fc;color:#486474;font-size:9px;font-weight:800}.driver-preferred-vehicles span{text-transform:uppercase;letter-spacing:.04em}.driver-preferred-vehicles strong{color:#195f8a;font-size:10px;text-align:right}
