@@ -1,4 +1,4 @@
-const CACHE='relayops-cortex-swap-rail-v55';
+const CACHE='relayops-picklist-no-phase-strip-v56';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{
