@@ -4191,6 +4191,7 @@ function startOpeningPicklistCellEdit(source) {
   state.editMode=true;state.copyMode=false;render();
   const target=[...document.querySelectorAll('[data-picklist-edit]')].find(cell=>cell.dataset.picklistCell===key);if(!target)return;
   if(target.dataset.picklistField==='driver'){const route=morningRouteByUid(target.dataset.picklistRouteUid)||(Number(target.dataset.picklistRouteIndex)>=0?state.morningRoutes[Number(target.dataset.picklistRouteIndex)]:null);if(route)target.textContent=driverDisplayValue(route.driver||'');}
+  target.dataset.picklistOriginal=picklistEditableCellValue(target);
   focusOperationalGridEditor(target);
 }
 function operationalSheetSnapshot() {
@@ -4237,8 +4238,18 @@ function normalizedPicklistWave(value='',fallback='') {
   if(!/\b(?:AM|PM)\b/i.test(clean)){const meridian=String(fallback||'').match(/\b(AM|PM)\b/i)?.[1];if(meridian)clean=`${clean} ${meridian.toUpperCase()}`;}
   return clean;
 }
+function picklistEditableCellValue(el) {
+  if(!el?.cloneNode)return String(el?.textContent||'').trim();
+  const clone=el.cloneNode(true);
+  clone.querySelectorAll?.('button,.driver-name-suggestions,.duplicate-vehicle-popover,.vehicle-issue-popover,.equipment-issue-popover').forEach(node=>node.remove());
+  return clone.textContent.trim();
+}
 function saveOpeningPicklistCell(el) {
-  const field=el.dataset.picklistField,value=el.textContent.trim(),wave=el.dataset.picklistWave||'',sectionKey=el.dataset.picklistSectionKey||'';
+  const field=el.dataset.picklistField,value=picklistEditableCellValue(el),wave=el.dataset.picklistWave||'',sectionKey=el.dataset.picklistSectionKey||'';
+  if(!field)return null;
+  const original=String(el.dataset.picklistOriginal??'').trim();
+  if(value===original)return morningRouteByUid(el.dataset.picklistRouteUid)||(Number(el.dataset.picklistRouteIndex)>=0?state.morningRoutes[Number(el.dataset.picklistRouteIndex)]:null);
+  el.dataset.picklistOriginal=value;
   if(field==='waveLabel'){pushSheetHistory('Edit Picklist wave label','picklist');state.openingPicklistLabels[sectionKey]=value||(sectionKey==='adhoc'?"ADHOC'S":`WAVE ${Number(sectionKey.split('-')[1])||1}`);persist();return;}
   if(field==='padOverride'){pushSheetHistory(`Edit ${wave} pad`,'both');state.morningRoutes.filter(row=>row.dsp===state.dspCode&&row.wave===wave).forEach(row=>{row.padOverride=value.toUpperCase();});persist();return;}
   if(field==='waveTime'){
@@ -4873,6 +4884,15 @@ function bind() {
     el.addEventListener('dblclick',startEdit);
   });
   document.querySelectorAll('[data-picklist-edit]').forEach(el=>{
+    el.dataset.picklistOriginal=picklistEditableCellValue(el);
+    const focusFromPointer=event=>{
+      if(event.button!==undefined&&event.button!==0)return;
+      event.preventDefault();
+      focusOperationalGridEditor(el);
+      if(el.dataset.picklistField==='driver')showDriverNameSuggestions(el);
+    };
+    el.addEventListener('pointerdown',focusFromPointer);
+    el.addEventListener('mousedown',focusFromPointer);
     if(el.dataset.picklistField==='driver'){
       el.addEventListener('focus',()=>showDriverNameSuggestions(el));
       el.addEventListener('input',()=>showDriverNameSuggestions(el));
@@ -4912,25 +4932,39 @@ function bind() {
   document.querySelectorAll('[data-parking-notes]').forEach(el=>el.addEventListener('input',()=>{state.parkingNotes=el.value;persist();}));
   document.querySelectorAll('[data-parking-kind]').forEach(el=>el.addEventListener('change',()=>updateParkingKind(el.dataset.parkingKind,el.value)));
   document.querySelectorAll('[data-device-sheet-field]').forEach(el=>{
-    el.addEventListener('pointerdown',()=>focusOperationalGridEditor(el));
+    el.dataset.deviceOriginal=el.value;
+    const focusFromPointer=event=>{
+      if(event.button!==undefined&&event.button!==0)return;
+      event.preventDefault();
+      focusOperationalGridEditor(el);
+    };
+    el.addEventListener('pointerdown',focusFromPointer);
+    el.addEventListener('mousedown',focusFromPointer);
     el.addEventListener('click',()=>focusOperationalGridEditor(el));
     el.addEventListener('input',()=>{
       const clean=String(el.value||'').toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,el.dataset.deviceSheetField==='device'?3:4);
       if(el.value!==clean)el.value=clean;
       updateDeviceSheetCell(el.dataset.deviceSheetId,el.dataset.deviceSheetField,clean);
     });
-    el.addEventListener('change',()=>persist());
+    el.addEventListener('change',()=>commitDeviceSheetEditor(el));
     el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();moveDeviceEntryDown(el);}});
   });
   document.querySelectorAll('[data-device-custom-field]').forEach(el=>{
-    el.addEventListener('pointerdown',()=>focusOperationalGridEditor(el));
+    el.dataset.deviceOriginal=el.value;
+    const focusFromPointer=event=>{
+      if(event.button!==undefined&&event.button!==0)return;
+      event.preventDefault();
+      focusOperationalGridEditor(el);
+    };
+    el.addEventListener('pointerdown',focusFromPointer);
+    el.addEventListener('mousedown',focusFromPointer);
     el.addEventListener('click',()=>focusOperationalGridEditor(el));
     el.addEventListener('input',()=>{
       const field=el.dataset.deviceCustomField,clean=field==='label'?String(el.value||'').toUpperCase().replace(/[^A-Z0-9 -]/g,'').slice(0,28):String(el.value||'').toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,field==='device'?3:4);
       if(el.value!==clean)el.value=clean;
       updateCustomDeviceRow(el.dataset.deviceCustomUid,field,clean);
     });
-    el.addEventListener('change',()=>persist());
+    el.addEventListener('change',()=>commitDeviceSheetEditor(el));
     el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();moveDeviceEntryDown(el);}});
   });
   document.querySelectorAll('.morning-template-sheet [data-edit-field]').forEach(el=>{
@@ -5441,7 +5475,7 @@ function stopSheetDrag() {
   if(sheetSelection.dragging)sheetSelection.dragging=false;
 }
 function operationalScrollPaneFor(el) {
-  const explicit=el?.closest?.('.sheet-scroll,.picklist-sheet-scroll,.device-sheet-scroll,.scroll-roster,.rostering-associate-list,.parking-map-scroll');
+  const explicit=el?.closest?.('.sheet-scroll,.opening-picklist-scroll,.picklist-sheet-scroll,.device-sheet-table-wrap,.device-sheet-scroll,.scroll-roster,.rostering-associate-list,.parking-map-scroll');
   if(explicit)return explicit;
   let node=el?.parentElement||null;
   while(node&&node!==document.body&&node!==document.documentElement){
@@ -5638,15 +5672,32 @@ const operationalGridEditorSelector=[
 function operationalGridRoot(editor) {
   return editor?.closest?.('table')||editor?.closest?.('.rostering-associate-list')||editor?.closest?.('.parking-lot')||editor?.closest?.('.modal');
 }
+let operationalGridFocusRequestVersion=0;
 function focusOperationalGridEditor(editor) {
   if(!editor)return false;
-  const pageX=window.scrollX||0,pageY=window.scrollY||0;
-  editor.focus?.({preventScroll:true});
-  if(editor.matches?.('input:not([type="date"]),textarea'))editor.select?.();
-  else if(editor.isContentEditable&&window.getSelection&&document.createRange){
-    const range=document.createRange(),selection=window.getSelection();range.selectNodeContents(editor);selection.removeAllRanges();selection.addRange(range);
-  }
-  preservePageScrollAfterCellFocus(editor,pageX,pageY);
+  const version=++operationalGridFocusRequestVersion,pageX=window.scrollX||0,pageY=window.scrollY||0,pane=operationalScrollPaneFor(editor),paneTop=pane?.scrollTop||0,paneLeft=pane?.scrollLeft||0;
+  let initial=true;
+  const applyFocus=()=>{
+    if(version!==operationalGridFocusRequestVersion||editor.isConnected===false)return;
+    const active=document.activeElement,root=operationalGridRoot(editor);
+    if(!initial&&active&&active!==document.body&&active!==editor&&root?.contains&&!root.contains(active))return;
+    const refocusing=active!==editor;
+    editor.focus?.({preventScroll:true});
+    if(editor.matches?.('input:not([type="date"]),textarea')){
+      if(initial||refocusing)editor.select?.();
+    } else if(editor.isContentEditable&&window.getSelection&&document.createRange){
+      const range=document.createRange(),selection=window.getSelection();range.selectNodeContents(editor);range.collapse(false);selection.removeAllRanges();selection.addRange(range);
+    }
+    if(pane?.isConnected){pane.scrollTop=paneTop;pane.scrollLeft=paneLeft;}
+    if(Math.abs((window.scrollX||0)-pageX)>1||Math.abs((window.scrollY||0)-pageY)>1)window.scrollTo(pageX,pageY);
+    keepOperationalEditorVisible(editor);
+    if(Date.now()<operationalInteractionUntil)rememberOperationalScrollAnchor();
+    initial=false;
+  };
+  applyFocus();
+  window.requestAnimationFrame?.(applyFocus);
+  setTimeout(applyFocus,0);
+  setTimeout(applyFocus,80);
   return true;
 }
 function directionalOperationalGridEditor(editor,key='') {
@@ -7270,6 +7321,14 @@ function updateDeviceSheetCell(id,field,value) {
   state.equipmentImport={name:'Device and Portable Sheet',details};
   persistSoon();
 }
+function commitDeviceSheetEditor(el) {
+  if(!el)return false;
+  const value=String(el.value??''),original=String(el.dataset?.deviceOriginal??'');
+  if(value===original)return false;
+  if(el.dataset)el.dataset.deviceOriginal=value;
+  persist();
+  return true;
+}
 function addDeviceSheetRow(section='') {
   if(!['ev','gas','helper'].includes(section))return;
   state.deviceCustomRows=state.deviceCustomRows||{ev:[],gas:[],helper:[]};
@@ -7297,7 +7356,8 @@ function moveDeviceEntryDown(el) {
   const row=el?.closest?.('tr'),table=el?.closest?.('table');if(!row||!table)return el?.blur?.();
   const rows=[...(table.tBodies?.[0]?.rows||[])],rowIndex=rows.indexOf(row),column=el.closest('td,th')?.cellIndex??-1;
   const next=rows[rowIndex+1]?.cells?.[column]?.querySelector?.('input');
-  if(next){next.focus({preventScroll:true});next.select?.();}else el.blur();
+  commitDeviceSheetEditor(el);
+  if(next){focusOperationalGridEditor(next);next.select?.();}else el.blur();
 }
 function removeCustomDeviceRow(uid='') {
   for(const section of ['ev','gas','helper']){

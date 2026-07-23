@@ -19,13 +19,18 @@ const gridFocusBody=app.match(/function focusOperationalGridEditor\(editor\) \{(
 assert(sheetFocusBody&&!sheetFocusBody.includes('scrollIntoView')&&gridFocusBody&&!gridFocusBody.includes('scrollIntoView'), 'Arrow navigation must never scroll the whole page to the focused table cell');
 assert(app.includes('function keepOperationalEditorVisible(el,padding=10)')&&app.includes('window.scrollTo(pageX,pageY)'), 'Cell focus must preserve page position and scroll only the operational table pane');
 assert(app.includes('let sheetFocusRequestVersion=0;')&&app.includes('setTimeout(applyFocus,80);'), 'Safari focus loss after a real pointer click must be repaired without letting an older cell steal focus');
+assert(app.includes('let operationalGridFocusRequestVersion=0;')&&app.includes('version!==operationalGridFocusRequestVersion'), 'Picklist and Device focus repairs must ignore stale delayed Safari focus requests');
+assert(app.includes("'.opening-picklist-scroll'")&&app.includes("'.device-sheet-table-wrap'"), 'Picklist and Device editors must preserve the scroll position of their real table panes');
 assert((app.match(/el\.addEventListener\('click',startEdit\)/g)||[]).length>=2, 'Morning Sheet and Picklist cells must enter editing from one click or tap');
 assert(app.includes('if(state.editMode&&el.isContentEditable)')&&app.includes('focusOperationalGridEditor(el)')&&app.includes('focusSheetCell(el)'), 'Already-editable table cells must receive explicit focus when Safari ignores native table-cell taps');
 assert(app.includes("if(state.editMode&&el.isContentEditable&&!e.shiftKey) {")&&app.includes("if(el.dataset.editField==='driver')showDriverNameSuggestions(el);"), 'Morning Sheet pointer-down must explicitly focus the editable cell before Safari can drop focus');
 assert((app.match(/el\.addEventListener\('mousedown',e=>handleSheetMouseDown\(e,el\)\)/g)||[]).length>=2, 'Morning Sheet edit and copy cells must prevent Safari mouse-down from undoing explicit focus');
 assert(app.includes('function verticalSheetCell(el,direction=1)')&&app.includes('if(dr)return focusSheetCell(verticalSheetCell(el,dr)||el);'), 'Up and Down must follow real Google-style sheet column numbers and skip divider rows');
 assert((app.match(/el\.addEventListener\('click',\(\)=>focusOperationalGridEditor\(el\)\)/g)||[]).length>=2, 'Device and Portable inputs must receive explicit focus when clicked');
-assert(app.includes("next.focus({preventScroll:true})"), 'Enter-to-next-row Device entry must not force the table back to the top');
+assert((app.match(/el\.addEventListener\('mousedown',focusFromPointer\)/g)||[]).length>=3&&app.includes('event.preventDefault();'), 'Picklist and Device editors must stop Safari native mouse focus from jumping the page');
+assert(app.includes('function picklistEditableCellValue(el)')&&app.includes('dataset.picklistOriginal'), 'Picklist edits must compare clean cell text and skip unchanged saves');
+assert(app.includes('if(value===original)return morningRouteByUid')&&app.includes('function commitDeviceSheetEditor(el)'), 'Unchanged Picklist and Device cells must not create unnecessary cloud writes');
+assert(app.includes('focusOperationalGridEditor(next);next.select?.()'), 'Enter-to-next-row Device entry must use the guarded shared focus path');
 
 assert(app.includes("state.modal='picklist-screenshot-review'") && app.includes('Confirm pads and Cortex swaps') && app.includes('continue-picklist-screenshot'), 'Waves + Adhocs screenshot must open the combined pad and Cortex review first');
 assert(app.includes('data-screenshot-review-pad=') && app.includes('function saveScreenshotReviewPad(input,commit=false)') && app.includes('row.padOverride=value'), 'Pad letters must be directly editable from the pre-screenshot review and update shared Morning Sheet rows');
