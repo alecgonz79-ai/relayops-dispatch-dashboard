@@ -4191,8 +4191,7 @@ function startOpeningPicklistCellEdit(source) {
   state.editMode=true;state.copyMode=false;render();
   const target=[...document.querySelectorAll('[data-picklist-edit]')].find(cell=>cell.dataset.picklistCell===key);if(!target)return;
   if(target.dataset.picklistField==='driver'){const route=morningRouteByUid(target.dataset.picklistRouteUid)||(Number(target.dataset.picklistRouteIndex)>=0?state.morningRoutes[Number(target.dataset.picklistRouteIndex)]:null);if(route)target.textContent=driverDisplayValue(route.driver||'');}
-  target.focus({preventScroll:true});
-  const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+  focusOperationalGridEditor(target);
 }
 function operationalSheetSnapshot() {
   return JSON.parse(JSON.stringify({morningRoutes:state.morningRoutes||[],morningOperationDate:state.morningOperationDate,morningWaveTimeOverrides:state.morningWaveTimeOverrides||{},fitMorningRows:state.fitMorningRows,fitOpeningPicklistRows:state.fitOpeningPicklistRows,callOffDriverKeys:state.callOffDriverKeys||{},callOffReasons:state.callOffReasons||{},scheduleDriverMarks:state.scheduleDriverMarks||{},scheduleBackupRecords:state.scheduleBackupRecords||{},openingPicklistTopics:state.openingPicklistTopics||[],openingPicklistNotes:state.openingPicklistNotes||'',openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts||[],openingPicklistBackupOverrides:state.openingPicklistBackupOverrides||{},openingPicklistLabels:state.openingPicklistLabels||{}}));
@@ -4578,6 +4577,7 @@ const NAVIGATION_PAGE_CACHE_LIMIT=6;
 const navigationPageCache=new Map();
 let navigationRenderToken=0;
 let deferredCloudRender=false;
+let operationalInteractionUntil=0;
 function invalidateNavigationPageCache() { navigationPageCache.clear();navigationRenderToken+=1; }
 function rememberNavigationPage(page='',content=null) {
   if(!page||!content||content.dataset.page!==page||content.dataset.ready!=='true')return;
@@ -4597,6 +4597,9 @@ function activeOperationalEditor() {
   const el=document.activeElement;
   return Boolean(el&&el!==document.body&&el.matches?.('[data-device-sheet-field],[data-device-custom-field],[data-picklist-edit],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad]'));
 }
+function markOperationalInteraction(event) {
+  if(event?.target?.closest?.('[data-device-sheet-field],[data-device-custom-field],[data-picklist-view],[data-picklist-edit],.morning-template-sheet [data-view-field],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad]'))operationalInteractionUntil=Date.now()+2000;
+}
 function captureUiScrollMemory() {
   const containers=[];
   UI_SCROLL_MEMORY_SELECTORS.forEach(selector=>document.querySelectorAll?.(selector).forEach((el,index)=>containers.push({selector,index,left:el.scrollLeft||0,top:el.scrollTop||0})));
@@ -4609,7 +4612,7 @@ function restoreUiScrollMemory(memory) {
   window.scrollTo?.({left:memory.x,top:memory.y,behavior:'instant'});
 }
 function renderFromCloudEvent() {
-  if(activeOperationalEditor()){deferredCloudRender=true;return false;}
+  if(activeOperationalEditor()||Date.now()<operationalInteractionUntil){deferredCloudRender=true;return false;}
   render();return true;
 }
 function refreshCloudStatusUi() {
@@ -4621,6 +4624,7 @@ function refreshCloudStatusUi() {
 }
 function flushDeferredCloudRender() {
   if(!deferredCloudRender||activeOperationalEditor())return;
+  if(Date.now()<operationalInteractionUntil){setTimeout(flushDeferredCloudRender,Math.max(80,operationalInteractionUntil-Date.now()+20));return;}
   deferredCloudRender=false;render();
 }
 document.addEventListener?.('focusout',()=>setTimeout(flushDeferredCloudRender,80),true);
@@ -4726,6 +4730,8 @@ function bindGlobalDocumentControls() {
   document.removeEventListener?.('focusout',handleDriverProfileFocusOut);
   document.removeEventListener?.('contextmenu',handleDriverRouteContextMenu);
   document.removeEventListener?.('keydown',handleOperationalGridArrowNavigation);
+  document.removeEventListener?.('pointerdown',markOperationalInteraction,true);
+  document.removeEventListener?.('mousedown',markOperationalInteraction,true);
   window.removeEventListener?.('resize',closeDriverRouteContextMenu);
   window.removeEventListener?.('scroll',closeDriverRouteContextOnScroll,true);
   if(state.modal)document.addEventListener?.('keydown',handleModalKeydown);
@@ -4743,6 +4749,8 @@ function bindGlobalDocumentControls() {
   document.addEventListener?.('focusout',handleDriverProfileFocusOut);
   document.addEventListener?.('contextmenu',handleDriverRouteContextMenu);
   document.addEventListener?.('keydown',handleOperationalGridArrowNavigation);
+  document.addEventListener?.('pointerdown',markOperationalInteraction,true);
+  document.addEventListener?.('mousedown',markOperationalInteraction,true);
   window.addEventListener?.('resize',closeDriverRouteContextMenu);
   window.addEventListener?.('scroll',closeDriverRouteContextOnScroll,true);
   bindPageNavigationControls();
@@ -4829,7 +4837,19 @@ function bind() {
     el.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();saveScreenshotReviewPad(el,true);commitSheetInputHistory(el);const inputs=[...document.querySelectorAll('[data-screenshot-review-pad]')],next=inputs[inputs.indexOf(el)+1];if(next){next.focus({preventScroll:true});next.select?.();}else el.blur();});
   });
   document.querySelectorAll('[data-picklist-date]').forEach(el=>el.addEventListener('change',()=>saveOpeningPicklistDate(el.value)));
-  document.querySelectorAll('[data-picklist-view]').forEach(el=>el.addEventListener('dblclick',event=>{if(!state.editMode){event.preventDefault();startOpeningPicklistCellEdit(el);}}));
+  document.querySelectorAll('[data-picklist-view]').forEach(el=>{
+    const startEdit=event=>{
+      if(event.target?.closest?.('button,a,input,select,textarea,[data-action]'))return;
+      if(state.copyMode)return;
+      event.preventDefault();
+      if(state.editMode&&el.isContentEditable){
+        focusOperationalGridEditor(el);
+        if(el.dataset.picklistField==='driver')showDriverNameSuggestions(el);
+      } else if(!state.editMode)startOpeningPicklistCellEdit(el);
+    };
+    el.addEventListener('click',startEdit);
+    el.addEventListener('dblclick',startEdit);
+  });
   document.querySelectorAll('[data-picklist-edit]').forEach(el=>{
     if(el.dataset.picklistField==='driver'){
       el.addEventListener('focus',()=>showDriverNameSuggestions(el));
@@ -4870,6 +4890,8 @@ function bind() {
   document.querySelectorAll('[data-parking-notes]').forEach(el=>el.addEventListener('input',()=>{state.parkingNotes=el.value;persist();}));
   document.querySelectorAll('[data-parking-kind]').forEach(el=>el.addEventListener('change',()=>updateParkingKind(el.dataset.parkingKind,el.value)));
   document.querySelectorAll('[data-device-sheet-field]').forEach(el=>{
+    el.addEventListener('pointerdown',()=>focusOperationalGridEditor(el));
+    el.addEventListener('click',()=>focusOperationalGridEditor(el));
     el.addEventListener('input',()=>{
       const clean=String(el.value||'').toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,el.dataset.deviceSheetField==='device'?3:4);
       if(el.value!==clean)el.value=clean;
@@ -4879,6 +4901,8 @@ function bind() {
     el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();moveDeviceEntryDown(el);}});
   });
   document.querySelectorAll('[data-device-custom-field]').forEach(el=>{
+    el.addEventListener('pointerdown',()=>focusOperationalGridEditor(el));
+    el.addEventListener('click',()=>focusOperationalGridEditor(el));
     el.addEventListener('input',()=>{
       const field=el.dataset.deviceCustomField,clean=field==='label'?String(el.value||'').toUpperCase().replace(/[^A-Z0-9 -]/g,'').slice(0,28):String(el.value||'').toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,field==='device'?3:4);
       if(el.value!==clean)el.value=clean;
@@ -4901,7 +4925,17 @@ function bind() {
     el.addEventListener('paste',e=>handleSheetPaste(e,el));
   });
   document.querySelectorAll('.morning-template-sheet [data-view-field]').forEach(el=>{
-    el.addEventListener('dblclick',e=>{if(!state.editMode&&!state.copyMode){e.preventDefault();startMorningCellEdit(el);}});
+    const startEdit=e=>{
+      if(e.target?.closest?.('button,a,input,select,textarea,[data-action]'))return;
+      if(state.copyMode)return;
+      e.preventDefault();
+      if(state.editMode&&el.isContentEditable){
+        focusSheetCell(el);
+        if(el.dataset.editField==='driver')showDriverNameSuggestions(el);
+      } else if(!state.editMode)startMorningCellEdit(el);
+    };
+    el.addEventListener('click',startEdit);
+    el.addEventListener('dblclick',startEdit);
   });
   document.querySelectorAll('[data-sheet-copy-cell]').forEach(el=>{
     el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);});
@@ -5184,11 +5218,8 @@ function startMorningCellEdit(source) {
   const target=[...document.querySelectorAll('.morning-template-sheet [data-edit-field]')].find(cell=>cell.dataset.editField===field&&(field==='waveTime'?cell.dataset.editSection===section:field==='padOverride'?cell.dataset.editWave===wave:uid?cell.dataset.editUid===uid:cell.dataset.editRoute===route));
   if(!target)return;
   if(field==='driver'){const morningRoute=morningRouteByUid(uid)||state.morningRoutes.find(row=>row.route===route);if(morningRoute)target.textContent=driverDisplayValue(morningRoute.driver||'');}
-  target.focus({preventScroll:true});
+  focusSheetCell(target);
   if(field==='driver')showDriverNameSuggestions(target);
-  selectSheetCell(target);
-  const range=document.createRange();range.selectNodeContents(target);range.collapse(false);
-  const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
 }
 
 function saveMorningEditCell(el) {
@@ -5373,8 +5404,41 @@ function handleSheetPointerMove(e) {
 function stopSheetDrag() {
   if(sheetSelection.dragging)sheetSelection.dragging=false;
 }
+function operationalScrollPaneFor(el) {
+  const explicit=el?.closest?.('.sheet-scroll,.picklist-sheet-scroll,.device-sheet-scroll,.scroll-roster,.rostering-associate-list,.parking-map-scroll');
+  if(explicit)return explicit;
+  let node=el?.parentElement||null;
+  while(node&&node!==document.body&&node!==document.documentElement){
+    const actuallyScrollable=(Number(node.scrollHeight)||0)>(Number(node.clientHeight)||0)+2||(Number(node.scrollWidth)||0)>(Number(node.clientWidth)||0)+2;
+    const style=window.getComputedStyle?.(node),overflow=`${style?.overflow||''} ${style?.overflowX||''} ${style?.overflowY||''}`;
+    if(actuallyScrollable&&/(auto|scroll)/.test(overflow))return node;
+    node=node.parentElement;
+  }
+  return null;
+}
+function keepOperationalEditorVisible(el,padding=10) {
+  const pane=operationalScrollPaneFor(el);if(!pane)return false;
+  const cellRect=el.getBoundingClientRect?.(),paneRect=pane.getBoundingClientRect?.();if(!cellRect||!paneRect)return false;
+  const top=paneRect.top+padding,bottom=paneRect.bottom-padding,left=paneRect.left+padding,right=paneRect.right-padding;
+  let dy=0,dx=0;
+  if(cellRect.top<top)dy=cellRect.top-top;else if(cellRect.bottom>bottom)dy=cellRect.bottom-bottom;
+  if(cellRect.left<left)dx=cellRect.left-left;else if(cellRect.right>right)dx=cellRect.right-right;
+  if(dy)pane.scrollTop+=dy;
+  if(dx)pane.scrollLeft+=dx;
+  return Boolean(dx||dy);
+}
+function preservePageScrollAfterCellFocus(el,pageX=window.scrollX||0,pageY=window.scrollY||0) {
+  const restore=()=>{
+    if(!el?.isConnected||document.activeElement!==el)return;
+    if(Math.abs((window.scrollX||0)-pageX)>1||Math.abs((window.scrollY||0)-pageY)>1)window.scrollTo(pageX,pageY);
+    keepOperationalEditorVisible(el);
+  };
+  restore();
+  window.requestAnimationFrame?.(restore);
+}
 function focusSheetCell(el) {
   if(!el)return;
+  const pageX=window.scrollX||0,pageY=window.scrollY||0;
   el.focus({preventScroll:true});
   selectSheetCell(el);
   const range=document.createRange();
@@ -5383,7 +5447,7 @@ function focusSheetCell(el) {
   const selection=window.getSelection();
   selection.removeAllRanges();
   selection.addRange(range);
-  el.scrollIntoView({block:'nearest',inline:'nearest'});
+  preservePageScrollAfterCellFocus(el,pageX,pageY);
 }
 function cellPosition(el) {
   if(el.dataset.sheetRow!==undefined&&el.dataset.sheetCol!==undefined)return {row:Number(el.dataset.sheetRow),col:Number(el.dataset.sheetCol)};
@@ -5394,11 +5458,21 @@ function cellPosition(el) {
 function cellAt(row,col,section=null) {
   if(row<0||col<0)return null;
   const sectionSelector=section!==null&&section!==undefined?`[data-sheet-section="${section}"]`:'';
-  const copyCell=document.querySelector(`[data-sheet-copy-cell="true"][data-sheet-row="${row}"][data-sheet-col="${col}"]${sectionSelector}`);
-  if(copyCell)return copyCell;
+  const indexedCell=document.querySelector(`[data-sheet-cell="true"][data-sheet-row="${row}"][data-sheet-col="${col}"]${sectionSelector}`);
+  if(indexedCell)return indexedCell;
   const rows=[...document.querySelectorAll('tr.ops-row')];
-  const field=sheetEditFields[col];
+  const field=({1:'driver',2:'route',3:'staging',4:'padOverride',5:'ev',6:'deviceName',7:'portable',15:'stops',16:'packages',17:'packageReturns',18:'endTime',19:'rtsTime',20:'plannedRts',21:'clockOutTime'})[col]||sheetEditFields[col];
   return rows[row]?.querySelector(`[data-edit-field="${field}"]`)||null;
+}
+function verticalSheetCell(el,direction=1) {
+  const row=Number(el?.dataset?.sheetRow),col=Number(el?.dataset?.sheetCol),root=el?.closest?.('.morning-template-sheet')||document;
+  if(!Number.isFinite(row)||!Number.isFinite(col))return null;
+  const candidates=[...root.querySelectorAll(`[data-sheet-cell="true"][data-sheet-col="${col}"]`)]
+    .filter(candidate=>candidate!==el&&Number.isFinite(Number(candidate.dataset.sheetRow)))
+    .sort((a,b)=>Number(a.dataset.sheetRow)-Number(b.dataset.sheetRow));
+  return direction>0
+    ? candidates.find(candidate=>Number(candidate.dataset.sheetRow)>row)||null
+    : candidates.reverse().find(candidate=>Number(candidate.dataset.sheetRow)<row)||null;
 }
 function moveSheetCell(el,dr,dc) {
   if(el.dataset.editField)saveMorningEditCell(el);
@@ -5407,6 +5481,7 @@ function moveSheetCell(el,dr,dc) {
     const next=rowCells[rowCells.indexOf(el)+dc];
     return focusSheetCell(next||el);
   }
+  if(dr)return focusSheetCell(verticalSheetCell(el,dr)||el);
   const pos=cellPosition(el);
   focusSheetCell(cellAt(pos.row+dr,pos.col+dc)||el);
 }
@@ -5517,12 +5592,13 @@ function operationalGridRoot(editor) {
 }
 function focusOperationalGridEditor(editor) {
   if(!editor)return false;
+  const pageX=window.scrollX||0,pageY=window.scrollY||0;
   editor.focus?.({preventScroll:true});
   if(editor.matches?.('input:not([type="date"]),textarea'))editor.select?.();
   else if(editor.isContentEditable&&window.getSelection&&document.createRange){
     const range=document.createRange(),selection=window.getSelection();range.selectNodeContents(editor);selection.removeAllRanges();selection.addRange(range);
   }
-  editor.scrollIntoView?.({block:'nearest',inline:'nearest'});
+  preservePageScrollAfterCellFocus(editor,pageX,pageY);
   return true;
 }
 function directionalOperationalGridEditor(editor,key='') {

@@ -8,8 +8,17 @@ const app = fs.readFileSync(require.resolve('../app.js'), 'utf8');
 const css = fs.readFileSync(require.resolve('../styles.css'), 'utf8');
 
 assert(app.includes("function activeOperationalEditor()") && app.includes("renderFromCloudEvent()") && app.includes("deferredCloudRender=true"), 'Cloud status updates must defer full table rendering while an operational cell is active');
+assert(app.includes('function markOperationalInteraction(event)')&&app.includes('Date.now()<operationalInteractionUntil'), 'A cloud refresh must not replace a cell between pointer-down and browser focus');
 assert(app.includes("UI_SCROLL_MEMORY_SELECTORS=['.sheet-scroll','.opening-picklist-scroll','.device-sheet-table-wrap']") && app.includes('restoreUiScrollMemory(scrollMemory)'), 'Morning Sheet, Picklist, and Device tables must preserve their own scroll positions across renders');
 assert(!app.includes("target.scrollIntoView({block:'nearest',inline:'nearest'});"), 'Double-click editing must not jump the table viewport');
+const sheetFocusBody=app.match(/function focusSheetCell\(el\) \{([\s\S]*?)\n\}/)?.[1]||'';
+const gridFocusBody=app.match(/function focusOperationalGridEditor\(editor\) \{([\s\S]*?)\n\}/)?.[1]||'';
+assert(sheetFocusBody&&!sheetFocusBody.includes('scrollIntoView')&&gridFocusBody&&!gridFocusBody.includes('scrollIntoView'), 'Arrow navigation must never scroll the whole page to the focused table cell');
+assert(app.includes('function keepOperationalEditorVisible(el,padding=10)')&&app.includes('window.scrollTo(pageX,pageY)'), 'Cell focus must preserve page position and scroll only the operational table pane');
+assert((app.match(/el\.addEventListener\('click',startEdit\)/g)||[]).length>=2, 'Morning Sheet and Picklist cells must enter editing from one click or tap');
+assert(app.includes('if(state.editMode&&el.isContentEditable)')&&app.includes('focusOperationalGridEditor(el)')&&app.includes('focusSheetCell(el)'), 'Already-editable table cells must receive explicit focus when Safari ignores native table-cell taps');
+assert(app.includes('function verticalSheetCell(el,direction=1)')&&app.includes('if(dr)return focusSheetCell(verticalSheetCell(el,dr)||el);'), 'Up and Down must follow real Google-style sheet column numbers and skip divider rows');
+assert((app.match(/el\.addEventListener\('click',\(\)=>focusOperationalGridEditor\(el\)\)/g)||[]).length>=2, 'Device and Portable inputs must receive explicit focus when clicked');
 assert(app.includes("next.focus({preventScroll:true})"), 'Enter-to-next-row Device entry must not force the table back to the top');
 
 assert(app.includes("state.modal='picklist-screenshot-review'") && app.includes('Confirm pads and Cortex swaps') && app.includes('continue-picklist-screenshot'), 'Waves + Adhocs screenshot must open the combined pad and Cortex review first');
