@@ -23,7 +23,7 @@ assert(source.includes('openingRosterControlsOpen:')&&source.includes("controlsO
 assert(source.includes('function teamDriverMetrics(drivers=[])'),'Drivers & Team must aggregate history in one pass instead of rescanning every history record per card');
 assert(source.includes("if(card.querySelector('.driver-text-button'))return"),'Driver text controls must not be rebuilt once per card after navigation');
 assert(source.includes("if (name==='import') { state.importSource='computer'; state.importPurpose='morning'; state.importedFile=null; return openLightweightModal('import'); }"),'Upload day files must open without rebuilding the large Morning Sheet');
-assert(source.includes("['picklist-screenshot-review','screenshot','vto-route-swap','import'].includes(state.modal)"),'The lightweight upload modal must close without rebuilding the Morning Sheet');
+assert(source.includes("['picklist-screenshot-review','screenshot','vto-route-swap'")&&source.includes("'early-calloff-reminder','import'].includes(state.modal)"),'Operational popups, including upload and screenshot review, must close without rebuilding the active page');
 assert(source.includes('bindUploadDropZone(backdrop);'),'The lightweight upload modal must preserve drag-and-drop file support');
 assert(source.includes("if(event.type==='saved'){state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;refreshCloudStatusUi();}"),'Cloud save acknowledgements must refresh only the sync indicator instead of rebuilding the active page');
 

@@ -1605,7 +1605,7 @@ tbody tr:last-child td { border-bottom:0; }
 .empty-state h3 { margin:0; font:800 13px "Manrope"; }
 .empty-state p { margin:7px auto 16px; max-width:340px; color:var(--muted); font-size:9px; line-height:1.6; }
 
-.modal-backdrop { position:fixed; inset:0; background:rgba(9,15,11,.54); backdrop-filter:blur(4px); z-index:50; display:grid; place-items:center; padding:20px; animation:fade .16s ease; }
+.modal-backdrop { position:fixed; inset:0; background:rgba(9,15,11,.58); backdrop-filter:none; z-index:50; display:grid; place-items:center; padding:20px; animation:fade .12s ease; contain:layout paint; }
 .modal { width:min(560px,100%); max-height:90vh; overflow:auto; background:#fff; border-radius:20px; box-shadow:0 22px 80px rgba(0,0,0,.25); animation:lift .2s ease; }
 .screenshot-modal { width:min(960px,100%); }
 .sheets-modal { width:min(880px,100%); }
@@ -3237,6 +3237,7 @@ body .parking-top-block .charger-report-trigger{width:18px;min-width:18px}
 /* Keep exactly one VTO action menu open at a time. JavaScript owns the active row. */
 .picklist-vto-driver:not(.is-popup-open) .picklist-vto-actions{display:none!important}
 .picklist-vto-driver.is-popup-open .picklist-vto-actions{display:block!important}
+.picklist-vto-actions{contain:layout paint}
 
 /* Final pre-screenshot safety review: pads and Cortex changes side by side. */
 .picklist-screenshot-review-modal{width:min(980px,100%);border-radius:24px}

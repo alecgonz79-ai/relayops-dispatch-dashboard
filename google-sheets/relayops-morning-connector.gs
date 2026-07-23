@@ -9,7 +9,7 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-22-wave5-fourteen-routes';
+const RELAYOPS_BUILD = '2026-07-22-verified-five-wave-footers';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -198,9 +198,20 @@ function relayOpsWaveLabels(payload) {
 }
 
 function writeRelayOpsWaveLabels(sheet, payload) {
-  let updated = 0;
-  relayOpsWaveLabels(payload).forEach(function(wave) { if (!wave.value) return;sheet.getRange(wave.layout.timeRow, 1).setValue(wave.value);updated++; });
-  return updated;
+  const waves = relayOpsWaveLabels(payload);
+  waves.forEach(function(wave) {
+    if (!wave.value) return;
+    const cell = sheet.getRange(wave.layout.timeRow, 1);
+    cell.clearContent();
+    cell.setValue(String(wave.value));
+  });
+  if (SpreadsheetApp.flush) SpreadsheetApp.flush();
+  const failed = waves.filter(function(wave) {
+    if (!wave.value) return true;
+    return String(sheet.getRange(wave.layout.timeRow, 1).getDisplayValue() || '').trim() !== String(wave.value).trim();
+  });
+  if (failed.length) throw new Error('Wave footer verification failed for ' + failed.map(function(wave) { return wave.layout.label; }).join(', '));
+  return waves.length;
 }
 
 function validateRelayOpsMorningPayload(payload) {

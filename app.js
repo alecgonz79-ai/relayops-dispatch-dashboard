@@ -636,6 +636,24 @@ function showDriverProfilePopover(source) {
   const pop=document.createElement('div');pop.id='driver-profile-popover';pop.className='driver-profile-popover';pop.setAttribute('role','tooltip');pop.innerHTML=`<strong>${esc(driverDisplayValue(name))}</strong><span>${flags.map(flag=>`<b>${esc(flag)}</b>`).join('')}</span>`;document.body.appendChild(pop);
   const rect=source.getBoundingClientRect?.()||{left:0,bottom:0,top:0,width:0},width=Math.min(320,Math.max(210,pop.offsetWidth||230)),left=Math.max(8,Math.min((window.innerWidth||1024)-width-8,rect.left+Math.min(rect.width||0,24))),top=Math.max(8,rect.bottom+8);pop.style.left=`${left}px`;pop.style.top=`${top}px`;
 }
+function handleDriverProfilePointerOver(event) {
+  const source=event.target?.closest?.('[data-driver-profile-name]');if(!source||source.contains?.(event.relatedTarget))return;
+  showDriverProfilePopover(source);
+}
+function handleDriverProfilePointerOut(event) {
+  const source=event.target?.closest?.('[data-driver-profile-name]');if(!source||source.contains?.(event.relatedTarget))return;
+  closeDriverProfilePopover();
+}
+function handleDriverProfileFocusIn(event) {
+  const source=event.target?.closest?.('[data-driver-profile-name]');if(source)showDriverProfilePopover(source);
+}
+function handleDriverProfileFocusOut(event) {
+  const source=event.target?.closest?.('[data-driver-profile-name]');if(source&&!source.contains?.(event.relatedTarget))closeDriverProfilePopover();
+}
+function handleDriverRouteContextMenu(event) {
+  const source=event.target?.closest?.('.morning-template-sheet [data-view-field="driver"], .opening-picklist-main [data-picklist-field="driver"]');
+  if(source)openDriverRouteContextMenu(event,source);
+}
 function driverAliasRecord(name='') {
   const exact=String(name||'').trim(),key=nameKey(exact),profile=driverProfileEntry(exact)?.profile;if(profile)return {canonical:profile.canonical||exact,display:profile.nickname||profile.canonical||exact,aliases:profile.names||[]};
   const direct=state.driverNameAliases?.[key];
@@ -943,7 +961,14 @@ function openingPicklistSections() {
   const eligible=(state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&!isExplicitHelperMorningRoute(row)&&!String(row.route||'').startsWith('__blank_'));
   const waveNames=[...new Set(eligible.filter(row=>!isExplicitAdhocMorningRoute(row)).map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b));
   const waveSlots=Math.max(0,Math.min(5,Number(state.openingPicklistWaveSlots??5)));
-  const waves=Array.from({length:waveSlots},(_,index)=>{const key=`wave-${index+1}`,wave=waveNames[index]||'',rows=wave?eligible.filter(row=>row.wave===wave):[],capacity=state.fitOpeningPicklistRows?Math.max(1,rows.length):13;return {key,label:state.openingPicklistLabels?.[key]||`WAVE ${index+1}`,wave,rows,capacity,hasTime:true,pad:rows[0]?.padOverride||rows[0]?.pad||padForWave(wave)};});
+  const waves=Array.from({length:waveSlots},(_,index)=>{
+    const key=`wave-${index+1}`,wave=waveNames[index]||'',rows=wave?eligible.filter(row=>row.wave===wave):[];
+    // Every Picklist wave is a real 15-driver block. The old 13-row fallback
+    // left row 14/15 outside the Wave and Pad rowspans, which shifted the final
+    // driver's cells one column to the left.
+    const capacity=state.fitOpeningPicklistRows?Math.max(1,rows.length):15;
+    return {key,label:state.openingPicklistLabels?.[key]||`WAVE ${index+1}`,wave,rows,capacity,hasTime:true,pad:rows[0]?.padOverride||rows[0]?.pad||padForWave(wave)};
+  });
   const used=new Set(waves.flatMap(section=>section.rows.map(row=>row.route)));
   const adhoc=eligible.filter(row=>!used.has(row.route)&&isExplicitAdhocMorningRoute(row));
   // Adhocs intentionally keep their full worksheet block. The Picklist
@@ -979,9 +1004,9 @@ function openingPicklistSectionHtml(section={},sectionIndex=0) {
   const rows=[...section.rows];while(rows.length<section.capacity)rows.push(null);
   const cell=(row,index,field,value,cls='')=>{const equipment=field==='ev'?String(row?.ev||value||''):String(value||''),vehicleIssue=field==='ev'?vehicleIssueForEquipmentId(equipment):null,equipmentType=field==='deviceName'?'device':field==='portable'?'portable':'',equipmentIssue=equipmentType?equipmentIssueFor(equipmentType,equipment):null,duplicate=field==='ev'&&duplicateMorningEquipmentRoutes(equipment).length>1,issueClass=duplicate?'duplicate-van-cell':vehicleIssue?.type==='grounded'?'grounded-van-cell':vehicleIssue?.type==='battery'?'low-battery-van-cell':vehicleIssue?.type==='reported'?'reported-van-cell':equipmentIssue?'reported-equipment-cell':'',vacant=field==='driver'&&routeAssignmentVacant(row),vacancyLabel=vacant?(routeMissingPrimary(row)?(String(row?.driver||'').trim()?'DRIVER NEEDED':'UNASSIGNED DRIVER'):'HELPER NEEDED'):'';return `<td class="picklist-data-cell ${cls} ${issueClass} ${vacant?'route-vacancy-driver-cell':''}" ${vacant?`data-vacancy-label="${esc(vacancyLabel)}"`:''} ${field==='driver'&&row?driverProfileAttrs(row.driver):''} ${openingPicklistCellAttrs(section,sectionIndex,row,index,field)}>${equipmentIssue?`<button type="button" class="equipment-issue-trigger active" data-action="open-equipment-issue" data-equipment-type="${equipmentType}" data-equipment-id="${esc(equipment)}">⚠</button>`:''}${esc(value||'')}${duplicateVehiclePopoverHtml(equipment)}${vehicleIssuePopoverHtml(row?.route||'',equipment,vehicleIssue)}${equipmentIssuePopoverHtml(equipmentType,equipment)}</td>`;};
   const pending=state.pendingPicklistWaveDelete?.key===section.key;
-  const padSpan=section.capacity+(section.hasTime?1:0);
-  const body=rows.map((row,index)=>`<tr class="${routeAssignmentVacant(row)?'route-vacancy-row':''}">${index===0?`<td class="picklist-wave-label picklist-data-cell" rowspan="${section.capacity}" data-picklist-meta="label" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'waveLabel')}><button type="button" class="picklist-wave-delete" data-action="request-delete-picklist-wave" data-section-key="${esc(section.key)}" aria-label="Delete ${esc(section.label)}" contenteditable="false">${ICONS.trash}</button><span>${esc(section.label)}</span></td>`:''}${cell(row,index,'driver',routeDriverDisplayValue(row),'picklist-driver')}${cell(row,index,'route',row?.route||'')}${cell(row,index,'staging',row?.staging||'')}${index===0?`<td class="picklist-pad picklist-data-cell" rowspan="${padSpan}" data-picklist-meta="pad" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'padOverride')}><span>${esc(section.pad||'')}</span></td>`:''}${cell(row,index,'ev',row?routeEquipmentValue(row):'')}${cell(row,index,'deviceName',row?.deviceName||'')}${cell(row,index,'portable',row?.portable||'')}</tr>`).join('');
-  const time=section.hasTime?`<tr class="picklist-wave-time"><td class="picklist-data-cell" data-picklist-meta="waveTime" ${openingPicklistCellAttrs(section,sectionIndex,null,section.capacity,'waveTime')}>${esc(openingPicklistTime(section))}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`:'';
+  const renderedCapacity=rows.length,padSpan=renderedCapacity+(section.hasTime?1:0);
+  const body=rows.map((row,index)=>`<tr class="${routeAssignmentVacant(row)?'route-vacancy-row':''}">${index===0?`<td class="picklist-wave-label picklist-data-cell" rowspan="${renderedCapacity}" data-picklist-meta="label" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'waveLabel')}><button type="button" class="picklist-wave-delete" data-action="request-delete-picklist-wave" data-section-key="${esc(section.key)}" aria-label="Delete ${esc(section.label)}" contenteditable="false">${ICONS.trash}</button><span>${esc(section.label)}</span></td>`:''}${cell(row,index,'driver',routeDriverDisplayValue(row),'picklist-driver')}${cell(row,index,'route',row?.route||'')}${cell(row,index,'staging',row?.staging||'')}${index===0?`<td class="picklist-pad picklist-data-cell" rowspan="${padSpan}" data-picklist-meta="pad" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'padOverride')}><span>${esc(section.pad||'')}</span></td>`:''}${cell(row,index,'ev',row?routeEquipmentValue(row):'')}${cell(row,index,'deviceName',row?.deviceName||'')}${cell(row,index,'portable',row?.portable||'')}</tr>`).join('');
+  const time=section.hasTime?`<tr class="picklist-wave-time"><td class="picklist-data-cell" data-picklist-meta="waveTime" ${openingPicklistCellAttrs(section,sectionIndex,null,renderedCapacity,'waveTime')}>${esc(openingPicklistTime(section))}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`:'';
   return `<tbody class="picklist-section ${section.hasTime?'wave':'adhoc'} ${pending?'delete-pending':''}">${body}${time}<tr class="picklist-black-divider"><td colspan="8"></td></tr></tbody>`;
 }
 function openingPicklistBackupRows() {
@@ -3734,7 +3759,7 @@ let operationalReminderTimer=null;
 function scheduleOperationalReminderCheck() {
   clearTimeout(operationalReminderTimer);operationalReminderTimer=setTimeout(()=>{
     if(state.modal)return;
-    if(earlyCalloffReminderRows().length){state.modal='early-calloff-reminder';render();}
+    if(earlyCalloffReminderRows().length)openLightweightModal('early-calloff-reminder');
   },0);
 }
 function rosterRecord(name='',role='',extra={}) {
@@ -3854,7 +3879,7 @@ function moveReductionToBackup(name='',role='') {
 }
 function openRosterDestinationActions(name='',role='',destination='',route='',start='',automatic=false) {
   state.pendingRosterDestination={name:contactForMorningDriver(name)?.name||name,role:role||'',destination:destination||'',route:route||'',start:start||'',automatic:automatic===true||automatic==='true'};
-  state.modal='roster-destination';render();
+  return openLightweightModal('roster-destination');
 }
 function setRosterBackupState(name='',role='',label='') {
   const exactName=contactForMorningDriver(name)?.name||name,key=scheduleDriverMarkKey(exactName),record=rosterRecord(exactName,role),vto=label||scheduleBackupLabel(role||record.role);
@@ -3967,20 +3992,45 @@ function openingRosterScheduleHtml() {
     <article class="card scheduled-section vto-destination vto4-destination roster-bottom-destination scroll-roster"><div class="scheduled-section-head"><div><h3>VTO 4 · Delivery Associate backups</h3><span>${vto4Drivers.length} backups · unrostered Delivery Associate shifts are added automatically</span></div><b>VTO 4 · ${vto4Drivers.length}</b></div><div class="scheduled-list">${scheduledShiftRowsHtml(vto4Drivers,'No VTO 4 Delivery Associate backups.',{backupBox:true,destination:'vto4'})}</div></article>
   </div></section>`;
 }
+let activePicklistVtoCard=null,picklistVtoCloseTimer=null;
+function closePicklistVtoCard(card=activePicklistVtoCard) {
+  if(!card)return;
+  card.classList.remove('is-popup-open','linger-open');card.setAttribute('aria-expanded','false');
+  if(activePicklistVtoCard===card)activePicklistVtoCard=null;
+}
+function openPicklistVtoCard(card) {
+  if(!card?.querySelector?.('.picklist-vto-actions'))return;
+  clearTimeout(picklistVtoCloseTimer);picklistVtoCloseTimer=null;
+  if(activePicklistVtoCard&&activePicklistVtoCard!==card)closePicklistVtoCard(activePicklistVtoCard);
+  // Defensive cleanup also closes stale menus left behind by a cached page.
+  document.querySelectorAll?.('.picklist-vto-driver.is-popup-open,.picklist-vto-driver.linger-open').forEach(other=>{if(other!==card)closePicklistVtoCard(other);});
+  activePicklistVtoCard=card;card.classList.add('is-popup-open','linger-open');card.setAttribute('aria-expanded','true');
+}
+function schedulePicklistVtoClose(card) {
+  clearTimeout(picklistVtoCloseTimer);
+  picklistVtoCloseTimer=setTimeout(()=>closePicklistVtoCard(card),260);
+}
+function handlePicklistVtoPointerOver(event) {
+  const card=event.target?.closest?.('.picklist-vto-driver');if(!card||card.contains?.(event.relatedTarget))return;
+  openPicklistVtoCard(card);
+}
+function handlePicklistVtoPointerOut(event) {
+  const card=event.target?.closest?.('.picklist-vto-driver');if(!card||card.contains?.(event.relatedTarget))return;
+  schedulePicklistVtoClose(card);
+}
+function handlePicklistVtoFocusIn(event) {
+  const card=event.target?.closest?.('.picklist-vto-driver');if(card)openPicklistVtoCard(card);
+}
+function handlePicklistVtoFocusOut(event) {
+  const card=event.target?.closest?.('.picklist-vto-driver');if(card&&!card.contains?.(event.relatedTarget))schedulePicklistVtoClose(card);
+}
+function handlePicklistVtoClick(event) {
+  const card=event.target?.closest?.('.picklist-vto-driver');if(!card||event.target.closest?.('button,input,select,a'))return;
+  if(card.classList.contains('is-popup-open'))closePicklistVtoCard(card);else openPicklistVtoCard(card);
+}
 function enhanceOpeningRoster() {
   if(state.page!=='roster')return;
   document.querySelectorAll?.('.vto-button').forEach(button=>button.classList.add(button.textContent.includes('VTO 4')?'vto-4':'vto-2'));
-  document.querySelectorAll?.('.picklist-vto-driver').forEach(card=>{
-    const menu=card.querySelector?.('.picklist-vto-actions');if(!menu)return;
-    let closeTimer=null;
-    const closeCard=target=>{target.classList.remove('is-popup-open','linger-open');target.setAttribute('aria-expanded','false');};
-    const keepOpen=()=>{clearTimeout(closeTimer);closeTimer=null;document.querySelectorAll?.('.picklist-vto-driver.is-popup-open,.picklist-vto-driver.linger-open').forEach(other=>{if(other!==card)closeCard(other);});card.classList.add('is-popup-open','linger-open');card.setAttribute('aria-expanded','true');};
-    const closeSoon=()=>{clearTimeout(closeTimer);closeTimer=setTimeout(()=>closeCard(card),700);};
-    card.addEventListener('pointerenter',keepOpen);card.addEventListener('pointerleave',closeSoon);
-    menu.addEventListener('pointerenter',keepOpen);menu.addEventListener('pointerleave',closeSoon);
-    card.addEventListener('focusin',keepOpen);card.addEventListener('focusout',closeSoon);
-    card.addEventListener('click',event=>{if(event.target.closest?.('button,input,select,a'))return;if(card.classList.contains('is-popup-open'))closeCard(card);else keepOpen();});
-  });
 }
 function enhanceMorningParkingAssignment() {
   // Parking-order assignment is rendered in the Morning Tools form so its
@@ -4019,7 +4069,7 @@ function applyVtoRouteSwap() {
   const routeUid=document.getElementById('vto-route-swap-target')?.value||'',result=performVtoRouteSwap(routeUid);if(!result.ok)return toast(result.error,'error');
   state.pendingVtoRouteSwap=null;state.modal=null;persist();render();toast(`${result.incoming} took ${result.route} · ${result.outgoing} moved to ${result.outgoingVto}`);return true;
 }
-function openRosterSwap(route='',driverName='',mode='swap',driverLabel='') { state.pendingRosterSwap={route,driverName,driverLabel:driverLabel||driverName,mode};state.modal='roster-swap';render(); }
+function openRosterSwap(route='',driverName='',mode='swap',driverLabel='') { state.pendingRosterSwap={route,driverName,driverLabel:driverLabel||driverName,mode};return openLightweightModal('roster-swap'); }
 function rosterSwapDriverIndex(people=[],target='') {
   const targetKey=nameKey(target),targetCanonical=nameKey(contactForMorningDriver(target)?.name||target);
   return people.findIndex(name=>{const key=nameKey(name),canonical=nameKey(contactForMorningDriver(name)?.name||name);return key===targetKey||canonical===targetKey||key===targetCanonical||canonical===targetCanonical;});
@@ -4088,7 +4138,7 @@ function routeTrainerCandidates(route={}) {
 }
 function openRouteTrainer(routeUid='') {
   const route=morningRouteByUid(routeUid);if(!route)return toast('That route is no longer available','error');
-  state.pendingRouteTrainer={routeUid};state.modal='route-trainer';render();return true;
+  state.pendingRouteTrainer={routeUid};return openLightweightModal('route-trainer');
 }
 function applyRouteTrainer() {
   const pending=state.pendingRouteTrainer,route=morningRouteByUid(pending?.routeUid||''),selected=document.getElementById('route-trainer-name')?.value||'';if(!route||!selected)return toast('Choose an available trainer','error');
@@ -4114,7 +4164,7 @@ function moveRouteDriverToStayHome(routeUid='',name='') {
 function openRouteVtoSwap(routeUid='',driverName='') {
   const route=morningRouteByUid(routeUid);if(!route)return toast('That route is no longer available','error');
   if(!currentBackupDriverRows().length)return toast('No VTO 2 or VTO 4 drivers are available','error');
-  state.pendingRouteVtoSwap={routeUid,driverName:canonicalDriverName(driverName)};state.modal='route-vto-swap';render();return true;
+  state.pendingRouteVtoSwap={routeUid,driverName:canonicalDriverName(driverName)};return openLightweightModal('route-vto-swap');
 }
 function applyRouteVtoSwap() {
   const pending=state.pendingRouteVtoSwap,route=morningRouteByUid(pending?.routeUid||''),incomingRaw=document.getElementById('route-vto-driver')?.value||'';if(!route||!incomingRaw)return toast('Choose a VTO driver','error');
@@ -4397,7 +4447,6 @@ function bindRosteringContent(root=document) {
     el.addEventListener('mouseenter',()=>{clearTimeout(driverSuggestionCloseTimer);driverSuggestionCloseTimer=null;});
     el.addEventListener('blur',()=>scheduleDriverSuggestionsClose(220));el.addEventListener('mouseleave',()=>scheduleDriverSuggestionsClose(320));
   });
-  root.querySelectorAll?.('[data-driver-profile-name]').forEach(el=>{el.addEventListener('mouseenter',()=>showDriverProfilePopover(el));el.addEventListener('mouseleave',closeDriverProfilePopover);el.addEventListener('pointerleave',closeDriverProfilePopover);el.addEventListener('focusin',()=>showDriverProfilePopover(el));el.addEventListener('focusout',closeDriverProfilePopover);});
 }
 
 function renderRosteringContent() {
@@ -4461,6 +4510,11 @@ function closeLightweightModal() {
   const wasOpen=modalWasOpen;
   if(['picklist-screenshot-review','screenshot'].includes(state.modal)){state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};}
   if(state.modal==='vto-route-swap')state.pendingVtoRouteSwap=null;
+  if(state.modal==='roster-destination')state.pendingRosterDestination=null;
+  if(state.modal==='roster-swap')state.pendingRosterSwap=null;
+  if(state.modal==='route-trainer')state.pendingRouteTrainer=null;
+  if(state.modal==='route-vto-swap')state.pendingRouteVtoSwap=null;
+  if(state.modal==='helper-match')state.pendingHelperMatch=null;
   state.modal=null;document.querySelector?.('.modal-backdrop')?.remove?.();modalWasOpen=false;if(wasOpen)restoreModalFocus();return true;
 }
 function updateGlobalSearchResults() {
@@ -4661,12 +4715,34 @@ function bindGlobalDocumentControls() {
   document.removeEventListener?.('keydown',handleSheetHistoryKeyboard);
   document.removeEventListener?.('pointerdown',closeDriverRouteContextOnOutside);
   document.removeEventListener?.('keydown',closeDriverRouteContextOnKey);
+  document.removeEventListener?.('pointerover',handlePicklistVtoPointerOver);
+  document.removeEventListener?.('pointerout',handlePicklistVtoPointerOut);
+  document.removeEventListener?.('focusin',handlePicklistVtoFocusIn);
+  document.removeEventListener?.('focusout',handlePicklistVtoFocusOut);
+  document.removeEventListener?.('click',handlePicklistVtoClick);
+  document.removeEventListener?.('pointerover',handleDriverProfilePointerOver);
+  document.removeEventListener?.('pointerout',handleDriverProfilePointerOut);
+  document.removeEventListener?.('focusin',handleDriverProfileFocusIn);
+  document.removeEventListener?.('focusout',handleDriverProfileFocusOut);
+  document.removeEventListener?.('contextmenu',handleDriverRouteContextMenu);
+  document.removeEventListener?.('keydown',handleOperationalGridArrowNavigation);
   window.removeEventListener?.('resize',closeDriverRouteContextMenu);
   window.removeEventListener?.('scroll',closeDriverRouteContextOnScroll,true);
   if(state.modal)document.addEventListener?.('keydown',handleModalKeydown);
   else document.addEventListener?.('keydown',handleSheetHistoryKeyboard);
   document.addEventListener?.('pointerdown',closeDriverRouteContextOnOutside);
   document.addEventListener?.('keydown',closeDriverRouteContextOnKey);
+  document.addEventListener?.('pointerover',handlePicklistVtoPointerOver);
+  document.addEventListener?.('pointerout',handlePicklistVtoPointerOut);
+  document.addEventListener?.('focusin',handlePicklistVtoFocusIn);
+  document.addEventListener?.('focusout',handlePicklistVtoFocusOut);
+  document.addEventListener?.('click',handlePicklistVtoClick);
+  document.addEventListener?.('pointerover',handleDriverProfilePointerOver);
+  document.addEventListener?.('pointerout',handleDriverProfilePointerOut);
+  document.addEventListener?.('focusin',handleDriverProfileFocusIn);
+  document.addEventListener?.('focusout',handleDriverProfileFocusOut);
+  document.addEventListener?.('contextmenu',handleDriverRouteContextMenu);
+  document.addEventListener?.('keydown',handleOperationalGridArrowNavigation);
   window.addEventListener?.('resize',closeDriverRouteContextMenu);
   window.addEventListener?.('scroll',closeDriverRouteContextOnScroll,true);
   bindPageNavigationControls();
@@ -4697,7 +4773,9 @@ function bind() {
     const body=openingRosterControls.querySelector('[data-opening-roster-controls-body]');if(body)body.innerHTML='<div class="opening-roster-controls-loading"><i></i><span>Loading today’s roster controls…</span></div>';
     openingRosterControls.setAttribute('aria-busy','true');
     const hydrate=()=>{if(state.page==='roster'&&state.openingRosterControlsOpen)render();};
-    if(window.requestAnimationFrame)window.requestAnimationFrame(()=>window.requestAnimationFrame(hydrate));else hydrate();
+    // Mobile Safari can throttle nested animation frames by seconds. One task
+    // yield paints the loading state without making the controls feel frozen.
+    if(window.setTimeout)window.setTimeout(hydrate,0);else hydrate();
   });
   document.querySelectorAll('[data-action="save-fleet-issue"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();saveFleetIssue();}));
   document.querySelectorAll('[data-action="mark-fleet-issue-fixed"]').forEach(el=>el.addEventListener('click',event=>{event.stopImmediatePropagation();markFleetIssueFixed(el.dataset.issueKey||'',el.dataset.issueId||'');}));
@@ -4709,8 +4787,6 @@ function bind() {
     card.addEventListener('click',event=>{if(event.target.closest('button,a,input,select,textarea,[data-action]'))return;toggle();});
     card.addEventListener('keydown',event=>{if(event.target!==card||!['Enter',' '].includes(event.key))return;event.preventDefault();toggle();});
   });
-  document.querySelectorAll('[data-driver-profile-name]').forEach(el=>{el.addEventListener('mouseenter',()=>showDriverProfilePopover(el));el.addEventListener('mouseleave',closeDriverProfilePopover);el.addEventListener('pointerleave',closeDriverProfilePopover);el.addEventListener('focusin',()=>showDriverProfilePopover(el));el.addEventListener('focusout',closeDriverProfilePopover);});
-  document.querySelectorAll('.morning-template-sheet [data-view-field="driver"], .opening-picklist-main [data-picklist-field="driver"]').forEach(el=>el.addEventListener('contextmenu',event=>openDriverRouteContextMenu(event,el)));
   const aChatInput=document.querySelector?.('[data-achat-input]');
   if(aChatInput)aChatInput.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAChatMessage();}});
   const aChatStream=document.querySelector?.('[data-achat-stream]');if(aChatStream)aChatStream.scrollTop=aChatStream.scrollHeight;
@@ -5406,7 +5482,6 @@ function handleSheetSelectionCopy(e) {
 }
 function handleSheetKeydown(e,el) {
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='c') return;
-  if(state.editMode&&el.isContentEditable&&['ArrowLeft','ArrowRight'].includes(e.key)) return;
   if(e.key==='Enter') {
     e.preventDefault();
     saveMorningEditCell(el);
@@ -5421,6 +5496,55 @@ function handleSheetKeydown(e,el) {
     return moveSheetCell(el,dr,dc);
   }
   if(e.key==='Escape') { e.preventDefault(); el.blur(); }
+}
+const operationalGridEditorSelector=[
+  '.morning-template-sheet [data-edit-field]',
+  '[data-picklist-edit]',
+  '[data-device-sheet-field]',
+  '[data-device-custom-field]',
+  '[data-picklist-backup]',
+  '[data-picklist-calloff-reason]',
+  '[data-picklist-calloff-name]',
+  '[data-picklist-calloff-draft]',
+  '[data-picklist-topic]',
+  '[data-rostering-assignment]',
+  '[data-parking-id]',
+  '[data-parking-battery]',
+  '[data-screenshot-review-pad]'
+].join(',');
+function operationalGridRoot(editor) {
+  return editor?.closest?.('table')||editor?.closest?.('.rostering-associate-list')||editor?.closest?.('.parking-lot')||editor?.closest?.('.modal');
+}
+function focusOperationalGridEditor(editor) {
+  if(!editor)return false;
+  editor.focus?.({preventScroll:true});
+  if(editor.matches?.('input:not([type="date"]),textarea'))editor.select?.();
+  else if(editor.isContentEditable&&window.getSelection&&document.createRange){
+    const range=document.createRange(),selection=window.getSelection();range.selectNodeContents(editor);selection.removeAllRanges();selection.addRange(range);
+  }
+  editor.scrollIntoView?.({block:'nearest',inline:'nearest'});
+  return true;
+}
+function directionalOperationalGridEditor(editor,key='') {
+  const root=operationalGridRoot(editor);if(!root)return null;
+  const current=editor.getBoundingClientRect?.();if(!current)return null;
+  const cx=current.left+current.width/2,cy=current.top+current.height/2,vertical=key==='ArrowUp'||key==='ArrowDown',positive=key==='ArrowDown'||key==='ArrowRight';
+  let best=null,bestScore=Infinity;
+  [...root.querySelectorAll(operationalGridEditorSelector)].forEach(candidate=>{
+    if(candidate===editor||candidate.disabled||candidate.hidden||candidate.getAttribute?.('aria-hidden')==='true')return;
+    const rect=candidate.getBoundingClientRect?.();if(!rect||(!rect.width&&!rect.height))return;
+    const x=rect.left+rect.width/2,y=rect.top+rect.height/2,primary=vertical?y-cy:x-cx,secondary=Math.abs(vertical?x-cx:y-cy);
+    if(positive?primary<=2:primary>=-2)return;
+    const distance=Math.abs(primary),score=distance*1000+secondary;
+    if(score<bestScore){best=candidate;bestScore=score;}
+  });
+  return best;
+}
+function handleOperationalGridArrowNavigation(event) {
+  if(event.defaultPrevented||!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key)||event.metaKey||event.ctrlKey||event.altKey)return;
+  const editor=event.target?.closest?.(operationalGridEditorSelector);if(!editor)return;
+  const next=directionalOperationalGridEditor(editor,event.key);if(!next)return;
+  event.preventDefault();focusOperationalGridEditor(next);
 }
 function setCellText(el,value) {
   if(!el)return;
@@ -5706,7 +5830,7 @@ function action(name,el) {
   if (name==='copy-open-charger-slack') return copyChargerReportAndOpenSlack();
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return renderLightweightModal(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal'&&['picklist-screenshot-review','screenshot','vto-route-swap','import'].includes(state.modal)) return closeLightweightModal();
+  if (name==='close-modal'&&['picklist-screenshot-review','screenshot','vto-route-swap','roster-destination','roster-swap','route-trainer','route-vto-swap','helper-match','early-calloff-reminder','import'].includes(state.modal)) return closeLightweightModal();
   if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingRouteTrainer=null;state.pendingRouteVtoSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=importAcceptForPurpose(state.importPurpose);return fileInput.click(); }
   if (name==='schedule-import') { state.scheduleImportDestination=state.page==='rostering'?'rostering':'roster';state.importPurpose='schedule';fileInput.accept='.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf';return fileInput.click(); }
@@ -6367,7 +6491,7 @@ function helperDriverCandidates() {
 function openHelperMatch(name='') {
   const helper=helperRosterRows().find(row=>nameKey(row.name)===nameKey(name));if(!helper)return toast('Helper was not found in today’s roster','error');
   const candidates=helperDriverCandidates();if(!candidates.length)return toast('Add Wave 1 or Wave 2 drivers to the Morning Sheet first','error');
-  state.pendingHelperMatch={name:helper.name,role:helper.role||'Driver Helper'};state.modal='helper-match';render();
+  state.pendingHelperMatch={name:helper.name,role:helper.role||'Driver Helper'};return openLightweightModal('helper-match');
 }
 function openDriverAlias(name='') {
   const canonical=canonicalDriverName(name);if(!canonical)return toast('Choose a driver or helper first','error');
@@ -7613,7 +7737,11 @@ function morningSheetCopyRows() {
 }
 function morningSheetTsv(){ return morningSheetCopyRows().map(row=>row.join('\t')).join('\n'); }
 function morningCoreWaveLabels() {
-  return morningSections(allMorningRows()).filter(section=>section.hasTime&&/^WAVE\s*[1-5]$/i.test(section.label)).slice(0,5).map(section=>({label:section.label,value:morningWaveTimeText(section)}));
+  const byKey=new Map(morningSections(allMorningRows()).filter(section=>section.hasTime&&/^WAVE\s*[1-5]$/i.test(section.label)).map(section=>[morningFixedSectionKey(section.label),section]));
+  return Array.from({length:5},(_,index)=>{
+    const label=`WAVE ${index+1}`,section=byKey.get(`WAVE${index+1}`)||{label,wave:defaultMorningWaveTimes[index],rows:[]};
+    return {label,value:morningWaveTimeText(section)};
+  });
 }
 function morningSheetsConnectorPayload() {
   const visibleRows=filteredMorningRows(),sections=fixedMorningSections(visibleRows),rows=[],rowTypes=[],sectionMeta=[],writeMode=morningFiltersAreActive()?'partial-update':'full-replace';
@@ -7772,7 +7900,7 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-22-wave5-fourteen-routes';
+const RELAYOPS_BUILD = '2026-07-22-verified-five-wave-footers';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
@@ -7961,9 +8089,20 @@ function relayOpsWaveLabels(payload) {
 }
 
 function writeRelayOpsWaveLabels(sheet, payload) {
-  let updated = 0;
-  relayOpsWaveLabels(payload).forEach(function(wave) { if (!wave.value) return;sheet.getRange(wave.layout.timeRow, 1).setValue(wave.value);updated++; });
-  return updated;
+  const waves = relayOpsWaveLabels(payload);
+  waves.forEach(function(wave) {
+    if (!wave.value) return;
+    const cell = sheet.getRange(wave.layout.timeRow, 1);
+    cell.clearContent();
+    cell.setValue(String(wave.value));
+  });
+  if (SpreadsheetApp.flush) SpreadsheetApp.flush();
+  const failed = waves.filter(function(wave) {
+    if (!wave.value) return true;
+    return String(sheet.getRange(wave.layout.timeRow, 1).getDisplayValue() || '').trim() !== String(wave.value).trim();
+  });
+  if (failed.length) throw new Error('Wave footer verification failed for ' + failed.map(function(wave) { return wave.layout.label; }).join(', '));
+  return waves.length;
 }
 
 function validateRelayOpsMorningPayload(payload) {
@@ -8378,12 +8517,14 @@ async function syncFilteredMorningToSheets() {
   try {
     const dryResult=await postMorningSheetsPayload(endpoint,{...payload,dryRun:true});
     if(!dryResult.dryRun)throw new Error('Google did not confirm the safety check');
+    if(String(dryResult.build||'')!=='2026-07-22-verified-five-wave-footers')throw confirmedConnectorError('Google is using an older Apps Script build that can report success without writing every Wave 1–5 footer. Download, paste, and redeploy the revised connector once.');
     if(Number(dryResult.waveTimes)!==5)throw confirmedConnectorError('Google is still using the older connector that can skip Wave 1–4 times. Install and redeploy the newest five-wave Apps Script before sending.');
     if(payload.writeMode==='partial-update'&&dryResult.wouldCreateSheet)throw new Error('Send all waves once before using a filtered partial update. No unrelated wave sections were changed.');
     if(button)button.textContent='Sending filtered waves…';
     const result=await postMorningSheetsPayload(endpoint,payload);
     const requestedRoutes=payload.sections.reduce((count,section)=>count+(payload.rows||[]).slice(Number(section.sourceIndex)||0,(Number(section.sourceIndex)||0)+Number(section.rowCount||0)).filter(row=>String(row?.[2]||'').trim()).length,0);
     if(result.writeMode!==payload.writeMode)throw confirmedConnectorError('Google did not confirm the requested full/partial write mode. Update and redeploy the revised Apps Script.');
+    if(String(result.build||'')!=='2026-07-22-verified-five-wave-footers')throw confirmedConnectorError('Google did not confirm the revised five-wave footer connector build.');
     if(Number(result.waveTimes)!==5)throw confirmedConnectorError(`Google updated ${result.waveTimes||0} of 5 wave time/count labels. Update and redeploy the newest Apps Script connector, then send again.`);
     if(payload.writeMode==='partial-update'&&(result.missingRoutes?.length||result.sectionMismatches?.length||Number(result.updated)!==requestedRoutes))throw confirmedConnectorError(`Google updated ${result.updated||0} of ${requestedRoutes} filtered routes; ${result.missingRoutes?.length||0} CX missing and ${result.sectionMismatches?.length||0} in a different fixed wave slot. Unrelated sections were left unchanged.`);
     const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
@@ -8415,7 +8556,7 @@ async function syncFilteredMorningToSheets() {
 }
 async function copyMorningAppsScript() {
   const code=morningSheetsAppsScript();
-  if(!code.includes('2026-07-22-wave5-fourteen-routes')){toast('The 14-route Wave 5 Apps Script is still loading — refresh the dashboard and try again','error');return false;}
+  if(!code.includes('2026-07-22-verified-five-wave-footers')){toast('The verified five-wave Apps Script is still loading — refresh the dashboard and try again','error');return false;}
   const ok=await writeClipboardText(code);
   toast(ok?'Revised original-template Apps Script copied — replace the old code, save, and deploy a new version':'Clipboard blocked — download the .gs script file instead',ok?'':'error');
   return ok;
@@ -8511,7 +8652,7 @@ async function testMorningSheetsConnector() {
     const response=await fetch(connectorUrlWithPing(endpoint),{method:'GET'});
     const text=await response.text();
     if(!response.ok||!/relayops-morning-v1/.test(text)||!/A3:V/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
-    if(!/2026-07-22-wave5-fourteen-routes/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the 14-route Wave 5 connector, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
+    if(!/2026-07-22-verified-five-wave-footers/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the verified five-wave footer connector, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
     state.morningSheetsLastError='';
     persist(); render();
     toast('Google Sheets connector confirmed');
@@ -8549,6 +8690,7 @@ async function dryRunMorningToSheets() {
     if(!response.ok)throw new Error(`Connector returned ${response.status}`);
     const result=parseMorningSheetsResponse(text,response.status);
     if(!result.dryRun)throw new Error('Connector did not confirm dry run mode');
+    if(String(result.build||'')!=='2026-07-22-verified-five-wave-footers'||Number(result.waveTimes)!==5)throw confirmedConnectorError('Google is using an older connector that cannot verify all five Wave time/count footers. Install and redeploy the revised Apps Script once.');
     state.morningSheetsLastDryRun=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastError='';
     state.modal='morning-sheets-connector';
@@ -8589,6 +8731,7 @@ async function sendMorningToSheets() {
     const text=await response.text();
     if(!response.ok)throw new Error(`Connector returned ${response.status}`);
     const result=parseMorningSheetsResponse(text,response.status);
+    if(String(result.build||'')!=='2026-07-22-verified-five-wave-footers'||Number(result.waveTimes)!==5)throw confirmedConnectorError('Google did not verify all five Wave time/count footers. Install and redeploy the revised Apps Script once before sending.');
     const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastPush=sentAt;
     state.morningSheetsLastReceipt={sheet:result.sheet||payload.sheetName,startCell:result.startCell||payload.startCell,writeRange:result.writtenRange||result.writeRange||payload.writeRange,lastCell:result.lastCell||'',rows:result.rows||payload.rows.length,sections:result.sections||payload.sections.length,status:'confirmed',updatedAt:result.updatedAt||sentAt,sentAt};

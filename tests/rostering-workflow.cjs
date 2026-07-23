@@ -173,7 +173,7 @@ function run() {
   assert(appSource.includes("if (name==='rostering-toggle-service') return toggleRosteringService")&&appSource.includes("data-rostering-service-card")&&appSource.includes("class=\"rostering-service-body\" ${open?'':'hidden'}")&&styleSource.includes('.rostering-service-body[hidden]{display:none!important}'), 'Rostering service blocks must open in place without rebuilding the whole dashboard');
   assert(appSource.includes('function persistRosteringSlice()')&&appSource.includes("if(!cleared)return toast(`${service.name} is already clear`)")&&appSource.includes('persistRosteringSlice();renderRosteringContent()'), 'Rostering actions must use the small save/render path and skip no-op Clear roster rebuilds');
   assert(styleSource.includes('.rostering-driver-note-list') && styleSource.includes('max-height:320px') && styleSource.includes('overflow:auto'), 'Driver flags must remain in a compact scrollable list');
-  assert(appSource.includes("el.addEventListener('pointerleave',closeDriverProfilePopover)")&&/function render\(\) \{[\s\S]{0,360}closeDriverProfilePopover\(\)/.test(appSource), 'Driver-note hover popovers must close on pointer exit and before rerendering any page');
+  assert(appSource.includes('function handleDriverProfilePointerOut')&&appSource.includes("document.addEventListener?.('pointerout',handleDriverProfilePointerOut)")&&/function render\(\) \{[\s\S]{0,360}closeDriverProfilePopover\(\)/.test(appSource), 'Delegated driver-note hover popovers must close on pointer exit and before rerendering any page');
   console.log('Rostering confirmed-services, PAYCOM fill, and fairness rotation tests passed');
 }
 
