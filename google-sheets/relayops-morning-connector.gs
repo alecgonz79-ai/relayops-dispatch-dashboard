@@ -9,13 +9,13 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-20-all-wave-labels';
+const RELAYOPS_BUILD = '2026-07-22-wave5-fourteen-routes';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
   {key:'WAVE3', label:'WAVE 3', startRow:33, routeCapacity:13, timeRow:46, separatorRow:47},
   {key:'WAVE4', label:'WAVE 4', startRow:48, routeCapacity:13, timeRow:61, separatorRow:62},
-  {key:'WAVE5', label:'WAVE 5', startRow:63, routeCapacity:13, timeRow:76, separatorRow:77},
+  {key:'WAVE5', label:'WAVE 5', startRow:63, routeCapacity:14, timeRow:77, separatorRow:78},
   {key:'ADHOCS', label:"ADHOC's", startRow:79, routeCapacity:15, separatorRow:94},
   {key:'HELPERS', label:'HELPERS', startRow:95, routeCapacity:15, separatorRow:110},
   {key:'DSP', label:'DSP', startRow:111, routeCapacity:6}
@@ -305,7 +305,7 @@ function relayOpsRouteIndex(sheet) {
 
 function writeRelayOpsRtsOnly(payload) {
   const target = resolveRelayOpsTarget(payload, false);if (target.wouldCreate) throw new Error('Send the full Morning Sheet once before RTS-only updates');const sheet = target.sheet;
-  validateRelayOpsTemplateSignature(sheet);
+  validateRelayOpsTemplateSignature(sheet);ensureRelayOpsWave5Capacity(sheet);
   const byRoute = relayOpsRouteIndex(sheet);
   let updated = 0;const missingRoutes = [], sectionMismatches = [];
   (payload.updates || []).forEach(function(update) {
@@ -321,7 +321,7 @@ function writeRelayOpsRtsOnly(payload) {
 
 function writeRelayOpsWhiparoundOnly(payload) {
   const target = resolveRelayOpsTarget(payload, false);if (target.wouldCreate) throw new Error('Send the full Morning Sheet once before Whiparound-only updates');const sheet = target.sheet;
-  validateRelayOpsTemplateSignature(sheet);
+  validateRelayOpsTemplateSignature(sheet);ensureRelayOpsWave5Capacity(sheet);
   const byRoute = relayOpsRouteIndex(sheet);
   let updated = 0;const missingRoutes = [], driverMismatches = [], sectionMismatches = [];
   (payload.updates || []).forEach(function(update) {
@@ -379,6 +379,27 @@ function ensureRelayOpsTemplateCapacity(sheet, rowCount) {
   if (!layout.hasEnoughColumns) sheet.insertColumnsAfter(sheet.getMaxColumns(), RELAYOPS_TEMPLATE_COLS - sheet.getMaxColumns());
 }
 
+function ensureRelayOpsWave5Capacity(sheet) {
+  const probe = sheet.getRange('A63');
+  if (!probe || typeof probe.getMergedRanges !== 'function' || typeof probe.copyTo !== 'function') return false;
+  const existing = probe.getMergedRanges().find(function(range) {
+    return range.getRow() === 63 && range.getColumn() === 1;
+  });
+  if (existing && existing.getNumRows() >= 14) return false;
+  ['A63:A77','E63:E77'].forEach(function(a1) {
+    sheet.getRange(a1).getMergedRanges().forEach(function(range) { range.breakApart(); });
+  });
+  sheet.getRange(76, 1, 1, RELAYOPS_TEMPLATE_COLS).copyTo(sheet.getRange(77, 1, 1, RELAYOPS_TEMPLATE_COLS), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+  sheet.getRange(76, 1, 1, RELAYOPS_TEMPLATE_COLS).copyTo(sheet.getRange(77, 1, 1, RELAYOPS_TEMPLATE_COLS), SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
+  sheet.getRange(75, 1, 1, RELAYOPS_TEMPLATE_COLS).copyTo(sheet.getRange(76, 1, 1, RELAYOPS_TEMPLATE_COLS), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+  sheet.getRange(75, 1, 1, RELAYOPS_TEMPLATE_COLS).copyTo(sheet.getRange(76, 1, 1, RELAYOPS_TEMPLATE_COLS), SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
+  sheet.getRange(76, 2, 1, RELAYOPS_TEMPLATE_COLS - 1).clearContent();
+  sheet.getRange(77, 1).clearContent();
+  sheet.getRange('A63:A76').merge();
+  sheet.getRange('E63:E77').merge();
+  return true;
+}
+
 function freezeRelayOpsHeader(sheet) {
   try {
     sheet.getRange(1, 1, 2, RELAYOPS_COLS).getMergedRanges().forEach(function(range) {
@@ -396,6 +417,7 @@ function writeRelayOpsMorningSheet(payload) {
   if (writeMode === 'partial-update' && target.wouldCreate) throw new Error('Send all waves once before using a filtered partial update');
   const sheet = target.sheet;
   validateRelayOpsTemplateSignature(sheet);
+  ensureRelayOpsWave5Capacity(sheet);
 
   // Clear only dashboard-owned cells inside the fixed OPS LOG 2026 sections.
   // Existing merges, headers, widths, colors, checkboxes J:M, divider N,

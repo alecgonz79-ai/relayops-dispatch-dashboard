@@ -423,6 +423,7 @@ let state = {
   gasAssignmentVans: [],
   deviceClearConfirm: null,
   deviceCustomRows: loadDeviceCustomRows(),
+  removedDeviceVehicleIds: JSON.parse(localStorage.getItem('relayops_removed_device_vehicle_ids') || 'null') || [],
   driverContacts: JSON.parse(localStorage.getItem('relayops_driver_contacts') || 'null') || [],
   driverContactsLastImport: localStorage.getItem('relayops_driver_contacts_last_import') || '',
   driverNameAliases: JSON.parse(localStorage.getItem('relayops_driver_name_aliases') || 'null') || {},
@@ -1402,7 +1403,7 @@ function morningSheetPage() {
     <section class="morning-tool-group filter-group"><div class="morning-tool-heading"><span><strong>Find routes</strong><small>Show only the part of the sheet you need.</small></span><div class="morning-kpi-pills"><i><b>${rows.length}</b> routes</i><i><b>${rows.reduce((n,r)=>n+r.packages,0).toLocaleString()}</b> packages</i><i><b>${rows.reduce((n,r)=>n+r.stops,0).toLocaleString()}</b> stops</i><i class="${irregular?'warning':''}"><b>${irregular}</b> RTS flags</i></div></div><div class="morning-filter-form"><label><span>Wave</span><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></label><label><span>Staging</span><select data-morning-filter="staging"><option value="all">All staging locations</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></label><label><span>Pad</span><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></label><button class="btn subtle" data-action="clear-morning-filters">Clear filters</button><span class="morning-sort-note">${ICONS.chevron} Earliest wave first</span></div></section>
     <div class="morning-tool-grid">
       <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Work with the sheet</strong><small>Edit, select, or make the sheet compact.</small></span></div><div class="morning-tool-actions"><button class="btn ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Finish editing':'✎ Edit sheet'}</button><button class="btn ${state.copyMode?'lime':''}" data-action="toggle-morning-copy">${state.copyMode?'✓ Exit copy mode':'Copy cells'}</button><button class="btn ${state.fitMorningRows?'lime':''}" data-action="toggle-fit-rows">${state.fitMorningRows?'✓ Fit to drivers':'Remove blank rows'}</button></div></section>
-      <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Choose vans another way</strong><small>Optional alternatives to safe automatic assignment.</small></span></div><div class="morning-tool-actions morning-vehicle-actions"><button class="btn" data-action="assign-vans-by-parking">${ICONS.van} Parking order</button><button class="btn" data-action="assign-ev-low">EV 1–58 low → high</button><button class="btn" data-action="assign-ev-random">Random EVs</button><button class="btn" data-action="assign-gas-vans">Gas vehicles</button><button class="btn danger-soft" data-action="clear-morning-evs">Clear EVs</button></div></section>
+      <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Choose vans another way</strong><small>Optional alternatives to safe automatic assignment.</small></span></div><div class="morning-tool-actions morning-vehicle-actions"><button class="btn bag-ready-vans" data-action="assign-bag-ready-vans">${ICONS.phone} Bag Ready Vans</button><button class="btn" data-action="assign-vans-by-parking">${ICONS.van} Parking order</button><button class="btn" data-action="assign-ev-low">EV 1–58 low → high</button><button class="btn" data-action="assign-ev-random">Random EVs</button><button class="btn" data-action="assign-gas-vans">Gas vehicles</button><button class="btn danger-soft" data-action="clear-morning-evs">Clear EVs</button></div></section>
       <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Backup and recovery</strong><small>Use only when you need to undo or paste manually.</small></span></div><div class="morning-tool-actions"><button class="btn" data-action="sheet-undo" ${state.sheetHistory?.past?.length?'':'disabled'}>↶ Undo</button><button class="btn" data-action="sheet-redo" ${state.sheetHistory?.future?.length?'':'disabled'}>↷ Redo</button><button class="btn" data-action="open-sheet-history">History</button><button class="btn" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn" data-action="open-sheets-helper">Paste box</button><button class="btn danger-soft" data-action="clear-morning-sheet">${ICONS.trash} Clear Morning Sheet</button></div></section>
     </div>
   </div></details>
@@ -1459,7 +1460,7 @@ function morningSections(rows) {
     const wave=candidates.find(value=>!usedWaves.has(value))||override?.time||defaultMorningWaveTimes[index]||`Wave ${index+1}`;
     sectionWaves.push(wave);usedWaves.add(wave);
   }
-  const sections=sectionWaves.map((wave,i)=>({label:`WAVE ${i+1}`,wave,rows:regular.filter(r=>r.wave===wave),pad:['A','B','C','A','B'][i],routeCapacity:13,hasTime:true,separatorRows:i===4?2:1}));
+  const sections=sectionWaves.map((wave,i)=>({label:`WAVE ${i+1}`,wave,rows:regular.filter(r=>r.wave===wave),pad:['A','B','C','A','B'][i],routeCapacity:i===4?14:13,hasTime:true,separatorRows:1}));
   const used=new Set(sections.flatMap(s=>s.rows.map(r=>r.route)));
   const adHoc=rows.filter(r=>!used.has(r.route)&&isExplicitAdhocMorningRoute(r));
   const helpers=rows.filter(r=>!used.has(r.route)&&isExplicitHelperMorningRoute(r)&&!adHoc.some(x=>x.route===r.route));
@@ -1563,16 +1564,23 @@ function deviceSheetDetails() {
   return state.equipmentImport?.details||{};
 }
 function deviceSheetBaseIds(section='') {
-  if(section==='ev')return Array.from({length:58},(_,i)=>`EV${i+1}`);
-  if(section==='gas')return [...gasVehicleIds];
-  if(section==='helper')return ['H1','H2','H3','H4'];
-  return [];
+  const removed=new Set((state.removedDeviceVehicleIds||[]).map(normalizeEquipmentId));
+  const base=section==='ev'?Array.from({length:58},(_,i)=>`EV${i+1}`):section==='gas'?[...gasVehicleIds]:section==='helper'?['H1','H2','H3','H4']:[];
+  return base.filter(label=>!removed.has(normalizeEquipmentId(label)));
 }
 function deviceSheetCustomRows(section='') {
   return Array.isArray(state.deviceCustomRows?.[section])?state.deviceCustomRows[section]:[];
 }
 function deviceSheetAllIds(section='') {
-  return [...deviceSheetBaseIds(section),...deviceSheetCustomRows(section).map(row=>row.label).filter(Boolean)];
+  return [...deviceSheetBaseIds(section),...deviceSheetCustomRows(section).map(row=>row.label).filter(Boolean)].sort(deviceVehicleLabelCompare);
+}
+function deviceVehicleLabelCompare(a='',b='') {
+  const left=String(typeof a==='object'?a.label:a||''),right=String(typeof b==='object'?b.label:b||'');
+  if(!left)return 1;if(!right)return -1;
+  return left.localeCompare(right,undefined,{numeric:true,sensitivity:'base'});
+}
+function sortDeviceCustomRows(section='') {
+  if(Array.isArray(state.deviceCustomRows?.[section]))state.deviceCustomRows[section].sort(deviceVehicleLabelCompare);
 }
 function fleetEquipmentIdentity(vehicle={}) {
   const vin=String(vehicle.vin||'').toUpperCase(),cleanedVin=cleanVin(vin),name=String(FIXED_FLEET_NAMES[cleanedVin]||state.fleetNameOverrides?.[cleanedVin]||vehicle.name||'').trim(),upper=name.toUpperCase();
@@ -1701,13 +1709,14 @@ function syncFleetVehiclesToDeviceSheet(vehicles=[]) {
   let added=0;
   vehicles.forEach(vehicle=>{
     const identity=fleetEquipmentIdentity(vehicle);if(!identity)return;
-    const key=normalizeEquipmentId(identity.label),baseKeys=new Set(deviceSheetBaseIds(identity.section).map(normalizeEquipmentId));
+    const key=normalizeEquipmentId(identity.label),removed=new Set((state.removedDeviceVehicleIds||[]).map(normalizeEquipmentId)),baseKeys=new Set(deviceSheetBaseIds(identity.section).map(normalizeEquipmentId));
+    if(removed.has(key))return;
     const custom=deviceSheetCustomRows(identity.section),existing=custom.find(row=>normalizeEquipmentId(row.label)===key);
     if(existing){existing.source='fleet';existing.fleetVin=vehicle.vin||existing.fleetVin||'';return;}
     if(baseKeys.has(key))return;
     custom.push({uid:`fleet-${identity.section}-${key||Date.now()}`,label:identity.label,device:'',portable:'',source:'fleet',fleetVin:vehicle.vin||''});added++;
   });
-  return added;
+  ['ev','gas','helper'].forEach(sortDeviceCustomRows);return added;
 }
 function syncGasVehiclesToParking(vehicles=[]) {
   const labels=[...new Set(vehicles.filter(isGasFleetVehicle).map(vehicle=>fleetEquipmentIdentity(vehicle)?.label||fleetDisplayName(vehicle)).map(value=>String(value||'').trim()).filter(Boolean))];
@@ -1718,10 +1727,11 @@ function syncGasVehiclesToParking(vehicles=[]) {
 function deviceSheetRows(section='') {
   const details=deviceSheetDetails();
   const base=deviceSheetBaseIds(section).map(label=>({label,fixed:true})),custom=deviceSheetCustomRows(section);
-  return [...base,...custom].map(row=>{
+  return [...base,...custom].sort(deviceVehicleLabelCompare).map(row=>{
     const label=String(row.label||''),key=normalizeEquipmentId(label),item=row.fixed?(details[key]||{}):{...row,device:row.device||details[key]?.device||'',portable:row.portable||details[key]?.portable||''};
   const issue=vehicleIssueForEquipmentId(label),rowClass=issue?.type==='grounded'?'grounded-vehicle-row':issue?.type==='battery'?'low-battery-vehicle-row':issue?.type==='reported'?'reported-vehicle-row':'';
-    const vanCell=row.fixed?`<th>${esc(label)}${issue?`<span>${esc(issue.label)}</span>`:''}</th>`:`<th class="custom-van-cell"><input class="device-sheet-van-input" aria-label="${esc(section)} custom van" data-device-custom-uid="${esc(row.uid)}" data-device-custom-field="label" value="${esc(label)}" placeholder="Van name"><button data-action="remove-device-custom-row" data-device-custom-uid="${esc(row.uid)}" aria-label="Remove ${esc(label||'custom van')} row">×</button>${issue?`<span>${esc(issue.label)}</span>`:''}</th>`;
+    const removeButton=`<button type="button" class="device-row-remove" data-action="remove-device-vehicle-row" data-device-section="${esc(section)}" data-device-id="${esc(label)}" ${row.uid?`data-device-custom-uid="${esc(row.uid)}"`:''} aria-label="Remove ${esc(label||'vehicle')} from the list" title="Remove ${esc(label||'vehicle')}">×</button>`;
+    const vanCell=row.fixed?`<th class="fixed-van-cell"><span class="device-van-label">${esc(label)}</span>${removeButton}${issue?`<span>${esc(issue.label)}</span>`:''}</th>`:`<th class="custom-van-cell"><input class="device-sheet-van-input" aria-label="${esc(section)} custom van" data-device-custom-uid="${esc(row.uid)}" data-device-custom-field="label" value="${esc(label)}" placeholder="Van name">${removeButton}${issue?`<span>${esc(issue.label)}</span>`:''}</th>`;
     const field=(name,max)=>{const value=String(item[name]||''),equipmentIssue=equipmentIssueFor(name,value);return `<td class="device-equipment-cell ${equipmentIssue?'has-equipment-issue':''}"><input aria-label="${esc(label||'New van')} ${name}" ${row.fixed?`data-device-sheet-id="${esc(key)}" data-device-sheet-field="${name}"`:`data-device-custom-uid="${esc(row.uid)}" data-device-custom-field="${name}"`} inputmode="numeric" maxlength="${max}" value="${esc(value)}" placeholder="—">${value?`<button type="button" class="equipment-issue-trigger ${equipmentIssue?'active':''}" data-action="open-equipment-issue" data-equipment-type="${name}" data-equipment-id="${esc(value)}" aria-label="Report or review ${esc(name)} ${esc(value)} issue">${equipmentIssue?'⚠':'!'}</button>`:''}${equipmentIssuePopoverHtml(name,value)}</td>`;};
     return `<tr class="${rowClass}">${vanCell}${field('device',3)}${field('portable',4)}</tr>`;
   }).join('');
@@ -3967,6 +3977,7 @@ function enhanceOpeningRoster() {
     card.addEventListener('pointerenter',keepOpen);card.addEventListener('pointerleave',closeSoon);
     menu.addEventListener('pointerenter',keepOpen);menu.addEventListener('pointerleave',closeSoon);
     card.addEventListener('focusin',keepOpen);card.addEventListener('focusout',closeSoon);
+    card.addEventListener('click',event=>{if(event.target.closest?.('button,input,select,a'))return;if(card.classList.contains('is-popup-open'))closeCard(card);else keepOpen();});
   });
 }
 function enhanceMorningParkingAssignment() {
@@ -3988,7 +3999,7 @@ function vtoLabelFromOrigin(origin='',role='') {
 function openVtoRouteSwap(name='',role='',origin='') {
   const exactName=contactForMorningDriver(name)?.name||name;if(!exactName)return false;
   const candidates=vtoRouteSwapCandidates(exactName);if(!candidates.length){toast('No assigned routes are available to swap','error');return false;}
-  state.pendingVtoRouteSwap={name:exactName,role:role||'',vtoLabel:vtoLabelFromOrigin(origin,role)};state.pendingRosterDestination=null;state.modal='vto-route-swap';render();return true;
+  state.pendingVtoRouteSwap={name:exactName,role:role||'',vtoLabel:vtoLabelFromOrigin(origin,role)};state.pendingRosterDestination=null;return openLightweightModal('vto-route-swap');
 }
 function performVtoRouteSwap(routeUid='') {
   const pending=state.pendingVtoRouteSwap,route=morningRouteByUid(routeUid);if(!pending)return {ok:false,error:'Choose a VTO driver first'};
@@ -4401,9 +4412,36 @@ function bindActionControls(root=document) {
     // Modal actions must not bubble into the backdrop's close action. A clear
     // confirmation used to run both handlers, causing a second render while
     // the critical shared-workspace save was starting.
-    if(el.closest?.('.modal')&&el.dataset.action!=='close-modal')event.stopPropagation();
+    if(el.closest?.('.modal'))event.stopPropagation();
     action(el.dataset.action,el);
   }));
+}
+function bindLightweightModal(backdrop) {
+  if(!backdrop)return;
+  bindActionControls(backdrop);
+  const vtoRouteSearch=backdrop.querySelector?.('#vto-route-swap-search');if(vtoRouteSearch)vtoRouteSearch.addEventListener('input',()=>filterVtoRouteSwapOptions(vtoRouteSearch));
+  backdrop.querySelectorAll?.('[data-screenshot-review-pad]').forEach(el=>{
+    el.addEventListener('focus',()=>{beginSheetInputHistory(el,`Edit ${el.dataset.screenshotReviewPad} pad from screenshot review`,'both');el.select?.();});
+    el.addEventListener('input',()=>saveScreenshotReviewPad(el));
+    el.addEventListener('change',()=>{saveScreenshotReviewPad(el,true);commitSheetInputHistory(el);});
+    el.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();saveScreenshotReviewPad(el,true);commitSheetInputHistory(el);const inputs=[...backdrop.querySelectorAll('[data-screenshot-review-pad]')],next=inputs[inputs.indexOf(el)+1];if(next){next.focus({preventScroll:true});next.select?.();}else el.blur();});
+  });
+}
+function renderLightweightModal() {
+  if(typeof app?.insertAdjacentHTML!=='function'&&!document.getElementById?.('toast-stack')){render();return true;}
+  const existing=document.querySelector?.('.modal-backdrop');existing?.remove?.();
+  const html=modal();if(!html){modalWasOpen=false;return false;}
+  if(!modalWasOpen)modalReturnFocus=captureModalReturnFocus();
+  const toastStack=document.getElementById?.('toast-stack');
+  if(toastStack)toastStack.insertAdjacentHTML('beforebegin',html);else app.insertAdjacentHTML('beforeend',html);
+  const backdrop=document.querySelector?.('.modal-backdrop');bindLightweightModal(backdrop);syncModalFocus(modalWasOpen);return true;
+}
+function openLightweightModal(name='') { state.modal=name;return renderLightweightModal(); }
+function closeLightweightModal() {
+  const wasOpen=modalWasOpen;
+  if(['picklist-screenshot-review','screenshot'].includes(state.modal)){state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};}
+  if(state.modal==='vto-route-swap')state.pendingVtoRouteSwap=null;
+  state.modal=null;document.querySelector?.('.modal-backdrop')?.remove?.();modalWasOpen=false;if(wasOpen)restoreModalFocus();return true;
 }
 function updateGlobalSearchResults() {
   const anchor=document.getElementById?.('global-search-results-anchor');
@@ -5633,6 +5671,7 @@ function action(name,el) {
   if (name==='copy-open-charger-slack') return copyChargerReportAndOpenSlack();
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return render(); }
   if (name==='load-slack-demo') return loadSlackDemo();
+  if (name==='close-modal'&&['picklist-screenshot-review','screenshot','vto-route-swap'].includes(state.modal)) return closeLightweightModal();
   if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingRouteTrainer=null;state.pendingRouteVtoSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=importAcceptForPurpose(state.importPurpose);return fileInput.click(); }
   if (name==='schedule-import') { state.scheduleImportDestination=state.page==='rostering'?'rostering':'roster';state.importPurpose='schedule';fileInput.accept='.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf';return fileInput.click(); }
@@ -5755,6 +5794,7 @@ function action(name,el) {
   if (name==='assign-ev-low') return assignElectricVehicles('low');
   if (name==='assign-ev-random') return assignElectricVehicles('random');
   if (name==='assign-operational-vans') return assignOperationalVehicles();
+  if (name==='assign-bag-ready-vans') return assignBagReadyVehicles();
   if (name==='clear-morning-evs') return clearMorningVehicleAssignments();
   if (name==='assign-vans-by-parking') return assignVansByParking();
   if (name==='assign-gas-vans') return openGasVehicleAssignment();
@@ -5793,6 +5833,7 @@ function action(name,el) {
   if (name==='device-sheet-to-morning') return inputDeviceSheetToMorning();
   if (name==='add-device-sheet-row') return addDeviceSheetRow(el.dataset.deviceSection||'');
   if (name==='remove-device-custom-row') return removeCustomDeviceRow(el.dataset.deviceCustomUid||'');
+  if (name==='remove-device-vehicle-row') return removeDeviceVehicleRow(el.dataset.deviceSection||'',el.dataset.deviceId||'',el.dataset.deviceCustomUid||'');
   if (name==='clear-device-sheet-section') return clearDeviceSheetSection(el.dataset.deviceSection||'');
   if (name==='parse-fleet-paste') return parseFleetPasteAction();
   if (name==='rate-service') { state.rating=Number(el.dataset.rating)||0;persist();render();return toast(`Thanks — ${state.rating} stars saved`); }
@@ -6954,16 +6995,18 @@ function addDeviceSheetRow(section='') {
   const rows=document.querySelectorAll(`.${section}-list [data-device-custom-field="label"]`),last=rows[rows.length-1];if(last)last.focus();
 }
 function updateCustomDeviceRow(uid,field,value) {
-  const sections=['ev','gas','helper'];let row=null;
-  for(const section of sections){row=(state.deviceCustomRows?.[section]||[]).find(item=>item.uid===uid);if(row)break;}
+  const sections=['ev','gas','helper'];let row=null,matchedSection='';
+  for(const section of sections){row=(state.deviceCustomRows?.[section]||[]).find(item=>item.uid===uid);if(row){matchedSection=section;break;}}
   if(!row||!['label','device','portable'].includes(field))return;
   const previousLabel=row.label||'';
   const clean=field==='label'?String(value??'').toUpperCase().replace(/[^A-Z0-9 -]/g,'').slice(0,28):String(value??'').toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,field==='device'?3:4);
   row[field]=clean;
   const details={...deviceSheetDetails()},oldKey=normalizeEquipmentId(previousLabel),newKey=normalizeEquipmentId(row.label);
   if(field==='label'&&oldKey&&oldKey!==newKey)delete details[oldKey];
+  if(field==='label'&&newKey)state.removedDeviceVehicleIds=(state.removedDeviceVehicleIds||[]).filter(id=>normalizeEquipmentId(id)!==newKey);
   if(newKey)details[newKey]={device:row.device||'',portable:row.portable||''};
   state.equipmentImport={name:'Device and Portable Sheet',details};
+  if(field==='label'&&matchedSection)sortDeviceCustomRows(matchedSection);
   persistSoon();
 }
 function moveDeviceEntryDown(el) {
@@ -6977,8 +7020,17 @@ function removeCustomDeviceRow(uid='') {
     const rows=state.deviceCustomRows?.[section]||[],index=rows.findIndex(row=>row.uid===uid);
     if(index<0)continue;
     const [removed]=rows.splice(index,1),key=normalizeEquipmentId(removed.label),details={...deviceSheetDetails()};if(key)delete details[key];
+    if(key)state.removedDeviceVehicleIds=[...new Set([...(state.removedDeviceVehicleIds||[]).map(normalizeEquipmentId),key])];
     state.equipmentImport={name:'Device and Portable Sheet',details};persist();render();return toast(`${removed.label||'Custom van'} row removed`);
   }
+}
+function removeDeviceVehicleRow(section='',id='',uid='') {
+  if(uid)return removeCustomDeviceRow(uid);
+  const key=normalizeEquipmentId(id);if(!key||!['ev','gas','helper'].includes(section))return;
+  state.removedDeviceVehicleIds=[...new Set([...(state.removedDeviceVehicleIds||[]).map(normalizeEquipmentId),key])];
+  const details={...deviceSheetDetails()};delete details[key];
+  (state.morningRoutes||[]).forEach(route=>{if(normalizeEquipmentId(route.ev)===key)clearEquipmentForRoute(route);});
+  state.equipmentImport={name:'Device and Portable Sheet',details};persist();render();toast(`${id} removed from the Device and Portable list`);
 }
 function deviceSheetSectionIds(section='') {
   return deviceSheetAllIds(section).map(normalizeEquipmentId).filter(Boolean);
@@ -7094,6 +7146,12 @@ function assignOperationalVehicles() {
   const pool=automaticFleetVehiclePool({electricOnly:true});
   if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No assignment-ready EVs available · each safe EV needs both a Device and Portable entered','error');}
   assignAutomaticVehiclePool(targets,pool,'verified safe EVs');
+}
+function assignBagReadyVehicles() {
+  const targets=morningAssignmentTargets().filter(route=>!/helper/i.test(String(route.service||'')));if(!targets.length)return toast('No visible driver rows to assign','error');
+  const pool=automaticFleetVehiclePool({electricOnly:true});
+  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No Bag Ready Vans found · enter both a Device and Portable beside a safe EV first','error');}
+  assignAutomaticVehiclePool(targets,pool,'Bag Ready Vans');
 }
 function clearMorningVehicleAssignments() {
   const targets=morningAssignmentTargets().filter(route=>!/helper/i.test(String(route.service||'')));if(!targets.length)return toast('No Morning Sheet vehicle assignments to clear','error');
@@ -7678,13 +7736,13 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-20-all-wave-labels';
+const RELAYOPS_BUILD = '2026-07-22-wave5-fourteen-routes';
 const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
   {key:'WAVE3', label:'WAVE 3', startRow:33, routeCapacity:13, timeRow:46, separatorRow:47},
   {key:'WAVE4', label:'WAVE 4', startRow:48, routeCapacity:13, timeRow:61, separatorRow:62},
-  {key:'WAVE5', label:'WAVE 5', startRow:63, routeCapacity:13, timeRow:76, separatorRow:77},
+  {key:'WAVE5', label:'WAVE 5', startRow:63, routeCapacity:14, timeRow:77, separatorRow:78},
   {key:'ADHOCS', label:"ADHOC's", startRow:79, routeCapacity:15, separatorRow:94},
   {key:'HELPERS', label:'HELPERS', startRow:95, routeCapacity:15, separatorRow:110},
   {key:'DSP', label:'DSP', startRow:111, routeCapacity:6}
@@ -7974,7 +8032,7 @@ function relayOpsRouteIndex(sheet) {
 
 function writeRelayOpsRtsOnly(payload) {
   const target = resolveRelayOpsTarget(payload, false);if (target.wouldCreate) throw new Error('Send the full Morning Sheet once before RTS-only updates');const sheet = target.sheet;
-  validateRelayOpsTemplateSignature(sheet);
+  validateRelayOpsTemplateSignature(sheet);ensureRelayOpsWave5Capacity(sheet);
   const byRoute = relayOpsRouteIndex(sheet);
   let updated = 0;const missingRoutes = [], sectionMismatches = [];
   (payload.updates || []).forEach(function(update) {
@@ -7990,7 +8048,7 @@ function writeRelayOpsRtsOnly(payload) {
 
 function writeRelayOpsWhiparoundOnly(payload) {
   const target = resolveRelayOpsTarget(payload, false);if (target.wouldCreate) throw new Error('Send the full Morning Sheet once before Whiparound-only updates');const sheet = target.sheet;
-  validateRelayOpsTemplateSignature(sheet);
+  validateRelayOpsTemplateSignature(sheet);ensureRelayOpsWave5Capacity(sheet);
   const byRoute = relayOpsRouteIndex(sheet);
   let updated = 0;const missingRoutes = [], driverMismatches = [], sectionMismatches = [];
   (payload.updates || []).forEach(function(update) {
@@ -8048,6 +8106,27 @@ function ensureRelayOpsTemplateCapacity(sheet, rowCount) {
   if (!layout.hasEnoughColumns) sheet.insertColumnsAfter(sheet.getMaxColumns(), RELAYOPS_TEMPLATE_COLS - sheet.getMaxColumns());
 }
 
+function ensureRelayOpsWave5Capacity(sheet) {
+  const probe = sheet.getRange('A63');
+  if (!probe || typeof probe.getMergedRanges !== 'function' || typeof probe.copyTo !== 'function') return false;
+  const existing = probe.getMergedRanges().find(function(range) {
+    return range.getRow() === 63 && range.getColumn() === 1;
+  });
+  if (existing && existing.getNumRows() >= 14) return false;
+  ['A63:A77','E63:E77'].forEach(function(a1) {
+    sheet.getRange(a1).getMergedRanges().forEach(function(range) { range.breakApart(); });
+  });
+  sheet.getRange(76, 1, 1, RELAYOPS_TEMPLATE_COLS).copyTo(sheet.getRange(77, 1, 1, RELAYOPS_TEMPLATE_COLS), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+  sheet.getRange(76, 1, 1, RELAYOPS_TEMPLATE_COLS).copyTo(sheet.getRange(77, 1, 1, RELAYOPS_TEMPLATE_COLS), SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
+  sheet.getRange(75, 1, 1, RELAYOPS_TEMPLATE_COLS).copyTo(sheet.getRange(76, 1, 1, RELAYOPS_TEMPLATE_COLS), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+  sheet.getRange(75, 1, 1, RELAYOPS_TEMPLATE_COLS).copyTo(sheet.getRange(76, 1, 1, RELAYOPS_TEMPLATE_COLS), SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
+  sheet.getRange(76, 2, 1, RELAYOPS_TEMPLATE_COLS - 1).clearContent();
+  sheet.getRange(77, 1).clearContent();
+  sheet.getRange('A63:A76').merge();
+  sheet.getRange('E63:E77').merge();
+  return true;
+}
+
 function freezeRelayOpsHeader(sheet) {
   try {
     sheet.getRange(1, 1, 2, RELAYOPS_COLS).getMergedRanges().forEach(function(range) {
@@ -8065,6 +8144,7 @@ function writeRelayOpsMorningSheet(payload) {
   if (writeMode === 'partial-update' && target.wouldCreate) throw new Error('Send all waves once before using a filtered partial update');
   const sheet = target.sheet;
   validateRelayOpsTemplateSignature(sheet);
+  ensureRelayOpsWave5Capacity(sheet);
 
   // Clear only dashboard-owned cells inside the fixed OPS LOG 2026 sections.
   // Existing merges, headers, widths, colors, checkboxes J:M, divider N,
@@ -8299,7 +8379,7 @@ async function syncFilteredMorningToSheets() {
 }
 async function copyMorningAppsScript() {
   const code=morningSheetsAppsScript();
-  if(!code.includes('2026-07-20-all-wave-labels')){toast('The five-wave Apps Script is still loading — refresh the dashboard and try again','error');return false;}
+  if(!code.includes('2026-07-22-wave5-fourteen-routes')){toast('The 14-route Wave 5 Apps Script is still loading — refresh the dashboard and try again','error');return false;}
   const ok=await writeClipboardText(code);
   toast(ok?'Revised original-template Apps Script copied — replace the old code, save, and deploy a new version':'Clipboard blocked — download the .gs script file instead',ok?'':'error');
   return ok;
@@ -8395,7 +8475,7 @@ async function testMorningSheetsConnector() {
     const response=await fetch(connectorUrlWithPing(endpoint),{method:'GET'});
     const text=await response.text();
     if(!response.ok||!/relayops-morning-v1/.test(text)||!/A3:V/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
-    if(!/2026-07-20-all-wave-labels/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the five-wave connector, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
+    if(!/2026-07-22-wave5-fourteen-routes/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the 14-route Wave 5 connector, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
     state.morningSheetsLastError='';
     persist(); render();
     toast('Google Sheets connector confirmed');
@@ -8573,7 +8653,7 @@ function buildPicklistScreenshot() {
   return canvas.toDataURL('image/jpeg',.94);
 }
 function previewWaveScreenshot(){const rows=filteredMorningRows();if(!rows.length)return toast('No wave rows are visible to capture','error');state.screenshotKind='morning';state.screenshotPreview=buildWaveScreenshot(rows);state.modal='screenshot';render();}
-function previewPicklistScreenshot(){const rows=openingPicklistSections().flatMap(section=>section.rows);if(!rows.length)return toast('No Picklist waves are available to capture','error');state.screenshotReview={pads:false,cortex:false};state.screenshotPreview=null;state.screenshotKind='picklist';state.modal='picklist-screenshot-review';render();}
+function previewPicklistScreenshot(){const rows=openingPicklistSections().flatMap(section=>section.rows);if(!rows.length)return toast('No Picklist waves are available to capture','error');state.screenshotReview={pads:false,cortex:false};state.screenshotPreview=null;state.screenshotKind='picklist';state.modal='picklist-screenshot-review';renderLightweightModal();}
 function acknowledgeScreenshotReview(check='') {
   if(!['pads','cortex'].includes(check))return;
   state.screenshotReview={...(state.screenshotReview||{pads:false,cortex:false}),[check]:true};
@@ -8581,11 +8661,11 @@ function acknowledgeScreenshotReview(check='') {
     const key=String(state.lastMorningImportFingerprint||'');if(key){state.padCheckAcknowledgements=state.padCheckAcknowledgements&&typeof state.padCheckAcknowledgements==='object'?state.padCheckAcknowledgements:{};state.padCheckAcknowledgements[key]={date:state.morningOperationDate,acknowledgedAt:new Date().toISOString(),source:'picklist-screenshot'};persist();}
   }
   if(check==='cortex'){const now=new Date().toISOString();currentPicklistRosterChanges().forEach(change=>{change.cortexConfirmed=true;change.cortexConfirmedAt=now;});persist();}
-  render();
+  renderLightweightModal();
 }
 function continuePicklistScreenshot() {
   if(!state.screenshotReview?.pads||!state.screenshotReview?.cortex)return toast('Confirm pads and Cortex swaps first','error');
-  state.screenshotPreview=buildPicklistScreenshot();state.screenshotKind='picklist';state.modal='screenshot';render();
+  state.screenshotPreview=buildPicklistScreenshot();state.screenshotKind='picklist';openLightweightModal('screenshot');
 }
 function saveWaveScreenshot(){if(!state.screenshotPreview)return;const a=document.createElement('a');a.href=state.screenshotPreview;a.download=state.screenshotKind==='picklist'?`${state.dspCode}-opening-picklist-${state.morningOperationDate}.jpg`:`${state.dspCode}-${state.morningFilters.wave==='all'?'all-waves':state.morningFilters.wave.replace(/[^a-z0-9]+/gi,'-')}.jpg`;document.body.appendChild(a);a.click();a.remove();state.modal=null;state.screenshotPreview=null;state.screenshotKind='';render();toast('Approved JPEG saved — ready for GroupMe');}
 function printOpeningPicklistOnePage() {
@@ -8635,6 +8715,7 @@ localStorage.setItem('relayops_slack_report_room_url',state.slackReportRoomUrl||
 localStorage.setItem('relayops_charger_reports',JSON.stringify(normalizeChargerReports(state.chargerReports||[])));
 localStorage.setItem('relayops_equipment_import',JSON.stringify(state.equipmentImport||null));
 localStorage.setItem('relayops_device_custom_rows',JSON.stringify(state.deviceCustomRows||{ev:[],gas:[],helper:[]}));
+localStorage.setItem('relayops_removed_device_vehicle_ids',JSON.stringify(state.removedDeviceVehicleIds||[]));
 localStorage.setItem('relayops_organization_name',state.organizationName);
 localStorage.setItem('relayops_station_code',state.stationCode);
 localStorage.setItem('relayops_message_queue_template',state.messageQueueTemplate);
@@ -8704,7 +8785,7 @@ function sharedWorkspaceState() {
     lastImportExcluded:state.lastImportExcluded,rosterPublished:state.rosterPublished,
     fleetImport:state.fleetImport,fleetSourceUploads:state.fleetSourceUploads,fleetExpectedCount:state.fleetExpectedCount,
     fleetNameOverrides:state.fleetNameOverrides,fleetIssues:state.fleetIssues,equipmentIssues:state.equipmentIssues,morningIssueAcknowledgements:state.morningIssueAcknowledgements,vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,chargingStationChecked:state.chargingStationChecked,
-    vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
+    vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,removedDeviceVehicleIds:state.removedDeviceVehicleIds,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),
     messageQueueTemplate:state.messageQueueTemplate,messageQueueStatus:state.messageQueueStatus,coachingQueue:normalizeCoachingQueue(state.coachingQueue),coachingTemplate:state.coachingTemplate,
     scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringHelperPool:state.rosteringHelperPool,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleBackupRecords:state.scheduleBackupRecords,scheduleStayHome:state.scheduleStayHome,scheduleStayHomeHistory:state.scheduleStayHomeHistory,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,morningWaveTimeOverrides:state.morningWaveTimeOverrides,earlyCalloffAcknowledgements:state.earlyCalloffAcknowledgements,padCheckAcknowledgements:state.padCheckAcknowledgements,lastMorningImportFingerprint:state.lastMorningImportFingerprint,fitMorningRows:state.fitMorningRows,fitOpeningPicklistRows:state.fitOpeningPicklistRows,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,picklistSwapAudit:state.picklistSwapAudit,sheetHistory:state.sheetHistory,
@@ -8720,7 +8801,7 @@ function persistentWorkspaceState() {
     fleetNameOverrides:state.fleetNameOverrides,fleetIssues:state.fleetIssues,equipmentIssues:state.equipmentIssues,
     vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,chargingStationChecked:state.chargingStationChecked,
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,
-    equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,
+    equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,removedDeviceVehicleIds:state.removedDeviceVehicleIds,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),scheduleStayHomeHistory:state.scheduleStayHomeHistory,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringHelperPool:state.rosteringHelperPool,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,morningWaveTimeOverrides:state.morningWaveTimeOverrides,earlyCalloffAcknowledgements:state.earlyCalloffAcknowledgements,padCheckAcknowledgements:state.padCheckAcknowledgements,lastMorningImportFingerprint:state.lastMorningImportFingerprint,
     whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
     inventoryItems:state.inventoryItems,inventoryLog:state.inventoryLog,coachingTemplate:state.coachingTemplate,
@@ -8728,10 +8809,11 @@ function persistentWorkspaceState() {
   };
 }
 function applySharedWorkspaceState(payload={}) {
-  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','messageQueueTemplate','messageQueueStatus','coachingQueue','coachingTemplate','scheduleEntries','scheduleImportName','rosteringDate','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleStayHomeHistory','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','fitMorningRows','fitOpeningPicklistRows','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','picklistSwapAudit','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','messageQueueTemplate','messageQueueStatus','coachingQueue','coachingTemplate','scheduleEntries','scheduleImportName','rosteringDate','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleStayHomeHistory','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','fitMorningRows','fitOpeningPicklistRows','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','picklistSwapAudit','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
   state.equipmentIssues=normalizeEquipmentIssuesStore(state.equipmentIssues||{});
+  state.removedDeviceVehicleIds=Array.isArray(state.removedDeviceVehicleIds)?[...new Set(state.removedDeviceVehicleIds.map(normalizeEquipmentId).filter(Boolean))]:[];
   state.sheetHistory=state.sheetHistory&&Array.isArray(state.sheetHistory.past)&&Array.isArray(state.sheetHistory.future)?state.sheetHistory:{past:[],future:[]};
   state.driverNameAliases=state.driverNameAliases&&typeof state.driverNameAliases==='object'?state.driverNameAliases:{};
   state.driverProfiles=normalizeDriverProfiles(state.driverProfiles||{});(state.driverContacts||[]).forEach(contact=>ensureDriverProfile(contact));
@@ -8766,10 +8848,11 @@ function applySharedWorkspaceState(payload={}) {
   persist();
 }
 function applyPersistentWorkspaceState(payload={}) {
-  const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringDate','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
+  const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringDate','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
   state.equipmentIssues=normalizeEquipmentIssuesStore(state.equipmentIssues||{});
+  state.removedDeviceVehicleIds=Array.isArray(state.removedDeviceVehicleIds)?[...new Set(state.removedDeviceVehicleIds.map(normalizeEquipmentId).filter(Boolean))]:[];
   state.driverNameAliases=state.driverNameAliases&&typeof state.driverNameAliases==='object'?state.driverNameAliases:{};
   state.driverProfiles=normalizeDriverProfiles(state.driverProfiles||{});(state.driverContacts||[]).forEach(contact=>ensureDriverProfile(contact));
   state.rosteringTrainingMatches=state.rosteringTrainingMatches&&typeof state.rosteringTrainingMatches==='object'?state.rosteringTrainingMatches:{};

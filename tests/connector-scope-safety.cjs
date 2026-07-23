@@ -86,7 +86,7 @@ function testPartialWritePreservesOtherCells() {
   const context = connectorContext(sheet), result = context.writeRelayOpsMorningSheet(partialPayload());
   assert(result.writeMode === 'partial-update', 'Connector receipt must report a partial update');
   assert(result.waveTimes === 5, 'A filtered partial update must write and confirm all five wave labels');
-  assert(sheet.get(16, 1) === '11:15 (7)' && sheet.get(31, 1) === '11:20 (9)' && sheet.get(46, 1) === '11:25 (2)' && sheet.get(61, 1) === '11:40 (11)' && sheet.get(76, 1) === '11:45 (8)', 'A filtered partial update must preserve every Wave 1-5 footer label');
+  assert(sheet.get(16, 1) === '11:15 (7)' && sheet.get(31, 1) === '11:20 (9)' && sheet.get(46, 1) === '11:25 (2)' && sheet.get(61, 1) === '11:40 (11)' && sheet.get(77, 1) === '11:45 (8)', 'A filtered partial update must preserve every Wave 1-5 footer label');
   assert(sheet.get(3, 2) === 'KEEP WAVE ONE' && sheet.get(3, 16) === '101', 'A Wave 3 partial send must not clear Wave 1');
   assert(sheet.get(33, 2) === 'Wave Three A' && sheet.get(33, 16) === 'KEEP ROUTE A', 'A one-route Wave 3 filter must not clear another Wave 3 route');
   assert(sheet.get(34, 2) === 'Updated Driver' && sheet.get(34, 3) === 'CX302' && String(sheet.get(34, 16)) === '188', 'Partial updates must find and update the selected route in its fixed Wave 3 slot');

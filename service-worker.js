@@ -1,4 +1,4 @@
-const CACHE='relayops-critical-sheet-clear-v58';
+const CACHE='relayops-wave5-bag-ready-v59';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{

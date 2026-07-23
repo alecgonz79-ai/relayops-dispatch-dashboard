@@ -106,6 +106,10 @@ button { cursor: pointer; }
 .device-sheet-table .custom-van-cell { padding-right:24px; }
 .device-sheet-table .custom-van-cell > button { position:absolute; right:3px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:18px; height:18px; padding:0; border:0; border-radius:6px; background:#e8ede8; color:#647068; font-size:13px; cursor:pointer; }
 .device-sheet-table .custom-van-cell > button:hover { background:#ffdcd7; color:#a92319; }
+.device-sheet-table .fixed-van-cell { padding-right:25px; }
+.device-sheet-table tbody th > .device-van-label { display:block; margin:0; color:#0860a8; font:800 11px/1 Manrope,sans-serif; letter-spacing:0; text-transform:none; }
+.device-sheet-table .device-row-remove { position:absolute; right:3px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:18px; height:18px; padding:0; border:1px solid #f2b7b2; border-radius:6px; background:#fff0ef; color:#c52d23; font:900 13px/1 Manrope,sans-serif; cursor:pointer; }
+.device-sheet-table .device-row-remove:hover,.device-sheet-table .device-row-remove:focus-visible { outline:0; border-color:#e35c50; background:#d93a2f; color:#fff; }
 .device-sheet-table input:focus { position:relative; z-index:1; box-shadow:inset 0 0 0 2px #2c6ce6; background:#f7fbff; }
 .device-sheet-table input::placeholder { color:#c3cbc5; }
 .device-sheet-table tr.grounded-vehicle-row th,.device-sheet-table tr.grounded-vehicle-row input { background:#ffe5e2; color:#9f1d16; }
@@ -3078,6 +3082,7 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .morning-tool-actions [data-action="toggle-morning-edit"]{border-color:#b9d6f0;background:#eaf5ff;color:#125f99}
 .morning-tool-actions [data-action="toggle-morning-copy"]{border-color:#d1c2ee;background:#f2ecff;color:#6843a4}
 .morning-tool-actions [data-action="toggle-fit-rows"]{border-color:#bae0d3;background:#eaf8f3;color:#1b735d}
+.morning-tool-actions .bag-ready-vans{border-color:#93d8b5;background:#e7f8ef;color:#146640;font-weight:850}.morning-tool-actions .bag-ready-vans:hover{border-color:#4db47e;background:#d7f2e4}
 .morning-tool-actions [data-action="assign-vans-by-parking"]{border-color:#a9d9e5;background:#e9f9fc;color:#14697b}
 .morning-tool-actions [data-action="assign-ev-low"]{border-color:#b8dfc7;background:#eaf8ef;color:#246b40}
 .morning-tool-actions [data-action="assign-ev-random"]{border-color:#d2c5ef;background:#f3edff;color:#66449b}
