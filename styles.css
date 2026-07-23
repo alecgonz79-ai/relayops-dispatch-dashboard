@@ -92,7 +92,7 @@ button { cursor: pointer; }
 .device-sheet-card-actions .btn { min-height:28px; padding:6px 9px; font-size:9px; }
 .device-sheet-card-actions .btn svg { width:11px; height:11px; }
 .device-sheet-card-actions .btn.danger { color:#8d281e; background:#ffe8e4; border-color:#f0afa7; }
-.device-sheet-table-wrap { overflow:auto; max-height:730px; }
+.device-sheet-table-wrap { overflow:auto; max-height:730px; overflow-anchor:none; }
 .device-sheet-table { width:100%; min-width:0; border-collapse:separate; border-spacing:0; table-layout:fixed; }
 .device-sheet-table th,.device-sheet-table td { border-right:1px solid #dfe4df; border-bottom:1px solid #dfe4df; height:31px; padding:0; text-align:center; }
 .device-sheet-table th:nth-child(1),.device-sheet-table td:nth-child(1) { width:32%; }
@@ -814,7 +814,7 @@ tbody tr:last-child td { border-bottom:0; }
 .morning-sheet-bridge > p { margin:0; color:#5b6b61; font-size:8.5px; font-weight:800; }
 .ops-log-send-btn { font-weight:1000; box-shadow:0 6px 16px rgba(38,111,57,.14); }
 .morning-board { border-radius:0 0 16px 16px; box-shadow:none; overflow:hidden; }
-.sheet-scroll { width:100%; overflow:auto; max-height:calc(100vh - 278px); position:relative; background:#fff; isolation:isolate; }
+.sheet-scroll { width:100%; overflow:auto; max-height:calc(100vh - 278px); position:relative; background:#fff; isolation:isolate; overflow-anchor:none; }
 .ops-sheet { min-width:1920px; width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-family:Arial,sans-serif; color:#0b0d0c; user-select:text; }
 .ops-sheet th { padding:7px 5px; color:#020403; background:#86e8ed; border:2px solid #111; font-size:8px; letter-spacing:.01em; text-align:center; text-transform:uppercase; }
 .ops-sheet thead th { position:sticky; top:0; z-index:7; background-clip:padding-box; }
@@ -2548,7 +2548,7 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .opening-picklist-toolbar p { margin:0; color:#687b89; font-size:10px; }
 .print-picklist-button { min-height:36px; white-space:nowrap; }
 .picklist-edit-help { padding:9px 15px; color:#254f6d; background:#e9f6ff; border-bottom:1px solid #bedcf0; font-size:9px; font-weight:800; }
-.opening-picklist-scroll { width:100%; max-width:100%; overflow:auto; background:#dfe6ea; -webkit-overflow-scrolling:touch; }
+.opening-picklist-scroll { width:100%; max-width:100%; overflow:auto; background:#dfe6ea; -webkit-overflow-scrolling:touch; overflow-anchor:none; }
 .opening-picklist-sheet { min-width:1386px; width:1386px; display:grid; grid-template-columns:702px 300px 360px; gap:12px; align-items:start; background:linear-gradient(90deg,#000 0 1014px,#e9f0f4 1014px); font-family:Arial,Helvetica,sans-serif; color:#050505; }
 .opening-picklist-main,.picklist-side-table { width:100%; min-width:0; border-collapse:collapse; table-layout:fixed; background:#fff; }
 .opening-picklist-main { width:702px; font-size:12px; font-weight:700; }

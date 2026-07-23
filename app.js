@@ -998,7 +998,7 @@ function warnDuplicateMorningEquipment(equipment='') {
 }
 function openingPicklistCellAttrs(section={},sectionIndex=0,row=null,rowIndex=0,field='') {
   const routeIndex=row?state.morningRoutes.indexOf(row):-1,key=`${section.key}:${rowIndex}:${field}`;
-  return `data-picklist-cell="${esc(key)}" data-picklist-view="true" data-picklist-field="${esc(field)}" data-picklist-route-index="${routeIndex}" data-picklist-route-uid="${esc(row?.routeUid||'')}" data-picklist-wave="${esc(section.wave||'')}" data-picklist-section-key="${esc(section.key||'')}" data-picklist-section-index="${sectionIndex}" data-picklist-row-index="${rowIndex}" title="${state.editMode?'Press Enter to save':'Double-click to edit'}" ${state.editMode?'contenteditable="true" tabindex="0" data-picklist-edit="true"':''}`;
+  return `data-picklist-cell="${esc(key)}" data-picklist-view="true" data-picklist-field="${esc(field)}" data-picklist-route-index="${routeIndex}" data-picklist-route-uid="${esc(row?.routeUid||'')}" data-picklist-wave="${esc(section.wave||'')}" data-picklist-section-key="${esc(section.key||'')}" data-picklist-section-index="${sectionIndex}" data-picklist-row-index="${rowIndex}" title="${state.editMode?'Press Enter to save':'Double-click to edit'}" ${state.editMode?'contenteditable="true" tabindex="0" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" data-picklist-edit="true"':''}`;
 }
 function openingPicklistSectionHtml(section={},sectionIndex=0) {
   const rows=[...section.rows];while(rows.length<section.capacity)rows.push(null);
@@ -1570,16 +1570,16 @@ function morningWaveGroup(section,sectionIndex=0) {
   const pad=section.rows[0]?.padOverride||section.rows[0]?.pad||section.pad||'';
   const waveTitle=section.dsp?'DSP':section.label;
   const waveTime=morningWaveTimeText(section);
-  const attrs=(r,field,rowIndex,colIndex,extra='')=>interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}" ${edit?`contenteditable="true" data-edit-route="${esc(r?.route||'')}" data-edit-uid="${esc(r?.routeUid||'')}" data-edit-field="${field}" data-edit-wave="${esc(r?.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''} ${extra}`:'';
+  const attrs=(r,field,rowIndex,colIndex,extra='')=>interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}" ${edit?`contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" data-edit-route="${esc(r?.route||'')}" data-edit-uid="${esc(r?.routeUid||'')}" data-edit-field="${field}" data-edit-wave="${esc(r?.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''} ${extra}`:'';
   const cell=(r,field,value,colIndex,cls='')=>{const equipment=field==='ev'?String(r?.ev||''):String(value||''),issue=field==='ev'?vehicleIssueForEquipmentId(equipment):null,equipmentType=field==='deviceName'?'device':field==='portable'?'portable':'',equipmentIssue=equipmentType?equipmentIssueFor(equipmentType,equipment):null,duplicate=field==='ev'&&duplicateMorningEquipmentRoutes(equipment).length>1,acknowledged=issue?.type==='reported'&&morningIssueAcknowledged(r?.route,issue.reported),issueClass=duplicate?'duplicate-van-cell':issue?.type==='grounded'?'grounded-van-cell':issue?.type==='battery'?'low-battery-van-cell':issue?.type==='reported'?`reported-van-cell ${acknowledged?'acknowledged':''}`:equipmentIssue?'reported-equipment-cell':'',vacant=field==='driver'&&routeAssignmentVacant(r),vacancyLabel=vacant?(routeMissingPrimary(r)?(String(r?.driver||'').trim()?'DRIVER NEEDED':'UNASSIGNED DRIVER'):'HELPER NEEDED'):'';return `<td class="sheet-edit-cell copy-sheet-cell ${cls} ${issueClass} ${vacant?'route-vacancy-driver-cell':''} ${r?.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" ${vacant?`data-vacancy-label="${esc(vacancyLabel)}"`:''} ${field==='driver'&&r?driverProfileAttrs(r.driver):''} data-view-route="${esc(r?.route||'')}" data-view-uid="${esc(r?.routeUid||'')}" data-view-field="${field}" data-view-wave="${esc(r?.wave||section.wave||'')}" ${edit?`data-edit-original="${esc(String(value??'').trim())}"`:''} title="${duplicate?'This EV is assigned to more than one route':issue?esc(issue.title):equipmentIssue?esc(equipmentIssue.active.map(record=>record.text).join(' · ')):edit?'Press Enter to save':'Double-click to edit'}" ${attrs(r,field,rows.indexOf(r),colIndex)}>${issue?.type==='reported'?`<button class="van-issue-mark ${acknowledged?'acknowledged':''}" data-action="open-morning-vehicle-issue" data-route="${esc(r?.route||'')}" data-equipment="${esc(equipment)}" title="${acknowledged?'Issue acknowledged':'Review and acknowledge issue'}" onclick="event.stopImmediatePropagation();openMorningVehicleIssue(this.dataset.route,this.dataset.equipment)">${acknowledged?'✓':'⚠'}</button>`:''}${equipmentIssue?`<button type="button" class="equipment-issue-trigger active" data-action="open-equipment-issue" data-equipment-type="${equipmentType}" data-equipment-id="${esc(equipment)}">⚠</button>`:''}${esc(value??'')}${duplicateVehiclePopoverHtml(equipment)}${vehicleIssuePopoverHtml(r?.route||'',equipment,issue)}${equipmentIssuePopoverHtml(equipmentType,equipment)}</td>`;};
   const selectCell=(r,field,colIndex,cls='')=>`<td class="sheet-check-cell copy-sheet-cell ${cls}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rows.indexOf(r)-3}" data-sheet-col="${colIndex}"`:''}><input type="checkbox" data-check-field="${field}" data-check-route="${esc(r?.route||'')}" data-check-wave="${esc(r?.wave||section.wave||'')}" ${r?.[field]?'checked':''} aria-label="${field}"></td>`;
   const divider=(rowIndex,colIndex)=>`<td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}"`:''}></td>`;
   const waveCell=`<td class="wave-label ${section.dsp?'dsp-label':''} copy-sheet-cell" rowspan="${rows.length}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="0"`:''}><span>${esc(waveTitle)}</span></td>`;
   const padRows=rows.length+(section.hasTime?1:0);
-  const padCell=`<td class="pad-label sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" rowspan="${padRows}" data-view-field="padOverride" data-view-wave="${esc(section.wave)}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="4" ${edit?`contenteditable="true" data-edit-wave="${esc(section.wave)}" data-edit-field="padOverride" data-edit-original="${esc(String(pad||'').trim())}"`:''}`:''}><span>${esc(pad)}</span></td>`;
+  const padCell=`<td class="pad-label sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" rowspan="${padRows}" data-view-field="padOverride" data-view-wave="${esc(section.wave)}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="4" ${edit?`contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" data-edit-wave="${esc(section.wave)}" data-edit-field="padOverride" data-edit-original="${esc(String(pad||'').trim())}"`:''}`:''}><span>${esc(pad)}</span></td>`;
   const body=rows.map((r,i)=>`<tr class="ops-row ${r._blank?'blank-row':''} ${routeAssignmentVacant(r)?'route-vacancy-row':''} wave-section-${sectionIndex}" data-wave-section="${sectionIndex}"><th class="sheet-row-num">${rowBase+i}</th>${i===0?waveCell:''}${cell(r,'driver',routeDriverDisplayValue(r),1,'driver-name')}${cell(r,'route',r._blank?'':r.route,2,'route-id')}${cell(r,'staging',r.staging,3,'staging-code')}${i===0?padCell:''}${cell(r,'ev',routeEquipmentValue(r),5)}${cell(r,'deviceName',r.deviceName||'',6)}${cell(r,'portable',r.portable||'',7)}${divider(i,8)}${selectCell(r,'preDvic',9)}${selectCell(r,'preWhip',10)}${selectCell(r,'postDvic',11)}${selectCell(r,'postWhip',12)}${divider(i,13)}${selectCell(r,'rescued',14,'rescued-cell')}${cell(r,'stops',r.stops,15,'count-cell')}${cell(r,'packages',r.packages,16,'count-cell')}${cell(r,'packageReturns',r.packageReturns||'',17)}${cell(r,'endTime',r.endTime||'',18)}${cell(r,'rtsTime',r.rtsTime||'',19)}${cell(r,'plannedRts',r.plannedRts||'',20,'planned-rts-cell')}${cell(r,'clockOutTime',r.clockOutTime||'',21)}</tr>`).join('');
   const timeRowIndex=rowBase+rows.length-3;
-  const timeCells=sheetCopyFields.map((field,colIndex)=>colIndex===0?`<td class="wave-time-cell sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" data-view-field="waveTime" data-view-wave="${esc(section.wave||'')}" data-view-section="${esc(section.label||'')}" title="${edit?'Type the wave time and driver total, then press Enter':'Double-click to edit wave time and driver total'}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="0" ${edit?`contenteditable="true" data-edit-field="waveTime" data-edit-wave="${esc(section.wave||'')}" data-edit-section="${esc(section.label||'')}" data-edit-original="${esc(String(waveTime||'').trim())}"`:''}`:''}>${esc(waveTime)}</td>`:colIndex===4?'':`<td class="${sheetSpacerColumns.has(colIndex)?'sheet-spacer-col':field==='plannedRts'?'planned-rts-cell sheet-edit-cell copy-sheet-cell':'sheet-edit-cell copy-sheet-cell'}" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="${colIndex}"`:''}></td>`).join('');
+  const timeCells=sheetCopyFields.map((field,colIndex)=>colIndex===0?`<td class="wave-time-cell sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" data-view-field="waveTime" data-view-wave="${esc(section.wave||'')}" data-view-section="${esc(section.label||'')}" title="${edit?'Type the wave time and driver total, then press Enter':'Double-click to edit wave time and driver total'}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="0" ${edit?`contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" data-edit-field="waveTime" data-edit-wave="${esc(section.wave||'')}" data-edit-section="${esc(section.label||'')}" data-edit-original="${esc(String(waveTime||'').trim())}"`:''}`:''}>${esc(waveTime)}</td>`:colIndex===4?'':`<td class="${sheetSpacerColumns.has(colIndex)?'sheet-spacer-col':field==='plannedRts'?'planned-rts-cell sheet-edit-cell copy-sheet-cell':'sheet-edit-cell copy-sheet-cell'}" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="${colIndex}"`:''}></td>`).join('');
   const timeRow=section.hasTime?`<tr class="ops-row wave-time-row wave-section-${sectionIndex}" data-wave-section="${sectionIndex}"><th class="sheet-row-num">${rowBase+rows.length}</th>${timeCells}</tr>`:'';
   const separators=Array.from({length:section.separatorRows||0},(_,offset)=>{const sheetRow=rowBase+rows.length+(section.hasTime?1:0)+offset,rowIndex=sheetRow-3;return `<tr class="wave-separator wave-section-${sectionIndex}" data-wave-section="${sectionIndex}"><th class="sheet-row-num">${sheetRow}</th>${sheetCopyFields.map((field,colIndex)=>`<td class="${sheetSpacerColumns.has(colIndex)?'sheet-spacer-col':''}" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowIndex}" data-sheet-col="${colIndex}"`:''}></td>`).join('')}</tr>`;}).join('');
   return `${body}${timeRow}${separators}`;
@@ -4592,6 +4592,12 @@ let operationalInteractionUntil=0;
 let operationalScrollAnchor=null;
 let operationalScrollAnchorVersion=0;
 const OPERATIONAL_INTERACTION_SELECTOR='[data-device-sheet-field],[data-device-custom-field],[data-picklist-view],[data-picklist-edit],.morning-template-sheet [data-view-field],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad]';
+const OPERATIONAL_SCROLL_PANE_SELECTOR='.sheet-scroll,.opening-picklist-scroll,.picklist-sheet-scroll,.device-sheet-table-wrap,.device-sheet-scroll';
+let operationalEditScrollLock=null;
+let operationalUserScrollUntil=0;
+let operationalScrollGuardRestoring=false;
+let operationalScrollLockVersion=0;
+let operationalScrollGuardFrame=0;
 function invalidateNavigationPageCache() { navigationPageCache.clear();navigationRenderToken+=1; }
 function rememberNavigationPage(page='',content=null) {
   if(!page||!content||content.dataset.page!==page||content.dataset.ready!=='true')return;
@@ -4619,6 +4625,69 @@ function markOperationalInteraction(event) {
   if(!event?.target?.closest?.(OPERATIONAL_INTERACTION_SELECTOR))return;
   operationalInteractionUntil=Date.now()+(event.type==='keydown'?5000:2500);
   rememberOperationalScrollAnchor();
+}
+function captureOperationalEditScrollLock(editor=document.activeElement,preferred={}) {
+  if(!editor?.matches?.(operationalGridEditorSelector)||editor.isConnected===false)return null;
+  const pane=operationalScrollPaneFor(editor);
+  operationalEditScrollLock={
+    editor,
+    pane,
+    pageX:Number.isFinite(preferred.pageX)?preferred.pageX:window.scrollX||0,
+    pageY:Number.isFinite(preferred.pageY)?preferred.pageY:window.scrollY||0,
+    paneLeft:Number.isFinite(preferred.paneLeft)?preferred.paneLeft:pane?.scrollLeft||0,
+    paneTop:Number.isFinite(preferred.paneTop)?preferred.paneTop:pane?.scrollTop||0,
+    version:++operationalScrollLockVersion
+  };
+  scheduleOperationalScrollGuard();
+  return operationalEditScrollLock;
+}
+function refreshOperationalEditScrollLock(editor=document.activeElement) {
+  if(editor?.matches?.(operationalGridEditorSelector)&&editor.isConnected!==false)return captureOperationalEditScrollLock(editor);
+  operationalEditScrollLock=null;
+  return null;
+}
+function markOperationalUserScrollIntent(event) {
+  const active=document.activeElement;
+  if(!active?.matches?.(operationalGridEditorSelector))return;
+  const pointerPane=event?.target?.closest?.(OPERATIONAL_SCROLL_PANE_SELECTOR);
+  if(event?.type==='pointerdown'&&(!pointerPane||event.target?.closest?.(OPERATIONAL_INTERACTION_SELECTOR)))return;
+  operationalUserScrollUntil=Date.now()+(event?.type==='pointerdown'?2500:850);
+  const capture=()=>{
+    if(Date.now()>operationalUserScrollUntil||document.activeElement!==active)return;
+    captureOperationalEditScrollLock(active);
+  };
+  window.requestAnimationFrame?.(capture);
+  setTimeout(capture,80);
+}
+function handleOperationalScrollGuard() {
+  const lock=operationalEditScrollLock,active=document.activeElement;
+  if(!lock||lock.editor?.isConnected===false||active!==lock.editor||!activeOperationalEditor()){
+    operationalEditScrollLock=null;
+    return;
+  }
+  if(Date.now()<operationalUserScrollUntil){
+    window.requestAnimationFrame?.(()=>{if(document.activeElement===lock.editor)captureOperationalEditScrollLock(lock.editor);});
+    return;
+  }
+  if(operationalScrollGuardRestoring)return;
+  const paneChanged=lock.pane?.isConnected&&(Math.abs((lock.pane.scrollTop||0)-lock.paneTop)>1||Math.abs((lock.pane.scrollLeft||0)-lock.paneLeft)>1);
+  const pageChanged=Math.abs((window.scrollX||0)-lock.pageX)>1||Math.abs((window.scrollY||0)-lock.pageY)>1;
+  if(!paneChanged&&!pageChanged)return;
+  operationalScrollGuardRestoring=true;
+  if(lock.pane?.isConnected){lock.pane.scrollTop=lock.paneTop;lock.pane.scrollLeft=lock.paneLeft;}
+  if(pageChanged)window.scrollTo(lock.pageX,lock.pageY);
+  rememberOperationalScrollAnchor();
+  setTimeout(()=>{operationalScrollGuardRestoring=false;},0);
+}
+function scheduleOperationalScrollGuard() {
+  if(operationalScrollGuardFrame||!window.requestAnimationFrame)return;
+  const guard=()=>{
+    operationalScrollGuardFrame=0;
+    if(!operationalEditScrollLock)return;
+    handleOperationalScrollGuard();
+    if(operationalEditScrollLock)operationalScrollGuardFrame=window.requestAnimationFrame(guard);
+  };
+  operationalScrollGuardFrame=window.requestAnimationFrame(guard);
 }
 function captureUiScrollMemory() {
   const containers=[];
@@ -4656,7 +4725,7 @@ function flushDeferredCloudRender() {
   if(Date.now()<operationalInteractionUntil){setTimeout(flushDeferredCloudRender,Math.max(80,operationalInteractionUntil-Date.now()+20));return;}
   deferredCloudRender=false;render();
 }
-document.addEventListener?.('focusout',()=>setTimeout(flushDeferredCloudRender,80),true);
+document.addEventListener?.('focusout',()=>setTimeout(()=>{if(!activeOperationalEditor())operationalEditScrollLock=null;flushDeferredCloudRender();},80),true);
 
 function render() {
   closeDriverProfilePopover();
@@ -4764,6 +4833,10 @@ function bindGlobalDocumentControls() {
   document.removeEventListener?.('keydown',markOperationalInteraction,true);
   document.removeEventListener?.('pointerdown',markOperationalInteraction,true);
   document.removeEventListener?.('mousedown',markOperationalInteraction,true);
+  document.removeEventListener?.('wheel',markOperationalUserScrollIntent,true);
+  document.removeEventListener?.('touchmove',markOperationalUserScrollIntent,true);
+  document.removeEventListener?.('pointerdown',markOperationalUserScrollIntent,true);
+  document.removeEventListener?.('scroll',handleOperationalScrollGuard,true);
   window.removeEventListener?.('resize',closeDriverRouteContextMenu);
   window.removeEventListener?.('scroll',closeDriverRouteContextOnScroll,true);
   if(state.modal)document.addEventListener?.('keydown',handleModalKeydown);
@@ -4784,6 +4857,10 @@ function bindGlobalDocumentControls() {
   document.addEventListener?.('keydown',markOperationalInteraction,true);
   document.addEventListener?.('pointerdown',markOperationalInteraction,true);
   document.addEventListener?.('mousedown',markOperationalInteraction,true);
+  document.addEventListener?.('wheel',markOperationalUserScrollIntent,true);
+  document.addEventListener?.('touchmove',markOperationalUserScrollIntent,true);
+  document.addEventListener?.('pointerdown',markOperationalUserScrollIntent,true);
+  document.addEventListener?.('scroll',handleOperationalScrollGuard,true);
   window.addEventListener?.('resize',closeDriverRouteContextMenu);
   window.addEventListener?.('scroll',closeDriverRouteContextOnScroll,true);
   bindPageNavigationControls();
@@ -5511,6 +5588,7 @@ let sheetFocusRequestVersion=0;
 function focusSheetCell(el) {
   if(!el)return;
   const version=++sheetFocusRequestVersion,pageX=window.scrollX||0,pageY=window.scrollY||0,pane=operationalScrollPaneFor(el),paneTop=pane?.scrollTop||0,paneLeft=pane?.scrollLeft||0;
+  captureOperationalEditScrollLock(el,{pageX,pageY,paneTop,paneLeft});
   selectSheetCell(el);
   const applyFocus=()=>{
     if(version!==sheetFocusRequestVersion||!el.isConnected)return;
@@ -5524,6 +5602,7 @@ function focusSheetCell(el) {
     if(pane?.isConnected){pane.scrollTop=paneTop;pane.scrollLeft=paneLeft;}
     if(Math.abs((window.scrollX||0)-pageX)>1||Math.abs((window.scrollY||0)-pageY)>1)window.scrollTo(pageX,pageY);
     keepOperationalEditorVisible(el);
+    captureOperationalEditScrollLock(el);
     if(Date.now()<operationalInteractionUntil)rememberOperationalScrollAnchor();
   };
   applyFocus();
@@ -5676,6 +5755,7 @@ let operationalGridFocusRequestVersion=0;
 function focusOperationalGridEditor(editor) {
   if(!editor)return false;
   const version=++operationalGridFocusRequestVersion,pageX=window.scrollX||0,pageY=window.scrollY||0,pane=operationalScrollPaneFor(editor),paneTop=pane?.scrollTop||0,paneLeft=pane?.scrollLeft||0;
+  captureOperationalEditScrollLock(editor,{pageX,pageY,paneTop,paneLeft});
   let initial=true;
   const applyFocus=()=>{
     if(version!==operationalGridFocusRequestVersion||editor.isConnected===false)return;
@@ -5691,6 +5771,7 @@ function focusOperationalGridEditor(editor) {
     if(pane?.isConnected){pane.scrollTop=paneTop;pane.scrollLeft=paneLeft;}
     if(Math.abs((window.scrollX||0)-pageX)>1||Math.abs((window.scrollY||0)-pageY)>1)window.scrollTo(pageX,pageY);
     keepOperationalEditorVisible(editor);
+    captureOperationalEditScrollLock(editor);
     if(Date.now()<operationalInteractionUntil)rememberOperationalScrollAnchor();
     initial=false;
   };
