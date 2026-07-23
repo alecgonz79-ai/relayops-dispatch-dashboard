@@ -1571,15 +1571,15 @@ function morningWaveGroup(section,sectionIndex=0) {
   const waveTitle=section.dsp?'DSP':section.label;
   const waveTime=morningWaveTimeText(section);
   const attrs=(r,field,rowIndex,colIndex,extra='')=>interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}" ${edit?`contenteditable="true" data-edit-route="${esc(r?.route||'')}" data-edit-uid="${esc(r?.routeUid||'')}" data-edit-field="${field}" data-edit-wave="${esc(r?.wave||section.wave||'')}" data-edit-section="${esc(section.label)}"`:''} ${extra}`:'';
-  const cell=(r,field,value,colIndex,cls='')=>{const equipment=field==='ev'?String(r?.ev||''):String(value||''),issue=field==='ev'?vehicleIssueForEquipmentId(equipment):null,equipmentType=field==='deviceName'?'device':field==='portable'?'portable':'',equipmentIssue=equipmentType?equipmentIssueFor(equipmentType,equipment):null,duplicate=field==='ev'&&duplicateMorningEquipmentRoutes(equipment).length>1,acknowledged=issue?.type==='reported'&&morningIssueAcknowledged(r?.route,issue.reported),issueClass=duplicate?'duplicate-van-cell':issue?.type==='grounded'?'grounded-van-cell':issue?.type==='battery'?'low-battery-van-cell':issue?.type==='reported'?`reported-van-cell ${acknowledged?'acknowledged':''}`:equipmentIssue?'reported-equipment-cell':'',vacant=field==='driver'&&routeAssignmentVacant(r),vacancyLabel=vacant?(routeMissingPrimary(r)?(String(r?.driver||'').trim()?'DRIVER NEEDED':'UNASSIGNED DRIVER'):'HELPER NEEDED'):'';return `<td class="sheet-edit-cell copy-sheet-cell ${cls} ${issueClass} ${vacant?'route-vacancy-driver-cell':''} ${r?.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" ${vacant?`data-vacancy-label="${esc(vacancyLabel)}"`:''} ${field==='driver'&&r?driverProfileAttrs(r.driver):''} data-view-route="${esc(r?.route||'')}" data-view-uid="${esc(r?.routeUid||'')}" data-view-field="${field}" data-view-wave="${esc(r?.wave||section.wave||'')}" title="${duplicate?'This EV is assigned to more than one route':issue?esc(issue.title):equipmentIssue?esc(equipmentIssue.active.map(record=>record.text).join(' · ')):edit?'Press Enter to save':'Double-click to edit'}" ${attrs(r,field,rows.indexOf(r),colIndex)}>${issue?.type==='reported'?`<button class="van-issue-mark ${acknowledged?'acknowledged':''}" data-action="open-morning-vehicle-issue" data-route="${esc(r?.route||'')}" data-equipment="${esc(equipment)}" title="${acknowledged?'Issue acknowledged':'Review and acknowledge issue'}" onclick="event.stopImmediatePropagation();openMorningVehicleIssue(this.dataset.route,this.dataset.equipment)">${acknowledged?'✓':'⚠'}</button>`:''}${equipmentIssue?`<button type="button" class="equipment-issue-trigger active" data-action="open-equipment-issue" data-equipment-type="${equipmentType}" data-equipment-id="${esc(equipment)}">⚠</button>`:''}${esc(value??'')}${duplicateVehiclePopoverHtml(equipment)}${vehicleIssuePopoverHtml(r?.route||'',equipment,issue)}${equipmentIssuePopoverHtml(equipmentType,equipment)}</td>`;};
+  const cell=(r,field,value,colIndex,cls='')=>{const equipment=field==='ev'?String(r?.ev||''):String(value||''),issue=field==='ev'?vehicleIssueForEquipmentId(equipment):null,equipmentType=field==='deviceName'?'device':field==='portable'?'portable':'',equipmentIssue=equipmentType?equipmentIssueFor(equipmentType,equipment):null,duplicate=field==='ev'&&duplicateMorningEquipmentRoutes(equipment).length>1,acknowledged=issue?.type==='reported'&&morningIssueAcknowledged(r?.route,issue.reported),issueClass=duplicate?'duplicate-van-cell':issue?.type==='grounded'?'grounded-van-cell':issue?.type==='battery'?'low-battery-van-cell':issue?.type==='reported'?`reported-van-cell ${acknowledged?'acknowledged':''}`:equipmentIssue?'reported-equipment-cell':'',vacant=field==='driver'&&routeAssignmentVacant(r),vacancyLabel=vacant?(routeMissingPrimary(r)?(String(r?.driver||'').trim()?'DRIVER NEEDED':'UNASSIGNED DRIVER'):'HELPER NEEDED'):'';return `<td class="sheet-edit-cell copy-sheet-cell ${cls} ${issueClass} ${vacant?'route-vacancy-driver-cell':''} ${r?.plannedRtsIssue&&field==='plannedRts'?'flag-cell':''} ${edit?'editable-cell':''}" ${vacant?`data-vacancy-label="${esc(vacancyLabel)}"`:''} ${field==='driver'&&r?driverProfileAttrs(r.driver):''} data-view-route="${esc(r?.route||'')}" data-view-uid="${esc(r?.routeUid||'')}" data-view-field="${field}" data-view-wave="${esc(r?.wave||section.wave||'')}" ${edit?`data-edit-original="${esc(String(value??'').trim())}"`:''} title="${duplicate?'This EV is assigned to more than one route':issue?esc(issue.title):equipmentIssue?esc(equipmentIssue.active.map(record=>record.text).join(' · ')):edit?'Press Enter to save':'Double-click to edit'}" ${attrs(r,field,rows.indexOf(r),colIndex)}>${issue?.type==='reported'?`<button class="van-issue-mark ${acknowledged?'acknowledged':''}" data-action="open-morning-vehicle-issue" data-route="${esc(r?.route||'')}" data-equipment="${esc(equipment)}" title="${acknowledged?'Issue acknowledged':'Review and acknowledge issue'}" onclick="event.stopImmediatePropagation();openMorningVehicleIssue(this.dataset.route,this.dataset.equipment)">${acknowledged?'✓':'⚠'}</button>`:''}${equipmentIssue?`<button type="button" class="equipment-issue-trigger active" data-action="open-equipment-issue" data-equipment-type="${equipmentType}" data-equipment-id="${esc(equipment)}">⚠</button>`:''}${esc(value??'')}${duplicateVehiclePopoverHtml(equipment)}${vehicleIssuePopoverHtml(r?.route||'',equipment,issue)}${equipmentIssuePopoverHtml(equipmentType,equipment)}</td>`;};
   const selectCell=(r,field,colIndex,cls='')=>`<td class="sheet-check-cell copy-sheet-cell ${cls}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rows.indexOf(r)-3}" data-sheet-col="${colIndex}"`:''}><input type="checkbox" data-check-field="${field}" data-check-route="${esc(r?.route||'')}" data-check-wave="${esc(r?.wave||section.wave||'')}" ${r?.[field]?'checked':''} aria-label="${field}"></td>`;
   const divider=(rowIndex,colIndex)=>`<td class="sheet-spacer-col" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase+rowIndex-3}" data-sheet-col="${colIndex}"`:''}></td>`;
   const waveCell=`<td class="wave-label ${section.dsp?'dsp-label':''} copy-sheet-cell" rowspan="${rows.length}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="0"`:''}><span>${esc(waveTitle)}</span></td>`;
   const padRows=rows.length+(section.hasTime?1:0);
-  const padCell=`<td class="pad-label sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" rowspan="${padRows}" data-view-field="padOverride" data-view-wave="${esc(section.wave)}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="4" ${edit?`contenteditable="true" data-edit-wave="${esc(section.wave)}" data-edit-field="padOverride"`:''}`:''}><span>${esc(pad)}</span></td>`;
+  const padCell=`<td class="pad-label sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" rowspan="${padRows}" data-view-field="padOverride" data-view-wave="${esc(section.wave)}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowBase-3}" data-sheet-col="4" ${edit?`contenteditable="true" data-edit-wave="${esc(section.wave)}" data-edit-field="padOverride" data-edit-original="${esc(String(pad||'').trim())}"`:''}`:''}><span>${esc(pad)}</span></td>`;
   const body=rows.map((r,i)=>`<tr class="ops-row ${r._blank?'blank-row':''} ${routeAssignmentVacant(r)?'route-vacancy-row':''} wave-section-${sectionIndex}" data-wave-section="${sectionIndex}"><th class="sheet-row-num">${rowBase+i}</th>${i===0?waveCell:''}${cell(r,'driver',routeDriverDisplayValue(r),1,'driver-name')}${cell(r,'route',r._blank?'':r.route,2,'route-id')}${cell(r,'staging',r.staging,3,'staging-code')}${i===0?padCell:''}${cell(r,'ev',routeEquipmentValue(r),5)}${cell(r,'deviceName',r.deviceName||'',6)}${cell(r,'portable',r.portable||'',7)}${divider(i,8)}${selectCell(r,'preDvic',9)}${selectCell(r,'preWhip',10)}${selectCell(r,'postDvic',11)}${selectCell(r,'postWhip',12)}${divider(i,13)}${selectCell(r,'rescued',14,'rescued-cell')}${cell(r,'stops',r.stops,15,'count-cell')}${cell(r,'packages',r.packages,16,'count-cell')}${cell(r,'packageReturns',r.packageReturns||'',17)}${cell(r,'endTime',r.endTime||'',18)}${cell(r,'rtsTime',r.rtsTime||'',19)}${cell(r,'plannedRts',r.plannedRts||'',20,'planned-rts-cell')}${cell(r,'clockOutTime',r.clockOutTime||'',21)}</tr>`).join('');
   const timeRowIndex=rowBase+rows.length-3;
-  const timeCells=sheetCopyFields.map((field,colIndex)=>colIndex===0?`<td class="wave-time-cell sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" data-view-field="waveTime" data-view-wave="${esc(section.wave||'')}" data-view-section="${esc(section.label||'')}" title="${edit?'Type the wave time and driver total, then press Enter':'Double-click to edit wave time and driver total'}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="0" ${edit?`contenteditable="true" data-edit-field="waveTime" data-edit-wave="${esc(section.wave||'')}" data-edit-section="${esc(section.label||'')}"`:''}`:''}>${esc(waveTime)}</td>`:colIndex===4?'':`<td class="${sheetSpacerColumns.has(colIndex)?'sheet-spacer-col':field==='plannedRts'?'planned-rts-cell sheet-edit-cell copy-sheet-cell':'sheet-edit-cell copy-sheet-cell'}" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="${colIndex}"`:''}></td>`).join('');
+  const timeCells=sheetCopyFields.map((field,colIndex)=>colIndex===0?`<td class="wave-time-cell sheet-edit-cell copy-sheet-cell ${edit?'editable-cell':''}" data-view-field="waveTime" data-view-wave="${esc(section.wave||'')}" data-view-section="${esc(section.label||'')}" title="${edit?'Type the wave time and driver total, then press Enter':'Double-click to edit wave time and driver total'}" ${interactive?`tabindex="0" data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="0" ${edit?`contenteditable="true" data-edit-field="waveTime" data-edit-wave="${esc(section.wave||'')}" data-edit-section="${esc(section.label||'')}" data-edit-original="${esc(String(waveTime||'').trim())}"`:''}`:''}>${esc(waveTime)}</td>`:colIndex===4?'':`<td class="${sheetSpacerColumns.has(colIndex)?'sheet-spacer-col':field==='plannedRts'?'planned-rts-cell sheet-edit-cell copy-sheet-cell':'sheet-edit-cell copy-sheet-cell'}" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${timeRowIndex}" data-sheet-col="${colIndex}"`:''}></td>`).join('');
   const timeRow=section.hasTime?`<tr class="ops-row wave-time-row wave-section-${sectionIndex}" data-wave-section="${sectionIndex}"><th class="sheet-row-num">${rowBase+rows.length}</th>${timeCells}</tr>`:'';
   const separators=Array.from({length:section.separatorRows||0},(_,offset)=>{const sheetRow=rowBase+rows.length+(section.hasTime?1:0)+offset,rowIndex=sheetRow-3;return `<tr class="wave-separator wave-section-${sectionIndex}" data-wave-section="${sectionIndex}"><th class="sheet-row-num">${sheetRow}</th>${sheetCopyFields.map((field,colIndex)=>`<td class="${sheetSpacerColumns.has(colIndex)?'sheet-spacer-col':''}" ${interactive?`data-sheet-cell="true" ${state.copyMode?'data-sheet-copy-cell="true"':''} data-sheet-section="${sectionIndex}" data-sheet-row="${rowIndex}" data-sheet-col="${colIndex}"`:''}></td>`).join('')}</tr>`;}).join('');
   return `${body}${timeRow}${separators}`;
@@ -4578,6 +4578,9 @@ const navigationPageCache=new Map();
 let navigationRenderToken=0;
 let deferredCloudRender=false;
 let operationalInteractionUntil=0;
+let operationalScrollAnchor=null;
+let operationalScrollAnchorVersion=0;
+const OPERATIONAL_INTERACTION_SELECTOR='[data-device-sheet-field],[data-device-custom-field],[data-picklist-view],[data-picklist-edit],.morning-template-sheet [data-view-field],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad]';
 function invalidateNavigationPageCache() { navigationPageCache.clear();navigationRenderToken+=1; }
 function rememberNavigationPage(page='',content=null) {
   if(!page||!content||content.dataset.page!==page||content.dataset.ready!=='true')return;
@@ -4597,8 +4600,14 @@ function activeOperationalEditor() {
   const el=document.activeElement;
   return Boolean(el&&el!==document.body&&el.matches?.('[data-device-sheet-field],[data-device-custom-field],[data-picklist-edit],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad]'));
 }
+function rememberOperationalScrollAnchor() {
+  operationalScrollAnchor={memory:captureUiScrollMemory(),version:++operationalScrollAnchorVersion,at:Date.now()};
+  return operationalScrollAnchor;
+}
 function markOperationalInteraction(event) {
-  if(event?.target?.closest?.('[data-device-sheet-field],[data-device-custom-field],[data-picklist-view],[data-picklist-edit],.morning-template-sheet [data-view-field],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad]'))operationalInteractionUntil=Date.now()+2000;
+  if(!event?.target?.closest?.(OPERATIONAL_INTERACTION_SELECTOR))return;
+  operationalInteractionUntil=Date.now()+(event.type==='keydown'?5000:2500);
+  rememberOperationalScrollAnchor();
 }
 function captureUiScrollMemory() {
   const containers=[];
@@ -4610,6 +4619,15 @@ function restoreUiScrollMemory(memory) {
   if(!memory||memory.page!==state.page)return;
   memory.containers.forEach(item=>{const el=document.querySelectorAll?.(item.selector)?.[item.index];if(el){el.scrollLeft=item.left;el.scrollTop=item.top;}});
   window.scrollTo?.({left:memory.x,top:memory.y,behavior:'instant'});
+}
+function reinforceOperationalScrollMemory(memory,version=operationalScrollAnchorVersion) {
+  const restore=()=>{
+    if(version!==operationalScrollAnchorVersion||Date.now()>=operationalInteractionUntil)return;
+    restoreUiScrollMemory(memory);
+  };
+  window.requestAnimationFrame?.(restore);
+  setTimeout(restore,80);
+  setTimeout(restore,260);
 }
 function renderFromCloudEvent() {
   if(activeOperationalEditor()||Date.now()<operationalInteractionUntil){deferredCloudRender=true;return false;}
@@ -4635,7 +4653,8 @@ function render() {
   closeDriverSuggestions();
   invalidateOperationalAlertGroups();
   invalidateNavigationPageCache();
-  const scrollMemory=captureUiScrollMemory();deferredCloudRender=false;
+  const anchored=Date.now()<operationalInteractionUntil&&operationalScrollAnchor?.memory?.page===state.page;
+  const scrollMemory=anchored?operationalScrollAnchor.memory:captureUiScrollMemory(),scrollVersion=operationalScrollAnchor?.version||0;deferredCloudRender=false;
   const previouslyOpen=modalWasOpen;
   if(PARKING_ONLY_VIEW&&!FLEET_TEAM_ALLOWED_PAGES.has(state.page))state.page=FLEET_TEAM_START_PAGE;
   if(state.page==='admin'&&!hasOwnerAdminAccess()){state.page='dashboard';state.modal='admin-pin';}
@@ -4650,6 +4669,7 @@ function render() {
   const renderedContent=document.querySelector?.('.content');if(renderedContent){renderedContent.dataset.page=state.page;renderedContent.dataset.ready='true';renderedContent.classList.remove('navigation-loading');renderedContent.removeAttribute('aria-busy');}
   syncModalFocus(previouslyOpen);
   restoreUiScrollMemory(scrollMemory);
+  if(anchored)reinforceOperationalScrollMemory(scrollMemory,scrollVersion);
   scheduleOperationalReminderCheck();
 }
 
@@ -4730,6 +4750,7 @@ function bindGlobalDocumentControls() {
   document.removeEventListener?.('focusout',handleDriverProfileFocusOut);
   document.removeEventListener?.('contextmenu',handleDriverRouteContextMenu);
   document.removeEventListener?.('keydown',handleOperationalGridArrowNavigation);
+  document.removeEventListener?.('keydown',markOperationalInteraction,true);
   document.removeEventListener?.('pointerdown',markOperationalInteraction,true);
   document.removeEventListener?.('mousedown',markOperationalInteraction,true);
   window.removeEventListener?.('resize',closeDriverRouteContextMenu);
@@ -4749,6 +4770,7 @@ function bindGlobalDocumentControls() {
   document.addEventListener?.('focusout',handleDriverProfileFocusOut);
   document.addEventListener?.('contextmenu',handleDriverRouteContextMenu);
   document.addEventListener?.('keydown',handleOperationalGridArrowNavigation);
+  document.addEventListener?.('keydown',markOperationalInteraction,true);
   document.addEventListener?.('pointerdown',markOperationalInteraction,true);
   document.addEventListener?.('mousedown',markOperationalInteraction,true);
   window.addEventListener?.('resize',closeDriverRouteContextMenu);
@@ -4919,6 +4941,7 @@ function bind() {
       el.addEventListener('mouseleave',()=>scheduleDriverSuggestionsClose(320));
     }
     el.addEventListener('pointerdown',e=>handleSheetMouseDown(e,el));
+    el.addEventListener('mousedown',e=>handleSheetMouseDown(e,el));
     el.addEventListener('pointerenter',()=>handleSheetMouseEnter(el));
     el.addEventListener('blur',()=>{saveMorningEditCell(el);if(el.dataset.editField==='driver')scheduleDriverSuggestionsClose();});
     el.addEventListener('keydown',e=>handleSheetKeydown(e,el));
@@ -4940,6 +4963,7 @@ function bind() {
   document.querySelectorAll('[data-sheet-copy-cell]').forEach(el=>{
     el.addEventListener('focus',()=>{if(!sheetSelection.dragging&&(!state.copyMode||sheetCopyZone(el.dataset.sheetCol)))selectSheetCell(el);});
     el.addEventListener('pointerdown',e=>handleSheetMouseDown(e,el));
+    el.addEventListener('mousedown',e=>handleSheetMouseDown(e,el));
     el.addEventListener('pointerenter',()=>handleSheetMouseEnter(el));
     el.addEventListener('keydown',e=>handleSheetKeydown(e,el));
   });
@@ -5222,9 +5246,18 @@ function startMorningCellEdit(source) {
   if(field==='driver')showDriverNameSuggestions(target);
 }
 
+function morningEditableCellValue(el) {
+  if(!el?.cloneNode)return String(el?.textContent||'').trim();
+  const clone=el.cloneNode(true);
+  clone.querySelectorAll?.('button,.driver-name-suggestions,.duplicate-vehicle-popover,.vehicle-issue-popover,.equipment-issue-popover').forEach(node=>node.remove());
+  return clone.textContent.trim();
+}
 function saveMorningEditCell(el) {
-  const value=el.textContent.trim(), field=el.dataset.editField;
+  const value=morningEditableCellValue(el), field=el.dataset.editField;
   if(!field)return null;
+  const original=String(el.dataset.editOriginal??'').trim();
+  if(value===original)return morningRouteByUid(el.dataset.editUid)||state.morningRoutes.find(r=>r.route===el.dataset.editRoute)||null;
+  el.dataset.editOriginal=value;
   if(field==='waveTime') {
     pushSheetHistory(`Edit ${el.dataset.editSection||el.dataset.editWave||'wave'} time and total`,'both');
     saveMorningWaveTimeValue(el.dataset.editSection||'',el.dataset.editWave||'',value);
@@ -5377,8 +5410,11 @@ function selectSheetCell(el) {
 }
 function handleSheetMouseDown(e,el) {
   if(state.editMode&&el.isContentEditable&&!e.shiftKey) {
+    e.preventDefault();
     sheetSelection={anchor:el,focus:el,dragging:false};
     applySheetSelection();
+    focusSheetCell(el);
+    if(el.dataset.editField==='driver')showDriverNameSuggestions(el);
     return;
   }
   e.preventDefault();
@@ -5432,22 +5468,34 @@ function preservePageScrollAfterCellFocus(el,pageX=window.scrollX||0,pageY=windo
     if(!el?.isConnected||document.activeElement!==el)return;
     if(Math.abs((window.scrollX||0)-pageX)>1||Math.abs((window.scrollY||0)-pageY)>1)window.scrollTo(pageX,pageY);
     keepOperationalEditorVisible(el);
+    if(Date.now()<operationalInteractionUntil)rememberOperationalScrollAnchor();
   };
   restore();
   window.requestAnimationFrame?.(restore);
 }
+let sheetFocusRequestVersion=0;
 function focusSheetCell(el) {
   if(!el)return;
-  const pageX=window.scrollX||0,pageY=window.scrollY||0;
-  el.focus({preventScroll:true});
+  const version=++sheetFocusRequestVersion,pageX=window.scrollX||0,pageY=window.scrollY||0,pane=operationalScrollPaneFor(el),paneTop=pane?.scrollTop||0,paneLeft=pane?.scrollLeft||0;
   selectSheetCell(el);
-  const range=document.createRange();
-  range.selectNodeContents(el);
-  range.collapse(false);
-  const selection=window.getSelection();
-  selection.removeAllRanges();
-  selection.addRange(range);
-  preservePageScrollAfterCellFocus(el,pageX,pageY);
+  const applyFocus=()=>{
+    if(version!==sheetFocusRequestVersion||!el.isConnected)return;
+    const active=document.activeElement;
+    if(active&&active!==document.body&&active!==el&&!active.closest?.('.morning-template-sheet'))return;
+    el.focus({preventScroll:true});
+    if(el.isContentEditable){
+      const range=document.createRange(),selection=window.getSelection();
+      range.selectNodeContents(el);range.collapse(false);selection.removeAllRanges();selection.addRange(range);
+    }
+    if(pane?.isConnected){pane.scrollTop=paneTop;pane.scrollLeft=paneLeft;}
+    if(Math.abs((window.scrollX||0)-pageX)>1||Math.abs((window.scrollY||0)-pageY)>1)window.scrollTo(pageX,pageY);
+    keepOperationalEditorVisible(el);
+    if(Date.now()<operationalInteractionUntil)rememberOperationalScrollAnchor();
+  };
+  applyFocus();
+  window.requestAnimationFrame?.(applyFocus);
+  setTimeout(applyFocus,0);
+  setTimeout(applyFocus,80);
 }
 function cellPosition(el) {
   if(el.dataset.sheetRow!==undefined&&el.dataset.sheetCol!==undefined)return {row:Number(el.dataset.sheetRow),col:Number(el.dataset.sheetCol)};

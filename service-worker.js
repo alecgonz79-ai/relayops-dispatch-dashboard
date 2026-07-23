@@ -1,4 +1,4 @@
-const CACHE='relayops-stable-cell-nav-v62';
+const CACHE='relayops-no-edit-jump-v64';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{
