@@ -1136,7 +1136,7 @@ function currentRosteringPlan() {
 }
 function rosteringService(serviceId='') { return currentRosteringPlan().services.find(service=>service.id===serviceId)||null; }
 function rosteringAssignment(assignmentId='') { return currentRosteringPlan().assignments.find(row=>row.id===assignmentId)||null; }
-function rosteringServiceRows(serviceId='') { return currentRosteringPlan().assignments.filter(row=>row.serviceId===serviceId).sort((a,b)=>waveMinutes(a.start)-waveMinutes(b.start)||a.associate.localeCompare(b.associate)); }
+function rosteringServiceRows(serviceId='') { return currentRosteringPlan().assignments.filter(row=>row.serviceId===serviceId).sort((a,b)=>waveMinutes(a.start)-waveMinutes(b.start)); }
 function scheduleEntriesForDate(date=state.morningOperationDate) {
   const entries=Array.isArray(state.scheduleEntries)?state.scheduleEntries:[],exact=entries.filter(entry=>scheduleDateKey(entry.date)===date);
   if(exact.length)return exact;
@@ -1172,15 +1172,18 @@ function rosteringPriorityEntries(entries=[]) {
   return [...entries].sort((a,b)=>rosteringStayHomeCount(b.name)-rosteringStayHomeCount(a.name)||rosteringRolePriority(a.role)-rosteringRolePriority(b.role)||waveMinutes(a.start)-waveMinutes(b.start)||String(a.name||'').localeCompare(String(b.name||'')));
 }
 function rosteringPaycomCategoryFor(entry={}) {
-  const key=headerKey(entry.role);if(isRidealongRole(entry.role))return 'training';if(isDriverHelperOnlyRole(entry.role))return 'helper';if(isNonRosterableOtherShift(entry.role))return 'other';if(key.includes('deliveryassociate'))return 'vto4';if(key.includes('rescue'))return 'vto2';if(key.includes('midshift'))return 'midshift';return 'other';
+  const key=headerKey(entry.role),group=scheduleRoleGroup(entry.role);if(isRidealongRole(entry.role))return 'training';if(isDriverHelperOnlyRole(entry.role))return 'helper';if(group==='dispatch'||isNonRosterableOtherShift(entry.role))return 'other';if(key.includes('deliveryassociate'))return 'vto4';if(key.includes('rescue'))return 'vto2';if(key.includes('midshift'))return 'midshift';return 'other';
 }
 function rosteringEntryEligibleForRoster(entry={}) {
-  const role=headerKey(entry.role);
-  return !isNonRosterableOtherShift(entry.role)&&(role.includes('deliveryassociate')||role.includes('rescue'))&&!rosteringUnavailableToday(entry.name);
+  const role=headerKey(entry.role),driverShift=scheduleRoleGroup(entry.role)==='driver',deliveryAssociate=role.includes('deliveryassociate'),fairnessRescue=role.includes('rescue')&&rosteringStayHomeCount(entry.name)>0;
+  return driverShift&&!isNonRosterableOtherShift(entry.role)&&(deliveryAssociate||fairnessRescue)&&!rosteringUnavailableToday(entry.name);
 }
 function rosteringOrderEntries(entries=[],mode=state.rosteringAutoMode,random=Math.random) {
-  const rows=[...entries];if(mode==='abc')return rows.sort((a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})||waveMinutes(a.start)-waveMinutes(b.start));
-  for(let index=rows.length-1;index>0;index--){const swap=Math.max(0,Math.min(index,Math.floor(Number(random())*(index+1))));[rows[index],rows[swap]]=[rows[swap],rows[index]];}return rows;
+  const compare=(a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})||waveMinutes(a.start)-waveMinutes(b.start),rows=[...entries];if(mode==='abc')return rows.sort(compare);
+  for(let index=rows.length-1;index>0;index--){const swap=Math.max(0,Math.min(index,Math.floor(Number(random())*(index+1))));[rows[index],rows[swap]]=[rows[swap],rows[index]];}
+  const alphabetical=[...entries].sort(compare),stillAlphabetical=rows.length>1&&rows.every((row,index)=>driverIdentityKey(row.name)===driverIdentityKey(alphabetical[index]?.name));
+  if(stillAlphabetical)[rows[0],rows[1]]=[rows[1],rows[0]];
+  return rows;
 }
 function rosteringAssignedNameKeys(plan=currentRosteringPlan()) { return new Set(plan.assignments.map(row=>driverIdentityKey(row.associate)).filter(Boolean)); }
 function rosteringDuplicateNameKeys(plan=currentRosteringPlan()) { const counts={};plan.assignments.forEach(row=>{const key=driverIdentityKey(row.associate);if(key)counts[key]=(counts[key]||0)+1;});return new Set(Object.entries(counts).filter(([,count])=>count>1).map(([key])=>key)); }
@@ -1307,6 +1310,7 @@ function rosteringUnrosteredBackupGroups(plan=currentRosteringPlan()) {
 function rosteringDriverActionButtons(entry={},isAssigned=false) {
   const eligible=rosteringEntryEligibleForRoster(entry);
   if(isAssigned)return '<button class="btn small" disabled>Rostered</button>';
+  if(scheduleRoleGroup(entry.role)==='driver'&&headerKey(entry.role).includes('rescue')&&!rosteringStayHomeCount(entry.name))return '<button class="btn small" disabled>VTO 2 backup</button>';
   if(!eligible)return '<button class="btn small" disabled>Other role</button>';
   return `<span class="rostering-driver-actions"><button class="btn small primary" data-action="rostering-add-paycom-driver" data-driver-name="${esc(entry.name)}">Add to roster</button><button class="btn small" data-action="open-rostering-driver-swap" data-driver-name="${esc(entry.name)}">Swap with rostered driver</button></span>`;
 }
@@ -1318,7 +1322,7 @@ function rosteringBackupEmailText(plan=currentRosteringPlan()) { const groups=ro
 async function copyRosteringBackupEmailText() { const ok=await writeClipboardText(rosteringBackupEmailText());toast(ok?'Grouped backup email text copied':'Clipboard access was blocked',ok?'success':'error'); }
 function rosteringDispatchAssignments() {
   const result={opener1:'',opener2:'',fleet:'',mid:'',closer1:'',closer2:''};let midFallback='';
-  scheduleEntriesForDate(state.rosteringDate).forEach(entry=>{const key=headerKey(entry.role),name=driverDisplayName(entry.name);if(!name)return;if(key.includes('firstopeningdispatch'))result.opener1||=name;else if(key.includes('secondopeningdispatch'))result.opener2||=name;else if(key.includes('fleetcoordinator'))result.fleet||=name;else if((key.includes('mid')||key.includes('midshift'))&&key.includes('dispatch'))result.mid||=name;else if(key==='mid'||key==='midshift')midFallback||=name;else if(key.includes('secondcloser')||key.includes('secondclosingdispatch'))result.closer2||=name;else if(key.includes('closingdispatch')||key.includes('firstcloser')||key.includes('firstclosingdispatch'))result.closer1||=name;});
+  scheduleEntriesForDate(state.rosteringDate).forEach(entry=>{const key=headerKey(entry.role),name=driverDisplayName(entry.name).split(/\s+/)[0]||'';if(!name)return;if(key.includes('firstopeningdispatch'))result.opener1||=name;else if(key.includes('secondopeningdispatch'))result.opener2||=name;else if(key.includes('fleetcoordinator'))result.fleet||=name;else if((key.includes('mid')||key.includes('midshift'))&&key.includes('dispatch'))result.mid||=name;else if(key==='mid'||key==='midshift')midFallback||=name;else if(key.includes('secondcloser')||key.includes('secondclosingdispatch'))result.closer2||=name;else if(key.includes('closingdispatch')||key.includes('firstcloser')||key.includes('firstclosingdispatch'))result.closer1||=name;});
   result.mid||=midFallback;
   return result;
 }

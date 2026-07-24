@@ -17,9 +17,10 @@ vm.runInContext(`
     {date:'7/18/2026',name:'Fleet Lead',role:'Fleet Coordinator',start:'8:00 AM'},
     {date:'7/18/2026',name:'Midshift Support',role:'Midshift',start:'2:00 PM'}
   ];
+  state.scheduleStayHomeHistory={'2026-07-17|rescue backup':{name:'Rescue Backup',date:'2026-07-17'}};
   const plan=currentRosteringPlan(),groups=rosteringUnrosteredBackupGroups(plan);
   globalThis.__groups={vto2:groups.vto2.map(row=>row.name),vto4:groups.vto4.map(row=>row.name),other:groups.other.map(row=>row.name)};
-  globalThis.__paycom=rosteringPaycomHtml(plan);globalThis.__backup=rosteringBackupBuilderHtml(plan);
+  globalThis.__paycom=rosteringPaycomHtml(plan);globalThis.__backup=rosteringBackupBuilderHtml(plan);globalThis.__email=rosteringEmailTemplateText(plan);
   const target=plan.assignments.find(row=>row.serviceId==='rivian-medium');target.associate='Rostered Person';target.role='Delivery Associate';
   state.pendingRosteringSwap={name:'Rescue Backup'};const originalGet=document.getElementById;document.getElementById=id=>id==='rostering-swap-assignment'?{value:target.id}:originalGet(id);applyRosteringDriverSwap();document.getElementById=originalGet;
   globalThis.__swap={name:target.associate,count:plan.assignments.filter(row=>row.associate==='Rescue Backup').length,old:plan.assignments.some(row=>row.associate==='Rostered Person')};
@@ -42,6 +43,7 @@ assert(context.__groups.vto4.join(',')==='Actual Associate','Delivery Associate 
 assert(context.__groups.other.join(',')==='Fleet Lead,Midshift Support','Midshift and non-route roles must stay grouped under Other roles');
 assert(context.__paycom.includes('Add to roster')&&context.__paycom.includes('Swap with rostered driver')&&!context.__paycom.includes('Keep as VTO 2'),'PAYCOM route-driver cards need Add and Swap controls');
 assert(context.__backup.includes('Other roles')&&context.__backup.includes('Fleet Lead')&&context.__backup.includes('Midshift Support')&&context.__backup.includes('Swap with rostered driver'),'Unrostered backup list lost Other roles or swap controls');
+assert(context.__email.includes('**Fleet:** Fleet')&&!context.__email.includes('**Fleet:** Fleet Lead'),'Unrostered shifts email must show only the first name for Fleet Coordinator and dispatcher shifts');
 assert(context.__swap.name==='Rescue Backup'&&context.__swap.count===1&&!context.__swap.old,'Roster swap must replace one rostered driver without duplication');
 assert(context.__teamRows.join(',')==='Actual Associate','Drivers & Team must use only imported directory names');
 assert(context.__teamCollapsed.includes('data-driver-card-toggle="true"')&&!context.__teamCollapsed.includes('>ACTIVE<')&&!context.__teamCollapsed.includes('>Active<'),'Driver cards must be expandable without the redundant Active status');
