@@ -4591,7 +4591,7 @@ let deferredCloudRender=false;
 let operationalInteractionUntil=0;
 let operationalScrollAnchor=null;
 let operationalScrollAnchorVersion=0;
-const OPERATIONAL_INTERACTION_SELECTOR='[data-device-sheet-field],[data-device-custom-field],[data-picklist-view],[data-picklist-edit],.morning-template-sheet [data-view-field],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad]';
+const OPERATIONAL_INTERACTION_SELECTOR='[data-device-sheet-field],[data-device-custom-field],[data-picklist-view],[data-picklist-edit],.morning-template-sheet [data-view-field],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad],[data-parking-id],[data-parking-battery],[data-parking-notes],[data-parking-date],[data-charging-check-date],[data-parking-kind]';
 const OPERATIONAL_SCROLL_PANE_SELECTOR='.sheet-scroll,.opening-picklist-scroll,.picklist-sheet-scroll,.device-sheet-table-wrap,.device-sheet-scroll';
 let operationalEditScrollLock=null;
 let operationalUserScrollUntil=0;
@@ -4615,7 +4615,7 @@ function recordNavigationTiming(page='',startedAt=Date.now(),cached=false) {
 }
 function activeOperationalEditor() {
   const el=document.activeElement;
-  return Boolean(el&&el!==document.body&&el.matches?.('[data-device-sheet-field],[data-device-custom-field],[data-picklist-edit],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad]'));
+  return Boolean(el&&el!==document.body&&el.matches?.('[data-device-sheet-field],[data-device-custom-field],[data-picklist-edit],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad],[data-parking-id],[data-parking-battery],[data-parking-notes],[data-parking-date],[data-charging-check-date],[data-parking-kind]'));
 }
 function rememberOperationalScrollAnchor() {
   operationalScrollAnchor={memory:captureUiScrollMemory(),version:++operationalScrollAnchorVersion,at:Date.now()};
@@ -4998,15 +4998,28 @@ function bind() {
   document.querySelectorAll('[data-fleet-expected]').forEach(el=>{el.addEventListener('input',()=>{const pos=el.selectionStart??String(el.value||'').length;state.fleetExpectedCount=Math.max(0,Number(el.value)||0);updateFleetExpectedSoon(el.value,pos);});el.addEventListener('change',()=>{state.fleetExpectedCount=Math.max(0,Number(el.value)||0);persist();});});
   document.querySelectorAll('[data-parking-select]').forEach(el=>el.addEventListener('click',e=>{if(e.target?.matches?.('[data-parking-id]'))return;selectParkingSlot(el.dataset.parkingSelect);}));
   document.querySelectorAll('[data-parking-id]').forEach(el=>{
-    el.addEventListener('focus',()=>selectParkingSlot(el.dataset.parkingId,false));
+    el.dataset.parkingOriginal=el.value;
+    el.addEventListener('focus',()=>{selectParkingSlot(el.dataset.parkingId,false);captureOperationalEditScrollLock(el);});
     el.addEventListener('input',()=>{updateParkingSlot(el.dataset.parkingId,el.value,false);syncParkingSlotVisual(el);});
-    el.addEventListener('change',()=>persist());
+    el.addEventListener('change',()=>commitParkingSlotEditor(el));
+    el.addEventListener('keydown',event=>handleParkingEditorKeydown(event,el));
   });
-  document.querySelectorAll('[data-parking-battery]').forEach(el=>{el.addEventListener('input',()=>{updateParkingBattery(el.dataset.parkingBattery,el.value);applyParkingBatteryTone(el,el.value);});el.addEventListener('change',()=>persist());});
+  document.querySelectorAll('[data-parking-battery]').forEach(el=>{
+    el.dataset.parkingOriginal=el.value;
+    el.addEventListener('focus',()=>captureOperationalEditScrollLock(el));
+    el.addEventListener('input',()=>{updateParkingBattery(el.dataset.parkingBattery,el.value,false);applyParkingBatteryTone(el,el.value);});
+    el.addEventListener('change',()=>commitParkingBatteryEditor(el));
+    el.addEventListener('keydown',event=>handleParkingEditorKeydown(event,el));
+  });
   document.querySelectorAll('[data-parking-charger]').forEach(el=>el.addEventListener('click',()=>toggleParkingCharger(el.dataset.parkingCharger)));
   document.querySelectorAll('[data-parking-date]').forEach(el=>el.addEventListener('change',()=>{state.vanParkingUpdated=el.value||defaultOperationDate();persist();render();toast('Parking map date updated');}));
   document.querySelectorAll('[data-charging-check-date]').forEach(el=>el.addEventListener('change',()=>{state.chargingStationChecked=el.value||'';persist();render();toast('Charging station check date updated');}));
-  document.querySelectorAll('[data-parking-notes]').forEach(el=>el.addEventListener('input',()=>{state.parkingNotes=el.value;persist();}));
+  document.querySelectorAll('[data-parking-notes]').forEach(el=>{
+    el.dataset.parkingOriginal=el.value;
+    el.addEventListener('focus',()=>captureOperationalEditScrollLock(el));
+    el.addEventListener('input',()=>{state.parkingNotes=el.value;});
+    el.addEventListener('change',()=>{state.parkingNotes=el.value;el.dataset.parkingOriginal=el.value;persist();});
+  });
   document.querySelectorAll('[data-parking-kind]').forEach(el=>el.addEventListener('change',()=>updateParkingKind(el.dataset.parkingKind,el.value)));
   document.querySelectorAll('[data-device-sheet-field]').forEach(el=>{
     el.dataset.deviceOriginal=el.value;
@@ -5157,24 +5170,56 @@ function updateParkingSlot(id,value,rerender=true) {
   slot.value=String(value||'').trim().toUpperCase();
   state.selectedParkingId=id;
   state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
-  if(rerender)persist();
-  else persistSoon();
-  if(rerender)render();
+  if(rerender){persist();render();}
+  return slot;
 }
 
 function selectParkingSlot(id,rerender=true) {
   if(!id)return;
   state.selectedParkingId=id;
-  persist();
-  if(rerender)render();
+  if(rerender){persist();render();}
 }
 
-function updateParkingBattery(id,value) {
+function updateParkingBattery(id,value,persistChange=true) {
   const clean=String(value||'').replace(/[^\d]/g,'').slice(0,3);
   const n=clean===''?'':Math.max(0,Math.min(100,Number(clean)));
   state.vanParkingBatteries={...(state.vanParkingBatteries||{}),[id]:n};
   state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
-  persistSoon();
+  if(persistChange)persist();
+  return n;
+}
+function commitParkingSlotEditor(el) {
+  if(!el)return;
+  const slot=updateParkingSlot(el.dataset.parkingId,el.value,false);
+  if(!slot)return;
+  el.value=slot.value;
+  el.dataset.parkingOriginal=slot.value;
+  syncParkingSlotVisual(el);
+  persist();
+}
+function commitParkingBatteryEditor(el) {
+  if(!el)return;
+  const value=updateParkingBattery(el.dataset.parkingBattery,el.value,false);
+  el.value=value;
+  el.dataset.parkingOriginal=String(value);
+  applyParkingBatteryTone(el,value);
+  persist();
+}
+function handleParkingEditorKeydown(event,el) {
+  if(event.key==='Enter'){
+    event.preventDefault();
+    if(el.matches?.('[data-parking-id]'))commitParkingSlotEditor(el);
+    else commitParkingBatteryEditor(el);
+    el.blur();
+    return;
+  }
+  if(event.key==='Escape'){
+    event.preventDefault();
+    el.value=el.dataset.parkingOriginal||'';
+    if(el.matches?.('[data-parking-id]')){updateParkingSlot(el.dataset.parkingId,el.value,false);syncParkingSlotVisual(el);}
+    else {updateParkingBattery(el.dataset.parkingBattery,el.value,false);applyParkingBatteryTone(el,el.value);}
+    el.blur();
+  }
 }
 function toggleParkingCharger(key='') {
   if(!key)return;const current=state.parkingChargerStatus[key]||'unknown',next=current==='unknown'?'green':current==='green'?'red':'unknown';
@@ -5749,7 +5794,7 @@ const operationalGridEditorSelector=[
   '[data-screenshot-review-pad]'
 ].join(',');
 function operationalGridRoot(editor) {
-  return editor?.closest?.('table')||editor?.closest?.('.rostering-associate-list')||editor?.closest?.('.parking-lot')||editor?.closest?.('.modal');
+  return editor?.closest?.('table')||editor?.closest?.('.rostering-associate-list')||editor?.closest?.('.van-parking-card')||editor?.closest?.('.parking-lot')||editor?.closest?.('.modal');
 }
 let operationalGridFocusRequestVersion=0;
 function focusOperationalGridEditor(editor) {
