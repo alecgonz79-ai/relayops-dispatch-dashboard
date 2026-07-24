@@ -12,7 +12,31 @@
   function storage(){try{return window.localStorage||globalThis.localStorage||null;}catch{return null;}}
   function pendingSnapshot(){try{return JSON.parse(storage()?.getItem(queueKey())||'null')||memoryPending;}catch{return memoryPending;}}
   function clearPending(){memoryPending=null;try{storage()?.removeItem(queueKey());}catch{}}
-  function clone(value){if(value===undefined)return undefined;try{return JSON.parse(JSON.stringify(value));}catch{return value;}}
+  function sanitizeCloudString(value=''){
+    const input=String(value),parts=[];
+    for(let index=0;index<input.length;index++){
+      const code=input.charCodeAt(index);
+      if(code===0)continue;
+      if(code>=0xD800&&code<=0xDBFF){
+        const next=input.charCodeAt(index+1);
+        if(next>=0xDC00&&next<=0xDFFF){parts.push(input[index],input[index+1]);index++;}else parts.push('\uFFFD');
+      }else if(code>=0xDC00&&code<=0xDFFF)parts.push('\uFFFD');
+      else parts.push(input[index]);
+    }
+    return parts.join('');
+  }
+  function sanitizeCloudValue(value,seen=new WeakMap()){
+    if(typeof value==='string')return sanitizeCloudString(value);
+    if(value===null||value===undefined||typeof value!=='object')return value;
+    if(seen.has(value))return seen.get(value);
+    if(Array.isArray(value)){
+      const result=[];seen.set(value,result);value.forEach(item=>result.push(sanitizeCloudValue(item,seen)));return result;
+    }
+    const result={};seen.set(value,result);
+    Object.entries(value).forEach(([key,item])=>{const clean=sanitizeCloudValue(item,seen);if(clean!==undefined)result[sanitizeCloudString(key)]=clean;});
+    return result;
+  }
+  function clone(value){if(value===undefined)return undefined;try{return sanitizeCloudValue(JSON.parse(JSON.stringify(value)));}catch{return sanitizeCloudValue(value);}}
   function canonical(value){
     if(value===undefined)return 'undefined';if(value===null||typeof value!=='object')return JSON.stringify(value);
     if(Array.isArray(value))return `[${value.map(canonical).join(',')}]`;
@@ -148,10 +172,12 @@
     }
   }
   function preparePayload(raw={},base={},previous=null,now=new Date().toISOString()){
-    const next=clone(raw||{}),meta=mergeSyncMeta(base?.[SYNC_META],previous?.[SYNC_META],raw?.[SYNC_META]);
-    stampCollections(next,base||{},previous||{},[],meta,now);next[SYNC_META]=meta;return next;
+    const cleanRaw=clone(raw||{}),cleanBase=clone(base||{}),cleanPrevious=previous===null?null:clone(previous||{});
+    const next=clone(cleanRaw),meta=mergeSyncMeta(cleanBase?.[SYNC_META],cleanPrevious?.[SYNC_META],cleanRaw?.[SYNC_META]);
+    stampCollections(next,cleanBase,cleanPrevious||{},[],meta,now);next[SYNC_META]=meta;return next;
   }
   function reconcilePayload(remote={},local={},base={}){
+    remote=clone(remote||{});local=clone(local||{});base=clone(base||{});
     const remoteMeta=mergeSyncMeta(remote?.[SYNC_META]),localMeta=mergeSyncMeta(local?.[SYNC_META]),baseMeta=mergeSyncMeta(base?.[SYNC_META]),resultMeta=mergeSyncMeta(baseMeta,remoteMeta,localMeta);
     const result=mergeValue(remote||{},local||{},base||{},[],'','',remoteMeta,localMeta,baseMeta,resultMeta)||{};result[SYNC_META]=resultMeta;return result;
   }
@@ -503,5 +529,5 @@
     window.addEventListener('online',()=>{notify({type:'reconnecting'});retryLinkAccess().catch(error=>notify({type:'link-access-error',error}));});
     window.addEventListener('offline',()=>notify({type:'offline',reason:'browser-offline'}));
   }
-  window.RelayOpsCloud={configured,init,retryLinkAccess,reclaimStorageForSharedSession,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{preparePayload,reconcilePayload,semanticKey,canonical,reclaimStorageForSharedSession,withCloudTimeout,pollForUpdates,applyRemoteSnapshot}};
+  window.RelayOpsCloud={configured,init,retryLinkAccess,reclaimStorageForSharedSession,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{sanitizeCloudString,sanitizeCloudValue,preparePayload,reconcilePayload,semanticKey,canonical,reclaimStorageForSharedSession,withCloudTimeout,pollForUpdates,applyRemoteSnapshot}};
 })();
