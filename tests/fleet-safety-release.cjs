@@ -66,7 +66,7 @@ vm.runInContext(`
     unknown:fleetVehicleAssignmentEligibility(vehicles[8])
   };
   state.dspCode='LLOL';state.morningFilters={wave:'all',staging:'all',pad:'all'};
-  state.equipmentImport={details:{'1':{device:'D1',portable:'P1'},'2':{device:'D2',portable:'P2'},'8':{device:'D8',portable:'P8'}}};
+  state.equipmentImport={details:{'1':{device:'D1',portable:'P1'},'2':{device:'D2',portable:''},'8':{device:'D8',portable:'-'}}};
   state.morningRoutes=Array.from({length:5},(_,index)=>({
     routeUid:'safe-'+index,dsp:'LLOL',driver:'Driver '+(index+1),route:'CX'+(101+index),
     wave:'11:15 AM',staging:'STG.V.'+(index+1),service:'Standard Parcel',ev:'58',deviceName:'old',portable:'old'
@@ -100,6 +100,7 @@ assert(e.watch.eligible, 'Watch-level issues should remain manually reviewable w
 const assigned = context.__assigned.map(row => row.ev);
 assert(assigned.join(',') === '1,2,8,,', `Safe assignment should use each safe EV once and leave the shortfall blank, received ${assigned.join(',')}`);
 assert(new Set(assigned.filter(Boolean)).size === assigned.filter(Boolean).length, 'Automatic assignment must never repeat a van');
+assert(context.__assigned[1].device==='D2'&&context.__assigned[1].portable===''&&context.__assigned[2].device==='D8'&&context.__assigned[2].portable==='-', 'Assign Operational Vans must accept blank or dash Portable whenever the EV has a Device');
 assert(context.__assigned.slice(3).every(row => row.device === '' && row.portable === ''), 'Unfilled routes must not retain stale device or portable assignments');
 assert(context.__toasts.some(row => /left blank/.test(row.message)), 'An insufficient safe pool must produce a clear operator warning');
 

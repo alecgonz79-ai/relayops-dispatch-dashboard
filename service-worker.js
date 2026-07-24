@@ -1,4 +1,4 @@
-const CACHE='relayops-parking-edit-v67';
+const CACHE='relayops-device-only-ready-v68';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{

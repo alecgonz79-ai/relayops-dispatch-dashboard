@@ -1713,7 +1713,8 @@ function saveEquipmentIssue() {
 }
 function markEquipmentIssueFixed(key='',id='') { const store=state.equipmentIssues?.[key],target=(store?.active||[]).find(record=>record.id===id);if(!store||!target)return;const resolvedAt=new Date().toISOString(),resolvedBy=state.cloudUser||'Dispatcher';store.active=(store.active||[]).filter(record=>record.id!==id);store.history=(store.history||[]).map(record=>record.id===id?{...record,status:'fixed',resolvedAt,resolvedBy}:record);store.updatedAt=resolvedAt;recalculateEquipmentReadiness();persist();render();toast(`${store.label} marked fixed`); }
 function routeEquipmentIssues(route={}) { return {device:equipmentIssueFor('device',route.deviceName),portable:equipmentIssueFor('portable',route.portable)}; }
-function recalculateEquipmentReadiness() { (state.morningRoutes||[]).forEach(route=>{const issues=routeEquipmentIssues(route);route.deviceReady=Boolean(String(route.deviceName||'').trim())&&!issues.device?.active.some(record=>['high','critical'].includes(record.severity));route.portableReady=Boolean(String(route.portable||'').trim()&&String(route.portable)!=='-')&&!issues.portable?.active.some(record=>['high','critical'].includes(record.severity));}); }
+function usableDeviceAssignment(value='') { const clean=String(value||'').trim();return Boolean(clean&&clean!=='-'); }
+function recalculateEquipmentReadiness() { (state.morningRoutes||[]).forEach(route=>{const issues=routeEquipmentIssues(route);route.deviceReady=usableDeviceAssignment(route.deviceName)&&!issues.device?.active.some(record=>['high','critical'].includes(record.severity));route.portableReady=Boolean(String(route.portable||'').trim()&&String(route.portable)!=='-')&&!issues.portable?.active.some(record=>['high','critical'].includes(record.severity));}); }
 function morningIssueAckKey(route='',issueIdValue=''){return `${state.morningOperationDate}|${String(route||'').toUpperCase()}|${issueIdValue}`;}
 function morningIssueAcknowledged(route='',reported=null){
   const records=reported?.active||[];return Boolean(records.length&&records.every(record=>state.morningIssueAcknowledgements?.[morningIssueAckKey(route,record.id)]));
@@ -7545,11 +7546,11 @@ function fillEquipmentForRoute(route) {
   const item=state.equipmentImport?.details?.[normalizeEquipmentId(route.ev)];
   if(item){route.deviceName=item.device||'';route.portable=item.portable||'';}
   else {route.deviceName='';route.portable='';}
-  const issues=routeEquipmentIssues(route);route.deviceReady=Boolean(route.deviceName)&&!issues.device?.active.some(record=>['high','critical'].includes(record.severity));route.portableReady=Boolean(route.portable&&route.portable!=='-')&&!issues.portable?.active.some(record=>['high','critical'].includes(record.severity));
+  const issues=routeEquipmentIssues(route);route.deviceReady=usableDeviceAssignment(route.deviceName)&&!issues.device?.active.some(record=>['high','critical'].includes(record.severity));route.portableReady=Boolean(route.portable&&route.portable!=='-')&&!issues.portable?.active.some(record=>['high','critical'].includes(record.severity));
 }
 function equipmentAssignmentFor(value='') {
-  const item=state.equipmentImport?.details?.[normalizeEquipmentId(value)],device=String(item?.device||'').trim(),portable=String(item?.portable||'').trim();
-  return device&&portable&&portable!=='-'?item:null;
+  const item=state.equipmentImport?.details?.[normalizeEquipmentId(value)];
+  return usableDeviceAssignment(item?.device)?item:null;
 }
 function clearEquipmentForRoute(route={}) {
   route.ev='';route.deviceName='';route.portable='';route.deviceReady=false;route.portableReady=false;
@@ -7608,19 +7609,19 @@ function assignElectricVehicles(mode='low') {
   const targets=morningAssignmentTargets();
   if(!targets.length)return toast('No visible driver rows to assign','error');
   const pool=automaticFleetVehiclePool({electricOnly:true,random:mode==='random'});
-  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No assignment-ready EVs available · each safe EV needs both a Device and Portable entered','error');}
+  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No assignment-ready EVs available · each safe EV needs a Device entered (Portable may be blank)','error');}
   assignAutomaticVehiclePool(targets,pool,mode==='random'?'safe EVs randomly':'safe EVs lowest to highest');
 }
 function assignOperationalVehicles() {
   const targets=morningAssignmentTargets().filter(route=>!/helper/i.test(String(route.service||'')));if(!targets.length)return toast('No visible driver rows to assign','error');
   const pool=automaticFleetVehiclePool({electricOnly:true});
-  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No assignment-ready EVs available · each safe EV needs both a Device and Portable entered','error');}
+  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No assignment-ready EVs available · each safe EV needs a Device entered (Portable may be blank)','error');}
   assignAutomaticVehiclePool(targets,pool,'verified safe EVs');
 }
 function assignBagReadyVehicles() {
   const targets=morningAssignmentTargets().filter(route=>!/helper/i.test(String(route.service||'')));if(!targets.length)return toast('No visible driver rows to assign','error');
   const pool=automaticFleetVehiclePool({electricOnly:true});
-  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No Bag Ready Vans found · enter both a Device and Portable beside a safe EV first','error');}
+  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No Bag Ready Vans found · enter a Device beside a safe EV first (Portable may be blank)','error');}
   assignAutomaticVehiclePool(targets,pool,'Bag Ready Vans');
 }
 function clearMorningVehicleAssignments() {
