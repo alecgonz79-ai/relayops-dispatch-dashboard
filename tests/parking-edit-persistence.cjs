@@ -11,8 +11,26 @@ assert(
   'Parking editors must count as active operational editors so cloud refreshes cannot replace their DOM while focused'
 );
 assert(
-  source.includes("el.addEventListener('input',()=>{updateParkingSlot(el.dataset.parkingId,el.value,false)")&&
-  source.includes("el.addEventListener('change',()=>commitParkingSlotEditor(el))"),
+  source.includes("doubleClick=event.detail>=2||now-last<500")&&
+  source.includes("el.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation();beginParkingSlotEdit(el);})")&&
+  source.includes("el.addEventListener('input',()=>{if(el.readOnly)return;updateParkingSlot(el.dataset.parkingId,el.value,false)")&&
+  source.includes("el.addEventListener('blur',()=>finishParkingSlotEdit(el))"),
+  'Parking van inputs must require a double-click, update locally while typing, and finish the edit on blur'
+);
+assert(
+  source.includes('readonly aria-readonly="true"')&&source.includes('title="Double-click to edit')&&
+  source.includes("function beginParkingSlotEdit(el)")&&
+  source.includes("el.readOnly=false")&&
+  source.includes("el.readOnly=true"),
+  'Parking spots must stay read-only until a double-click explicitly opens that EV number for editing'
+);
+assert(
+  source.includes("if(activeParkingEditId||activeOperationalEditor()")&&
+  source.includes("if(!deferredCloudRender||activeParkingEditId||activeOperationalEditor())return;"),
+  'Cloud refreshes must wait until a double-click parking edit is finished'
+);
+assert(
+  source.includes("el.addEventListener('change',()=>{if(!el.readOnly)commitParkingSlotEditor(el);})"),
   'Parking van inputs must update locally while typing and commit only when the edit is finished'
 );
 assert(

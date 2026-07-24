@@ -12,7 +12,7 @@ assert(app.includes("!FLEET_TEAM_ALLOWED_PAGES.has(page)"),'Direct dashboard nav
 assert(app.includes('This fleet link can edit Van Parking. Other dashboard tools stay locked.'),'Fleet-only actions must allow parking edits while enforcing the remaining scope');
 assert(app.includes('fleet-issues-readonly'),'Vehicle issue-entry controls must remain read-only on Fleet Health');
 assert(!app.includes('if(PARKING_ONLY_VIEW)return withChargers'),'Fleet and dispatcher links must render the same complete parking map');
-assert(!app.includes("readonly tabindex=\"-1\"':` data-parking-id"),'Fleet parking van fields must not be rendered read-only');
+assert(app.includes('readonly aria-readonly="true"')&&app.includes('title="Double-click to edit')&&app.includes('beginParkingSlotEdit(el)'),'Fleet parking van fields must use the same double-click editing interaction as the dispatcher map');
 assert(app.includes("'parking-choose-file','copy-parking-list','reset-parking','parse-parking-paste'")&&app.includes("'report-charging-station','copy-charger-report','copy-open-charger-slack'"),'Fleet parking action scope must include editing, imports, and charger reporting');
 assert(app.includes('vanParking:state.vanParking')&&app.includes('vanParkingBatteries:state.vanParkingBatteries')&&app.includes('parkingChargerStatus:state.parkingChargerStatus')&&app.includes('parkingNotes:state.parkingNotes'),'Parking edits must remain part of the shared cloud payload');
 assert(styles.includes('.fleet-locked-nav')&&styles.includes('cursor:not-allowed'),'Locked navigation must be visually distinct');

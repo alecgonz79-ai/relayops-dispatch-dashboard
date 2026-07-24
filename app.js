@@ -1970,6 +1970,7 @@ function parkingChargerColumn() {
   const tent=`<div class="parking-tent-square" title="Operations tent"><svg viewBox="0 0 64 52" aria-hidden="true"><path d="M32 5 57 45H7L32 5Z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="M32 5v40M20 45l12-18 12 18" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg><span>TENT</span></div>`;
   return `<div class="parking-crosswalk charger-column"><div class="parking-charger-pairs">${Array.from({length:rows},(_,index)=>{const isTent=index===3,left=index<leftCount&&!isTent&&leftSlots[index]?.kind!=='crosswalk'?parkingChargerButton(`middle-${index+1}-left`,`Left charger ${index+1}`,parkingSpotNumber('west',index)):'<span></span>',right=index<rightCount&&!isTent&&rightSlots[index]?.kind!=='crosswalk'?parkingChargerButton(`middle-${index+1}-right`,`Right charger ${index+1}`,parkingSpotNumber('east',index)):'<span></span>';return isTent?`<div class="charger-pair tent-row"><span></span>${tent}<span></span></div>`:`<div class="charger-pair">${left}${right}</div>`;}).join('')}</div></div>`;
 }
+let activeParkingEditId='';
 function syncParkingSlotVisual(input) {
   const slot=input?.closest?.('.parking-slot');
   if(!slot)return;
@@ -1977,9 +1978,15 @@ function syncParkingSlotVisual(input) {
   slot.classList.toggle('blocked',blocked);
   slot.classList.toggle('has-vehicle',Boolean(value)&&!blocked);
 }
+function syncParkingSelectionVisual(id='') {
+  document.querySelectorAll?.('[data-parking-id]').forEach(input=>{
+    input.closest?.('.parking-slot')?.classList.toggle('selected',input.dataset.parkingId===id);
+  });
+}
 function parkingSlotInput(slot) {
   const tone=slot.kind==='crosswalk'?' crosswalk-slot':slot.kind==='overflow'?' overflow-slot':slot.kind==='street'?' street-slot':'';
   const selected=state.selectedParkingId===slot.id?' selected':'';
+  const editing=activeParkingEditId===slot.id;
   const battery=parkingBatteryForSlot(slot);
   const batteryTone=parkingBatteryTone(battery);
   const blocked=/^x$/i.test(String(slot.value||''))||slot.kind==='blocked';
@@ -1990,9 +1997,9 @@ function parkingSlotInput(slot) {
   const upperIndex=['northLeft','northRight'].includes(slot.zone)?parkingSlots(slot.zone).findIndex(item=>item.id===slot.id):-1;
   const upperCharger=upperIndex>=0?parkingChargerButton(`upper-${slot.id}`,`${slot.label} charger`,parkingSpotNumber(slot.zone,upperIndex)):'';
   const selectAttr=` data-parking-select="${esc(slot.id)}"`;
-  const vanInputAttrs=` data-parking-id="${esc(slot.id)}"`;
+  const vanInputAttrs=` data-parking-id="${esc(slot.id)}"${editing?' data-parking-editing="true" aria-readonly="false"':' readonly aria-readonly="true"'} title="Double-click to edit ${esc(slot.label)}"`;
   const batteryInputAttrs=` data-parking-battery="${esc(slot.id)}"`;
-  return `<div class="parking-slot parking-slot-row zone-${esc(slot.zone)}${tone}${selected}${blocked?' blocked':''}${charging?' charging':''}${hasVehicle?' has-vehicle':''}${slot.zone==='gas'?' gas-vehicle':' ev-vehicle'}" title="${esc(slot.label)}"><label class="parking-van-cell"${selectAttr}><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}"${vanInputAttrs} value="${esc(slot.value||'')}" placeholder="${slot.kind==='street'?'STREET':''}">${!showBatteryBox&&status?`<em>${status}</em>`:''}</label>${showBatteryBox?`<label class="parking-battery-mini battery-${batteryTone}" title="Battery % for ${esc(slot.value||slot.label)}"><input aria-label="Battery percent for ${esc(slot.value||slot.label)}"${batteryInputAttrs} type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="--"></label>`:''}${upperCharger}</div>`;
+  return `<div class="parking-slot parking-slot-row zone-${esc(slot.zone)}${tone}${selected}${editing?' editing':''}${blocked?' blocked':''}${charging?' charging':''}${hasVehicle?' has-vehicle':''}${slot.zone==='gas'?' gas-vehicle':' ev-vehicle'}" title="${esc(slot.label)}"><label class="parking-van-cell"${selectAttr}><span>${esc(slot.label)}</span><input aria-label="${esc(slot.label)}"${vanInputAttrs} value="${esc(slot.value||'')}" placeholder="${slot.kind==='street'?'STREET':''}">${!showBatteryBox&&status?`<em>${status}</em>`:''}</label>${showBatteryBox?`<label class="parking-battery-mini battery-${batteryTone}" title="Battery % for ${esc(slot.value||slot.label)}"><input aria-label="Battery percent for ${esc(slot.value||slot.label)}"${batteryInputAttrs} type="number" min="0" max="100" inputmode="numeric" value="${esc(battery)}" placeholder="--"></label>`:''}${upperCharger}</div>`;
 }
 function parkingStack(zone,title,subtitle='') {
   return `<section class="parking-stack ${zone}"><div class="parking-stack-title"><strong>${esc(title)}</strong>${subtitle?`<small>${esc(subtitle)}</small>`:''}</div>${parkingSlots(zone).map(parkingSlotInput).join('')}</section>`;
@@ -2027,8 +2034,8 @@ function vanParkingSectionLegacy() {
   const stats=vanParkingStats();
   const headActions=`<span class="parking-updated">Updated ${esc(state.vanParkingUpdated||'today')}</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking list</button><button class="btn small ghost" data-action="reset-parking">Reset mockup</button>`;
   const editTools=`<div class="parking-import-row"><div class="parking-drop" id="parking-drop" tabindex="0"><b>Drop parking list here</b><span>CSV, XLSX, TXT, or a copied Google Sheets export. One EV per row works best.</span><button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Choose file</button></div>${parkingBatteryEditor()}<div class="parking-paste-box"><label for="parking-paste-text">Paste parking list</label><textarea id="parking-paste-text" placeholder="57&#10;2&#10;1&#10;4&#10;...">${esc(state.vanParkingPasteText)}</textarea><button class="btn small" data-action="parse-parking-paste">Fill parking spots</button></div></div>`;
-  const helperText='<strong>Click a van</strong><span>Type EV number, battery %, or spot type.</span>';
-  const mapHint='Click any stall to edit the van and battery';
+  const helperText='<strong>Double-click a van number</strong><span>Edit the EV, then press Enter to save.</span>';
+  const mapHint='Single-click to select · double-click the van number to edit';
   return `<article class="van-parking-card" id="van-parking"><div class="van-parking-head"><div><span class="eyebrow">Van Parking</span><h2>Parking Map</h2><p>Closing dispatcher and fleet share this live map. Every saved move, battery, note, and charger update appears in both workspaces.</p></div><div class="parking-head-actions">${headActions}</div></div>${parkingModeControls()}<div class="parking-helper-grid park-easy-stats"><div><strong>${stats.filled}</strong><span>occupied / assigned</span></div><div><strong>${stats.overflow}</strong><span>overflow + crosswalk spots</span></div><div>${helperText}</div></div>${editTools}<div class="parking-lot park-easy-map"><div class="parking-map-toolbar"><div><strong>Overhead lot view</strong><span>${mapHint}</span></div><div class="parking-map-legend"><span><i class="ready"></i>Standard stall</span><span><i class="cross"></i>Crosswalk / overflow</span><span><i class="charge"></i>Charging</span></div></div><div class="parking-mobile-gesture-hint" aria-hidden="true"><b>↔</b><span>Swipe the map · pinch to zoom</span></div><div class="parking-map-grid"><div class="parking-empty-grid"><span class="lot-entry">ENTRY</span><span class="lane-arrow arrow-east">→</span><span class="lane-arrow arrow-north">↑</span><small>DRIVE LANE</small></div><div class="parking-top-block"><div class="parking-lane"></div>${parkingStack('northLeft','', '')}<div class="parking-lane skinny"><span class="lane-arrow">↕</span></div>${parkingStack('northRight','', '')}<div class="parking-lane"></div></div><div class="parking-street-zone">${parkingStreetRows()}</div><div class="parking-main-block"><div class="parking-lane vertical"><span class="lane-arrow">↓</span></div>${parkingStack('west','', '')}<div class="parking-crosswalk"><div class="tent-icon">TENT</div><strong>TENT</strong>${parkingStack('crosswalk','', '')}</div>${parkingStack('east','', '')}<div class="parking-lane vertical"><span class="lane-arrow">↑</span></div></div><div class="parking-side-area"><div class="parking-date-box"><strong>MAP UPDATED</strong><span>${esc(state.vanParkingUpdated||'')}</span></div><div class="lot-exit"><span>EXIT</span><b>→</b></div></div></div></div></article>`;
 }
 function parkingDateInputValue() { const value=String(state.vanParkingUpdated||'');if(/^\d{4}-\d{2}-\d{2}$/.test(value))return value;const m=value.match(/(\d{1,2})\/(\d{1,2})/);return m?`${new Date().getFullYear()}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`:defaultOperationDate(); }
@@ -4711,7 +4718,7 @@ function reinforceOperationalScrollMemory(memory,version=operationalScrollAnchor
   setTimeout(restore,260);
 }
 function renderFromCloudEvent() {
-  if(activeOperationalEditor()||Date.now()<operationalInteractionUntil){deferredCloudRender=true;return false;}
+  if(activeParkingEditId||activeOperationalEditor()||Date.now()<operationalInteractionUntil){deferredCloudRender=true;return false;}
   render();return true;
 }
 function refreshCloudStatusUi() {
@@ -4722,7 +4729,7 @@ function refreshCloudStatusUi() {
   document.querySelectorAll?.('.sync-state').forEach(el=>{el.classList.toggle('cloud-live',synced);el.innerHTML=`<i class="live-dot"></i>${esc(label)}`;});
 }
 function flushDeferredCloudRender() {
-  if(!deferredCloudRender||activeOperationalEditor())return;
+  if(!deferredCloudRender||activeParkingEditId||activeOperationalEditor())return;
   if(Date.now()<operationalInteractionUntil){setTimeout(flushDeferredCloudRender,Math.max(80,operationalInteractionUntil-Date.now()+20));return;}
   deferredCloudRender=false;render();
 }
@@ -4997,12 +5004,15 @@ function bind() {
   document.querySelectorAll('[data-fleet-view]').forEach(el=>el.addEventListener('change',()=>{state.fleetView=el.value;persistFleetPresentation();render();}));
   document.querySelectorAll('[data-fleet-search]').forEach(el=>{el.addEventListener('input',()=>{const pos=el.selectionStart??String(el.value||'').length;state.fleetSearch=el.value;updateFleetSearchSoon(el.value,pos);});el.addEventListener('change',()=>{state.fleetSearch=el.value;persistFleetPresentation();});});
   document.querySelectorAll('[data-fleet-expected]').forEach(el=>{el.addEventListener('input',()=>{const pos=el.selectionStart??String(el.value||'').length;state.fleetExpectedCount=Math.max(0,Number(el.value)||0);updateFleetExpectedSoon(el.value,pos);});el.addEventListener('change',()=>{state.fleetExpectedCount=Math.max(0,Number(el.value)||0);persist();});});
-  document.querySelectorAll('[data-parking-select]').forEach(el=>el.addEventListener('click',e=>{if(e.target?.matches?.('[data-parking-id]'))return;selectParkingSlot(el.dataset.parkingSelect);}));
+  document.querySelectorAll('[data-parking-select]').forEach(el=>el.addEventListener('click',()=>{selectParkingSlot(el.dataset.parkingSelect,false);syncParkingSelectionVisual(el.dataset.parkingSelect);}));
   document.querySelectorAll('[data-parking-id]').forEach(el=>{
     el.dataset.parkingOriginal=el.value;
-    el.addEventListener('focus',()=>{selectParkingSlot(el.dataset.parkingId,false);captureOperationalEditScrollLock(el);});
-    el.addEventListener('input',()=>{updateParkingSlot(el.dataset.parkingId,el.value,false);syncParkingSlotVisual(el);});
-    el.addEventListener('change',()=>commitParkingSlotEditor(el));
+    el.addEventListener('focus',()=>{selectParkingSlot(el.dataset.parkingId,false);syncParkingSelectionVisual(el.dataset.parkingId);if(!el.readOnly)captureOperationalEditScrollLock(el);});
+    el.addEventListener('click',event=>{const now=Date.now(),last=Number(el.dataset.parkingLastClickAt||0),doubleClick=event.detail>=2||now-last<500;el.dataset.parkingLastClickAt=String(now);selectParkingSlot(el.dataset.parkingId,false);syncParkingSelectionVisual(el.dataset.parkingId);if(doubleClick){event.preventDefault();event.stopPropagation();beginParkingSlotEdit(el);}});
+    el.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation();beginParkingSlotEdit(el);});
+    el.addEventListener('input',()=>{if(el.readOnly)return;updateParkingSlot(el.dataset.parkingId,el.value,false);syncParkingSlotVisual(el);});
+    el.addEventListener('change',()=>{if(!el.readOnly)commitParkingSlotEditor(el);});
+    el.addEventListener('blur',()=>finishParkingSlotEdit(el));
     el.addEventListener('keydown',event=>handleParkingEditorKeydown(event,el));
   });
   document.querySelectorAll('[data-parking-battery]').forEach(el=>{
@@ -5180,6 +5190,27 @@ function selectParkingSlot(id,rerender=true) {
   state.selectedParkingId=id;
   if(rerender){persist();render();}
 }
+function beginParkingSlotEdit(el) {
+  if(!el)return;
+  activeParkingEditId=el.dataset.parkingId||'';
+  selectParkingSlot(el.dataset.parkingId,false);
+  syncParkingSelectionVisual(el.dataset.parkingId);
+  el.readOnly=false;
+  el.setAttribute?.('aria-readonly','false');
+  el.dataset.parkingEditing='true';
+  el.closest?.('.parking-slot')?.classList.add('editing');
+  focusOperationalGridEditor(el);
+}
+function finishParkingSlotEdit(el) {
+  if(!el||el.dataset.parkingEditing!=='true')return;
+  commitParkingSlotEditor(el);
+  if(activeParkingEditId===el.dataset.parkingId)activeParkingEditId='';
+  el.dataset.parkingEditing='false';
+  el.readOnly=true;
+  el.setAttribute?.('aria-readonly','true');
+  el.closest?.('.parking-slot')?.classList.remove('editing');
+  operationalEditScrollLock=null;
+}
 
 function updateParkingBattery(id,value,persistChange=true) {
   const clean=String(value||'').replace(/[^\d]/g,'').slice(0,3);
@@ -5191,12 +5222,13 @@ function updateParkingBattery(id,value,persistChange=true) {
 }
 function commitParkingSlotEditor(el) {
   if(!el)return;
+  const previous=String(el.dataset.parkingOriginal||'');
   const slot=updateParkingSlot(el.dataset.parkingId,el.value,false);
   if(!slot)return;
   el.value=slot.value;
   el.dataset.parkingOriginal=slot.value;
   syncParkingSlotVisual(el);
-  persist();
+  if(slot.value!==previous)persist();
 }
 function commitParkingBatteryEditor(el) {
   if(!el)return;
@@ -5207,6 +5239,7 @@ function commitParkingBatteryEditor(el) {
   persist();
 }
 function handleParkingEditorKeydown(event,el) {
+  if(el.matches?.('[data-parking-id]')&&el.readOnly)return;
   if(event.key==='Enter'){
     event.preventDefault();
     if(el.matches?.('[data-parking-id]'))commitParkingSlotEditor(el);
