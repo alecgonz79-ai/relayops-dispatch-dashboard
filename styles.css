@@ -107,7 +107,13 @@ button { cursor: pointer; }
 .device-sheet-table .custom-van-cell > button { position:absolute; right:3px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:18px; height:18px; padding:0; border:0; border-radius:6px; background:#e8ede8; color:#647068; font-size:13px; cursor:pointer; }
 .device-sheet-table .custom-van-cell > button:hover { background:#ffdcd7; color:#a92319; }
 .device-sheet-table .fixed-van-cell { padding-right:25px; }
+.device-sheet-table .has-priority-control { padding-left:25px; }
 .device-sheet-table tbody th > .device-van-label { display:block; margin:0; color:#0860a8; font:800 11px/1 Manrope,sans-serif; letter-spacing:0; text-transform:none; }
+.device-sheet-table .device-priority-star { position:absolute; left:3px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:19px; height:19px; padding:0; border:1px solid #cbd5df; border-radius:7px; background:#fff; color:#98a6b5; font:900 12px/1 Manrope,sans-serif; cursor:pointer; transition:transform .14s ease,border-color .14s ease,background .14s ease,color .14s ease; }
+.device-sheet-table .device-priority-star:hover,.device-sheet-table .device-priority-star:focus-visible { outline:0; transform:translateY(-50%) scale(1.08); border-color:#d8a423; color:#c88a00; background:#fff9df; }
+.device-sheet-table .device-priority-star.active { border-color:#e2ad25; color:#9b6600; background:linear-gradient(180deg,#fff6bd,#ffd96a); box-shadow:0 2px 7px rgba(164,111,0,.18); }
+.device-sheet-table .device-priority-star > span { display:block; margin:0; color:inherit; font:900 12px/1 Manrope,sans-serif; letter-spacing:0; text-transform:none; }
+.device-sheet-table .device-priority-star > b { position:absolute; right:-5px; top:-5px; display:grid; place-items:center; min-width:11px; height:11px; padding:0 2px; border:1px solid #fff; border-radius:999px; background:#173b5c; color:#fff; font:900 6px/1 Manrope,sans-serif; }
 .device-sheet-table .device-row-remove { position:absolute; right:3px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:18px; height:18px; padding:0; border:1px solid #f2b7b2; border-radius:6px; background:#fff0ef; color:#c52d23; font:900 13px/1 Manrope,sans-serif; cursor:pointer; }
 .device-sheet-table .device-row-remove:hover,.device-sheet-table .device-row-remove:focus-visible { outline:0; border-color:#e35c50; background:#d93a2f; color:#fff; }
 .device-sheet-table input:focus { position:relative; z-index:1; box-shadow:inset 0 0 0 2px #2c6ce6; background:#f7fbff; }
@@ -1647,6 +1653,28 @@ tbody tr:last-child td { border-bottom:0; }
 .gas-assignment-summary { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; padding:10px 12px; border-radius:11px; background:#172019; color:#fff; }
 .gas-assignment-summary strong { font-size:10px; }
 .gas-assignment-summary span { color:#c5d0c8; font-size:8px; }
+.preferred-vehicle-modal { width:min(760px,calc(100vw - 28px)); }
+.preferred-vehicle-search { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:9px; margin-bottom:10px; padding:8px 10px; border:1px solid #dce4eb; border-radius:12px; background:#f7fafc; color:#5c6a78; }
+.preferred-vehicle-search svg { width:15px; height:15px; }
+.preferred-vehicle-search input { min-width:0; height:34px; border:0; outline:0; background:transparent; color:#14283a; font:750 11px/1 Manrope,sans-serif; }
+.preferred-vehicle-search small { color:#71808f; font-size:8px; font-weight:800; white-space:nowrap; }
+.preferred-vehicle-driver-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; max-height:min(430px,52vh); padding:2px; overflow:auto; overscroll-behavior:contain; }
+.preferred-vehicle-driver-list > label { display:grid; grid-template-columns:auto 28px minmax(0,1fr) auto; align-items:center; gap:8px; min-height:52px; padding:7px 9px; border:1px solid #dce4e9; border-radius:11px; background:#fff; cursor:pointer; transition:border-color .14s ease,background .14s ease,box-shadow .14s ease; }
+.preferred-vehicle-driver-list > label:hover { border-color:#9fc4df; background:#f5fbff; }
+.preferred-vehicle-driver-list > label.selected { border-color:#e0ad27; background:#fff9df; box-shadow:0 0 0 2px rgba(231,180,44,.12); }
+.preferred-vehicle-driver-list input { width:16px; height:16px; accent-color:#d49a08; }
+.preferred-driver-star { display:grid; place-items:center; width:28px; height:28px; border-radius:9px; background:#eef3f7; color:#9aa8b5; font-size:16px; }
+.preferred-vehicle-driver-list label.selected .preferred-driver-star { background:#ffdf75; color:#8c5d00; }
+.preferred-vehicle-driver-list label > span:nth-of-type(2) { display:grid; min-width:0; gap:2px; }
+.preferred-vehicle-driver-list strong { overflow:hidden; color:#1d3143; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.preferred-vehicle-driver-list small { overflow:hidden; color:#758391; font-size:8px; text-overflow:ellipsis; white-space:nowrap; }
+.preferred-vehicle-driver-list label > b { color:#7f8d9a; font-size:7px; text-transform:uppercase; letter-spacing:.05em; }
+.preferred-vehicle-driver-list label.selected > b { color:#936500; }
+.preferred-vehicle-rule { display:flex; align-items:center; gap:10px; margin-top:12px; padding:10px 12px; border:1px solid #f0db9e; border-radius:12px; background:#fffaf0; }
+.preferred-vehicle-rule > span { color:#c18400; font-size:22px; }
+.preferred-vehicle-rule > div { display:grid; gap:2px; }
+.preferred-vehicle-rule strong { color:#3a3323; font-size:9px; }
+.preferred-vehicle-rule small { color:#71684e; font-size:8px; line-height:1.4; }
 .fleet-import-sources { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:12px; }
 .fleet-source-card { border:1px solid #dfe7dd; border-radius:13px; background:#fbfcfa; padding:12px; text-align:left; cursor:pointer; transition:.16s ease; }
 .fleet-source-card:hover { border-color:#82c66b; box-shadow:0 8px 20px rgba(74,141,49,.11); transform:translateY(-1px); }
@@ -3259,3 +3287,4 @@ body .parking-top-block .charger-report-trigger{width:18px;min-width:18px}
 .review-empty{display:grid;place-content:center;gap:4px;min-height:82px;padding:12px;border:1px dashed #cbd8e0;border-radius:11px;background:#fff;text-align:center;color:#70838f;font:700 8px/1.4 Manrope,sans-serif}.review-empty strong{font-size:9px}.review-empty span{font-size:8px}
 .picklist-review-panel>.btn{justify-self:stretch;min-height:40px}.pad-confirm-button{border-color:#eab3bd;background:#fff1f4;color:#8c3446}.cortex-confirm-button{border-color:#c9b5ed;background:#f7f2ff;color:#60408f}.picklist-review-actions{justify-content:flex-end}.picklist-review-actions .btn[disabled]{opacity:.45;cursor:not-allowed}
 @media (max-width:760px){.picklist-review-grid{grid-template-columns:1fr}.pad-check-grid.compact{grid-template-columns:repeat(5,minmax(48px,1fr))}.cortex-swap-review-list{max-height:210px}.picklist-screenshot-review-modal{border-radius:18px}}
+@media (max-width:760px){.preferred-vehicle-driver-list{grid-template-columns:1fr;max-height:48vh}.preferred-vehicle-search{grid-template-columns:auto minmax(0,1fr)}.preferred-vehicle-search small{grid-column:2}}

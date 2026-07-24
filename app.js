@@ -421,6 +421,7 @@ let state = {
   pendingEquipmentIssue: null,
   gasAssignmentRoutes: [],
   gasAssignmentVans: [],
+  pendingPreferredVehicleId: '',
   deviceClearConfirm: null,
   deviceCustomRows: loadDeviceCustomRows(),
   removedDeviceVehicleIds: JSON.parse(localStorage.getItem('relayops_removed_device_vehicle_ids') || 'null') || [],
@@ -600,6 +601,44 @@ function normalizeDriverCustomFlags(values=[]) {
 }
 function driverProfileCustomFlags(name='') { return normalizeDriverCustomFlags(driverProfileEntry(name)?.profile?.customFlags||[]); }
 function driverPreferredVehicleIds(name='') { return normalizePreferredVehicleIds(driverProfileEntry(name)?.profile?.preferredEvs||[]); }
+function preferredVehicleDisplayId(value='') {
+  const key=normalizeEquipmentId(value);return /^\d+$/.test(key)?`EV${Number(key)}`:key;
+}
+function prioritizedDriversForVehicle(value='') {
+  const key=normalizeEquipmentId(value);if(!key)return [];
+  const contacts=new Map();
+  (state.driverContacts||[]).forEach(contact=>{
+    const canonical=canonicalDriverName(contact.name)||String(contact.name||'').trim(),identity=nameKey(canonical);if(identity&&!contacts.has(identity))contacts.set(identity,canonical);
+  });
+  return [...contacts.values()].filter(name=>driverPreferredVehicleIds(name).map(normalizeEquipmentId).includes(key)).sort((a,b)=>driverDisplayName(a).localeCompare(driverDisplayName(b)));
+}
+function preferredVehicleDriverOptions() {
+  const contacts=new Map();
+  (state.driverContacts||[]).forEach(contact=>{
+    const canonical=canonicalDriverName(contact.name)||String(contact.name||'').trim(),identity=nameKey(canonical);if(identity&&!contacts.has(identity))contacts.set(identity,{...contact,name:canonical});
+  });
+  return [...contacts.values()].sort((a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name)));
+}
+function openPreferredVehicleDrivers(value='') {
+  const key=normalizeEquipmentId(value);if(!key)return toast('Choose an EV first','error');
+  state.pendingPreferredVehicleId=key;return openLightweightModal('preferred-vehicle-drivers');
+}
+function filterPreferredVehicleDrivers(value='') {
+  const query=nameKey(value),rows=[...document.querySelectorAll?.('[data-preferred-vehicle-driver-row]')||[]];let visible=0;
+  rows.forEach(row=>{const show=!query||String(row.dataset.preferredVehicleDriverRow||'').includes(query);row.hidden=!show;if(show)visible++;});
+  const count=document.querySelector?.('[data-preferred-vehicle-driver-count]');if(count)count.textContent=`${visible} driver${visible===1?'':'s'} shown`;
+}
+function savePreferredVehicleDrivers() {
+  const vehicle=normalizeEquipmentId(state.pendingPreferredVehicleId),selected=new Set([...document.querySelectorAll?.('[data-preferred-vehicle-driver]:checked')||[]].map(input=>nameKey(input.value)).filter(Boolean));
+  if(!vehicle)return toast('EV preference could not be saved','error');
+  Object.values(state.driverProfiles||{}).forEach(profile=>{profile.preferredEvs=normalizePreferredVehicleIds(profile.preferredEvs||[]).filter(value=>normalizeEquipmentId(value)!==vehicle);});
+  preferredVehicleDriverOptions().forEach(contact=>{
+    const entry=ensureDriverProfile(contact);if(!entry||!selected.has(nameKey(entry.profile.canonical)))return;
+    entry.profile.preferredEvs=normalizePreferredVehicleIds([vehicle,...(entry.profile.preferredEvs||[])]);
+    entry.profile.updatedAt=new Date().toISOString();
+  });
+  const count=selected.size,label=preferredVehicleDisplayId(vehicle);state.pendingPreferredVehicleId='';state.modal=null;persist();render();toast(count?`${label} prioritized for ${count} driver${count===1?'':'s'}`:`${label} driver priorities cleared`);
+}
 function driverPreferredVehiclesHtml(name='') {
   const vehicles=driverPreferredVehicleIds(name);if(!vehicles.length)return '';
   return `<div class="driver-preferred-vehicles" title="Automatic assignment uses the first verified-safe available preference"><span>Preferred vans</span><strong>${vehicles.map(value=>/^\d+$/.test(value)?`EV${value}`:value).map(esc).join(' · ')}</strong></div>`;
@@ -1753,11 +1792,15 @@ function syncGasVehiclesToParking(vehicles=[]) {
 function deviceSheetRows(section='') {
   const details=deviceSheetDetails();
   const base=deviceSheetBaseIds(section).map(label=>({label,fixed:true})),custom=deviceSheetCustomRows(section);
+  const priorityByVehicle=new Map();
+  if(section==='ev')preferredVehicleDriverOptions().forEach(contact=>driverPreferredVehicleIds(contact.name).forEach(value=>{const key=normalizeEquipmentId(value),names=priorityByVehicle.get(key)||[];names.push(contact.name);priorityByVehicle.set(key,names);}));
   return [...base,...custom].sort(deviceVehicleLabelCompare).map(row=>{
     const label=String(row.label||''),key=normalizeEquipmentId(label),item=row.fixed?(details[key]||{}):{...row,device:row.device||details[key]?.device||'',portable:row.portable||details[key]?.portable||''};
-  const issue=vehicleIssueForEquipmentId(label),rowClass=issue?.type==='grounded'?'grounded-vehicle-row':issue?.type==='battery'?'low-battery-vehicle-row':issue?.type==='reported'?'reported-vehicle-row':'';
+    const issue=vehicleIssueForEquipmentId(label),rowClass=issue?.type==='grounded'?'grounded-vehicle-row':issue?.type==='battery'?'low-battery-vehicle-row':issue?.type==='reported'?'reported-vehicle-row':'';
+    const priorityDrivers=(priorityByVehicle.get(key)||[]).sort((a,b)=>driverDisplayName(a).localeCompare(driverDisplayName(b))),priorityTitle=priorityDrivers.length?`${priorityDrivers.map(driverDisplayName).join(', ')} prioritized for ${label}`:`Choose prioritized driver for ${label}`;
+    const priorityButton=section==='ev'?`<button type="button" class="device-priority-star ${priorityDrivers.length?'active':''}" data-action="open-preferred-vehicle-drivers" data-device-id="${esc(label)}" aria-label="${esc(priorityTitle)}" title="${esc(priorityTitle)}"><span aria-hidden="true">★</span>${priorityDrivers.length?`<b>${priorityDrivers.length}</b>`:''}</button>`:'';
     const removeButton=`<button type="button" class="device-row-remove" data-action="remove-device-vehicle-row" data-device-section="${esc(section)}" data-device-id="${esc(label)}" ${row.uid?`data-device-custom-uid="${esc(row.uid)}"`:''} aria-label="Remove ${esc(label||'vehicle')} from the list" title="Remove ${esc(label||'vehicle')}">×</button>`;
-    const vanCell=row.fixed?`<th class="fixed-van-cell"><span class="device-van-label">${esc(label)}</span>${removeButton}${issue?`<span>${esc(issue.label)}</span>`:''}</th>`:`<th class="custom-van-cell"><input class="device-sheet-van-input" aria-label="${esc(section)} custom van" data-device-custom-uid="${esc(row.uid)}" data-device-custom-field="label" value="${esc(label)}" placeholder="Van name">${removeButton}${issue?`<span>${esc(issue.label)}</span>`:''}</th>`;
+    const vanCell=row.fixed?`<th class="fixed-van-cell ${section==='ev'?'has-priority-control':''}">${priorityButton}<span class="device-van-label">${esc(label)}</span>${removeButton}${issue?`<span>${esc(issue.label)}</span>`:''}</th>`:`<th class="custom-van-cell ${section==='ev'?'has-priority-control':''}">${priorityButton}<input class="device-sheet-van-input" aria-label="${esc(section)} custom van" data-device-custom-uid="${esc(row.uid)}" data-device-custom-field="label" value="${esc(label)}" placeholder="Van name">${removeButton}${issue?`<span>${esc(issue.label)}</span>`:''}</th>`;
     const field=(name,max)=>{const value=String(item[name]||''),equipmentIssue=equipmentIssueFor(name,value);return `<td class="device-equipment-cell ${equipmentIssue?'has-equipment-issue':''}"><input aria-label="${esc(label||'New van')} ${name}" ${row.fixed?`data-device-sheet-id="${esc(key)}" data-device-sheet-field="${name}"`:`data-device-custom-uid="${esc(row.uid)}" data-device-custom-field="${name}"`} inputmode="numeric" maxlength="${max}" value="${esc(value)}" placeholder="—">${value?`<button type="button" class="equipment-issue-trigger ${equipmentIssue?'active':''}" data-action="open-equipment-issue" data-equipment-type="${name}" data-equipment-id="${esc(value)}" aria-label="Report or review ${esc(name)} ${esc(value)} issue">${equipmentIssue?'⚠':'!'}</button>`:''}${equipmentIssuePopoverHtml(name,value)}</td>`;};
     return `<tr class="${rowClass}">${vanCell}${field('device',3)}${field('portable',4)}</tr>`;
   }).join('');
@@ -3457,10 +3500,15 @@ function modal() {
     const payload=morningSheetsConnectorPayload(), rows=payload.rows.length, sections=payload.sections.length;
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="morning-sheets-connector-title"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS CONNECTOR</span><h2 id="morning-sheets-connector-title">Send values into the Ops Log</h2><p>The connector writes only the Morning Sheet values into the fixed OPS LOG 2026 cells. It does not resize columns, change fonts, recolor cells, rebuild checkboxes, or modify the operations columns.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheets-connector-status ${state.morningSheetsEndpoint?'ready':'warn'}"><strong>${state.morningSheetsEndpoint?'Connector saved · update Apps Script once':'Connector not set yet'}</strong><span>${state.morningSheetsEndpoint?`Install the values-only OPS LOG script, redeploy it, then keep using this endpoint. Target: ${esc(payload.sheetName)} or ${esc(payload.sheetNameCandidates?.[1]||payload.sheetName)}.`:'Copy the values-only Apps Script, deploy it as a web app, then paste the web app URL below.'}</span></div>${morningSheetsPreflightHtml(payload)}${morningSheetsHandoffProofHtml(payload)}${morningSheetsRowAuditHtml(payload)}${morningSheetsLiveProofHtml(payload)}${morningSheetsReceiptHtml()}<div class="sheets-connector-grid"><div class="connector-step"><b>1</b><strong>Replace the old Apps Script</strong><span>Delete the previous connector code, paste the values-only OPS LOG version, save, then deploy a new Web app version.</span><button class="btn small lime" data-action="copy-morning-apps-script">${ICONS.copy} COPY REVISED APPS SCRIPT</button><button class="btn small ghost" data-action="copy-morning-sheets-setup">Copy setup checklist</button><a class="btn small ghost" href="${MORNING_APPS_SCRIPT_URL}" download>Download .gs file</a></div><div class="connector-step"><b>2</b><strong>Paste web app endpoint</strong><span>Use the Apps Script deployment URL. Do not paste Google passwords or Amazon/Rivian credentials.</span><input id="morning-sheets-endpoint" value="${esc(state.morningSheetsEndpoint)}" placeholder="https://script.google.com/macros/s/.../exec"><button class="btn small" data-action="save-morning-sheets-connector">Save endpoint</button><button class="btn small ghost" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button></div><div class="connector-step"><b>3</b><strong>Send checked sheet</strong><span>Values only: Wave/Driver/Route/Staging/Pad/EV/Device/Portable, Stop Count, Package Count, and Planned RTS. ${rows} logical rows · ${sections} sections.</span><button class="btn small ghost" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn small primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send to Google Sheet</button><button class="btn small ghost" data-action="copy-morning-sheets-verify">${ICONS.copy} Copy verify checklist</button></div></div>${state.morningSheetsLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Connector note</strong><span>${esc(state.morningSheetsLastError)}</span></div></div>`:''}<details class="sheets-advanced-preview"><summary>Advanced transfer preview — do not paste into Apps Script</summary><div class="sheets-connector-preview"><strong>Dashboard data JSON</strong><span>This is only a preview of the filtered wave data. It is not Apps Script code.</span><textarea readonly>${esc(JSON.stringify(payload,null,2).slice(0,1800))}${JSON.stringify(payload).length>1800?'\n...':''}</textarea></div></details><div class="modal-actions"><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open template</a><a class="btn" href="${MORNING_APPS_SCRIPT_URL}" download>Download script</a><button class="btn lime" data-action="copy-morning-apps-script">${ICONS.copy} COPY REVISED APPS SCRIPT</button><button class="btn" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button><button class="btn" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send now</button></div><p class="upload-help">Values map into fixed cells only: A/B/C/D/E/F/G/H, P/Q, and U. All other Ops Log cells and formatting stay untouched.</p></div></div></div>`;
   }
+  if (state.modal === 'preferred-vehicle-drivers') {
+    const vehicle=normalizeEquipmentId(state.pendingPreferredVehicleId),label=preferredVehicleDisplayId(vehicle),selected=new Set(prioritizedDriversForVehicle(vehicle).map(nameKey)),drivers=preferredVehicleDriverOptions();
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal preferred-vehicle-modal" role="dialog" aria-modal="true" aria-labelledby="preferred-vehicle-title"><div class="modal-head"><div><span class="eyebrow">PRIORITIZED DRIVER</span><h2 id="preferred-vehicle-title">Who should receive ${esc(label)}?</h2><p>Star one or more drivers. Automatic van buttons honor this preference only while the EV is active, operational, issue-free, sufficiently charged, and available.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="preferred-vehicle-search">${ICONS.search||'⌕'}<input type="search" data-preferred-vehicle-search placeholder="Search Drivers & Team" autocomplete="off" autofocus><small data-preferred-vehicle-driver-count>${drivers.length} drivers shown</small></label><div class="preferred-vehicle-driver-list">${drivers.length?drivers.map(driver=>{const checked=selected.has(nameKey(driver.name));return `<label data-preferred-vehicle-driver-row="${esc(nameKey(`${driverDisplayName(driver.name)} ${driver.name} ${driver.role||''}`))}" class="${checked?'selected':''}"><input type="checkbox" data-preferred-vehicle-driver value="${esc(driver.name)}" ${checked?'checked':''}><span class="preferred-driver-star">★</span><span><strong>${esc(driverDisplayName(driver.name))}</strong><small>${esc(driver.role||'Delivery Associate')}</small></span><b>${checked?'Prioritized':'Select'}</b></label>`;}).join(''):`<div class="review-empty"><strong>No Drivers & Team records yet</strong><span>Import your driver list first, then return to this star.</span></div>`}</div><div class="preferred-vehicle-rule"><span>★</span><div><strong>Safe assignment always wins</strong><small>If several prioritized drivers are on the sheet, the earliest route receives ${esc(label)}. Every other driver falls back to the next verified-safe van.</small></div></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="save-preferred-vehicle-drivers" ${drivers.length?'':'disabled'}>Save ${esc(label)} priority</button></div></div></div></div>`;
+  }
   if (state.modal === 'gas-assignment') {
     const targets=morningAssignmentTargets();
     const selectedRoutes=new Set(state.gasAssignmentRoutes||[]), selectedVans=new Set(state.gasAssignmentVans||[]);
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="gas-assignment-title"><div class="modal-head"><div><span class="eyebrow">GAS VEHICLE ASSIGNMENT</span><h2 id="gas-assignment-title">Choose the driver boxes</h2><p>Select only the drivers receiving gas vans, then select the available gas vehicles.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="gas-assignment-steps"><span><b>1</b>Choose drivers</span><span><b>2</b>Choose gas vans</span><span><b>3</b>Assign</span></div><strong class="gas-section-title">Drivers on the visible morning sheet</strong><div class="gas-choice-grid drivers">${targets.map(route=>`<button class="gas-choice ${selectedRoutes.has(route.route)?'selected':''}" data-action="toggle-gas-driver" data-route="${esc(route.route)}"><span>${selectedRoutes.has(route.route)?'✓':''}</span><b>${esc(route.driver||'Unassigned driver')}</b><small>${esc(route.route)} · ${esc(route.wave)}</small></button>`).join('')}</div><strong class="gas-section-title">Available gas vehicles</strong><div class="gas-choice-grid vans">${gasVehicleIds.map(van=>{const ready=Boolean(equipmentAssignmentFor(van));return `<button class="gas-choice ${selectedVans.has(van)?'selected':''}" data-action="toggle-gas-van" data-van="${van}" ${ready?'':'disabled'}><span>${selectedVans.has(van)?'✓':''}</span><b>${van}</b><small>${ready?'Device + Portable ready':'Enter both Device + Portable first'}</small></button>`;}).join('')}</div><div class="gas-assignment-summary"><strong>${selectedRoutes.size} driver${selectedRoutes.size===1?'':'s'} selected</strong><span>${selectedVans.size} assignment-ready gas van${selectedVans.size===1?'':'s'} selected · vehicles are assigned in the displayed order</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-gas-assignment" ${selectedRoutes.size&&selectedVans.size?'':'disabled'}>Assign selected gas vans</button></div></div></div></div>`;
+    const gasIds=deviceSheetAllIds('gas');
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="gas-assignment-title"><div class="modal-head"><div><span class="eyebrow">GAS VEHICLE ASSIGNMENT</span><h2 id="gas-assignment-title">Choose the driver boxes receiving gas vans</h2><p>No driver is selected automatically. Check only the names you want, review the safe gas vans, then assign.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="gas-assignment-steps"><span><b>1</b>Choose drivers</span><span><b>2</b>Review safe gas vans</span><span><b>3</b>Assign</span></div><strong class="gas-section-title">Drivers on the visible morning sheet</strong><div class="gas-choice-grid drivers">${targets.map(route=>`<button class="gas-choice ${selectedRoutes.has(route.route)?'selected':''}" data-action="toggle-gas-driver" data-route="${esc(route.route)}"><span>${selectedRoutes.has(route.route)?'✓':''}</span><b>${esc(route.driver||'Unassigned driver')}</b><small>${esc(route.route)} · ${esc(route.wave)}</small></button>`).join('')}</div><strong class="gas-section-title">Verified gas vans · safe vans start selected</strong><div class="gas-choice-grid vans">${gasIds.map(van=>{const assignment=equipmentAssignmentFor(van),safe=Boolean(assignment&&fleetVehicleAssignmentEligibility(van).eligible&&isGasFleetVehicle(fleetVehicleForEquipmentId(van)||{}));return `<button class="gas-choice ${selectedVans.has(van)?'selected':''}" data-action="toggle-gas-van" data-van="${esc(van)}" ${safe?'':'disabled'}><span>${selectedVans.has(van)?'✓':''}</span><b>${esc(van)}</b><small>${safe?'Safe · Device ready':assignment?'Fleet Health verification needed':'Enter a Device first'}</small></button>`;}).join('')}</div><div class="gas-assignment-summary"><strong>${selectedRoutes.size} driver${selectedRoutes.size===1?'':'s'} selected</strong><span>${selectedVans.size} verified gas van${selectedVans.size===1?'':'s'} ready · assigned in the displayed order</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-gas-assignment" ${selectedRoutes.size&&selectedVans.size?'':'disabled'}>Assign gas vans to selected drivers</button></div></div></div></div>`;
   }
   if (state.modal === 'equipment') {
     const count=state.equipmentImport?Object.keys(state.equipmentImport.details||{}).length:0;
@@ -4507,6 +4555,8 @@ function bindLightweightModal(backdrop) {
   bindActionControls(backdrop);
   bindUploadDropZone(backdrop);
   const vtoRouteSearch=backdrop.querySelector?.('#vto-route-swap-search');if(vtoRouteSearch)vtoRouteSearch.addEventListener('input',()=>filterVtoRouteSwapOptions(vtoRouteSearch));
+  const preferredVehicleSearch=backdrop.querySelector?.('[data-preferred-vehicle-search]');if(preferredVehicleSearch)preferredVehicleSearch.addEventListener('input',()=>filterPreferredVehicleDrivers(preferredVehicleSearch.value));
+  backdrop.querySelectorAll?.('[data-preferred-vehicle-driver]').forEach(input=>input.addEventListener('change',()=>{const row=input.closest?.('label');row?.classList?.toggle('selected',input.checked);const status=row?.querySelector?.(':scope > b');if(status)status.textContent=input.checked?'Prioritized':'Select';}));
   backdrop.querySelectorAll?.('[data-screenshot-review-pad]').forEach(el=>{
     el.addEventListener('focus',()=>{beginSheetInputHistory(el,`Edit ${el.dataset.screenshotReviewPad} pad from screenshot review`,'both');el.select?.();});
     el.addEventListener('input',()=>saveScreenshotReviewPad(el));
@@ -4533,6 +4583,7 @@ function closeLightweightModal() {
   if(state.modal==='route-trainer')state.pendingRouteTrainer=null;
   if(state.modal==='route-vto-swap')state.pendingRouteVtoSwap=null;
   if(state.modal==='helper-match')state.pendingHelperMatch=null;
+  if(state.modal==='preferred-vehicle-drivers')state.pendingPreferredVehicleId='';
   state.modal=null;document.querySelector?.('.modal-backdrop')?.remove?.();modalWasOpen=false;if(wasOpen)restoreModalFocus();return true;
 }
 function updateGlobalSearchResults() {
@@ -4937,6 +4988,8 @@ function bind() {
   document.querySelectorAll('[data-team-search]').forEach(el=>el.addEventListener('input',()=>filterTeamDirectorySoon(el.value)));
   document.querySelectorAll('[data-roster-search]').forEach(el=>el.addEventListener('input',()=>filterScheduledRosterSoon(el)));
   const vtoRouteSearch=document.getElementById('vto-route-swap-search');if(vtoRouteSearch)vtoRouteSearch.addEventListener('input',()=>filterVtoRouteSwapOptions(vtoRouteSearch));
+  const preferredVehicleSearch=document.querySelector?.('[data-preferred-vehicle-search]');if(preferredVehicleSearch)preferredVehicleSearch.addEventListener('input',()=>filterPreferredVehicleDrivers(preferredVehicleSearch.value));
+  document.querySelectorAll('[data-preferred-vehicle-driver]').forEach(input=>input.addEventListener('change',()=>{const row=input.closest?.('label');row?.classList?.toggle('selected',input.checked);const status=row?.querySelector?.(':scope > b');if(status)status.textContent=input.checked?'Prioritized':'Select';}));
   document.querySelectorAll('[data-picklist-calloff-reason]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist call-off reason'));el.addEventListener('input',()=>{state.callOffReasons[el.dataset.picklistCalloffReason]=el.value;persistSoon();});el.addEventListener('change',()=>{commitSheetInputHistory(el);persist();});});
   document.querySelectorAll('[data-picklist-backup]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Edit Picklist backup'));el.addEventListener('input',()=>saveOpeningPicklistBackup(el.dataset.picklistBackup,el.value));el.addEventListener('change',()=>{commitSheetInputHistory(el);persist();});});
   document.querySelectorAll('[data-picklist-calloff-name]').forEach(el=>{el.addEventListener('focus',()=>beginSheetInputHistory(el,'Rename Picklist call off'));el.addEventListener('change',()=>{commitSheetInputHistory(el);renameOpeningPicklistCalloff(el.dataset.picklistCalloffName,el.value);});});
@@ -6165,8 +6218,8 @@ function action(name,el) {
   if (name==='copy-open-charger-slack') return copyChargerReportAndOpenSlack();
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return renderLightweightModal(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal'&&['picklist-screenshot-review','screenshot','vto-route-swap','roster-destination','roster-swap','route-trainer','route-vto-swap','helper-match','early-calloff-reminder','import'].includes(state.modal)) return closeLightweightModal();
-  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingRouteTrainer=null;state.pendingRouteVtoSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};state.fleetRefreshPreview=null;return render(); }
+  if (name==='close-modal'&&['picklist-screenshot-review','screenshot','vto-route-swap','roster-destination','roster-swap','route-trainer','route-vto-swap','helper-match','preferred-vehicle-drivers','early-calloff-reminder','import'].includes(state.modal)) return closeLightweightModal();
+  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingRouteTrainer=null;state.pendingRouteVtoSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingPreferredVehicleId='';state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=importAcceptForPurpose(state.importPurpose);return fileInput.click(); }
   if (name==='schedule-import') { state.scheduleImportDestination=state.page==='rostering'?'rostering':'roster';state.importPurpose='schedule';fileInput.accept='.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf';return fileInput.click(); }
   if (name==='rostering-import-screenshot') { state.importPurpose='rostering-screenshot';fileInput.accept=importAcceptForPurpose('rostering-screenshot');return fileInput.click(); }
@@ -6292,6 +6345,8 @@ function action(name,el) {
   if (name==='clear-morning-evs') return clearMorningVehicleAssignments();
   if (name==='assign-vans-by-parking') return assignVansByParking();
   if (name==='assign-gas-vans') return openGasVehicleAssignment();
+  if (name==='open-preferred-vehicle-drivers') return openPreferredVehicleDrivers(el.dataset.deviceId||'');
+  if (name==='save-preferred-vehicle-drivers') return savePreferredVehicleDrivers();
   if (name==='toggle-gas-driver') return toggleGasDriver(el.dataset.route||'');
   if (name==='toggle-gas-van') return toggleGasVan(el.dataset.van||'');
   if (name==='apply-gas-assignment') return applyGasVehicleAssignment();
@@ -7673,19 +7728,25 @@ function assignVansByParking() {
   const targets=state.morningRoutes.filter(route=>route.dsp===state.dspCode&&route.route&&!String(route.route).startsWith('__blank_')).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||routeCompare(a.route,b.route));
   if(!targets.length)return toast('No Morning Sheet drivers to assign','error');
   const grounded=groundedParkingIds(),values=(zones,reverse=false)=>[...new Set(zones.flatMap(zone=>{const slots=parkingSlots(zone);return reverse?[...slots].reverse():slots;}).map(parkedVanId).filter(id=>id&&!grounded.has(id)&&fleetVehicleAssignmentEligibility(id).eligible&&equipmentAssignmentFor(id)))];
-  const west=values(['west']),east=values(['east'],true),remainingHealthy=values(['northRight','northLeft','street','streetLower','west','east','gas']);
+  const west=values(['west']),east=values(['east'],true),remainingHealthy=values(['northRight','northLeft','street','streetLower','west','east','gas']),allHealthy=[...new Set([...west,...east,...remainingHealthy])];
   const used=new Set(),cursors=new Map(),take=pool=>{let index=cursors.get(pool)||0,id='';while(index<pool.length&&!id){const candidate=pool[index++];if(!used.has(candidate))id=candidate;}cursors.set(pool,index);if(id)used.add(id);return id;};
   targets.forEach(clearEquipmentForRoute);
-  const waves=[...new Set(targets.map(route=>route.wave))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)),assigned=[];targets.forEach(route=>{const waveIndex=Math.max(0,waves.indexOf(route.wave));let van=waveIndex<=1?take(west):waveIndex<=3?take(east):take(remainingHealthy);if(!van)van=take(remainingHealthy);if(van){route.ev=van;fillEquipmentForRoute(route);assigned.push(van);}});
+  const assigned=[],preferredRoutes=new Set();
+  targets.forEach(route=>{
+    const preferred=preferredVehicleKeysForRoute(route),van=preferred.map(key=>allHealthy.find(id=>normalizeEquipmentId(id)===key&&!used.has(id))).find(Boolean);
+    if(!van)return;used.add(van);route.ev=van;fillEquipmentForRoute(route);assigned.push(van);preferredRoutes.add(route);
+  });
+  const waves=[...new Set(targets.map(route=>route.wave))].sort((a,b)=>waveMinutes(a)-waveMinutes(b));targets.forEach(route=>{if(preferredRoutes.has(route))return;const waveIndex=Math.max(0,waves.indexOf(route.wave));let van=waveIndex<=1?take(west):waveIndex<=3?take(east):take(remainingHealthy);if(!van)van=take(remainingHealthy);if(van){route.ev=van;fillEquipmentForRoute(route);assigned.push(van);}});
   persist();render();
   const shortfall=targets.length-assigned.length;
-  toast(shortfall?`${assigned.length}/${targets.length} vans assigned by parking order · ${shortfall} left blank because no additional verified safe parked van was available`:`${assigned.length} verified safe vans assigned by parking order${grounded.size?` · ${grounded.size} grounded skipped`:''}`,shortfall?'error':'');
+  const preferredText=preferredRoutes.size?` · ${preferredRoutes.size} driver preference${preferredRoutes.size===1?'':'s'} honored`:'';
+  toast(shortfall?`${assigned.length}/${targets.length} vans assigned by parking order${preferredText} · ${shortfall} left blank because no additional verified safe parked van was available`:`${assigned.length} verified safe vans assigned by parking order${preferredText}${grounded.size?` · ${grounded.size} grounded skipped`:''}`,shortfall?'error':'');
 }
 function openGasVehicleAssignment() {
   const targets=morningAssignmentTargets();
   if(!targets.length)return toast('No visible driver rows to assign gas vehicles','error');
   state.gasAssignmentRoutes=[];
-  state.gasAssignmentVans=[];
+  state.gasAssignmentVans=deviceSheetAllIds('gas').filter(van=>equipmentAssignmentFor(van)&&fleetVehicleAssignmentEligibility(van).eligible&&isGasFleetVehicle(fleetVehicleForEquipmentId(van)||{}));
   state.modal='gas-assignment';
   render();
 }
@@ -7697,10 +7758,10 @@ function toggleGasDriver(route='') {
   render();
 }
 function toggleGasVan(van='') {
-  if(!gasVehicleIds.includes(van)||!equipmentAssignmentFor(van))return;
+  const ids=deviceSheetAllIds('gas');if(!ids.includes(van)||!equipmentAssignmentFor(van)||!fleetVehicleAssignmentEligibility(van).eligible)return;
   const selected=new Set(state.gasAssignmentVans||[]);
   selected.has(van)?selected.delete(van):selected.add(van);
-  state.gasAssignmentVans=gasVehicleIds.filter(id=>selected.has(id));
+  state.gasAssignmentVans=ids.filter(id=>selected.has(id));
   render();
 }
 function applyGasVehicleAssignment() {
