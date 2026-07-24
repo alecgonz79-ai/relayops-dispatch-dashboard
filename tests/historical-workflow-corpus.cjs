@@ -246,7 +246,7 @@ async function testTemplateEquipmentPayloadAndPickerScopes() {
   state.importPurpose = 'itinerary-rts'; context.action('choose-file', {});
   assert(fileInput.accept.includes('.xlsx') && !fileInput.accept.includes('.csv'), 'RTS picker must be XLSX-only');
   context.action('driver-import', {});
-  assert(fileInput.accept.includes('text/plain') && fileInput.accept.includes('application/octet-stream'), 'Driver picker must visibly allow extensionless AssociateData text files');
+  assert(fileInput.accept.includes('text/plain') && fileInput.accept.includes('application/octet-stream') && fileInput.accept.includes('.pdf') && fileInput.accept.includes('application/pdf'), 'Driver picker must visibly allow extensionless AssociateData text files and PDFs');
 
   state.morningRoutes = [
     { dsp:'LLOL', driver:'Primary Driver + Helper Name', route:'CX101', wave:'11:15 AM', staging:'STG.V.1', padOverride:'A', ev:'1', deviceName:'1', portable:'2', stops:180, packages:320, duration:480, plannedRts:'9:15 PM', plannedRtsSource:'itinerary', preWhip:true, postWhip:false },

@@ -39,7 +39,7 @@ vm.runInContext(`
 
 assert(context.__groups.vto2.join(',')==='Rescue Backup','Rescue must be grouped as VTO 2');
 assert(context.__groups.vto4.join(',')==='Actual Associate','Delivery Associate must be grouped as VTO 4');
-assert(context.__groups.other.join(',')==='Fleet Lead,Midshift Support','Every non-Rescue/Delivery Associate shift must be grouped under Other roles');
+assert(context.__groups.other.join(',')==='Fleet Lead,Midshift Support','Midshift and non-route roles must stay grouped under Other roles');
 assert(context.__paycom.includes('Add to roster')&&context.__paycom.includes('Swap with rostered driver')&&!context.__paycom.includes('Keep as VTO 2'),'PAYCOM route-driver cards need Add and Swap controls');
 assert(context.__backup.includes('Other roles')&&context.__backup.includes('Fleet Lead')&&context.__backup.includes('Midshift Support')&&context.__backup.includes('Swap with rostered driver'),'Unrostered backup list lost Other roles or swap controls');
 assert(context.__swap.name==='Rescue Backup'&&context.__swap.count===1&&!context.__swap.old,'Roster swap must replace one rostered driver without duplication');

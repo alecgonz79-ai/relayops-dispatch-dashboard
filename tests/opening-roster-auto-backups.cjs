@@ -52,10 +52,9 @@ function testAutomaticVtoDestinations() {
   assert(context.__html.includes('roster-bottom-destination scroll-roster') && context.__html.includes('data-roster-destination="vto2"') && context.__html.includes('data-roster-destination="vto4"'), 'VTO destination boxes must stay scrollable and expose destination actions');
   assert(context.__html.includes('data-action="open-roster-destination-actions"'), 'Non-PAYCOM roster names must open the destination action popup');
   const paycom = context.__html.split('All Scheduled driver shifts (PAYCOM)')[1].split('scheduled-section called-off')[0];
-  assert(paycom.includes('Unrostered Rescue') && paycom.includes('Unrostered Associate') && paycom.includes('Midshift Support') && paycom.includes('Routed Rescue'), 'All Scheduled must retain every imported driver even after VTO or route placement');
+  assert(paycom.includes('Unrostered Rescue') && paycom.includes('Unrostered Associate') && !paycom.includes('Midshift Support') && paycom.includes('Routed Rescue'), 'All Scheduled must retain route-eligible imported drivers while excluding Midshift');
   assert(paycom.includes('data-paycom-tab="scheduled"') && paycom.includes('data-paycom-tab="unmarked"') && paycom.includes('data-paycom-tab="marked"') && paycom.includes('All Scheduled') && paycom.includes('Unmarked Drivers') && paycom.includes('Marked Drivers'), 'PAYCOM must expose All Scheduled, Unmarked Drivers, and Marked Drivers inner tabs');
-  assert(!paycom.includes('Pilot Rescue Support') && !paycom.includes('Modified Duty Support') && context.__html.includes('Pilot Rescue Support') && context.__html.includes('Modified Duty Support'), 'Pilot/Rescues and Modified Duty must move out of the driver PAYCOM list and into Other scheduled shifts');
-  assert(!paycom.includes('roster-driver-action-trigger') || !paycom.match(/roster-driver-action-trigger[\s\S]{0,250}Midshift Support/), 'PAYCOM names must remain plain and must not open the destination popup');
+  assert(!paycom.includes('Pilot Rescue Support') && !paycom.includes('Modified Duty Support') && context.__html.includes('Pilot Rescue Support') && context.__html.includes('Modified Duty Support') && context.__html.includes('Midshift Support'), 'Midshift, Pilot/Rescues, and Modified Duty must move out of the driver PAYCOM list and into Other scheduled shifts');
 }
 
 function testMarkedDriversInnerTab() {
@@ -93,15 +92,16 @@ function testMarkedDriversInnerTab() {
     action('opening-paycom-tab',{dataset:{paycomTab:'unmarked'}});globalThis.__tab=state.openingRosterPaycomTab;globalThis.__saved=localStorage.getItem('relayops_opening_roster_paycom_tab');globalThis.__unmarkedHtml=openingRosterScheduleHtml();globalThis.__unmarkedPaycom=globalThis.__unmarkedHtml.split('All Scheduled driver shifts (PAYCOM)')[1].split('scheduled-section called-off')[0];
   `, context);
   const statusByName = Object.fromEntries(context.__marked.map(row => [row.name, row.statusLabel]));
+  const markedPaycom = context.__html.split('All Scheduled driver shifts (PAYCOM)')[1].split('scheduled-section called-off')[0];
   assert(statusByName['Route Driver'] === 'On Route' && statusByName['Adhoc Driver'] === 'Adhoc', 'Marked Drivers must identify route and Adhoc placements');
   assert(statusByName['Backup Rescue'] === 'VTO 2' && statusByName['Backup Associate'] === 'VTO 4', 'Marked Drivers must distinguish VTO 2 and VTO 4');
   assert(statusByName['Reduction Driver'] === 'Reduction' && statusByName['Calloff Driver'] === 'Called Off' && statusByName['Stay Home Driver'] === 'Told To Stay Home', 'Marked Drivers must show reduction, call-off, and stay-home destinations');
   assert(statusByName['Helper Driver'] === 'Helper' && !statusByName['Plain Midshift'], 'Helper must appear while an unmarked scheduled shift stays out of Marked Drivers');
   assert(context.__html.includes('data-paycom-pane="marked"') && context.__html.includes('aria-selected="true" data-action="opening-paycom-tab" data-paycom-tab="marked"'), 'Marked Drivers must render as the active accessible inner tab');
   ['marked-driver-route','marked-driver-adhoc','marked-driver-vto2','marked-driver-vto4','marked-driver-reduction','marked-driver-called-off','marked-driver-stay-home','marked-driver-helper'].forEach(className=>assert(context.__html.includes(className), `${className} color status is missing`));
-  assert(!context.__html.includes('Plain Midshift'), 'Marked Drivers pane must omit unmarked scheduled shifts');
-  assert(context.__unmarked.length === 1 && context.__unmarked[0].name === 'Plain Midshift', 'Unmarked Drivers must identify every route-eligible PAYCOM shift without a destination');
-  assert(context.__unmarkedPaycom.includes('data-paycom-pane="unmarked"') && context.__unmarkedPaycom.includes('Plain Midshift') && !context.__unmarkedPaycom.includes('Route Driver'), 'Unmarked Drivers pane must show only drivers still needing a roster decision');
+  assert(!markedPaycom.includes('Plain Midshift') && context.__html.includes('Plain Midshift'), 'Marked Drivers pane must omit Midshift while Other Scheduled Shifts retains it');
+  assert(context.__unmarked.length === 0, 'Midshift must not appear as an unmarked route-eligible driver');
+  assert(context.__unmarkedPaycom.includes('data-paycom-pane="unmarked"') && context.__unmarkedPaycom.includes('Every route-eligible scheduled driver has been marked.') && !context.__unmarkedPaycom.includes('Plain Midshift') && !context.__unmarkedPaycom.includes('Route Driver'), 'Unmarked Drivers pane must exclude Midshift and show only route-eligible drivers still needing a decision');
   assert(context.__tab === 'unmarked' && context.__saved === 'unmarked', 'Unmarked PAYCOM inner-tab selection must persist locally');
 }
 

@@ -772,6 +772,35 @@ function driverContactsFromRows(rows=[]) {
   });
   return contacts;
 }
+function driverContactNameFromPdfLine(value='') {
+  let text=String(value||'').replace(/\S+@\S+\.\S+/g,' ').replace(/(?:\+?1[\s.-]?)?(?:\(\s*\d{3}\s*\)|\d{3})[\s.-]*\d{3}[\s.-]*\d{4}/g,' ').replace(/\s+/g,' ').trim();
+  const transporter=text.match(/\bA[A-Z0-9]{9,19}\b/i);if(transporter)text=text.slice(0,transporter.index).trim();
+  text=text.split(/\b(?:Helper|Driver|Rescue|Delivery Associate|Standard Parcel|Electric Vehicle|Step Van|Active|Inactive)\b/i)[0].trim();
+  text=text.replace(/^[^A-Za-z]+|[^A-Za-z.'’ -]+$/g,'').replace(/\s+/g,' ').trim();
+  if(!text||text.length>72||/\d|@/.test(text)||/\b(?:name and id|personal phone|transporter|position|qualification|expiration|status|associate data)\b/i.test(text))return '';
+  const words=text.split(/\s+/).filter(Boolean);
+  if(words.length<2||words.length>7||words.some(word=>!/^[A-Za-z][A-Za-z.'’ -]*$/.test(word)))return '';
+  return /^[A-Z .'-]+$/.test(text)?text.toLowerCase().replace(/\b[a-z]/g,char=>char.toUpperCase()):text;
+}
+function driverContactsFromText(text='') {
+  const raw=String(text||'').replace(/\r/g,'').trim();if(!raw)return [];
+  const tableRows=rowsFromPastedTable(raw),tableContacts=driverContactsFromRows(tableRows);
+  if(tableContacts.length)return tableContacts;
+  const csvContacts=driverContactsFromRows(parseCSV(raw));if(csvContacts.length)return csvContacts;
+  const lines=raw.split('\n').map(line=>line.replace(/\s+/g,' ').trim()).filter(Boolean),contacts=[],seen=new Set();
+  const phonePattern=/(?:\+?1[\s.-]?)?(?:\(\s*\d{3}\s*\)|\d{3})[\s.-]*\d{3}[\s.-]*\d{4}/g;
+  lines.forEach((line,index)=>{
+    const phones=line.match(phonePattern)||[];if(!phones.length)return;
+    phones.forEach(phoneValue=>{
+      const sameLineBeforePhone=line.slice(0,Math.max(0,line.indexOf(phoneValue))),candidates=[{text:sameLineBeforePhone,index},...Array.from({length:Math.min(5,index)},(_,offset)=>({text:lines[index-offset-1],index:index-offset-1}))],match=candidates.map(candidate=>({...candidate,name:driverContactNameFromPdfLine(candidate.text)})).find(candidate=>candidate.name),name=match?.name||'';
+      const key=nameKey(name);if(!key||seen.has(key))return;
+      const nearby=lines.slice(Math.max(0,match?.index??index),Math.min(lines.length,index+2));
+      const context=nearby.join(' '),transporterId=(context.match(/\bA[A-Z0-9]{9,19}\b/i)||[''])[0].toUpperCase(),email=(context.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i)||[''])[0],roleMatch=context.match(/\b(?:Helper\s*,?\s*Driver|Delivery Associate|Driver Helper|Rescue|Driver)\b/i);
+      seen.add(key);contacts.push({name,phone:phoneDisplay(phoneValue),role:roleMatch?.[0]||'',transporterId,status:/\bactive\b/i.test(context)?'ACTIVE':'',email,key});
+    });
+  });
+  return contacts;
+}
 function mergeDriverContacts(incoming=[]) {
   const contacts=[...(state.driverContacts||[])];
   incoming.forEach(contact=>{
@@ -1892,9 +1921,9 @@ function teamPage() {
   const drivers=teamDriverRows(), contacts=state.driverContacts||[],metrics=teamDriverMetrics(drivers);
   const onRouteNames=new Set(filteredMorningRows().map(r=>nameKey(r.driver)).filter(Boolean));
   const recognizedDrivers=drivers.filter(d=>onRouteNames.has(nameKey(d.name))).length;
-  return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar team-toolbar"><div class="toolbar-left"><label class="team-name-search">${ICONS.search}<input type="search" data-team-search autocomplete="off" placeholder="Search driver names" aria-label="Search Drivers and Team by name"><button type="button" data-action="clear-team-search" aria-label="Clear driver search">×</button></label><span class="filter-note" data-team-search-count>${drivers.length} drivers</span><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import Drivers CSV / Excel</button><button class="btn lime" data-action="add-delivery-associate">${ICONS.plus} Add Delivery Associate</button></div></div>
+  return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar team-toolbar"><div class="toolbar-left"><label class="team-name-search">${ICONS.search}<input type="search" data-team-search autocomplete="off" placeholder="Search driver names" aria-label="Search Drivers and Team by name"><button type="button" data-action="clear-team-search" aria-label="Clear driver search">×</button></label><span class="filter-note" data-team-search-count>${drivers.length} drivers</span><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import Drivers CSV / Excel / PDF</button><button class="btn lime" data-action="add-delivery-associate">${ICONS.plus} Add Delivery Associate</button></div></div>
   <section class="driver-team-setup-grid" aria-label="Driver directory setup">
-    <article class="driver-workforce-import driver-setup-card card"><div class="driver-setup-icon" aria-hidden="true">${ICONS.users}</div><div class="driver-setup-copy"><span class="driver-setup-kicker">Team directory</span><strong>Driver & phone import</strong><p>Drop in an AssociateData CSV or Excel workbook (.xlsx). RelayOps finds the associate sheet, matches Name with Personal Phone, and keeps Position, Transporter ID, and Active status.</p><small class="driver-privacy-note">${ICONS.check}<span>Contacts are never embedded in the public website. Signed-in dispatchers share them only through the protected station workspace; signed-out use stays in this browser.</span></small></div><div class="driver-setup-actions"><button class="btn primary" data-action="driver-import">${ICONS.upload}<span>Choose CSV or Excel</span></button><button class="btn" data-action="add-delivery-associate">${ICONS.plus}<span>Add one manually</span></button></div></article>
+    <article class="driver-workforce-import driver-setup-card card"><div class="driver-setup-icon" aria-hidden="true">${ICONS.users}</div><div class="driver-setup-copy"><span class="driver-setup-kicker">Team directory</span><strong>Driver & phone import</strong><p>Drop in an AssociateData CSV, Excel workbook (.xlsx), or text-based PDF. RelayOps matches Name with Personal Phone and keeps Position, Transporter ID, and Active status when those fields are available.</p><small class="driver-privacy-note">${ICONS.check}<span>Contacts are never embedded in the public website. Signed-in dispatchers share them only through the protected station workspace; signed-out use stays in this browser.</span></small></div><div class="driver-setup-actions"><button class="btn primary" data-action="driver-import">${ICONS.upload}<span>Choose CSV or Excel / PDF</span></button><button class="btn" data-action="add-delivery-associate">${ICONS.plus}<span>Add one manually</span></button></div></article>
     <article class="driver-message-readiness driver-setup-card card"><div class="driver-setup-icon" aria-hidden="true">${ICONS.phone}</div><div class="driver-setup-copy"><span class="driver-setup-kicker">Morning Sheet match</span><strong>Future text reminder prep</strong><p>After the Morning Sheet is finalized, RelayOps can identify on-route drivers by the visible Morning Sheet names. Texting will need a secure SMS connector and driver opt-in before it sends anything.</p><span class="driver-readiness-status"><i></i>${recognizedDrivers?'Names matched and ready for review':'Waiting for finalized routes'}</span></div><div class="driver-readiness-metric"><b>${recognizedDrivers}</b><span>matched</span><small>current team cards recognized on the Morning Sheet</small></div></article>
   </section>
   <div class="team-directory-layout"><section class="grid team-grid">${drivers.map(driver=>driverTeamCardHtml(driver,metrics)).join('')}<div class="team-search-empty" data-team-search-empty hidden><strong>No driver found</strong><span>Try the legal name, nickname, or another linked name.</span></div></section><aside class="team-message-column">${morningMessageQueueHtml()}</aside></div>`;
@@ -3871,14 +3900,14 @@ function syncManualAdhocRosterAssignment(route={},previous='',assigned='') {
   return after;
 }
 function markPaycomBackup(name='',role='') {
-  if(isNonRosterableOtherShift(role))return toast(`${name} has an Other role shift and cannot be marked as a backup`,'error');
+  if(role&&scheduleRoleGroup(role)!=='driver')return toast(`${name} has an Other role shift and cannot be marked as a backup`,'error');
   const key=scheduleDriverMarkKey(name),current=dailyRosterMark(name);
   if(current!=='backup'){reconcileDailyRosterFlags(name,'backup');state.scheduleDriverMarks[key]='backup';state.scheduleBackupRecords[key]=rosterRecord(contactForMorningDriver(name)?.name||name,role);}
   else {delete state.scheduleDriverMarks[key];delete state.scheduleBackupRecords[key];}
   removeDriverAdhocRoute(name);persist();render();toast(state.scheduleDriverMarks[key]?`${name} marked ${scheduleBackupLabel(role)}`:`${name} backup mark cleared`);
 }
 function markPaycomAdhoc(name='',role='') {
-  if(isNonRosterableOtherShift(role))return toast(`${name} has an Other role shift and cannot be added as Adhoc`,'error');
+  if(role&&scheduleRoleGroup(role)!=='driver')return toast(`${name} has an Other role shift and cannot be added as Adhoc`,'error');
   const key=scheduleDriverMarkKey(name),adhocKey=adhocIdentityKey(name),legacy=legacyAdhocRoute(name),current=state.scheduleDriverMarks[key];
   if(current==='adhoc'){delete state.scheduleDriverMarks[key];removeDriverAdhocRoute(name);persist();render();return toast(`${name} removed from Adhoc`);}
   reconcileDailyRosterFlags(name,'adhoc');state.scheduleDriverMarks[key]='adhoc';state.openingPicklistShowAdhoc=true;let route=state.morningRoutes.find(row=>row.adhocKey===adhocKey||row.route===legacy);if(!route)route=createManualMorningRoute({route:'AX',wave:'Ad hoc'});route.route='AX';route.adhocKey=adhocKey;route.driver=contactForMorningDriver(name)?.name||name;route.service=role||'Adhoc';
@@ -4034,7 +4063,7 @@ function openingPaycomInnerTabsHtml(active='scheduled',scheduledCount=0,markedCo
 function openingRosterScheduleHtml() {
   const morning=filteredMorningRows().filter(row=>row.route&&!String(row.route).startsWith('__blank_')&&!/helper/i.test(String(row.service||''))),onRoute=morning.flatMap(row=>routeMissingPrimary(row)?[{name:'Unassigned driver',sourceName:row.vacatedDriver||'',role:'Delivery Associate',start:row.wave||'',end:'',route:row.route,vacant:true,helperNames:morningDriverNames(row.driver)}]:morningDriverNames(row.driver).map((name,index)=>({name:contactForMorningDriver(name)?.name||name,sourceName:name,role:'Delivery Associate',start:row.wave||'',end:'',route:row.route,helperMissing:index===0&&routeMissingHelper(row)})));
   const routeNames=new Set(onRoute.map(row=>nameKey(row.name))),schedule=currentScheduleEntries(),driverShifts=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='driver'),helpers=helperRosterRows(),allScheduledDrivers=driverShifts.map(entry=>({...entry,paycom:true,route:routeNames.has(nameKey(entry.name))?'On morning sheet':'Not rostered for route'}));
-  const backupDrivers=currentBackupDriverRows(),vto2Drivers=backupDrivers.filter(row=>(row.vto||scheduleBackupLabel(row.role))==='VTO 2'),vto4Drivers=backupDrivers.filter(row=>(row.vto||scheduleBackupLabel(row.role))==='VTO 4'),stayHome=rosterStatusRows(state.scheduleStayHome,'Told to stay home'),reductions=rosterStatusRows(state.scheduleReductions,'Route reduction'),scheduledDrivers=filteredScheduledDrivers(allScheduledDrivers),dispatch=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='dispatch'),other=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='other'),filters=[['all','All shifts'],['deliveryassociate','Delivery Associate'],['rescue','Rescue'],['midshift','Midshift'],['on-route','On morning sheet'],['not-rostered','Not rostered for route']],calledOff=Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([,value])=>({name:value.name,role:value.role||'Called off',start:value.start||'',end:value.end||'',route:value.route||''})),stayHomeWindow=stayHomeWindowEntries(),paycomTab=['scheduled','marked','unmarked'].includes(state.openingRosterPaycomTab)?state.openingRosterPaycomTab:'scheduled',markedDrivers=openingRosterMarkedDrivers({scheduled:allScheduledDrivers,onRoute,backups:backupDrivers,stayHome,reductions,calledOff,helpers}),unmarkedDrivers=openingRosterUnmarkedDrivers(allScheduledDrivers,markedDrivers),paycomList=paycomTab==='marked'?markedDriverRowsHtml(markedDrivers):paycomTab==='unmarked'?scheduledShiftRowsHtml(unmarkedDrivers,'Every route-eligible scheduled driver has been marked.',{destination:'unmarked'}):scheduledShiftRowsHtml(scheduledDrivers,'No Paycom shifts match this filter.'),paycomSearch=paycomTab==='marked'?'Search marked drivers':paycomTab==='unmarked'?'Search unmarked drivers':'Search all scheduled drivers';
+  const backupDrivers=currentBackupDriverRows(),vto2Drivers=backupDrivers.filter(row=>(row.vto||scheduleBackupLabel(row.role))==='VTO 2'),vto4Drivers=backupDrivers.filter(row=>(row.vto||scheduleBackupLabel(row.role))==='VTO 4'),stayHome=rosterStatusRows(state.scheduleStayHome,'Told to stay home'),reductions=rosterStatusRows(state.scheduleReductions,'Route reduction'),scheduledDrivers=filteredScheduledDrivers(allScheduledDrivers),dispatch=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='dispatch'),other=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='other'),filters=[['all','All shifts'],['deliveryassociate','Delivery Associate'],['rescue','Rescue'],['on-route','On morning sheet'],['not-rostered','Not rostered for route']],calledOff=Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([,value])=>({name:value.name,role:value.role||'Called off',start:value.start||'',end:value.end||'',route:value.route||''})),stayHomeWindow=stayHomeWindowEntries(),paycomTab=['scheduled','marked','unmarked'].includes(state.openingRosterPaycomTab)?state.openingRosterPaycomTab:'scheduled',markedDrivers=openingRosterMarkedDrivers({scheduled:allScheduledDrivers,onRoute,backups:backupDrivers,stayHome,reductions,calledOff,helpers}),unmarkedDrivers=openingRosterUnmarkedDrivers(allScheduledDrivers,markedDrivers),paycomList=paycomTab==='marked'?markedDriverRowsHtml(markedDrivers):paycomTab==='unmarked'?scheduledShiftRowsHtml(unmarkedDrivers,'Every route-eligible scheduled driver has been marked.',{destination:'unmarked'}):scheduledShiftRowsHtml(scheduledDrivers,'No Paycom shifts match this filter.'),paycomSearch=paycomTab==='marked'?'Search marked drivers':paycomTab==='unmarked'?'Search unmarked drivers':'Search all scheduled drivers';
   return `<section class="opening-schedule-board"><div class="opening-schedule-head"><div><span class="eyebrow">TODAY'S OPENING TEAM</span><h2>Routes and scheduled shifts</h2><p>${state.scheduleImportName?`Paycom file: ${esc(state.scheduleImportName)}`:'Upload Paycom inside the green Paycom panel below.'}</p></div></div><div class="opening-schedule-grid">
     <article class="card scheduled-section route scroll-roster"><div class="scheduled-section-head"><h3>Drivers on route</h3><b>${onRoute.length}</b></div><div class="scheduled-list">${routeDriverRowsHtml(onRoute)}</div></article>
     <article class="card scheduled-section helper-roster scroll-roster"><div class="scheduled-section-head"><div><h3>Helpers</h3><span>Match helpers to Wave 1 or Wave 2</span></div><b>${helpers.length}</b></div><div class="scheduled-list">${scheduledShiftRowsHtml(helpers,'No Driver Helper shifts or helper assignments found.',{helperBox:true,destination:'helper'})}</div></article>
@@ -6133,7 +6162,7 @@ function importAcceptForPurpose(purpose='morning') {
   if(purpose==='fleet')return spreadsheet;
   if(purpose==='parking')return `${spreadsheet},.txt,image/*,text/plain`;
   if(purpose==='rostering-screenshot')return '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp,image/*';
-  if(purpose==='drivers')return `${spreadsheet},.txt,text/plain,application/octet-stream`;
+  if(purpose==='drivers')return `${spreadsheet},.pdf,.txt,application/pdf,text/plain,application/octet-stream`;
   if(purpose==='whiparound')return spreadsheet;
   return spreadsheet;
 }
@@ -6848,8 +6877,9 @@ function scheduleRoleGroup(role='') {
   const key=headerKey(role);
   if(/firstopeningdispatch|fleetcoordinator|secondopeningdispatch|closingdispatch|secondcloser|leaddispatch/.test(key))return 'dispatch';
   if(/ridealong|ridealongshift|training|trainee|newhire/.test(key))return 'training';
+  if(key.includes('midshift'))return 'other';
   if(isNonRosterableOtherShift(role))return 'other';
-  if(/deliveryassociate|driverhelper|rescue|midshift|modifiedduty/.test(key))return 'driver';
+  if(/deliveryassociate|driverhelper|rescue/.test(key))return 'driver';
   return 'other';
 }
 function isNonRosterableOtherShift(role='') {
@@ -7017,7 +7047,7 @@ async function readFiles(files) {
       return toast(`${vehicles.length} fleet rows read · ${operationalCount} operational · ${groundedCount} grounded · ${total} vehicle cards tracked`);
     }
     if(state.importPurpose==='drivers') {
-      const contacts=parsed.flatMap(f=>driverContactsFromRows(f.rows||[]));
+      const contacts=parsed.flatMap(f=>{const fromRows=driverContactsFromRows(f.rows||[]);return fromRows.length?fromRows:driverContactsFromText(f.text||'');});
       if(!contacts.length) throw new Error('no driver contacts');
       const total=mergeDriverContacts(contacts);
       state.driverContactsLastImport=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date());
@@ -7053,7 +7083,7 @@ async function readFiles(files) {
     if(state.modal==='import')renderLightweightModal();else render();
     toast(`${parsed.length} file${parsed.length===1?'':'s'} ready · CX routes will be matched automatically`);
   } catch(error) {
-    console.error(error);if(state.importPurpose==='itinerary-rts')return toast(error?.message||'Choose an Itineraries_DJT6 XLSX containing Route code and Planned return to station','error');toast(state.importPurpose==='rostering-screenshot'?(error?.message||'Could not read Amazon confirmed services or associate rows. Upload a clear full-size roster screenshot.'):state.importPurpose==='whiparound'?(error?.message||'Could not find the five required Whiparound columns. Choose a CSV or XLSX inspection report.'):state.importPurpose==='schedule'?'Could not find scheduled names, times, and shift labels. Upload the Paycom PDF, screenshot, CSV, Excel, or text export.':state.importPurpose==='fleet'?(error?.message||'Could not find VIN rows in the selected fleet file.'):state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV or XLSX file with Name and Personal Phone columns.':'These files could not be read. Choose DAYOFOPSPLAN and ROUTE_DJT6 as CSV or XLSX.','error');
+    console.error(error);if(state.importPurpose==='itinerary-rts')return toast(error?.message||'Choose an Itineraries_DJT6 XLSX containing Route code and Planned return to station','error');toast(state.importPurpose==='rostering-screenshot'?(error?.message||'Could not read Amazon confirmed services or associate rows. Upload a clear full-size roster screenshot.'):state.importPurpose==='whiparound'?(error?.message||'Could not find the five required Whiparound columns. Choose a CSV or XLSX inspection report.'):state.importPurpose==='schedule'?'Could not find scheduled names, times, and shift labels. Upload the Paycom PDF, screenshot, CSV, Excel, or text export.':state.importPurpose==='fleet'?(error?.message||'Could not find VIN rows in the selected fleet file.'):state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV, XLSX, or text-based PDF with Name and Personal Phone information.':'These files could not be read. Choose DAYOFOPSPLAN and ROUTE_DJT6 as CSV or XLSX.','error');
   }
 }
 async function readFile(file) { return readFiles([file]); }
