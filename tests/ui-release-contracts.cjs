@@ -1,6 +1,7 @@
 const fs = require('fs');
 
 const css = fs.readFileSync(require.resolve('../styles.css'), 'utf8');
+const tahoeMidnightCss = fs.readFileSync(require.resolve('../tahoe-midnight-preview.css'), 'utf8');
 const app = fs.readFileSync(require.resolve('../app.js'), 'utf8');
 
 function assert(condition, message) {
@@ -15,6 +16,7 @@ for (const selector of ['.main', '.content', '.card']) {
   assert(new RegExp(`${escaped}[^{}]*\\{[^}]*min-width\\s*:\\s*0`, 'i').test(css), `${selector} must be allowed to shrink inside the responsive shell`);
 }
 assert(/@media\s*\(max-width\s*:\s*760px\)[\s\S]*?\.topbar[^{}]*\{[^}]*grid/i.test(css), 'Mobile topbar must use a wrapping/two-row grid');
+assert(/body\s+\.topbar\s*\{[^}]*position\s*:\s*relative[^}]*top\s*:\s*0/i.test(tahoeMidnightCss), 'The Tahoe app header must scroll with the page instead of covering worksheet rows');
 assert(/@media\s*\(max-width\s*:\s*760px\)[\s\S]*?\.modal[^{}]*\{[^}]*width\s*:\s*calc\(100vw\s*-\s*24px\)/i.test(css), 'Mobile modals must fit inside the viewport');
 assert(/@media\s*\(max-width\s*:\s*760px\)[\s\S]*?\.modal-body[^{}]*\{[^}]*overflow-y\s*:\s*auto/i.test(css), 'Long mobile modal contents must scroll without overflowing the viewport');
 assert(/@media\s*\(max-width\s*:\s*760px\)[\s\S]*?\.toast-stack[^{}]*\{[^}]*inset/i.test(css), 'Mobile toasts must remain inset from both viewport edges');

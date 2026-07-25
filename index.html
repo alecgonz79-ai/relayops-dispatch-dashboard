@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="styles.css?v=20260724-rich-email-template-r6" />
     <link rel="stylesheet" href="macos-preview.css?v=20260725-tahoe-published-r1" />
     <link rel="stylesheet" href="tahoe-preview.css?v=20260725-tahoe-published-r1" />
-    <link rel="stylesheet" href="tahoe-midnight-preview.css?v=20260725-tahoe-published-r6" />
+    <link rel="stylesheet" href="tahoe-midnight-preview.css?v=20260725-scroll-header-r7" />
   </head>
   <body>
     <div id="app"></div>
@@ -33,7 +33,7 @@
             window.location.reload();
           });
           navigator.serviceWorker
-            .register('./service-worker.js?v=20260725-tahoe-published-r2', { updateViaCache: 'none' })
+            .register('./service-worker.js?v=20260725-scroll-header-r3', { updateViaCache: 'none' })
             .then(registration => registration.update())
             .catch(() => {});
         });
