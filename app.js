@@ -1337,34 +1337,34 @@ function rosteringAllocatedCounts(plan=currentRosteringPlan()) {
 }
 function rosteringEmailTemplateText(plan=currentRosteringPlan()) {
   const dispatch=rosteringDispatchAssignments(),helpers=rosteringEmailHelperRows(plan),groups=rosteringUnrosteredBackupGroups(plan),counts=rosteringAllocatedCounts(plan),line='---------------------------------------------------';
-  const names=rows=>rows.map(row=>`${driverDisplayName(row.name)}${driverProfileFlags(row.name).includes('modified-duty')||/modified\s*duty/i.test(row.role||'')?' ***\\*Mod Duty***':''}`).join('\n')||'';
+  const names=rows=>rows.map(row=>`${driverDisplayName(row.name)}${driverProfileFlags(row.name).includes('modified-duty')||/modified\s*duty/i.test(row.role||'')?' Mod Duty':''}`).join('\n')||'';
   return [
-    `**Opener:** *1st* ${dispatch.opener1||''} /*2nd* ${dispatch.opener2||''}       **Fleet:** ${dispatch.fleet||''}`,
+    `Opener: 1st ${dispatch.opener1||''} /2nd ${dispatch.opener2||''}       Fleet: ${dispatch.fleet||''}`,
     '',
-    `**MidShift:** ${dispatch.mid||''}`,
+    `MidShift: ${dispatch.mid||''}`,
     '',
-    `**1 st Closer:** *${dispatch.closer1||''}*  **2nd Closer***: ${dispatch.closer2||''}*`,
+    `1 st Closer: ${dispatch.closer1||''}  2nd Closer: ${dispatch.closer2||''}`,
     '',
     line,
-    '**Helpers:**',
+    'Helpers:',
     '',
     helpers.join('\n'),
     '',
     line,
     '',
-    '**Back Ups:** ',
+    'Back Ups:',
     '',
-    '**VTO (2)**',
+    'VTO (2)',
     names(groups.vto2),
     '',
-    '**VTO (4)**',
+    'VTO (4)',
     names(groups.vto4),
     '',
     line,
-    '**Allocated:**',
+    'Allocated:',
     '',
-    `***${counts.rivian} RIV***`,
-    `***${counts.total} Total***`
+    `${counts.rivian} RIV`,
+    `${counts.total} Total`
   ].join('\n');
 }
 async function copyRosteringEmailTemplateText() { const ok=await writeClipboardText(rosteringEmailTemplateText());toast(ok?'Roster email template copied':'Clipboard access was blocked',ok?'success':'error'); }

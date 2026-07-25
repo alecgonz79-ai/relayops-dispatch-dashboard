@@ -43,7 +43,7 @@ assert(context.__groups.vto4.join(',')==='Actual Associate','Delivery Associate 
 assert(context.__groups.other.join(',')==='Fleet Lead,Midshift Support','Midshift and non-route roles must stay grouped under Other roles');
 assert(context.__paycom.includes('Add to roster')&&context.__paycom.includes('Swap with rostered driver')&&!context.__paycom.includes('Keep as VTO 2'),'PAYCOM route-driver cards need Add and Swap controls');
 assert(context.__backup.includes('Other roles')&&context.__backup.includes('Fleet Lead')&&context.__backup.includes('Midshift Support')&&context.__backup.includes('Swap with rostered driver'),'Unrostered backup list lost Other roles or swap controls');
-assert(context.__email.includes('**Fleet:** Fleet')&&!context.__email.includes('**Fleet:** Fleet Lead'),'Unrostered shifts email must show only the first name for Fleet Coordinator and dispatcher shifts');
+assert(context.__email.includes('Fleet: Fleet')&&!context.__email.includes('Fleet: Fleet Lead'),'Unrostered shifts email must show only the first name for Fleet Coordinator and dispatcher shifts');
 assert(context.__swap.name==='Rescue Backup'&&context.__swap.count===1&&!context.__swap.old,'Roster swap must replace one rostered driver without duplication');
 assert(context.__teamRows.join(',')==='Actual Associate','Drivers & Team must use only imported directory names');
 assert(context.__teamCollapsed.includes('data-driver-card-toggle="true"')&&!context.__teamCollapsed.includes('>ACTIVE<')&&!context.__teamCollapsed.includes('>Active<'),'Driver cards must be expandable without the redundant Active status');
