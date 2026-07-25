@@ -297,6 +297,7 @@
     await load();
     if(!membership)throw new Error('The shared station membership could not be created');
     notify({type:'admin-status',unlocked:await adminStatus().catch(()=>false)});
+    notify({type:'ready',revision,persistentRevision});
     return session;
   }
   async function init(){
@@ -305,7 +306,15 @@
     initializing=true;initializingSince=Date.now();
     try{
       const result=await withCloudTimeout(client.auth.getSession(),'Saved shared session check');if(result?.error)throw result.error;session=result?.data?.session||null;
-      client.auth.onAuthStateChange((_event,next)=>{session=next;if(!session)membership=null;notify({type:'auth',session});if(session&&!initializing)load().catch(error=>notify({type:'error',error}));});
+      client.auth.onAuthStateChange((_event,next)=>{
+        session=next;if(!session)membership=null;
+        // init()/retryLinkAccess() own the first load. A delayed SIGNED_IN
+        // callback must not change a fully loaded workspace back to
+        // "Connecting" or start a duplicate snapshot request.
+        if(initializing)return;
+        notify({type:'auth',session});
+        if(session)load().catch(error=>notify({type:'error',error}));
+      });
       if(!session)session=await createAnonymousLinkSession();
       if(session){
         notify({type:'auth',session});
@@ -314,7 +323,10 @@
         // Replace any stale browser session that lacks station access, including
         // anonymous sessions created before the link-access trigger existed.
         if(!membership)await replaceWithAnonymousLinkSession();
-        if(membership)notify({type:'admin-status',unlocked:await adminStatus().catch(()=>false)});
+        if(membership){
+          notify({type:'admin-status',unlocked:await adminStatus().catch(()=>false)});
+          notify({type:'ready',revision,persistentRevision});
+        }
       }else notify({type:'link-access-error',error:new Error('Automatic shared access is unavailable')});
       return {configured:true,session};
     }catch(error){notify({type:'link-access-error',error});return {configured:true,session,error};}
@@ -326,7 +338,7 @@
       const deadline=(initializingSince||Date.now())+CLOUD_TIMEOUT_MS+1500;
       while(initializing&&Date.now()<deadline)await pause(150);
       if(initializing)throw new Error('The previous shared-cloud connection stalled. Reload once to start the repaired session.');
-      if(session&&membership)return {configured:true,session};
+      if(session&&membership){notify({type:'ready',revision,persistentRevision});return {configured:true,session};}
     }
     if(!client)client=createClient();
     if(!client)throw new Error('Shared cloud is not configured');
@@ -334,7 +346,7 @@
     try{
       if(session){
         await load();
-        if(membership){notify({type:'admin-status',unlocked:await adminStatus().catch(()=>false)});return {configured:true,session};}
+        if(membership){notify({type:'admin-status',unlocked:await adminStatus().catch(()=>false)});notify({type:'ready',revision,persistentRevision});return {configured:true,session};}
       }
       await replaceWithAnonymousLinkSession();
       return {configured:true,session};

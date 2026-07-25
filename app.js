@@ -975,9 +975,9 @@ function cloudStatusControl() {
   const synced=state.cloudStatus==='synced',connecting=state.cloudStatus==='connecting';
   const needsRetry=['error','access-denied','offline','signed-out'].includes(state.cloudStatus);
   const label=synced?'Shared & synced':connecting?'Connecting shared workspace…':needsRetry?'Sync issue · retry':'Starting shared sync…';
-  const title=needsRetry?(state.cloudAccessError||'Shared cloud is disconnected. Tap to retry.'):'Shared cloud synchronization';
-  const tag=needsRetry?'button':'span';
-  return `<${tag} class="btn cloud-status-button ${esc(state.cloudStatus)}" ${needsRetry?'data-action="retry-cloud-link"':''} aria-live="polite" title="${esc(title)}"><i></i><span class="hide-mobile">${esc(label)}</span></${tag}>`;
+  const retryable=needsRetry||connecting,title=needsRetry?(state.cloudAccessError||'Shared cloud is disconnected. Tap to retry.'):connecting?'Still connecting? Tap to restart shared sync.':'Shared cloud synchronization';
+  const tag=retryable?'button':'span';
+  return `<${tag} class="btn cloud-status-button ${esc(state.cloudStatus)}" ${retryable?'data-action="retry-cloud-link"':''} aria-live="polite" title="${esc(title)}"><i></i><span class="hide-mobile">${esc(label)}</span></${tag}>`;
 }
 
 function topbar() {
@@ -6036,10 +6036,18 @@ async function lockAdminAccess() {
   try{await window.RelayOpsCloud?.lockAdmin?.();}catch(error){console.warn('Could not clear the server Admin session',error);}
   toast('Admin controls locked');
 }
-let cloudRetryInFlight=false,cloudAutoRetryAttempts=0;
+let cloudRetryInFlight=false,cloudAutoRetryAttempts=0,cloudConnectingWatchdog=null;
+function clearCloudConnectingWatchdog(){clearTimeout(cloudConnectingWatchdog);cloudConnectingWatchdog=null;}
+function armCloudConnectingWatchdog(){
+  clearCloudConnectingWatchdog();
+  cloudConnectingWatchdog=setTimeout(()=>{
+    if(state.cloudStatus!=='connecting')return;
+    retryCloudLinkAccess(true);
+  },45000);
+}
 async function retryCloudLinkAccess(silent=false) {
   if(cloudRetryInFlight)return;
-  cloudRetryInFlight=true;state.cloudStatus='connecting';render();
+  cloudRetryInFlight=true;state.cloudStatus='connecting';armCloudConnectingWatchdog();render();
   try{
     const result=await window.RelayOpsCloud?.retryLinkAccess?.();
     if(!result?.session)throw result?.error||new Error('Shared session was not created');
@@ -9489,20 +9497,22 @@ function applyPersistentWorkspaceState(payload={}) {
 }
 window.RelayOpsApp={sharedState:sharedWorkspaceState,persistentState:persistentWorkspaceState,applySharedState:applySharedWorkspaceState,applyPersistentState:applyPersistentWorkspaceState,operationDate:()=>state.morningOperationDate,morningSheetsPayload:()=>morningSheetsConnectorPayload()};
 window.RelayOpsCloud?.on?.(event=>{
-  if(event.type==='offline'){state.cloudStatus='offline';refreshCloudStatusUi();}
-  if(event.type==='reconnecting'){state.cloudStatus='connecting';refreshCloudStatusUi();}
-  if(event.type==='auth'){state.cloudStatus=event.session?'connecting':'connecting';state.cloudUser=event.session?.user?.is_anonymous?'Shared link':event.session?.user?.email||'Shared link';state.cloudAccessError='';state.cloudSigninError='';state.cloudSigninCooldownUntil=0;localStorage.removeItem('relayops_cloud_signin_cooldown_until');if(!event.session)state.role='viewer';renderFromCloudEvent();}
+  if(event.type==='offline'){clearCloudConnectingWatchdog();state.cloudStatus='offline';refreshCloudStatusUi();}
+  if(event.type==='reconnecting'){state.cloudStatus='connecting';armCloudConnectingWatchdog();refreshCloudStatusUi();}
+  if(event.type==='auth'){state.cloudStatus='connecting';armCloudConnectingWatchdog();state.cloudUser=event.session?.user?.is_anonymous?'Shared link':event.session?.user?.email||'Shared link';state.cloudAccessError='';state.cloudSigninError='';state.cloudSigninCooldownUntil=0;localStorage.removeItem('relayops_cloud_signin_cooldown_until');if(!event.session)state.role='viewer';renderFromCloudEvent();}
   if(event.type==='admin-status'){state.adminPinUnlocked=Boolean(event.unlocked);renderFromCloudEvent();}
   if(event.type==='access-granted'){state.cloudAccessError='';state.role=['fleet_lead','viewer'].includes(event.membership?.role)?event.membership.role:'dispatcher';renderFromCloudEvent();}
-  if(event.type==='access-denied'){state.cloudStatus='access-denied';state.cloudAccessError='Automatic shared-link access has not been provisioned for this browser.';renderFromCloudEvent();toast('Shared link access needs repair in Supabase','error');}
-  if(event.type==='link-access-error'){state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';renderFromCloudEvent();toast(`Shared access failed: ${state.cloudAccessError}`,'error');if(cloudAutoRetryAttempts<2){cloudAutoRetryAttempts++;setTimeout(()=>retryCloudLinkAccess(true),750*cloudAutoRetryAttempts);}}
-  if(event.type==='workspace-empty'){state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';renderFromCloudEvent();toast('Shared workspace is not initialized for this day yet','error');}
+  if(event.type==='access-denied'){clearCloudConnectingWatchdog();state.cloudStatus='access-denied';state.cloudAccessError='Automatic shared-link access has not been provisioned for this browser.';renderFromCloudEvent();toast('Shared link access needs repair in Supabase','error');}
+  if(event.type==='link-access-error'){clearCloudConnectingWatchdog();state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';renderFromCloudEvent();toast(`Shared access failed: ${state.cloudAccessError}`,'error');if(cloudAutoRetryAttempts<2){cloudAutoRetryAttempts++;setTimeout(()=>retryCloudLinkAccess(true),750*cloudAutoRetryAttempts);}}
+  if(event.type==='workspace-empty'){clearCloudConnectingWatchdog();state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';renderFromCloudEvent();toast('Shared workspace is not initialized for this day yet','error');}
   if(event.type==='presence'){state.cloudPresence=event.users||[];refreshCloudStatusUi();}
-  if(event.type==='loaded'){state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;renderFromCloudEvent();}
-  if(event.type==='saved'){state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;refreshCloudStatusUi();}
-  if(event.type==='remote-update'){state.cloudStatus='synced';renderFromCloudEvent();toast('Another dispatcher updated today’s workspace');}
+  if(event.type==='loaded'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;renderFromCloudEvent();}
+  if(event.type==='ready'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;refreshCloudStatusUi();}
+  if(event.type==='saved'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;refreshCloudStatusUi();}
+  if(event.type==='remote-update'){clearCloudConnectingWatchdog();state.cloudStatus='synced';renderFromCloudEvent();toast('Another dispatcher updated today’s workspace');}
   if(event.type==='conflict')toast('A newer dispatcher update was loaded before saving','error');
-  if(event.type==='error'){state.cloudStatus='error';refreshCloudStatusUi();toast(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
+  if(event.type==='error'){clearCloudConnectingWatchdog();state.cloudStatus='error';refreshCloudStatusUi();toast(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
 });
 render();
+if(window.RelayOpsCloud?.configured)armCloudConnectingWatchdog();
 window.RelayOpsCloud?.init?.().catch(error=>console.error('RelayOps cloud initialization failed',error));
