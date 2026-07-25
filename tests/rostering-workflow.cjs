@@ -87,7 +87,7 @@ function run() {
     globalThis.__specialRoles=[{name:'Parker Pilot',role:'Pilot/Rescues'},{name:'Moe Modified',role:'Modified duty/Rescues'}].map(entry=>({category:rosteringPaycomCategoryFor(entry),eligible:rosteringEntryEligibleForRoster(entry),group:scheduleRoleGroup(entry.role),helper:canBecomeHelperRole(entry.role)}));
     globalThis.__eligibility={delivery:rosteringEntryEligibleForRoster({name:'Evan Stone',role:'Delivery Associate'}),flaggedRescue:rosteringEntryEligibleForRoster({name:'Nina Patel',role:'Rescue'}),plainRescue:rosteringEntryEligibleForRoster({name:'Rex Rescue',role:'Rescue'}),fleet:rosteringEntryEligibleForRoster({name:'Terry Trainer',role:'Fleet Coordinator/Rescue'}),fleetCategory:rosteringPaycomCategoryFor({name:'Terry Trainer',role:'Fleet Coordinator/Rescue'}),fleetGroup:scheduleRoleGroup('Fleet Coordinator/Rescue')};
     ensureDriverProfile({name:'Zora VTO Four'}).profile.flags=['modified-duty'];
-    globalThis.__emailTemplate=rosteringEmailTemplateText(autoPlan);
+    globalThis.__emailTemplate=rosteringEmailTemplateText(autoPlan);globalThis.__emailTemplateHtml=rosteringEmailTemplateHtml(autoPlan);
     state.rosteringPaycomCategory='vto2';globalThis.__vto2PaycomHtml=rosteringPaycomHtml(autoPlan);state.rosteringPaycomCategory='all';
     state.scheduleEntries.push({date:'7/15/2026',name:'Riley R',role:'Training',start:'11:15 AM',end:'9:15 PM'});
     globalThis.__trainingHtml=rosteringTrainingHtml();globalThis.__trainingRidealongCount=[...new Map(scheduleEntriesForDate(state.rosteringDate).filter(entry=>isRidealongRole(entry.role)).map(entry=>[driverIdentityKey(entry.name),entry])).values()].length;
@@ -155,6 +155,8 @@ function run() {
   assert(context.__emailTemplate.includes('Zora VTO Four Mod Duty'), 'Modified-duty backup drivers must carry the requested Mod Duty marker');
   assert(context.__emailTemplate.includes('Allocated:\n\n6 RIV\n6 Total')&&!context.__emailTemplate.includes('HELPER'), 'Allocated output must contain only RIV and route Total lines');
   assert(!context.__emailTemplate.includes('*')&&!context.__emailTemplate.includes('\\'), 'Copied email text must not contain Markdown asterisks or escape characters');
+  assert(context.__emailTemplateHtml.includes('<strong>Opener:</strong>')&&context.__emailTemplateHtml.includes('<strong>MidShift:</strong>')&&context.__emailTemplateHtml.includes('<strong>VTO (2)</strong>')&&context.__emailTemplateHtml.includes('<strong>VTO (4)</strong>'), 'Rich email output must bold the shift and VTO headings');
+  assert(context.__emailTemplateHtml.includes('<strong><em>6 RIV</em></strong>')&&context.__emailTemplateHtml.includes('<strong><em>6 Total</em></strong>')&&!context.__emailTemplateHtml.includes('*'), 'Rich email output must bold-italicize route totals without visible Markdown characters');
   assert(context.__driverSwap.incoming==='Uma Rescue'&&!context.__driverSwap.displacedStillRostered&&context.__driverSwap.incomingCount===1, 'Swap with rostered driver must replace exactly one assignment without duplicating either driver');
   assert(context.__trainingHtml.includes('Riley R') && context.__trainingHtml.includes('Coach T') && context.__trainingHtml.includes('scheduled'), 'Ridealong shifts must render with saved display names beside scheduled Trainer-tagged drivers');
   assert(context.__trainingRidealongCount === 1, 'Canonical and nickname variants of the same ridealong must render as one training match');

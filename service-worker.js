@@ -1,4 +1,4 @@
-const CACHE='relayops-plain-email-template-v76';
+const CACHE='relayops-rich-email-template-v77';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{
