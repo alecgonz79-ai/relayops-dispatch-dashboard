@@ -1,0 +1,938 @@
+/*
+ * RelayOps Tahoe — Midnight Glass preview
+ * Visual-only refinement layered over tahoe-preview.css.
+ * No operational behavior or spreadsheet geometry is changed here.
+ */
+
+:root {
+  --midnight-0: #05070b;
+  --midnight-1: #0a1019;
+  --midnight-2: #111c2b;
+  --midnight-3: #1b2c42;
+  --midnight-blue: #2997ff;
+  --midnight-cyan: #64d2ff;
+  --midnight-silver: #f5f5f7;
+  --midnight-mist: #dce7f3;
+  --midnight-line: rgba(255, 255, 255, 0.14);
+  --midnight-shadow: 0 28px 80px rgba(2, 7, 16, 0.34);
+}
+
+html,
+body {
+  background-color: var(--midnight-0);
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    Inter, sans-serif;
+  background:
+    radial-gradient(circle at 14% -8%, rgba(41, 151, 255, 0.34), transparent 34%),
+    radial-gradient(circle at 82% 4%, rgba(104, 83, 255, 0.2), transparent 28%),
+    radial-gradient(circle at 72% 104%, rgba(0, 199, 190, 0.13), transparent 31%),
+    linear-gradient(145deg, #05070b 0%, #0b111b 38%, #101d2d 70%, #07101a 100%);
+}
+
+body::before {
+  opacity: 0.22;
+  background:
+    linear-gradient(118deg, transparent 0 44%, rgba(255, 255, 255, 0.08) 49%, transparent 54%),
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: 100% 100%, 86px 86px, 86px 86px;
+  mask-image: linear-gradient(to bottom, black, transparent 82%);
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent 82%);
+}
+
+body .main {
+  position: relative;
+  border-color: rgba(255, 255, 255, 0.23);
+  background:
+    linear-gradient(180deg, rgba(246, 249, 253, 0.92), rgba(230, 237, 246, 0.86)),
+    rgba(236, 243, 250, 0.85);
+  box-shadow:
+    var(--midnight-shadow),
+    inset 0 1px rgba(255, 255, 255, 0.76);
+}
+
+body .main::before {
+  position: absolute;
+  z-index: 80;
+  inset: 0 7% auto;
+  height: 1px;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(100, 210, 255, 0.72) 24%,
+    rgba(255, 255, 255, 0.92) 50%,
+    rgba(83, 125, 255, 0.68) 76%,
+    transparent
+  );
+  box-shadow: 0 0 24px rgba(41, 151, 255, 0.32);
+  pointer-events: none;
+}
+
+/* Sidebar becomes the quiet, dark command rail. */
+body .sidebar {
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.15);
+  background:
+    radial-gradient(circle at 14% 0, rgba(59, 163, 255, 0.24), transparent 32%),
+    radial-gradient(circle at 105% 32%, rgba(93, 80, 199, 0.16), transparent 34%),
+    linear-gradient(165deg, rgba(27, 42, 61, 0.97), rgba(10, 15, 23, 0.96) 58%, rgba(8, 17, 29, 0.97));
+  box-shadow:
+    0 28px 72px rgba(0, 4, 11, 0.48),
+    inset 0 1px rgba(255, 255, 255, 0.16),
+    inset -1px 0 rgba(255, 255, 255, 0.05);
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+body .sidebar::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.36), transparent);
+}
+
+body .brand-name,
+body .station-copy strong,
+body .user-copy strong {
+  color: rgba(255, 255, 255, 0.96);
+}
+
+body .brand-sub,
+body .station-copy span,
+body .station-pill > svg,
+body .user-copy span {
+  color: rgba(222, 235, 249, 0.48);
+}
+
+body .station-pill {
+  border-color: rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035)),
+    rgba(7, 15, 25, 0.42);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.13),
+    0 10px 26px rgba(0, 4, 12, 0.24);
+}
+
+body .station-icon,
+body .avatar {
+  border-color: rgba(133, 205, 255, 0.22);
+  background: linear-gradient(145deg, rgba(84, 183, 255, 0.28), rgba(25, 95, 173, 0.2));
+  color: #9bd8ff;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.18);
+}
+
+body .side-label {
+  color: rgba(180, 205, 232, 0.43);
+  font-family: "SF Mono", "SFMono-Regular", ui-monospace, monospace;
+  letter-spacing: 0.14em;
+}
+
+body .nav-item {
+  color: rgba(223, 234, 247, 0.66);
+}
+
+body .nav-item:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.075);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.09);
+}
+
+body .nav-item.active {
+  color: #fff;
+  border-color: rgba(141, 210, 255, 0.32);
+  background:
+    linear-gradient(135deg, rgba(68, 171, 255, 0.72), rgba(36, 111, 226, 0.62)),
+    rgba(36, 126, 237, 0.48);
+  box-shadow:
+    0 11px 27px rgba(0, 86, 210, 0.3),
+    inset 0 1px rgba(255, 255, 255, 0.3),
+    inset 0 -1px rgba(1, 49, 124, 0.24);
+}
+
+body .nav-count,
+body .nav-item.active .nav-count {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.13);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.16);
+}
+
+body .user-card {
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+body .role-tag {
+  border-color: rgba(116, 190, 255, 0.18);
+  background: rgba(83, 166, 242, 0.1);
+  color: #9fd5ff;
+}
+
+/* Dark translucent title bar, like a focused Tahoe window. */
+body .topbar {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background:
+    radial-gradient(circle at 72% -70%, rgba(77, 160, 255, 0.28), transparent 47%),
+    linear-gradient(112deg, rgba(17, 26, 39, 0.97), rgba(7, 12, 20, 0.94) 62%, rgba(12, 24, 39, 0.96));
+  box-shadow:
+    0 14px 36px rgba(4, 10, 20, 0.24),
+    inset 0 -1px rgba(255, 255, 255, 0.035);
+}
+
+body .topbar::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.23), transparent);
+}
+
+body .page-heading h1 {
+  color: #fff;
+  text-shadow: 0 1px 18px rgba(119, 192, 255, 0.12);
+}
+
+body .page-heading p {
+  color: rgba(222, 233, 247, 0.56);
+}
+
+body .top-actions {
+  border-color: rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035)),
+    rgba(7, 13, 22, 0.48);
+  box-shadow:
+    0 12px 34px rgba(0, 3, 9, 0.34),
+    inset 0 1px rgba(255, 255, 255, 0.14);
+}
+
+body .top-actions .btn,
+body .top-actions .icon-button,
+body .top-actions .search {
+  color: rgba(244, 248, 255, 0.88);
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.075);
+}
+
+body .top-actions .global-search-shell {
+  min-width: 0;
+}
+
+body .top-actions .search {
+  box-sizing: border-box;
+  width: min(290px, 28vw);
+  height: 42px;
+  gap: 10px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 13px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.025)),
+    rgba(2, 8, 16, 0.26);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.08),
+    0 7px 18px rgba(0, 4, 11, 0.13);
+  transition:
+    width 180ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+body .top-actions .search:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.115), rgba(255, 255, 255, 0.035)),
+    rgba(2, 8, 16, 0.25);
+}
+
+body .top-actions .search:focus-within {
+  width: min(320px, 31vw);
+  border-color: rgba(105, 194, 255, 0.64);
+  background:
+    linear-gradient(145deg, rgba(91, 177, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    rgba(2, 8, 16, 0.4);
+  box-shadow:
+    0 0 0 3px rgba(37, 147, 255, 0.15),
+    0 12px 26px rgba(0, 4, 12, 0.24),
+    inset 0 1px rgba(255, 255, 255, 0.12);
+}
+
+body .top-actions .search svg {
+  width: 17px;
+  min-width: 17px;
+  height: 17px;
+  color: rgba(167, 190, 211, 0.76);
+  transition:
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+body .top-actions .search:focus-within svg {
+  color: #72c6ff;
+  transform: scale(1.04);
+}
+
+body .top-actions .btn:hover,
+body .top-actions .icon-button:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+body .top-actions .search input {
+  box-sizing: border-box;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  color: #fff;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  appearance: none;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  caret-color: #72c6ff;
+}
+
+body .top-actions .search input::placeholder {
+  color: rgba(199, 216, 233, 0.48);
+  opacity: 1;
+}
+
+body .top-actions .search input:-webkit-autofill,
+body .top-actions .search input:-webkit-autofill:hover,
+body .top-actions .search input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #fff;
+  transition: background-color 9999s ease-out 0s;
+}
+
+body .top-actions .cloud-status-button.synced {
+  color: #aaf4c5;
+  background: rgba(50, 193, 103, 0.13);
+}
+
+body .top-actions .cloud-status-button:not(.synced) {
+  color: #ffd88a;
+}
+
+body .info-top-button {
+  color: #a8d9ff;
+  border-color: rgba(92, 180, 255, 0.15);
+  background: rgba(48, 137, 225, 0.13);
+}
+
+body .info-top-button > span:first-child {
+  background: linear-gradient(145deg, #55b7ff, #1478e4);
+  box-shadow: 0 4px 13px rgba(28, 126, 229, 0.34);
+}
+
+body .context-bar {
+  border-color: rgba(255, 255, 255, 0.66);
+  background:
+    linear-gradient(110deg, rgba(255, 255, 255, 0.71), rgba(236, 244, 252, 0.55)),
+    rgba(244, 249, 254, 0.52);
+  box-shadow:
+    0 8px 28px rgba(17, 36, 59, 0.065),
+    inset 0 1px rgba(255, 255, 255, 0.82);
+}
+
+/* Dark gradients are spent on high-level command surfaces, not data entry. */
+body .morning-workflow {
+  overflow: hidden;
+}
+
+body .morning-workflow-head {
+  position: relative;
+  color: rgba(255, 255, 255, 0.92);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at 78% -45%, rgba(72, 171, 255, 0.34), transparent 52%),
+    linear-gradient(118deg, #152439 0%, #0a111c 54%, #101e31 100%);
+}
+
+body .morning-workflow-head::after {
+  position: absolute;
+  inset: auto 7% 0;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(105, 203, 255, 0.56), transparent);
+}
+
+body .morning-workflow-head h2,
+body .morning-workflow-head strong {
+  color: #fff;
+}
+
+body .morning-workflow-head p,
+body .morning-workflow-head small,
+body .morning-workflow-head .eyebrow {
+  color: rgba(221, 232, 246, 0.58);
+}
+
+body .morning-workflow-head .operation-date-picker {
+  position: relative;
+  gap: 7px;
+  padding: 13px 14px 12px;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.16);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.045)),
+    rgba(3, 9, 17, 0.34);
+  box-shadow:
+    0 14px 34px rgba(0, 4, 12, 0.27),
+    inset 0 1px rgba(255, 255, 255, 0.14);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+body .morning-workflow-head .operation-date-picker > span {
+  color: rgba(137, 200, 248, 0.68);
+  font-size: 8px;
+  letter-spacing: 0.14em;
+}
+
+body .morning-workflow-head .operation-date-picker input[type="date"] {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  padding: 0 7px 0 12px;
+  color-scheme: dark;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  outline: 0;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035)),
+    rgba(3, 9, 17, 0.26);
+  box-shadow:
+    0 8px 18px rgba(0, 4, 12, 0.17),
+    inset 0 1px rgba(255, 255, 255, 0.09);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+body .morning-workflow-head .operation-date-picker input[type="date"]:hover {
+  border-color: rgba(138, 205, 255, 0.42);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.055)),
+    rgba(3, 9, 17, 0.26);
+}
+
+body .morning-workflow-head .operation-date-picker:focus-within {
+  border-color: rgba(108, 194, 255, 0.52);
+  box-shadow:
+    0 16px 38px rgba(0, 4, 12, 0.31),
+    0 0 0 3px rgba(50, 158, 255, 0.13),
+    inset 0 1px rgba(255, 255, 255, 0.17);
+}
+
+body .morning-workflow-head .operation-date-picker input[type="date"]:focus {
+  border-color: rgba(121, 202, 255, 0.72);
+  box-shadow:
+    0 8px 20px rgba(0, 4, 12, 0.2),
+    0 0 0 3px rgba(52, 159, 255, 0.16),
+    inset 0 1px rgba(255, 255, 255, 0.11);
+}
+
+body .morning-workflow-head .operation-date-picker input[type="date"]::-webkit-calendar-picker-indicator {
+  box-sizing: content-box;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 7px;
+  border-radius: 8px;
+  cursor: pointer;
+  opacity: 0.82;
+  filter: invert(1) saturate(0) brightness(1.55);
+  transition:
+    background 150ms ease,
+    opacity 150ms ease;
+}
+
+body .morning-workflow-head .operation-date-picker input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  background: rgba(255, 255, 255, 0.11);
+  opacity: 1;
+}
+
+body .morning-workflow-head .operation-date-picker > small {
+  color: rgba(221, 232, 246, 0.6);
+  line-height: 1.35;
+}
+
+body .morning-workflow-head .morning-connector-pill {
+  color: #9ff1bd;
+  border-color: rgba(103, 225, 147, 0.18);
+  background: rgba(49, 190, 100, 0.12);
+}
+
+body .morning-step {
+  box-shadow:
+    0 10px 28px rgba(27, 52, 79, 0.09),
+    inset 0 1px rgba(255, 255, 255, 0.88);
+}
+
+body .morning-step:hover {
+  border-color: rgba(41, 151, 255, 0.28);
+  box-shadow:
+    0 15px 34px rgba(28, 66, 103, 0.14),
+    0 0 0 1px rgba(41, 151, 255, 0.07),
+    inset 0 1px rgba(255, 255, 255, 0.9);
+}
+
+body .btn.primary {
+  color: #fff;
+  border-color: rgba(98, 184, 255, 0.38);
+  background: linear-gradient(145deg, #2499ff, #0867d5 72%, #0756b5);
+  box-shadow:
+    0 10px 24px rgba(0, 102, 218, 0.26),
+    inset 0 1px rgba(255, 255, 255, 0.28);
+}
+
+body .btn.primary:hover {
+  background: linear-gradient(145deg, #47acff, #0b72e7 72%, #075ec5);
+  box-shadow:
+    0 13px 30px rgba(0, 102, 218, 0.34),
+    inset 0 1px rgba(255, 255, 255, 0.34);
+}
+
+body .card,
+body .morning-more-tools,
+body .morning-advanced-checks,
+body .device-sheet-card,
+body .van-parking-card,
+body .team-import-card,
+body .team-message-column {
+  box-shadow:
+    0 18px 48px rgba(13, 30, 50, 0.11),
+    inset 0 1px rgba(255, 255, 255, 0.86);
+}
+
+body .morning-more-tools > summary,
+body .morning-more-tools[open] > summary {
+  border-bottom-color: rgba(57, 78, 101, 0.11) !important;
+  background:
+    linear-gradient(110deg, rgba(244, 248, 253, 0.96), rgba(226, 236, 247, 0.86)) !important;
+}
+
+body .morning-tools-body {
+  background:
+    linear-gradient(180deg, rgba(229, 237, 246, 0.7), rgba(243, 247, 251, 0.88)) !important;
+}
+
+body .morning-tool-group {
+  border-color: rgba(76, 101, 130, 0.14);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0 9px 28px rgba(19, 43, 69, 0.07),
+    inset 0 1px rgba(255, 255, 255, 0.84);
+}
+
+body .morning-tool-actions .btn:not(:disabled) {
+  border-color: rgba(62, 88, 117, 0.15);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(229, 236, 244, 0.86));
+  color: #26374a;
+}
+
+body .morning-tool-actions .btn:not(:disabled):hover {
+  border-color: rgba(41, 151, 255, 0.3);
+  background: linear-gradient(180deg, #fff, #e7f2fd);
+}
+
+/* Fleet cards: give data its own rows and blend the van cutout into the card. */
+body .rivian-panel.simplified .rivian-card:not(.expanded) {
+  min-height: 174px;
+  padding: 12px;
+}
+
+body .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-card-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  grid-template-areas:
+    "title art"
+    "sources art"
+    "charge charge"
+    "status status"
+    "issue issue";
+  align-items: start;
+  gap: 6px 10px;
+}
+
+body .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-copy {
+  display: contents;
+}
+
+body .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-title-line {
+  grid-area: title;
+  align-self: center;
+  min-width: 0;
+  min-height: 24px;
+}
+
+body .rivian-panel.simplified .rivian-card:not(.expanded) .fleet-source-badges {
+  grid-area: sources;
+  align-self: start;
+  margin: 0;
+}
+
+body .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-van-art {
+  grid-area: art;
+  align-self: center;
+  justify-self: end;
+  width: 92px;
+  height: 48px;
+  margin: 0;
+  background: transparent;
+  filter: none;
+}
+
+body .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-van-art img {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  mix-blend-mode: multiply;
+  filter: contrast(1.045) saturate(1.04);
+}
+
+body .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-charge-line {
+  grid-area: charge;
+  width: 100%;
+  min-width: 0;
+  margin-top: 5px;
+}
+
+body .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-charge-line strong {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+body .rivian-panel.simplified .rivian-card:not(.expanded) .fleet-card-status-line {
+  grid-area: status;
+  width: 100%;
+  margin-top: 2px;
+}
+
+body .rivian-panel.simplified .rivian-card:not(.expanded) .fleet-reported-issue {
+  grid-area: issue;
+}
+
+body .rivian-panel.simplified .detail-view .rivian-card:not(.expanded) .rivian-card-main {
+  grid-template-columns: minmax(0, 1fr) 118px;
+}
+
+body .rivian-panel.simplified .detail-view .rivian-card:not(.expanded) .rivian-van-art {
+  width: 118px;
+  height: 61px;
+}
+
+/* Whiparound header: controls size from their labels and never overlap. */
+body .whip-hero {
+  grid-template-columns: 54px minmax(220px, 0.7fr) minmax(610px, 1.3fr);
+}
+
+body .whip-import-controls {
+  grid-template-columns: minmax(190px, 0.72fr) minmax(0, 1.28fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+body .whip-import-actions {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(216px, 1.2fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+body .whip-import-actions .btn {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 10px;
+  justify-content: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body .whip-import-actions .btn:first-child {
+  font-size: 9px;
+}
+
+body .whip-import-actions .btn:first-child small {
+  margin-left: 1px;
+  font-size: 6px;
+  letter-spacing: -0.02em;
+}
+
+body .notification-button {
+  overflow: visible;
+}
+
+body .whip-import-controls > small {
+  overflow: visible;
+  text-align: left;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+/* Shared alignment and clipping safeguards for application chrome. */
+body :where(.btn, .icon-button, .nav-item, .morning-step) {
+  box-sizing: border-box;
+}
+
+body :where(.btn, .icon-button) {
+  align-items: center;
+  justify-content: center;
+}
+
+body :where(.toolbar, .sheet-toolbar, .toolbar-left, .toolbar-right) {
+  min-width: 0;
+}
+
+body :where(
+  .card-title,
+  .card-title h2,
+  .card-title h3,
+  .morning-tool-heading,
+  .morning-step span,
+  .team-import-card,
+  .fleet-clean-head
+) {
+  min-width: 0;
+}
+
+body :where(.card-title h2, .card-title h3, .morning-step strong) {
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Scroll performance
+ * The Tahoe gradients already provide visible depth, so static panels do not
+ * need hundreds of live backdrop-blur passes while long rosters are moving.
+ */
+body {
+  background-attachment: scroll;
+}
+
+body::before {
+  position: absolute;
+}
+
+body :where(
+  .main,
+  .sidebar,
+  .topbar,
+  .top-actions,
+  .top-actions .btn,
+  .top-actions .icon-button,
+  .context-bar,
+  .toolbar,
+  .sheet-toolbar,
+  .card,
+  .btn,
+  .icon-button,
+  .phase-strip,
+  .morning-workflow,
+  .morning-step,
+  .device-sheet-sticky-action,
+  .fleet-health-card,
+  .rivian-card,
+  .fleet-import-button,
+  .rivian-panel,
+  .driver-card,
+  .team-message-column,
+  .team-card,
+  .scheduled-driver-card,
+  .inventory-card
+) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body .team-grid > .driver-card,
+body .rostering-paycom-list > div,
+body .rostering-driver-note-list > div,
+body .inventory-grid > .inventory-card,
+body .fleet-card-shell {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 190px;
+}
+
+body .team-grid {
+  align-content: start;
+}
+
+@media (max-width: 760px) {
+  body {
+    background:
+      radial-gradient(circle at 12% -5%, rgba(41, 151, 255, 0.38), transparent 40%),
+      radial-gradient(circle at 100% 14%, rgba(103, 84, 255, 0.2), transparent 34%),
+      linear-gradient(155deg, #05070b, #0c1420 62%, #07111c);
+  }
+
+  body .main {
+    background:
+      linear-gradient(180deg, rgba(241, 246, 251, 0.93), rgba(226, 235, 245, 0.9)),
+      #e8eef5;
+  }
+
+  body .main::before {
+    inset-inline: 12%;
+  }
+
+  body .sidebar {
+    background:
+      radial-gradient(circle at 12% 0, rgba(59, 163, 255, 0.28), transparent 35%),
+      linear-gradient(165deg, rgba(27, 42, 61, 0.98), rgba(7, 12, 19, 0.98) 62%, rgba(8, 17, 29, 0.98));
+  }
+
+  body .topbar {
+    height: auto;
+    min-height: 104px;
+    padding: 9px 12px;
+    align-content: center;
+    gap: 8px;
+    border-radius: 0 0 22px 22px;
+    background:
+      radial-gradient(circle at 84% -60%, rgba(71, 164, 255, 0.3), transparent 49%),
+      linear-gradient(116deg, rgba(17, 26, 39, 0.98), rgba(7, 12, 20, 0.97) 64%, rgba(12, 24, 39, 0.98));
+  }
+
+  body .page-heading h1 {
+    max-width: 48vw;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    line-height: 1.05;
+  }
+
+  body .morning-workflow-head {
+    background:
+      radial-gradient(circle at 88% -30%, rgba(72, 171, 255, 0.3), transparent 48%),
+      linear-gradient(145deg, #16263c, #09111c 64%, #102035);
+  }
+
+  body .fleet-alert-squares {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  body .fleet-alert-squares > button {
+    min-height: 76px;
+    padding: 11px;
+  }
+
+  body .whip-hero {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  body .whip-import-controls {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr;
+  }
+
+  body .whip-import-actions {
+    grid-template-columns: 1fr;
+  }
+
+  body .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-card-main {
+    grid-template-columns: minmax(0, 1fr) 76px;
+  }
+
+  body .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-van-art {
+    width: 76px;
+    height: 40px;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  body .whip-hero {
+    grid-template-columns: 54px minmax(0, 1fr);
+  }
+
+  body .whip-import-controls {
+    grid-column: 1 / -1;
+  }
+}
+
+/*
+ * Keep the exact Picklist tables readable on medium desktop windows.
+ * Large displays keep the Cortex tracker on the right; narrower displays
+ * place it directly above the worksheet instead of clipping it off-canvas.
+ */
+@media screen and (min-width: 761px) and (max-width: 1600px) {
+  body .opening-picklist-sheet {
+    min-width: 1014px;
+    width: 1014px;
+    grid-template-columns: 702px 300px;
+    grid-template-rows: auto auto;
+    background: #000;
+  }
+
+  body .opening-picklist-main {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  body .opening-picklist-right {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  body .opening-picklist-swap-rail {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 0 12px;
+    background: #e9f0f4;
+  }
+
+  body .opening-picklist-swap-rail .picklist-swap-tracker {
+    position: static;
+    width: min(520px, 100%);
+  }
+
+  body .opening-picklist-swap-rail .picklist-swap-tracker-list {
+    max-height: 220px;
+  }
+
+  body .opening-picklist-swap-rail .picklist-swap-empty {
+    grid-template-columns: 34px minmax(0, 1fr);
+    align-items: center;
+    justify-items: start;
+    gap: 2px 10px;
+    padding: 18px;
+    text-align: left;
+  }
+
+  body .opening-picklist-swap-rail .picklist-swap-empty > b {
+    grid-row: 1 / 3;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  body .sidebar,
+  body .topbar {
+    background-color: #0c1420;
+    background-image: linear-gradient(150deg, #17273b, #080d15);
+  }
+
+  body .main {
+    background: #edf2f7;
+  }
+}
