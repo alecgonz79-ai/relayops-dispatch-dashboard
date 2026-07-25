@@ -1328,16 +1328,44 @@ function rosteringDispatchAssignments() {
 }
 function rosteringEmailHelperRows(plan=currentRosteringPlan()) {
   const services=new Map((plan.services||[]).map(service=>[service.id,service]));
-  return plan.assignments.filter(row=>row.associate&&services.get(row.serviceId)?.kind==='helper').map(row=>{const helper=driverDisplayName(row.associate),lead=String(row.route||'').trim();return lead&&!/^(?:no route generated|support|helper)$/i.test(lead)?`${lead} > ${helper}`:helper;});
+  return plan.assignments.filter(row=>row.associate&&services.get(row.serviceId)?.kind==='helper').map(row=>driverDisplayName(row.associate));
 }
 function rosteringAllocatedCounts(plan=currentRosteringPlan()) {
   const services=new Map((plan.services||[]).map(service=>[service.id,service]));
-  let rivian=0,helper=0;plan.assignments.forEach(row=>{if(!row.associate)return;const service=services.get(row.serviceId);if(service?.kind==='helper')helper++;else if(service?.id!=='xl-donations')rivian++;});
-  return {rivian,helper,total:rivian+helper};
+  let rivian=0,helper=0,total=0;plan.assignments.forEach(row=>{if(!row.associate)return;const service=services.get(row.serviceId);if(service?.kind==='helper'){helper++;return;}total++;if(service?.id!=='xl-donations')rivian++;});
+  return {rivian,helper,total};
 }
 function rosteringEmailTemplateText(plan=currentRosteringPlan()) {
-  const dispatch=rosteringDispatchAssignments(),helpers=rosteringEmailHelperRows(plan),groups=rosteringUnrosteredBackupGroups(plan),counts=rosteringAllocatedCounts(plan),line='---------------------------------------------------',names=rows=>rows.map(row=>driverDisplayName(row.name)).join('\n')||'';
-  return [`**Opener:** *1st* ${dispatch.opener1||''} /*2nd* ${dispatch.opener2||''}       **Fleet:** ${dispatch.fleet||''}`,'',`**Mid:** ${dispatch.mid||''}`,'',`**1 st Closer:** *${dispatch.closer1||''}*  **2nd Closer***: ${dispatch.closer2||''}*`,'',line,'**Helpers:**',helpers.join('\n'),line,'','**Back Ups:** ','','**VTO (2)**',names(groups.vto2),'','**VTO (4)**',names(groups.vto4),'',line,'**Allocated:**','',`***${counts.rivian} RIV***`,`***${counts.helper} HELPER***`,`***${counts.total} Total***`].join('\n');
+  const dispatch=rosteringDispatchAssignments(),helpers=rosteringEmailHelperRows(plan),groups=rosteringUnrosteredBackupGroups(plan),counts=rosteringAllocatedCounts(plan),line='---------------------------------------------------';
+  const names=rows=>rows.map(row=>`${driverDisplayName(row.name)}${driverProfileFlags(row.name).includes('modified-duty')||/modified\s*duty/i.test(row.role||'')?' ***\\*Mod Duty***':''}`).join('\n')||'';
+  return [
+    `**Opener:** *1st* ${dispatch.opener1||''} /*2nd* ${dispatch.opener2||''}       **Fleet:** ${dispatch.fleet||''}`,
+    '',
+    `**MidShift:** ${dispatch.mid||''}`,
+    '',
+    `**1 st Closer:** *${dispatch.closer1||''}*  **2nd Closer***: ${dispatch.closer2||''}*`,
+    '',
+    line,
+    '**Helpers:**',
+    '',
+    helpers.join('\n'),
+    '',
+    line,
+    '',
+    '**Back Ups:** ',
+    '',
+    '**VTO (2)**',
+    names(groups.vto2),
+    '',
+    '**VTO (4)**',
+    names(groups.vto4),
+    '',
+    line,
+    '**Allocated:**',
+    '',
+    `***${counts.rivian} RIV***`,
+    `***${counts.total} Total***`
+  ].join('\n');
 }
 async function copyRosteringEmailTemplateText() { const ok=await writeClipboardText(rosteringEmailTemplateText());toast(ok?'Roster email template copied':'Clipboard access was blocked',ok?'success':'error'); }
 function openRosteringDriverSwap(name='') {
@@ -1412,7 +1440,7 @@ function rosteringDriverNotesHtml() {
 }
 function rosteringEmailHandoffHtml(plan=currentRosteringPlan()) {
   const text=rosteringEmailTemplateText(plan),counts=rosteringAllocatedCounts(plan);
-  return `<section class="card rostering-email-handoff"><header><div><span class="eyebrow">EMAIL HANDOFF</span><h2>Unrostered shifts template</h2><p>Copy this into the route-total email after reviewing names and counts.</p></div><button class="btn small primary" data-action="copy-rostering-email-template">${ICONS.copy} Copy text</button></header><textarea readonly aria-label="Formatted unrostered shifts email template">${esc(text)}</textarea><footer><span>${counts.rivian} RIV · ${counts.helper} Helper · ${counts.total} total allocated</span><small>Backups come from unrostered PAYCOM shifts.</small></footer></section>`;
+  return `<section class="card rostering-email-handoff"><header><div><span class="eyebrow">EMAIL HANDOFF</span><h2>Unrostered shifts template</h2><p>Copy this into the route-total email after reviewing names and counts.</p></div><button class="btn small primary" data-action="copy-rostering-email-template">${ICONS.copy} Copy text</button></header><textarea readonly aria-label="Formatted unrostered shifts email template">${esc(text)}</textarea><footer><span>${counts.rivian} RIV · ${counts.total} total allocated</span><small>Backups come from unrostered PAYCOM shifts.</small></footer></section>`;
 }
 function rosteringHelperShiftsHtml(plan=currentRosteringPlan()) {
   const helpers=rosteringHelperPoolRows(),assigned=rosteringAssignedNameKeys(plan),hasHelperService=plan.services.some(service=>service.kind==='helper');

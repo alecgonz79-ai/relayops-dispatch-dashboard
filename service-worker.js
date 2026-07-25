@@ -1,4 +1,4 @@
-const CACHE='relayops-cloud-ready-v74';
+const CACHE='relayops-unrostered-template-v75';
 const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
 
 self.addEventListener('install',event=>{

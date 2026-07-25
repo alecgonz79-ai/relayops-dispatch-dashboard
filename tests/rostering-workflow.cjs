@@ -86,6 +86,7 @@ function run() {
     globalThis.__paycomHtml=rosteringPaycomHtml(autoPlan);globalThis.__backupEmail=rosteringBackupEmailText(autoPlan);globalThis.__backupGroups=rosteringUnrosteredBackupGroups(autoPlan);
     globalThis.__specialRoles=[{name:'Parker Pilot',role:'Pilot/Rescues'},{name:'Moe Modified',role:'Modified duty/Rescues'}].map(entry=>({category:rosteringPaycomCategoryFor(entry),eligible:rosteringEntryEligibleForRoster(entry),group:scheduleRoleGroup(entry.role),helper:canBecomeHelperRole(entry.role)}));
     globalThis.__eligibility={delivery:rosteringEntryEligibleForRoster({name:'Evan Stone',role:'Delivery Associate'}),flaggedRescue:rosteringEntryEligibleForRoster({name:'Nina Patel',role:'Rescue'}),plainRescue:rosteringEntryEligibleForRoster({name:'Rex Rescue',role:'Rescue'}),fleet:rosteringEntryEligibleForRoster({name:'Terry Trainer',role:'Fleet Coordinator/Rescue'}),fleetCategory:rosteringPaycomCategoryFor({name:'Terry Trainer',role:'Fleet Coordinator/Rescue'}),fleetGroup:scheduleRoleGroup('Fleet Coordinator/Rescue')};
+    ensureDriverProfile({name:'Zora VTO Four'}).profile.flags=['modified-duty'];
     globalThis.__emailTemplate=rosteringEmailTemplateText(autoPlan);
     state.rosteringPaycomCategory='vto2';globalThis.__vto2PaycomHtml=rosteringPaycomHtml(autoPlan);state.rosteringPaycomCategory='all';
     state.scheduleEntries.push({date:'7/15/2026',name:'Riley R',role:'Training',start:'11:15 AM',end:'9:15 PM'});
@@ -149,6 +150,10 @@ function run() {
   assert(context.__paycomHtml.includes('Copy email text') && context.__backupEmail.includes('VTO 2 · Rescue') && context.__backupEmail.includes('Uma Rescue') && context.__backupEmail.includes('Zora VTO Four') && context.__backupEmail.includes('Morgan Midshift'), 'Backup builder must produce grouped email-ready text');
   assert(context.__paycomHtml.includes('VTO 2 backup') && context.__paycomHtml.includes('Add to roster') && context.__paycomHtml.includes('Swap with rostered driver'), 'Unflagged Rescue cards must stay VTO 2 while eligible Delivery Associate or fairness-flagged Rescue cards expose roster controls');
   assert(context.__emailTemplate.includes('**Fleet:** Coach')&&!context.__emailTemplate.includes('**Fleet:** Coach T'), 'The unrostered shifts template must shorten dispatcher and Fleet Coordinator assignments to first names');
+  assert(context.__emailTemplate.includes('**MidShift:**')&&!context.__emailTemplate.includes('**Mid:**'), 'The unrostered shifts template must use the exact MidShift label');
+  assert(context.__emailTemplate.includes('**Helpers:**\n\nJohn Helper\n\n---------------------------------------------------\n\n**Back Ups:** \n\n**VTO (2)**'), 'Helpers, separator, Back Ups, and VTO 2 must preserve the requested blank-line layout');
+  assert(context.__emailTemplate.includes('Zora VTO Four ***\\*Mod Duty***'), 'Modified-duty backup drivers must carry the requested Mod Duty marker');
+  assert(context.__emailTemplate.includes('**Allocated:**\n\n***6 RIV***\n***6 Total***')&&!context.__emailTemplate.includes(' HELPER***'), 'Allocated output must contain only RIV and route Total lines');
   assert(context.__driverSwap.incoming==='Uma Rescue'&&!context.__driverSwap.displacedStillRostered&&context.__driverSwap.incomingCount===1, 'Swap with rostered driver must replace exactly one assignment without duplicating either driver');
   assert(context.__trainingHtml.includes('Riley R') && context.__trainingHtml.includes('Coach T') && context.__trainingHtml.includes('scheduled'), 'Ridealong shifts must render with saved display names beside scheduled Trainer-tagged drivers');
   assert(context.__trainingRidealongCount === 1, 'Canonical and nickname variants of the same ridealong must render as one training match');
