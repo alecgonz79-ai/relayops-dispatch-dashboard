@@ -151,6 +151,7 @@ function run() {
   assert(context.__paycomHtml.includes('VTO 2 backup') && context.__paycomHtml.includes('Add to roster') && context.__paycomHtml.includes('Swap with rostered driver'), 'Unflagged Rescue cards must stay VTO 2 while eligible Delivery Associate or fairness-flagged Rescue cards expose roster controls');
   assert(context.__emailTemplate.includes('Fleet: Coach')&&!context.__emailTemplate.includes('Fleet: Coach T'), 'The unrostered shifts template must shorten dispatcher and Fleet Coordinator assignments to first names');
   assert(context.__emailTemplate.includes('MidShift:')&&!context.__emailTemplate.includes('Mid:'), 'The unrostered shifts template must use the exact MidShift label');
+  assert(context.__emailTemplate.includes('1st Closer:')&&!context.__emailTemplate.includes('1 st Closer:')&&context.__emailTemplateHtml.includes('<strong>1st Closer:</strong>'), 'Plain and formatted email output must use the exact 1st Closer label');
   assert(context.__emailTemplate.includes('Helpers:\n\nJohn Helper\n\n---------------------------------------------------\n\nBack Ups:\n\nVTO (2)'), 'Helpers, separator, Back Ups, and VTO 2 must preserve the requested blank-line layout');
   assert(context.__emailTemplate.includes('Zora VTO Four Mod Duty'), 'Modified-duty backup drivers must carry the requested Mod Duty marker');
   assert(context.__emailTemplate.includes('Allocated:\n\n6 RIV\n6 Total')&&!context.__emailTemplate.includes('HELPER'), 'Allocated output must contain only RIV and route Total lines');
