@@ -52,7 +52,7 @@ jobs:
       - name: Build public site allowlist
         run: |
           mkdir -p _site/assets _site/vendor _site/supabase _site/google-sheets
-          cp index.html 404.html .nojekyll app.js cloud-sync.js service-worker.js styles.css _site/
+          cp index.html 404.html .nojekyll app.js cloud-sync.js service-worker.js styles.css macos-preview.css tahoe-preview.css tahoe-midnight-preview.css _site/
           cp assets/rivian-prime-van.png _site/assets/
           cp vendor/jszip.min.js _site/vendor/
           cp supabase/config.js _site/supabase/

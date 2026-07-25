@@ -1,4 +1,4 @@
-const CACHE='relayops-tahoe-published-v78';
+const CACHE='relayops-tahoe-published-v79';
 const CORE=[
   './',
   './index.html',

@@ -33,7 +33,7 @@
             window.location.reload();
           });
           navigator.serviceWorker
-            .register('./service-worker.js?v=20260725-tahoe-published-r1', { updateViaCache: 'none' })
+            .register('./service-worker.js?v=20260725-tahoe-published-r2', { updateViaCache: 'none' })
             .then(registration => registration.update())
             .catch(() => {});
         });

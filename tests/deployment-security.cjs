@@ -9,6 +9,7 @@ function assert(condition, message) {
 }
 
 const workflow = read('../.github/workflows/pages.yml');
+const index = read('../index.html');
 const connector = read('../live-connector/server.mjs');
 const app = read('../app.js');
 const cloud = read('../cloud-sync.js');
@@ -20,6 +21,10 @@ assert(/Run release regression gate/.test(workflow), 'GitHub Pages publishing mu
 assert(/node --check app\.js/.test(workflow) && /for test_file in tests\/\*\.cjs/.test(workflow), 'The Pages gate must run browser syntax checks and every CJS regression');
 assert(/path:\s*_site/.test(workflow), 'GitHub Pages must upload only the assembled _site directory');
 assert(!/upload-pages-artifact@[\s\S]{0,180}?path:\s*\.(?:\s|$)/.test(workflow), 'GitHub Pages must never publish the repository root');
+const localStylesheets = [...index.matchAll(/<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"'?]+)(?:\?[^"']*)?["']/g)]
+  .map(match => match[1])
+  .filter(href => !/^https?:\/\//.test(href));
+assert(localStylesheets.every(file => new RegExp(`\\b${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(workflow)), 'Every local stylesheet referenced by index.html must be included in the GitHub Pages allowlist');
 
 assert(/CONNECTOR_TOKEN/.test(connector), 'The live fleet connector must require a server-side bearer token');
 assert(/req\.headers\.authorization\s*!==\s*`Bearer \$\{CONNECTOR_TOKEN\}`/.test(connector), 'The connector must reject requests without the configured bearer token');
