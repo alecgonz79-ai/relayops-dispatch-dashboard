@@ -1,8 +1,25 @@
-const CACHE='relayops-rich-email-template-v77';
-const CORE=['./','./index.html','./styles.css','./app.js','./cloud-sync.js','./supabase/config.js','./vendor/jszip.min.js','./assets/rivian-prime-van.png'];
+const CACHE='relayops-tahoe-published-v78';
+const CORE=[
+  './',
+  './index.html',
+  './styles.css?v=20260724-rich-email-template-r6',
+  './macos-preview.css?v=20260725-tahoe-published-r1',
+  './tahoe-preview.css?v=20260725-tahoe-published-r1',
+  './tahoe-midnight-preview.css?v=20260725-tahoe-published-r6',
+  './app.js?v=20260724-closer-label-r12',
+  './cloud-sync.js?v=20260724-cloud-ready-r7',
+  './supabase/config.js?v=20260720-auth-redirect',
+  './vendor/jszip.min.js',
+  './assets/rivian-prime-van.png'
+];
 
 self.addEventListener('install',event=>{
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()));
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then(cache=>cache.addAll(CORE.map(url=>new Request(url,{cache:'reload'}))))
+      .then(()=>self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate',event=>{
@@ -15,7 +32,8 @@ self.addEventListener('fetch',event=>{
   if(url.origin!==location.origin)return;
   if(event.request.mode==='navigate'||/\.(?:js|css)$/.test(url.pathname)){
     const fallback=event.request.mode==='navigate'?'./index.html':event.request;
-    event.respondWith(fetch(event.request).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response;}).catch(()=>caches.match(fallback,{ignoreSearch:true})));
+    const freshRequest=new Request(event.request,{cache:'reload'});
+    event.respondWith(fetch(freshRequest).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response;}).catch(()=>caches.match(fallback,{ignoreSearch:true})));
     return;
   }
   event.respondWith(caches.match(event.request,{ignoreSearch:true}).then(cached=>cached||fetch(event.request).then(response=>{if(response.ok){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));}return response;})));
