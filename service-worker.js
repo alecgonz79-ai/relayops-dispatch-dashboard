@@ -1,4 +1,4 @@
-const CACHE='relayops-tahoe-published-v80';
+const CACHE='relayops-tahoe-published-v81';
 const CORE=[
   './',
   './index.html',
@@ -6,7 +6,7 @@ const CORE=[
   './macos-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260725-scroll-header-r7',
-  './app.js?v=20260724-closer-label-r12',
+  './app.js?v=20260725-mobile-parking-edit-r13',
   './cloud-sync.js?v=20260724-cloud-ready-r7',
   './supabase/config.js?v=20260720-auth-redirect',
   './vendor/jszip.min.js',

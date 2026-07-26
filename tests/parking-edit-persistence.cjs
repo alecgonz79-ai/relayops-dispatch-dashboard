@@ -12,17 +12,21 @@ assert(
 );
 assert(
   source.includes("doubleClick=event.detail>=2||now-last<500")&&
+  source.includes("el.addEventListener('pointerup',event=>{if(!['touch','pen'].includes(String(event.pointerType||'')))return;")&&
+  source.includes("mobileTap=el.dataset.parkingTouchOpened==='true'||parkingTapOpensEditor(event)")&&
+  source.includes("if(mobileTap||doubleClick)")&&
   source.includes("el.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation();beginParkingSlotEdit(el);})")&&
   source.includes("el.addEventListener('input',()=>{if(el.readOnly)return;updateParkingSlot(el.dataset.parkingId,el.value,false)")&&
   source.includes("el.addEventListener('blur',()=>finishParkingSlotEdit(el))"),
-  'Parking van inputs must require a double-click, update locally while typing, and finish the edit on blur'
+  'Parking van inputs must open on one mobile tap or a desktop double-click, update locally while typing, and finish the edit on blur'
 );
 assert(
   source.includes('readonly aria-readonly="true"')&&source.includes('title="Double-click to edit')&&
+  source.includes('tap once on mobile')&&
   source.includes("function beginParkingSlotEdit(el)")&&
   source.includes("el.readOnly=false")&&
   source.includes("el.readOnly=true"),
-  'Parking spots must stay read-only until a double-click explicitly opens that EV number for editing'
+  'Parking spots must stay read-only until a mobile tap or desktop double-click explicitly opens that EV number for editing'
 );
 assert(
   source.includes("if(activeParkingEditId||activeOperationalEditor()")&&
