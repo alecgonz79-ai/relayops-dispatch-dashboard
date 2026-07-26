@@ -75,7 +75,15 @@ vm.runInContext(`
   globalThis.__assigned=state.morningRoutes.map(row=>({ev:row.ev,device:row.deviceName,portable:row.portable}));
   globalThis.__unknown=normalizeFleetVehicle({name:'EV10',vin:'7FCEHEB79PN000010',active:'Active',operational:'Operational',source:'Amazon fleet list'});
   globalThis.__unknownCard=rivianCard(globalThis.__unknown);
-  globalThis.__manualWarnings={low:vehicleIssueForEquipmentId('5'),reported:vehicleIssueForEquipmentId('7')};
+  const warningRoute={routeUid:'warning-80',dsp:'LLOL',driver:'Battery Watch Driver',route:'CX180',wave:'11:15 AM',staging:'STG.V.1',service:'Standard Parcel',ev:'2',deviceName:'D2',portable:''};
+  globalThis.__manualWarnings={
+    low:vehicleIssueForEquipmentId('5'),
+    at80:vehicleIssueForEquipmentId('2'),
+    reported:vehicleIssueForEquipmentId('7'),
+    deviceRows:deviceSheetRows('ev'),
+    morning:morningWaveGroup({label:'WAVE 1',wave:'11:15 AM',rows:[warningRoute],pad:'A',hasTime:true,separatorRows:0},0),
+    fleetCard:rivianCard(vehicles[1])
+  };
   state.fleetFilter='low';
   invalidateOperationalAlertGroups();
   globalThis.__lowBatterySection={
@@ -108,9 +116,17 @@ assert(context.__unknown.battery === null && context.__unknown.miles === null, '
 assert(context.__unknownCard.includes('Unknown battery / range') && !context.__unknownCard.includes('63%'), 'Fleet card must honestly display unknown battery/range');
 assert(context.__unknownCard.includes('Battery unknown') && !context.__unknownCard.includes('Charge now'), 'Unknown charge must not be categorized as a zero-percent/charge-now battery');
 assert(context.__manualWarnings.low?.type === 'battery' && context.__manualWarnings.reported?.type === 'reported', 'Manual Morning Sheet edits must retain low-battery and reported-issue flags');
+assert(context.__manualWarnings.at80?.type === 'battery' && context.__manualWarnings.at80?.battery === 80, 'Morning and Device safety must use the inclusive 80% Fleet Health warning threshold');
+assert(context.__manualWarnings.deviceRows.includes('low-battery-vehicle-row') && context.__manualWarnings.deviceRows.includes('Low 80%'), 'Device and Portable Sheet must visibly flag an imported EV at 80%');
+assert(context.__manualWarnings.morning.includes('low-battery-van-cell') && context.__manualWarnings.morning.includes('Low battery 80%'), 'Morning Sheet must visibly flag an assigned EV at 80%');
+assert(context.__manualWarnings.fleetCard.includes('fleet-card-vehicle-name') && context.__manualWarnings.fleetCard.includes('EV2'), 'Fleet Health cards must render the imported van name in every view');
 assert(context.__lowBatterySection.threshold===80,'Fleet low-battery section threshold must be 80%');
 assert(context.__lowBatterySection.filtered.length===3&&['EV2','EV5','EV8'].every(name=>context.__lowBatterySection.filtered.includes(name)),'Low-battery filter must include every EV at 80% or lower and exclude EVs above 80%');
 assert(context.__lowBatterySection.chargeRows.join(',')==='EV5,EV8,EV2','Recommended charging section must use the same inclusive 80% threshold');
 assert(context.__lowBatterySection.alertCount===3&&context.__lowBatterySection.page.includes('80% or lower'),'Fleet alert counts and visible copy must explain the inclusive 80% threshold');
+
+const styles=fs.readFileSync(require.resolve('../styles.css'),'utf8');
+const tahoe=fs.readFileSync(require.resolve('../tahoe-midnight-preview.css'),'utf8');
+assert(styles.includes('.fleet-card-vehicle-name')&&tahoe.includes('.fleet-card-vehicle-name'),'Fleet card name visibility styles must remain available in the default and Tahoe themes');
 
 console.log('Fleet assignment safety and honest unknown-battery regression contracts passed');

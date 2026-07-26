@@ -141,6 +141,7 @@ button { cursor: pointer; }
 .device-sheet-table tr.low-battery-vehicle-row td { background:#fff0c8; }
 .morning-template-sheet td.grounded-van-cell { position:relative; color:#8f1712!important; background:#ffc9c4!important; box-shadow:inset 0 0 0 2px #d92d20; font-weight:900!important; }
 .morning-template-sheet td.grounded-van-cell::after { content:'GROUNDED'; position:absolute; right:2px; bottom:1px; color:#a31610; font:800 5px/1 Arial,sans-serif; letter-spacing:.03em; pointer-events:none; }
+.morning-template-sheet td.grounded-van-cell.low-battery-risk::after { content:'GROUNDED · LOW'; }
 .morning-template-sheet td.low-battery-van-cell { position:relative; color:#6f4c00!important; background:#ffe9a8!important; box-shadow:inset 0 0 0 2px #e0a100; font-weight:900!important; }
 .morning-template-sheet td.low-battery-van-cell::after { content:'LOW'; position:absolute; right:2px; bottom:1px; color:#795300; font:800 5px/1 Arial,sans-serif; pointer-events:none; }
 .device-sheet-card.gas-list thead th { background:#2e3530; }
@@ -2615,6 +2616,7 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .opening-picklist-main [data-picklist-view]:hover { background:#f3f9ff; box-shadow:inset 0 0 0 1px #78b4dd; }
 .opening-picklist-main [data-picklist-edit] { background:#fff!important; outline:2px solid #3b82f6; outline-offset:-2px; caret-color:#123d5a; }
 .opening-picklist-main .grounded-van-cell { background:#ffd6d2!important; box-shadow:inset 0 0 0 2px #ef4035; }
+.opening-picklist-main .grounded-van-cell::after { content:'GROUNDED'; position:absolute; right:2px; bottom:1px; color:#a31610; font:800 5px/1 Arial,sans-serif; letter-spacing:.03em; pointer-events:none; }
 .morning-template-sheet tr.route-vacancy-row > td:not(.sheet-spacer-col):not(.pad-label),
 .opening-picklist-main tr.route-vacancy-row > td:not(.picklist-wave-label):not(.picklist-pad) {
   background:#ffe1de!important;
@@ -2644,6 +2646,7 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .route-driver-row.route-vacancy-row strong { color:#b42318; }
 .route-driver-row.route-vacancy-row > div:first-child span { color:#8f1712; }
 .opening-picklist-main .low-battery-van-cell { background:#ffe29a!important; box-shadow:inset 0 0 0 2px #d29a00; }
+.opening-picklist-main .grounded-van-cell.low-battery-risk::after { content:'GROUNDED · LOW'; }
 .opening-picklist-main .reported-van-cell { background:#fff1c8!important; }
 .opening-picklist-right { min-width:0; display:flex; flex-direction:column; background:#fff; }
 .picklist-swap-tracker{flex:0 0 auto;border:1px solid #111;background:#f7fafc;font-family:Manrope,Arial,sans-serif}.picklist-swap-tracker>header{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:36px;padding:6px 8px;background:#1f3d52;color:#fff}.picklist-swap-tracker>header>span{display:grid;gap:1px}.picklist-swap-tracker>header strong{font-size:8px;letter-spacing:.08em}.picklist-swap-tracker>header small{color:#c8dae5;font-size:6px}.picklist-swap-tracker>header>b{display:grid;place-items:center;min-width:22px;height:22px;border-radius:7px;background:#78c7ef;color:#123d58;font-size:9px}.picklist-swap-tracker-list{display:grid;max-height:178px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}.picklist-swap-tracker-list>label{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 25px;align-items:center;gap:4px;min-height:39px;padding:5px 5px 5px 8px;border-bottom:1px solid #cdd8df;background:#fff;cursor:pointer}.picklist-swap-tracker-list>label:hover{background:#f0f8fc}.picklist-swap-tracker-list>label.confirmed{background:#effaf2}.picklist-swap-tracker-list>label>span{display:grid;grid-template-columns:minmax(0,1fr) 17px minmax(0,1fr);align-items:center;gap:3px;min-width:0}.picklist-swap-tracker-list em{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#29495e;font-size:7px;font-style:normal;font-weight:900}.picklist-swap-tracker-list em:nth-of-type(2){color:#23704a}.picklist-swap-tracker-list i{color:#8061aa;text-align:center;font-size:11px;font-style:normal;font-weight:900}.picklist-swap-tracker-list small{grid-column:1/-1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#718691;font-size:6px}.picklist-swap-tracker-list input{position:absolute;opacity:0;pointer-events:none}.picklist-swap-tracker-list label>b{display:grid;place-items:center;width:20px;height:20px;border:1.5px solid #91a5b2;border-radius:6px;background:#fff;color:transparent;font-size:10px}.picklist-swap-tracker-list label.confirmed>b{border-color:#48a76c;background:#48a76c;color:#fff}.picklist-swap-tracker-list label:focus-within>b{outline:2px solid #4d9dcc;outline-offset:1px}.picklist-swap-empty{padding:16px 10px;color:#778b96;text-align:center;font-size:7px;font-weight:700}
@@ -3146,7 +3149,8 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .rivian-panel.simplified .detail-view .rivian-card:not(.expanded) .rivian-card-main{grid-template-columns:minmax(0,1fr) 104px;gap:12px}
 .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-copy{display:grid;align-content:start;min-width:0}
 .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-title-line{min-height:18px;gap:4px;overflow:hidden}
-.rivian-panel.simplified .rivian-card:not(.expanded) .rivian-copy h3{max-width:100%;font-size:12px;line-height:1.05}
+.rivian-panel.simplified .rivian-card:not(.expanded) .rivian-copy h3{display:block!important;min-width:48px;max-width:100%;font-size:12px;line-height:1.05}
+.rivian-panel.simplified .rivian-card:not(.expanded) .fleet-card-vehicle-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-van-art{width:82px;height:43px;margin:28px 0 0;justify-self:end;align-self:start;flex:0 0 auto}
 .rivian-panel.simplified .detail-view .rivian-card:not(.expanded) .rivian-van-art{width:104px;height:54px;margin-top:10px}
 .rivian-panel.simplified .rivian-card:not(.expanded) .rivian-charge-line{max-width:100%;margin-top:8px;gap:6px}
