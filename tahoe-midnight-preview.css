@@ -882,7 +882,7 @@ body .team-grid {
     width: 1014px;
     grid-template-columns: 702px 300px;
     grid-template-rows: auto auto;
-    background: #000;
+    background: linear-gradient(90deg, #fff 0 702px, #000 702px 714px, #fff 714px 1014px);
   }
 
   body .opening-picklist-main {

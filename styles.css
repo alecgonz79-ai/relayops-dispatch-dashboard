@@ -2580,7 +2580,7 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .print-picklist-button { min-height:36px; white-space:nowrap; }
 .picklist-edit-help { padding:9px 15px; color:#254f6d; background:#e9f6ff; border-bottom:1px solid #bedcf0; font-size:9px; font-weight:800; }
 .opening-picklist-scroll { width:100%; max-width:100%; overflow:auto; background:#dfe6ea; -webkit-overflow-scrolling:touch; overflow-anchor:none; }
-.opening-picklist-sheet { min-width:1386px; width:1386px; display:grid; grid-template-columns:702px 300px 360px; gap:12px; align-items:start; background:linear-gradient(90deg,#000 0 1014px,#e9f0f4 1014px); font-family:Arial,Helvetica,sans-serif; color:#050505; }
+.opening-picklist-sheet { min-width:1386px; width:1386px; display:grid; grid-template-columns:702px 300px 360px; gap:12px; align-items:start; background:linear-gradient(90deg,#fff 0 702px,#000 702px 714px,#fff 714px 1014px,#e9f0f4 1014px); font-family:Arial,Helvetica,sans-serif; color:#050505; }
 .opening-picklist-main,.picklist-side-table { width:100%; min-width:0; border-collapse:collapse; table-layout:fixed; background:#fff; }
 .opening-picklist-main { width:702px; font-size:12px; font-weight:700; }
 .opening-picklist-main .pick-col-wave { width:62px; }
@@ -2598,8 +2598,8 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 .opening-picklist-main tbody td { height:23px; line-height:18px; }
 .opening-picklist-main td.picklist-data-cell:not(.picklist-wave-label) { text-align:center; vertical-align:middle; }
 .opening-picklist-main td.picklist-driver { font-size:11px; font-weight:800; text-align:center; }
-.opening-picklist-main .picklist-wave-label { position:relative; padding:0; background:#fff; overflow:visible; }
-.opening-picklist-main .picklist-wave-label span { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) rotate(-90deg); white-space:nowrap; font-size:36px; font-weight:400; line-height:1; }
+.opening-picklist-main .picklist-wave-label { position:relative; padding:0; background:#fff; overflow:hidden; }
+.opening-picklist-main .picklist-wave-label span { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) rotate(-90deg); white-space:nowrap; font-size:var(--picklist-wave-font,36px); font-weight:400; line-height:1; }
 .picklist-wave-delete { position:absolute; z-index:8; left:4px; top:50%; width:21px; height:27px; display:grid; place-items:center; padding:3px; border:1px solid #ed9b97; border-radius:6px; background:#fff1ef; color:#c9261c; transform:translateY(-50%); cursor:pointer; }
 .picklist-wave-delete svg { width:13px; height:13px; }
 .picklist-wave-delete:hover { background:#ffd9d5; border-color:#df433a; }
@@ -2757,7 +2757,7 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
   .print-picklist-button { width:100%; }
   .picklist-tool-actions { align-items:stretch; flex-direction:column; }
   .picklist-tool-actions .btn { width:100%; }
-  .opening-picklist-sheet { min-width:1014px; width:1014px; grid-template-columns:702px 300px; grid-template-rows:auto auto; background:#000; }
+  .opening-picklist-sheet { min-width:1014px; width:1014px; grid-template-columns:702px 300px; grid-template-rows:auto auto; background:linear-gradient(90deg,#fff 0 702px,#000 702px 714px,#fff 714px 1014px); }
   .opening-picklist-main { grid-column:1; grid-row:2; }
   .opening-picklist-right { grid-column:2; grid-row:2; }
   .opening-picklist-swap-rail { grid-column:1/-1; grid-row:1; display:flex; justify-content:flex-start; padding:10px; background:#e9f0f4; }

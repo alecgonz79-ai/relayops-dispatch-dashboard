@@ -1073,7 +1073,8 @@ function openingPicklistSectionHtml(section={},sectionIndex=0) {
   const cell=(row,index,field,value,cls='')=>{const equipment=field==='ev'?String(row?.ev||value||''):String(value||''),vehicleIssue=field==='ev'?vehicleIssueForEquipmentId(equipment):null,equipmentType=field==='deviceName'?'device':field==='portable'?'portable':'',equipmentIssue=equipmentType?equipmentIssueFor(equipmentType,equipment):null,duplicate=field==='ev'&&duplicateMorningEquipmentRoutes(equipment).length>1,issueClass=duplicate?'duplicate-van-cell':vehicleIssue?.type==='grounded'?'grounded-van-cell':vehicleIssue?.type==='battery'?'low-battery-van-cell':vehicleIssue?.type==='reported'?'reported-van-cell':equipmentIssue?'reported-equipment-cell':'',vacant=field==='driver'&&routeAssignmentVacant(row),vacancyLabel=vacant?(routeMissingPrimary(row)?(String(row?.driver||'').trim()?'DRIVER NEEDED':'UNASSIGNED DRIVER'):'HELPER NEEDED'):'';return `<td class="picklist-data-cell ${cls} ${issueClass} ${vacant?'route-vacancy-driver-cell':''}" ${vacant?`data-vacancy-label="${esc(vacancyLabel)}"`:''} ${field==='driver'&&row?driverProfileAttrs(row.driver):''} ${openingPicklistCellAttrs(section,sectionIndex,row,index,field)}>${equipmentIssue?`<button type="button" class="equipment-issue-trigger active" data-action="open-equipment-issue" data-equipment-type="${equipmentType}" data-equipment-id="${esc(equipment)}">⚠</button>`:''}${esc(value||'')}${duplicateVehiclePopoverHtml(equipment)}${vehicleIssuePopoverHtml(row?.route||'',equipment,vehicleIssue)}${equipmentIssuePopoverHtml(equipmentType,equipment)}</td>`;};
   const pending=state.pendingPicklistWaveDelete?.key===section.key;
   const renderedCapacity=rows.length,padSpan=renderedCapacity+(section.hasTime?1:0);
-  const body=rows.map((row,index)=>`<tr class="${routeAssignmentVacant(row)?'route-vacancy-row':''}">${index===0?`<td class="picklist-wave-label picklist-data-cell" rowspan="${renderedCapacity}" data-picklist-meta="label" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'waveLabel')}><button type="button" class="picklist-wave-delete" data-action="request-delete-picklist-wave" data-section-key="${esc(section.key)}" aria-label="Delete ${esc(section.label)}" contenteditable="false">${ICONS.trash}</button><span>${esc(section.label)}</span></td>`:''}${cell(row,index,'driver',routeDriverDisplayValue(row),'picklist-driver')}${cell(row,index,'route',row?.route||'')}${cell(row,index,'staging',row?.staging||'')}${index===0?`<td class="picklist-pad picklist-data-cell" rowspan="${padSpan}" data-picklist-meta="pad" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'padOverride')}><span>${esc(section.pad||'')}</span></td>`:''}${cell(row,index,'ev',row?routeEquipmentValue(row):'')}${cell(row,index,'deviceName',row?.deviceName||'')}${cell(row,index,'portable',row?.portable||'')}</tr>`).join('');
+  const waveLabelLength=Math.max(1,String(section.label||'').length),waveLabelFont=Math.max(8,Math.min(36,Math.floor((renderedCapacity*23-8)/(waveLabelLength*.58))));
+  const body=rows.map((row,index)=>`<tr class="${routeAssignmentVacant(row)?'route-vacancy-row':''}">${index===0?`<td class="picklist-wave-label picklist-data-cell" style="--picklist-wave-font:${waveLabelFont}px" rowspan="${renderedCapacity}" data-picklist-meta="label" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'waveLabel')}><button type="button" class="picklist-wave-delete" data-action="request-delete-picklist-wave" data-section-key="${esc(section.key)}" aria-label="Delete ${esc(section.label)}" contenteditable="false">${ICONS.trash}</button><span>${esc(section.label)}</span></td>`:''}${cell(row,index,'driver',routeDriverDisplayValue(row),'picklist-driver')}${cell(row,index,'route',row?.route||'')}${cell(row,index,'staging',row?.staging||'')}${index===0?`<td class="picklist-pad picklist-data-cell" rowspan="${padSpan}" data-picklist-meta="pad" ${openingPicklistCellAttrs(section,sectionIndex,null,index,'padOverride')}><span>${esc(section.pad||'')}</span></td>`:''}${cell(row,index,'ev',row?routeEquipmentValue(row):'')}${cell(row,index,'deviceName',row?.deviceName||'')}${cell(row,index,'portable',row?.portable||'')}</tr>`).join('');
   const time=section.hasTime?`<tr class="picklist-wave-time"><td class="picklist-data-cell" data-picklist-meta="waveTime" ${openingPicklistCellAttrs(section,sectionIndex,null,renderedCapacity,'waveTime')}>${esc(openingPicklistTime(section))}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`:'';
   return `<tbody class="picklist-section ${section.hasTime?'wave':'adhoc'} ${pending?'delete-pending':''}">${body}${time}<tr class="picklist-black-divider"><td colspan="8"></td></tr></tbody>`;
 }
@@ -4736,6 +4737,26 @@ const filterScheduledRosterSoon=frameThrottle(el=>{
   const query=nameKey(el.value),panel=el.closest('.scheduled-section');
   panel?.querySelectorAll('[data-roster-name]').forEach(row=>{row.hidden=Boolean(query&&!String(row.dataset.rosterName||'').includes(query));});
 });
+function focusRosterSearchWithoutPageJump(input,event) {
+  if(!input||document.activeElement===input)return;
+  const memory=captureUiScrollMemory(),version=++operationalScrollAnchorVersion,searchKey=input.dataset.rosterSearch||'';
+  event?.preventDefault?.();
+  operationalInteractionUntil=Date.now()+5000;
+  operationalScrollAnchor={memory,version,at:Date.now()};
+  input.focus?.({preventScroll:true});
+  const restore=()=>{
+    if(memory.page!==state.page||Date.now()>operationalInteractionUntil)return;
+    const current=input.isConnected?input:[...document.querySelectorAll('[data-roster-search]')].find(el=>(el.dataset.rosterSearch||'')===searchKey);
+    if(current&&document.activeElement!==current)current.focus?.({preventScroll:true});
+    restoreUiScrollMemory(memory);
+    operationalScrollAnchor={memory,version,at:Date.now()};
+  };
+  restore();
+  window.requestAnimationFrame?.(restore);
+  setTimeout(restore,80);
+  setTimeout(restore,240);
+  setTimeout(restore,600);
+}
 function filterVtoRouteSwapOptions(input) {
   const query=nameKey(input?.value||''),select=document.getElementById('vto-route-swap-target');if(!select)return;
   let first=null,count=0;[...select.options].forEach(option=>{const match=!query||String(option.dataset.vtoRouteSearch||'').includes(query);option.hidden=!match;option.disabled=!match;if(match){count++;if(!first)first=option;}});
@@ -4755,7 +4776,7 @@ let deferredCloudRender=false;
 let operationalInteractionUntil=0;
 let operationalScrollAnchor=null;
 let operationalScrollAnchorVersion=0;
-const OPERATIONAL_INTERACTION_SELECTOR='[data-device-sheet-field],[data-device-custom-field],[data-picklist-view],[data-picklist-edit],.morning-template-sheet [data-view-field],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad],[data-parking-id],[data-parking-battery],[data-parking-notes],[data-parking-date],[data-charging-check-date],[data-parking-kind]';
+const OPERATIONAL_INTERACTION_SELECTOR='[data-device-sheet-field],[data-device-custom-field],[data-picklist-view],[data-picklist-edit],.morning-template-sheet [data-view-field],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-roster-search],[data-screenshot-review-pad],[data-parking-id],[data-parking-battery],[data-parking-notes],[data-parking-date],[data-charging-check-date],[data-parking-kind]';
 const OPERATIONAL_SCROLL_PANE_SELECTOR='.sheet-scroll,.opening-picklist-scroll,.picklist-sheet-scroll,.device-sheet-table-wrap,.device-sheet-scroll';
 let operationalEditScrollLock=null;
 let operationalUserScrollUntil=0;
@@ -4779,7 +4800,7 @@ function recordNavigationTiming(page='',startedAt=Date.now(),cached=false) {
 }
 function activeOperationalEditor() {
   const el=document.activeElement;
-  return Boolean(el&&el!==document.body&&el.matches?.('[data-device-sheet-field],[data-device-custom-field],[data-picklist-edit],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-screenshot-review-pad],[data-parking-id],[data-parking-battery],[data-parking-notes],[data-parking-date],[data-charging-check-date],[data-parking-kind]'));
+  return Boolean(el&&el!==document.body&&el.matches?.('[data-device-sheet-field],[data-device-custom-field],[data-picklist-edit],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-roster-search],[data-screenshot-review-pad],[data-parking-id],[data-parking-battery],[data-parking-notes],[data-parking-date],[data-charging-check-date],[data-parking-kind]'));
 }
 function rememberOperationalScrollAnchor() {
   operationalScrollAnchor={memory:captureUiScrollMemory(),version:++operationalScrollAnchorVersion,at:Date.now()};
@@ -5091,7 +5112,10 @@ function bind() {
   document.querySelectorAll('[data-rostering-paycom-search]').forEach(el=>el.addEventListener('input',()=>filterRosteringPaycomSoon(el)));
   document.querySelectorAll('[data-rostering-driver-note-search]').forEach(el=>el.addEventListener('input',()=>filterRosteringDriverNotesSoon(el)));
   document.querySelectorAll('[data-team-search]').forEach(el=>el.addEventListener('input',()=>filterTeamDirectorySoon(el.value)));
-  document.querySelectorAll('[data-roster-search]').forEach(el=>el.addEventListener('input',()=>filterScheduledRosterSoon(el)));
+  document.querySelectorAll('[data-roster-search]').forEach(el=>{
+    el.addEventListener('pointerdown',event=>focusRosterSearchWithoutPageJump(el,event));
+    el.addEventListener('input',()=>filterScheduledRosterSoon(el));
+  });
   const vtoRouteSearch=document.getElementById('vto-route-swap-search');if(vtoRouteSearch)vtoRouteSearch.addEventListener('input',()=>filterVtoRouteSwapOptions(vtoRouteSearch));
   const preferredVehicleSearch=document.querySelector?.('[data-preferred-vehicle-search]');if(preferredVehicleSearch)preferredVehicleSearch.addEventListener('input',()=>filterPreferredVehicleDrivers(preferredVehicleSearch.value));
   document.querySelectorAll('[data-preferred-vehicle-driver]').forEach(input=>input.addEventListener('change',()=>{const row=input.closest?.('label');row?.classList?.toggle('selected',input.checked);const status=row?.querySelector?.(':scope > b');if(status)status.textContent=input.checked?'Prioritized':'Select';}));
