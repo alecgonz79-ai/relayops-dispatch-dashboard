@@ -1086,7 +1086,7 @@ function picklistVtoDriverCell(group='',index=0,row=null,value='') {
   if(!name)return input;
   const action=(target,text,tone='')=>`<button type="button" class="${esc(tone)}" data-action="picklist-vto-action" data-vto-target="${esc(target)}" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}">${esc(text)}</button>`;
   const swap=`<button type="button" class="swap-route" data-action="open-vto-route-swap" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}" data-vto-label="${esc(label)}">Swap To Route</button>`;
-  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}" aria-haspopup="menu" aria-expanded="false">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('adhoc','Adhoc','adhoc')}</div></div></div>`;
+  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}" aria-haspopup="menu" aria-expanded="false">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('adhoc','Adhoc','adhoc')}${action('remove','Remove Driver','remove-driver')}</div></div></div>`;
 }
 function openingPicklistCallOffRows() {
   return Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([key,value])=>({key,name:value.name||'',reason:state.callOffReasons?.[key]||'',route:value.route||''})).sort((a,b)=>a.name.localeCompare(b.name));
@@ -1397,7 +1397,8 @@ function applyRosteringDriverSwap() {
 function rosteringPaycomHtml(plan=currentRosteringPlan()) {
   const assigned=rosteringAssignedNameKeys(plan),seen=new Set(),entries=scheduleEntriesForDate(state.rosteringDate).filter(entry=>{const key=driverIdentityKey(entry.name);if(!key||seen.has(key))return false;seen.add(key);return true;}).sort((a,b)=>Number(assigned.has(driverIdentityKey(b.name)))-Number(assigned.has(driverIdentityKey(a.name)))||driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})),category=state.rosteringPaycomCategory||'all',categories=[['all','All'],['rostered','Rostered'],['unrostered','Unrostered'],['vto4','Delivery Associate'],['vto2','Rescue / VTO 2'],['midshift','Midshift'],['training','Training'],['helper','Helpers'],['other','Other roles']];
   const categoryCount=key=>entries.filter(entry=>key==='all'||key==='rostered'&&assigned.has(driverIdentityKey(entry.name))||key==='unrostered'&&!assigned.has(driverIdentityKey(entry.name))||rosteringPaycomCategoryFor(entry)===key).length;
-  return `<section class="card rostering-paycom"><header><div><span class="eyebrow">PAYCOM</span><h2>All Scheduled driver shifts</h2><p>${state.scheduleImportName?`Source: ${esc(state.scheduleImportName)}`:'Import PAYCOM, then choose Random or ABC before Auto Roster.'}</p></div><div><button class="btn" data-action="schedule-import">${ICONS.upload} Import PAYCOM</button><button class="btn primary" data-action="rostering-auto-roster">Auto Roster scheduled drivers</button></div></header><div class="rostering-paycom-stats"><span><b>${entries.length}</b> scheduled shifts</span><span><b>${entries.filter(entry=>assigned.has(driverIdentityKey(entry.name))).length}</b> rostered</span><span><b>${entries.filter(entry=>rosteringStayHomeCount(entry.name)>0).length}</b> fairness flags</span></div><div class="rostering-paycom-categories" role="group" aria-label="Filter PAYCOM shifts">${categories.map(([key,label])=>`<button type="button" class="${category===key?'active':''}" data-action="rostering-paycom-category" data-rostering-category="${key}">${esc(label)} <b>${categoryCount(key)}</b></button>`).join('')}</div><label class="roster-search rostering-paycom-search">${ICONS.search||'⌕'}<input type="search" data-rostering-paycom-search placeholder="Search names or shift roles" aria-label="Search PAYCOM drivers"></label><div class="rostering-paycom-list">${entries.length?entries.map(entry=>{const isAssigned=assigned.has(driverIdentityKey(entry.name)),entryCategory=rosteringPaycomCategoryFor(entry),visible=category==='all'||category==='rostered'&&isAssigned||category==='unrostered'&&!isAssigned||category===entryCategory,training=entryCategory==='training',haystack=nameKey(`${driverDisplayName(entry.name)} ${entry.role} ${entryCategory}`);return `<div data-rostering-paycom-name="${esc(haystack)}" data-rostering-paycom-category="${entryCategory}" data-rostering-paycom-status="${isAssigned?'rostered':'unrostered'}" class="${isAssigned?'assigned':'unassigned'}" ${visible?'':'hidden'} ${driverProfileAttrs(entry.name)}><span><strong>${esc(driverDisplayName(entry.name))}</strong><small>${esc(entry.role)} · ${esc(entry.start)}${entry.end?`–${esc(entry.end)}`:''}</small></span>${rosteringPaycomFairnessBadge(entry.name)}${driverFlagBadgeHtml(entry.name)}${training?`<button class="btn small" data-action="rostering-focus-training">Training box</button>`:rosteringDriverActionButtons(entry,isAssigned)}</div>`;}).join(''):'<div class="rostering-empty"><strong>No PAYCOM shifts for this date</strong><span>Import CSV, XLS, XLSX, PDF, image, or text.</span></div>'}</div>${rosteringBackupBuilderHtml(plan)}</section>`;
+  const importName=plan.importName||state.scheduleImportName;
+  return `<section class="card rostering-paycom"><header><div><span class="eyebrow">PAYCOM</span><h2>All Scheduled driver shifts</h2><p>${importName?`Source: ${esc(importName)}`:'Import PAYCOM, then choose Random or ABC before Auto Roster.'}</p></div><div><button class="btn" data-action="schedule-import">${ICONS.upload} Import PAYCOM</button><button class="btn primary" data-action="rostering-auto-roster">Auto Roster scheduled drivers</button></div></header><div class="rostering-paycom-stats"><span><b>${entries.length}</b> scheduled shifts</span><span><b>${entries.filter(entry=>assigned.has(driverIdentityKey(entry.name))).length}</b> rostered</span><span><b>${entries.filter(entry=>rosteringStayHomeCount(entry.name)>0).length}</b> fairness flags</span></div><div class="rostering-paycom-categories" role="group" aria-label="Filter PAYCOM shifts">${categories.map(([key,label])=>`<button type="button" class="${category===key?'active':''}" data-action="rostering-paycom-category" data-rostering-category="${key}">${esc(label)} <b>${categoryCount(key)}</b></button>`).join('')}</div><label class="roster-search rostering-paycom-search">${ICONS.search||'⌕'}<input type="search" data-rostering-paycom-search placeholder="Search names or shift roles" aria-label="Search PAYCOM drivers"></label><div class="rostering-paycom-list">${entries.length?entries.map(entry=>{const isAssigned=assigned.has(driverIdentityKey(entry.name)),entryCategory=rosteringPaycomCategoryFor(entry),visible=category==='all'||category==='rostered'&&isAssigned||category==='unrostered'&&!isAssigned||category===entryCategory,training=entryCategory==='training',haystack=nameKey(`${driverDisplayName(entry.name)} ${entry.role} ${entryCategory}`);return `<div data-rostering-paycom-name="${esc(haystack)}" data-rostering-paycom-category="${entryCategory}" data-rostering-paycom-status="${isAssigned?'rostered':'unrostered'}" class="${isAssigned?'assigned':'unassigned'}" ${visible?'':'hidden'} ${driverProfileAttrs(entry.name)}><span><strong>${esc(driverDisplayName(entry.name))}</strong><small>${esc(entry.role)} · ${esc(entry.start)}${entry.end?`–${esc(entry.end)}`:''}</small></span>${rosteringPaycomFairnessBadge(entry.name)}${driverFlagBadgeHtml(entry.name)}${training?`<button class="btn small" data-action="rostering-focus-training">Training box</button>`:rosteringDriverActionButtons(entry,isAssigned)}</div>`;}).join(''):'<div class="rostering-empty"><strong>No PAYCOM shifts for this date</strong><span>Import CSV, XLS, XLSX, PDF, image, or text.</span></div>'}</div>${rosteringBackupBuilderHtml(plan)}</section>`;
 }
 function rosteringTrainingKey(name='') { return `${state.rosteringDate}|${driverIdentityKey(name)}`; }
 function rosteringManualTrainingKey(name='',kind='ridealong') { return `${state.rosteringDate}|${kind==='trainer'?'trainer':'ridealong'}|${driverIdentityKey(name)}`; }
@@ -4000,13 +4001,26 @@ function restoreReductionToOriginalRoute(name='') {
 }
 function restoreRosterStatus(name='',status='') {
   const exactName=contactForMorningDriver(name)?.name||name,key=scheduleDriverMarkKey(exactName);if(status==='reduction')return restoreReductionToOriginalRoute(name);
-  if(status==='stay-home'||status==='backup'){
+  if(status==='stay-home'){
+    const stayKey=dailyRosterIdentityKeys(state.scheduleStayHome,exactName)[0],record=(stayKey&&state.scheduleStayHome[stayKey])||currentScheduleEntries().find(entry=>driverIdentityKey(entry.name)===driverIdentityKey(exactName))||{},backup=setRosterBackupState(exactName,record.role||'Delivery Associate',scheduleBackupLabel(record.role||'Delivery Associate'));
+    if(backup){persist();render();toast(`${backup.name} restored to the ${backup.vto} backup list`);return true;}
+  }
+  if(status==='backup'){
     reconcileDailyRosterFlags(exactName,'paycom');
     // Explicitly suppress the automatic unrostered-backup rule. Without this,
     // Restore removed the old row and immediately recreated the same driver.
     state.scheduleDriverMarks[key]='paycom';
   }
   persist();render();toast(`${exactName} returned to the PAYCOM list`);return true;
+}
+function removeBackupDriver(name='') {
+  const exactName=contactForMorningDriver(name)?.name||canonicalDriverName(name)||String(name||'').trim();if(!exactName)return false;
+  reconcileDailyRosterFlags(exactName,'paycom');
+  // A scheduled but unrostered driver would otherwise be recreated
+  // immediately by automaticUnrosteredBackupRows().
+  state.scheduleDriverMarks[scheduleDriverMarkKey(exactName)]='paycom';
+  clearPicklistBackupDriver(exactName);
+  persist();render();toast(`${exactName} removed from the backup list`);return true;
 }
 function moveReductionToBackup(name='',role='') {
   const key=scheduleDriverMarkKey(name),record=state.scheduleReductions[key]||rosterRecord(name,role),resolvedRole=role||record.role||'Delivery Associate';if(isNonRosterableOtherShift(resolvedRole))return toast(`${record.name||name} has an Other role shift and cannot be moved to backups`,'error');reconcileDailyRosterFlags(name,'backup');state.scheduleDriverMarks[key]='backup';state.scheduleBackupRecords[key]={...record,role:resolvedRole};removeDriverAdhocRoute(name);persist();render();toast(`${record.name||name} moved to Backup drivers as ${scheduleBackupLabel(resolvedRole)}`);
@@ -4059,6 +4073,7 @@ function applyPicklistVtoAction(name='',role='',target='') {
   const exactName=contactForMorningDriver(name)?.name||name;
   if(!exactName)return false;
   if(target==='return')return restoreRosterStatus(exactName,'backup');
+  if(target==='remove')return removeBackupDriver(exactName);
   if(target==='calloff')return markRosterCalledOff(exactName,role);
   if(target==='reduction')return addRosterReduction(exactName,role);
   if(target==='stay-home')return markPaycomStayHome(exactName,role);
@@ -4341,6 +4356,19 @@ function commitSheetInputHistory(el) { const draft=el?sheetInputHistoryDrafts.ge
 function undoSheetChange() { const item=state.sheetHistory?.past?.pop();if(!item)return toast('Nothing to undo','error');state.sheetHistory.future=state.sheetHistory.future||[];state.sheetHistory.future.push({...item,snapshot:operationalSheetSnapshot()});restoreOperationalSheetSnapshot(item.snapshot);persist();render();toast(`Undid: ${item.label}`); }
 function redoSheetChange() { const item=state.sheetHistory?.future?.pop();if(!item)return toast('Nothing to redo','error');state.sheetHistory.past=state.sheetHistory.past||[];state.sheetHistory.past.push({...item,snapshot:operationalSheetSnapshot()});restoreOperationalSheetSnapshot(item.snapshot);persist();render();toast(`Redid: ${item.label}`); }
 function requestClearOperationalSheet(scope='morning') { state.pendingSheetClear=scope==='picklist'?'picklist':'morning';state.modal='clear-operational-sheet';render(); }
+function clearDailyBackupState() {
+  const datePrefix=`${state.morningOperationDate}|`;
+  state.openingPicklistBackupOverrides={};
+  state.scheduleBackupRecords=Object.fromEntries(Object.entries(state.scheduleBackupRecords||{}).filter(([key])=>!key.startsWith(datePrefix)));
+  state.scheduleDriverMarks=Object.fromEntries(Object.entries(state.scheduleDriverMarks||{}).filter(([key,value])=>!(key.startsWith(datePrefix)&&value==='backup')));
+  // Keep route-eligible PAYCOM names visible in the scheduled list, but
+  // explicitly suppress the automatic VTO rule after either sheet is cleared.
+  currentScheduleEntries().forEach(entry=>{
+    if(!automaticBackupLabel(entry.role)||rosterDriverUnavailable(entry.name))return;
+    const key=scheduleDriverMarkKey(entry.name),mark=state.scheduleDriverMarks[key];
+    if(!mark||mark==='backup'||mark==='paycom')state.scheduleDriverMarks[key]='paycom';
+  });
+}
 function flushOperationalSheetClear(scope='morning') {
   const cloud=window.RelayOpsCloud;
   if(!cloud?.configured||!cloud?.session||typeof cloud.save!=='function')return;
@@ -4362,9 +4390,8 @@ function confirmClearOperationalSheet() {
     state.openingPicklistTopics=['','','',''];state.openingPicklistNotes='';state.openingPicklistCalloffRows=6;state.openingPicklistTopicRows=4;state.openingPicklistBackupRows=21;state.openingPicklistCalloffDrafts=[];state.openingPicklistBackupOverrides={};state.openingPicklistLabels={};
     state.callOffDriverKeys=Object.fromEntries(Object.entries(state.callOffDriverKeys||{}).filter(([key])=>!key.startsWith(datePrefix)));
     state.callOffReasons=Object.fromEntries(Object.entries(state.callOffReasons||{}).filter(([key])=>!key.startsWith(datePrefix)));
-    state.scheduleBackupRecords=Object.fromEntries(Object.entries(state.scheduleBackupRecords||{}).filter(([key])=>!key.startsWith(datePrefix)));
-    state.scheduleDriverMarks=Object.fromEntries(Object.entries(state.scheduleDriverMarks||{}).filter(([key,value])=>!(key.startsWith(datePrefix)&&value==='backup')));
   }
+  clearDailyBackupState();
   state.pendingSheetClear=null;state.modal=null;persist();render();toast(`${scope==='picklist'?'Opening Picklist':'Morning Sheet'} cleared · Undo is available`);flushOperationalSheetClear(scope);
 }
 function normalizedPicklistWave(value='',fallback='') {
@@ -7028,6 +7055,16 @@ function scheduleDateKey(value='') { const m=String(value).match(/(\d{1,2})\/(\d
 function scheduleImportDateKeys(entries=[]) {
   return [...new Set((entries||[]).map(entry=>scheduleDateKey(entry?.date)).filter(Boolean))];
 }
+function mergeScheduleEntriesByImportedDate(existing=[],incoming=[]) {
+  const prior=Array.isArray(existing)?existing:[],next=Array.isArray(incoming)?incoming:[],dates=new Set(scheduleImportDateKeys(next)),hasUndated=next.some(entry=>!scheduleDateKey(entry?.date));
+  const retained=prior.filter(entry=>{const date=scheduleDateKey(entry?.date);return date?!dates.has(date):!hasUndated;});
+  const unique=new Map();
+  [...retained,...next].forEach((entry,index)=>{
+    const signature=[scheduleDateKey(entry?.date)||'undated',driverIdentityKey(entry?.name)||nameKey(entry?.name),headerKey(entry?.role),String(entry?.start||'').trim(),String(entry?.end||'').trim()].join('|');
+    unique.set(signature||`row-${index}`,entry);
+  });
+  return [...unique.values()];
+}
 function alignScheduleImportDate(entries=[],destination='roster') {
   const dates=scheduleImportDateKeys(entries);if(!dates.length)return '';
   const current=destination==='rostering'?state.rosteringDate:state.morningOperationDate,target=dates.includes(current)?current:dates[0];
@@ -7065,7 +7102,8 @@ async function readFiles(files) {
     if(state.importPurpose==='schedule') {
       const entries=parsed.flatMap(file=>file.rows?.length?scheduleEntriesFromRows(file.rows,{fileName:file.name}):scheduleEntriesFromText(file.text||''));
       if(!entries.length)throw new Error('no schedule shifts');
-      const destination=state.scheduleImportDestination||'roster',entryDate=alignScheduleImportDate(entries,destination);state.scheduleEntries=entries;state.scheduleImportName=parsed.map(file=>file.name).join(' + ');
+      const destination=state.scheduleImportDestination||'roster',entryDate=alignScheduleImportDate(entries,destination),importName=parsed.map(file=>file.name).join(' + ');state.scheduleEntries=mergeScheduleEntriesByImportedDate(state.scheduleEntries,entries);
+      if(destination==='rostering'){const plan=currentRosteringPlan();plan.importName=importName;plan.importedAt=new Date().toISOString();}else state.scheduleImportName=importName;
       let helperAdded=0;if(destination==='rostering')helperAdded=syncRosteringHelperShifts(currentRosteringPlan());
       state.scheduleImportDestination='';state.importPurpose='morning';state.page=destination==='rostering'?'rostering':'roster';persist();render();
       const dateNote=entryDate?` · ${formatShortOperationDate(entryDate)}`:'';

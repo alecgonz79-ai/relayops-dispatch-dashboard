@@ -1,12 +1,12 @@
-const CACHE='relayops-tahoe-published-v81';
+const CACHE='relayops-tahoe-published-v82';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=20260724-rich-email-template-r6',
+  './styles.css?v=20260726-paycom-backup-r7',
   './macos-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260725-scroll-header-r7',
-  './app.js?v=20260725-mobile-parking-edit-r13',
+  './app.js?v=20260726-paycom-backup-r14',
   './cloud-sync.js?v=20260724-cloud-ready-r7',
   './supabase/config.js?v=20260720-auth-redirect',
   './vendor/jszip.min.js',
