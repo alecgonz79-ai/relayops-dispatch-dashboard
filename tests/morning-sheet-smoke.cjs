@@ -711,7 +711,7 @@ const checks = `
   const tsv = morningSheetTsv();
   const tsvRows = tsv.split('\\n').map(row => row.split('\\t'));
   if (!tsv.startsWith('WAVE 1\\tTaylor Driver') || !tsv.includes('\\n11:15 (1)\\t') || tsvRows.some(row => row.length !== 22) || tsvRows[0][8] !== '' || tsvRows[0][13] !== '' || tsv.includes('WAVE\\tDRIVER\\tROUTE')) throw new Error('Google Sheets TSV output should match the A-V template body');
-  if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 13) throw new Error('Template row padding missing');
+  if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 15) throw new Error('15-route Wave template padding missing');
   state.fitMorningRows = true;
   if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 1) throw new Error('Fit-to-drivers row sizing failed');
   if (!morningSheetPage().includes('✓ Fit to drivers')) throw new Error('Fit-to-drivers toggle missing');
@@ -721,7 +721,7 @@ const checks = `
   let capturedFormattedMorning = null;
   downloadBlob = (data,type,name) => { capturedFormattedMorning = { data, type, name }; };
   exportMorningTemplateSheet();
-  if (!capturedFormattedMorning || capturedFormattedMorning.name !== 'LLOL-opening-operations-formatted.xls' || capturedFormattedMorning.type !== 'application/vnd.ms-excel' || !capturedFormattedMorning.data.includes('rowspan="13"') || !capturedFormattedMorning.data.includes('WAVE 1') || !capturedFormattedMorning.data.includes('11:15 (1)') || !capturedFormattedMorning.data.includes('class="spacer"') || !capturedFormattedMorning.data.includes('PRE DVIC') || !capturedFormattedMorning.data.includes('CLOCK OUT TIME') || !capturedFormattedMorning.data.includes('<x:FreezePanes/>') || !capturedFormattedMorning.data.includes('<x:SplitHorizontal>1</x:SplitHorizontal>') || !capturedFormattedMorning.data.includes('<x:Name>Morning Operations</x:Name>')) throw new Error('Formatted morning XLS export missing original template layout');
+  if (!capturedFormattedMorning || capturedFormattedMorning.name !== 'LLOL-opening-operations-formatted.xls' || capturedFormattedMorning.type !== 'application/vnd.ms-excel' || !capturedFormattedMorning.data.includes('rowspan="15"') || !capturedFormattedMorning.data.includes('WAVE 1') || !capturedFormattedMorning.data.includes('11:15 (1)') || !capturedFormattedMorning.data.includes('class="spacer"') || !capturedFormattedMorning.data.includes('PRE DVIC') || !capturedFormattedMorning.data.includes('CLOCK OUT TIME') || !capturedFormattedMorning.data.includes('<x:FreezePanes/>') || !capturedFormattedMorning.data.includes('<x:SplitHorizontal>1</x:SplitHorizontal>') || !capturedFormattedMorning.data.includes('<x:Name>Morning Operations</x:Name>')) throw new Error('Formatted morning XLS export missing 15-route Wave layout');
   state.screenshotPreview = 'data:image/jpeg;base64,demo'; state.modal = 'screenshot';
   if (!modal().includes('Approve & save JPEG') || !modal().includes('Driver/Helper')) throw new Error('JPEG approval dialog missing');
   globalThis.__parseXlsx = parseXlsxArrayBuffer;
