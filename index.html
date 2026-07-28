@@ -33,7 +33,7 @@
             window.location.reload();
           });
           navigator.serviceWorker
-            .register('./service-worker.js?v=20260726-fleet-warning-r1', { updateViaCache: 'none' })
+            .register('./service-worker.js?v=20260728-cpu-efficient-r1', { updateViaCache: 'none' })
             .then(registration => registration.update())
             .catch(() => {});
         });

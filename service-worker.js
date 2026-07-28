@@ -1,4 +1,4 @@
-const CACHE='relayops-tahoe-published-v86';
+const CACHE='relayops-cpu-efficient-sync-v87';
 const CORE=[
   './',
   './index.html',
@@ -7,7 +7,7 @@ const CORE=[
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260726-fleet-warning-r1',
   './app.js?v=20260726-fleet-warning-r1',
-  './cloud-sync.js?v=20260724-cloud-ready-r7',
+  './cloud-sync.js?v=20260728-cpu-efficient-r1',
   './supabase/config.js?v=20260720-auth-redirect',
   './vendor/jszip.min.js',
   './assets/rivian-prime-van.png'
