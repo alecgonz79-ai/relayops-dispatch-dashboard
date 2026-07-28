@@ -1540,7 +1540,7 @@ function morningSheetPage() {
     <section class="morning-tool-group filter-group"><div class="morning-tool-heading"><span><strong>Find routes</strong><small>Show only the part of the sheet you need.</small></span><div class="morning-kpi-pills"><i><b>${rows.length}</b> routes</i><i><b>${rows.reduce((n,r)=>n+r.packages,0).toLocaleString()}</b> packages</i><i><b>${rows.reduce((n,r)=>n+r.stops,0).toLocaleString()}</b> stops</i><i class="${irregular?'warning':''}"><b>${irregular}</b> RTS flags</i></div></div><div class="morning-filter-form"><label><span>Wave</span><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></label><label><span>Staging</span><select data-morning-filter="staging"><option value="all">All staging locations</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></label><label><span>Pad</span><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></label><button class="btn subtle" data-action="clear-morning-filters">Clear filters</button><span class="morning-sort-note">${ICONS.chevron} Earliest wave first</span></div></section>
     <div class="morning-tool-grid">
       <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Work with the sheet</strong><small>Edit, select, or make the sheet compact.</small></span></div><div class="morning-tool-actions"><button class="btn ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Finish editing':'✎ Edit sheet'}</button><button class="btn ${state.copyMode?'lime':''}" data-action="toggle-morning-copy">${state.copyMode?'✓ Exit copy mode':'Copy cells'}</button><button class="btn ${state.fitMorningRows?'lime':''}" data-action="toggle-fit-rows">${state.fitMorningRows?'✓ Fit to drivers':'Remove blank rows'}</button></div></section>
-      <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Choose vans another way</strong><small>Optional alternatives to safe automatic assignment.</small></span></div><div class="morning-tool-actions morning-vehicle-actions"><button class="btn bag-ready-vans" data-action="assign-bag-ready-vans">${ICONS.phone} Bag Ready Vans</button><button class="btn" data-action="assign-vans-by-parking">${ICONS.van} Parking order</button><button class="btn" data-action="assign-ev-low">EV 1–58 low → high</button><button class="btn" data-action="assign-ev-random">Random EVs</button><button class="btn" data-action="assign-gas-vans">Gas vehicles</button><button class="btn danger-soft" data-action="clear-morning-evs">Clear EVs</button></div></section>
+      <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Choose vans another way</strong><small>Optional alternatives to safe automatic assignment.</small></span></div><div class="morning-tool-actions morning-vehicle-actions"><button class="btn bag-ready-vans" data-action="assign-bag-ready-vans">${ICONS.phone} Prepped Vans</button><button class="btn" data-action="assign-vans-by-parking">${ICONS.van} Parking order</button><button class="btn" data-action="assign-ev-low">EV 1–58 low → high</button><button class="btn" data-action="assign-ev-random">Random EVs</button><button class="btn" data-action="assign-gas-vans">Gas vehicles</button><button class="btn danger-soft" data-action="clear-morning-evs">Clear EVs</button></div></section>
       <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Backup and recovery</strong><small>Use only when you need to undo or paste manually.</small></span></div><div class="morning-tool-actions"><button class="btn" data-action="sheet-undo" ${state.sheetHistory?.past?.length?'':'disabled'}>↶ Undo</button><button class="btn" data-action="sheet-redo" ${state.sheetHistory?.future?.length?'':'disabled'}>↷ Redo</button><button class="btn" data-action="open-sheet-history">History</button><button class="btn" data-action="copy-morning-visible">${ICONS.copy} Copy fallback</button><button class="btn" data-action="open-sheets-helper">Paste box</button><button class="btn danger-soft" data-action="clear-morning-sheet">${ICONS.trash} Clear Morning Sheet</button></div></section>
     </div>
   </div></details>
@@ -7791,15 +7791,20 @@ function equipmentAssignmentFor(value='') {
   const item=state.equipmentImport?.details?.[normalizeEquipmentId(value)];
   return usableDeviceAssignment(item?.device)?item:null;
 }
+function preppedEquipmentAssignmentFor(value='') {
+  const item=equipmentAssignmentFor(value);
+  return item&&usableDeviceAssignment(item.portable)?item:null;
+}
 function clearEquipmentForRoute(route={}) {
   route.ev='';route.deviceName='';route.portable='';route.deviceReady=false;route.portableReady=false;
 }
-function automaticFleetVehiclePool({electricOnly=false,random=false}={}) {
+function automaticFleetVehiclePool({electricOnly=false,random=false,requirePortable=false}={}) {
   const seen=new Set(),rows=[];
   rivianFleet.forEach(vehicle=>{
     if(electricOnly&&!isElectricFleetVehicle(vehicle))return;
     const safety=fleetVehicleAssignmentEligibility(vehicle),identity=fleetEquipmentIdentity(vehicle),key=normalizeEquipmentId(identity?.label||'');
-    if(!safety.eligible||!key||seen.has(key)||!equipmentAssignmentFor(key))return;
+    const equipment=requirePortable?preppedEquipmentAssignmentFor(key):equipmentAssignmentFor(key);
+    if(!safety.eligible||!key||seen.has(key)||!equipment)return;
     seen.add(key);rows.push({vehicle,label:identity.label,key,safety});
   });
   rows.sort((a,b)=>routeCompare(a.label,b.label));
@@ -7859,9 +7864,9 @@ function assignOperationalVehicles() {
 }
 function assignBagReadyVehicles() {
   const targets=morningAssignmentTargets().filter(route=>!/helper/i.test(String(route.service||'')));if(!targets.length)return toast('No visible driver rows to assign','error');
-  const pool=automaticFleetVehiclePool({electricOnly:true});
-  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No Bag Ready Vans found · enter a Device beside a safe EV first (Portable may be blank)','error');}
-  assignAutomaticVehiclePool(targets,pool,'Bag Ready Vans');
+  const pool=automaticFleetVehiclePool({electricOnly:true,requirePortable:true});
+  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No Prepped Vans found · each safe EV needs both a Device and Portable','error');}
+  assignAutomaticVehiclePool(targets,pool,'Prepped Vans');
 }
 function clearMorningVehicleAssignments() {
   const targets=morningAssignmentTargets().filter(route=>!/helper/i.test(String(route.service||'')));if(!targets.length)return toast('No Morning Sheet vehicle assignments to clear','error');
@@ -7878,7 +7883,7 @@ function groundedParkingIds() {
 function assignVansByParking() {
   const targets=state.morningRoutes.filter(route=>route.dsp===state.dspCode&&route.route&&!String(route.route).startsWith('__blank_')).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||routeCompare(a.route,b.route));
   if(!targets.length)return toast('No Morning Sheet drivers to assign','error');
-  const grounded=groundedParkingIds(),values=(zones,reverse=false)=>[...new Set(zones.flatMap(zone=>{const slots=parkingSlots(zone);return reverse?[...slots].reverse():slots;}).map(parkedVanId).filter(id=>id&&!grounded.has(id)&&fleetVehicleAssignmentEligibility(id).eligible&&equipmentAssignmentFor(id)))];
+  const grounded=groundedParkingIds(),values=(zones,reverse=false)=>[...new Set(zones.flatMap(zone=>{const slots=parkingSlots(zone);return reverse?[...slots].reverse():slots;}).map(parkedVanId).filter(id=>id&&!grounded.has(id)&&fleetVehicleAssignmentEligibility(id).eligible&&preppedEquipmentAssignmentFor(id)))];
   const west=values(['west']),east=values(['east'],true),remainingHealthy=values(['northRight','northLeft','street','streetLower','west','east','gas']),allHealthy=[...new Set([...west,...east,...remainingHealthy])];
   const used=new Set(),cursors=new Map(),take=pool=>{let index=cursors.get(pool)||0,id='';while(index<pool.length&&!id){const candidate=pool[index++];if(!used.has(candidate))id=candidate;}cursors.set(pool,index);if(id)used.add(id);return id;};
   targets.forEach(clearEquipmentForRoute);
@@ -7891,7 +7896,7 @@ function assignVansByParking() {
   persist();render();
   const shortfall=targets.length-assigned.length;
   const preferredText=preferredRoutes.size?` · ${preferredRoutes.size} driver preference${preferredRoutes.size===1?'':'s'} honored`:'';
-  toast(shortfall?`${assigned.length}/${targets.length} vans assigned by parking order${preferredText} · ${shortfall} left blank because no additional verified safe parked van was available`:`${assigned.length} verified safe vans assigned by parking order${preferredText}${grounded.size?` · ${grounded.size} grounded skipped`:''}`,shortfall?'error':'');
+  toast(shortfall?`${assigned.length}/${targets.length} prepped vans assigned by parking order${preferredText} · ${shortfall} left blank because no additional safe parked van had both a Device and Portable`:`${assigned.length} verified prepped vans assigned by parking order${preferredText}${grounded.size?` · ${grounded.size} grounded skipped`:''}`,shortfall?'error':'');
 }
 function openGasVehicleAssignment() {
   const targets=morningAssignmentTargets();

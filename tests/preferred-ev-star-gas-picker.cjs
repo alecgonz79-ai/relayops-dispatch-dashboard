@@ -34,16 +34,20 @@ vm.runInContext(`
 
   const ev=(number)=>({name:'EV'+number,vin:'7FCEHEB79PN'+String(number).padStart(6,'0'),battery:95,miles:150,vehicleType:'Rivian EDV 700',operational:'Operational',active:'Active',source:'Amazon fleet list + FleetOS tracker',hasBattery:true,hasMiles:true,hasActive:true,hasOperational:true});
   const gas=(name,vin)=>({name,vin,battery:null,miles:null,vehicleType:'Ford Transit Cargo Van',operational:'Operational',active:'Active',source:'Amazon fleet list',hasBattery:false,hasMiles:false,hasActive:true,hasOperational:true});
-  rivianFleet.splice(0,rivianFleet.length,ev(1),ev(3),gas('F33','1FTYR3XM1PKA00033'));
-  state.equipmentImport={details:{'1':{device:'1',portable:''},'3':{device:'3',portable:'4'},F33:{device:'33',portable:'-'}}};
+  rivianFleet.splice(0,rivianFleet.length,ev(1),ev(2),ev(3),gas('F33','1FTYR3XM1PKA00033'));
+  state.equipmentImport={details:{'1':{device:'1',portable:'2'},'2':{device:'2',portable:''},'3':{device:'3',portable:'4'},F33:{device:'33',portable:'-'}}};
   driverProfileEntry('Alice Driver').profile.preferredEvs=['3'];
   state.morningRoutes=[
     {dsp:'LLOL',driver:'Alice Driver',route:'CX101',service:'Standard Parcel',wave:'11:15 AM',staging:'STG.V.1',ev:'',deviceName:'',portable:''},
-    {dsp:'LLOL',driver:'Bob Driver',route:'CX102',service:'Standard Parcel',wave:'11:20 AM',staging:'STG.V.2',ev:'',deviceName:'',portable:''}
+    {dsp:'LLOL',driver:'Bob Driver',route:'CX102',service:'Standard Parcel',wave:'11:20 AM',staging:'STG.V.2',ev:'',deviceName:'',portable:''},
+    {dsp:'LLOL',driver:'Cara Driver',route:'CX103',service:'Standard Parcel',wave:'11:25 AM',staging:'STG.V.3',ev:'',deviceName:'',portable:''}
   ];
-  parkingSlots=zone=>zone==='west'?[{value:'EV1'}]:zone==='east'?[{value:'EV3'}]:[];
+  parkingSlots=zone=>zone==='west'?[{value:'EV2'},{value:'EV1'}]:zone==='east'?[{value:'EV3'}]:[];
   assignVansByParking();
   globalThis.__parkingAssignments=state.morningRoutes.map(route=>route.ev);
+  state.morningRoutes.forEach(clearEquipmentForRoute);
+  assignBagReadyVehicles();
+  globalThis.__preppedAssignments=state.morningRoutes.map(route=>route.ev);
 
   openGasVehicleAssignment();
   globalThis.__gasInitial={routes:[...state.gasAssignmentRoutes],vans:[...state.gasAssignmentVans],html:modal()};
@@ -56,7 +60,9 @@ assert(context.__preferenceModal.includes('Who should receive EV1?')&&context.__
 assert(context.__deviceBefore.includes('open-preferred-vehicle-drivers')&&context.__deviceBefore.includes('device-priority-star active'),'Every EV row must expose its star and show saved priority');
 assert(context.__alicePreferred.join(',')==='1'&&context.__bobPreferred.length===0,'Saving an EV star must add selected drivers and remove unchecked drivers for that EV');
 assert(context.__deviceAfter.includes('Alice Driver prioritized for EV1'),'Active EV star must identify the prioritized driver');
-assert(context.__parkingAssignments.join(',')==='3,1','Parking-order assignment must honor a safe preferred EV before normal parking order');
+assert(context.__parkingAssignments.join(',')==='3,1,','Parking-order assignment must honor a safe preferred EV and skip parked EVs without both Device and Portable');
+assert(context.__preppedAssignments.join(',')==='3,1,','Prepped Vans must honor preferences while assigning only safe EVs with both Device and Portable');
+assert(!fs.readFileSync(require.resolve('../app.js'),'utf8').includes('Bag Ready Vans</button>')&&fs.readFileSync(require.resolve('../app.js'),'utf8').includes('Prepped Vans</button>'),'Morning tools must label the readiness action Prepped Vans');
 assert(context.__gasInitial.routes.length===0,'Gas assignment must never preselect drivers');
 assert(context.__gasInitial.vans.join(',')==='F33','Verified gas vans should be ready automatically so dispatchers only need to choose driver names');
 assert(context.__gasInitial.html.includes('Choose the driver boxes receiving gas vans')&&context.__gasInitial.html.includes('Alice Driver')&&context.__gasInitial.html.includes('Bob Driver'),'Gas picker must clearly list visible driver names');
