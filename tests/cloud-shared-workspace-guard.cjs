@@ -3,6 +3,9 @@ const vm=require('vm');
 
 const source=fs.readFileSync('cloud-sync.js','utf8');
 if(!source.includes('function pollForUpdates(')||!source.includes('CLOUD_POLL_MS'))throw new Error('Shared updates must use the low-pressure background poller');
+if(!source.includes("select('revision,updated_at,updated_by,operation_date')")||!source.includes('CLOUD_PERSISTENT_POLL_MS'))throw new Error('Shared polling must check lightweight revisions before downloading JSON snapshots');
+if(!source.includes('dailyChanged=!sameStoredPayload')||!source.includes('persistentChanged=!sameStoredPayload'))throw new Error('Cloud saves must skip unchanged daily or persistent snapshots');
+if(!source.includes("window.addEventListener('focus'")||!source.includes("document.addEventListener('visibilitychange'"))throw new Error('Returning dispatchers must receive an immediate shared refresh');
 if(source.includes(".on('postgres_changes'")||source.includes(".on('presence'"))throw new Error('Nano compute must not reopen CPU-heavy Realtime replication or presence channels');
 if(!source.includes("rpc('save_workspace_snapshot_v2'")||!source.includes('saveInFlight'))throw new Error('Cloud writes must use the versioned single-flight writer');
 if(!source.includes("if(!membership){notify({type:'reconnecting',reason:'membership-pending'});return;}"))throw new Error('Startup must not fan out writes before station membership loads');
