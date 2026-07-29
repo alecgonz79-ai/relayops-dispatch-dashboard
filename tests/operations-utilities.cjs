@@ -75,7 +75,7 @@ function testInventoryWorkflow() {
   const logHtml=context.modal();
   assert(logHtml.includes('Assignment &amp; adjustment log')===false && logHtml.includes('Assignment & adjustment log') && logHtml.includes('Angelique Murray') && logHtml.includes('−3'),'Inventory log modal must show assignment details and signed quantity');
   const shared=context.sharedWorkspaceState(),persistent=context.persistentWorkspaceState();
-  assert(shared.inventoryItems.length&&shared.inventoryLog.length&&persistent.inventoryItems.length&&persistent.inventoryLog.length,'Inventory state must be included in shared and persistent workspace payloads');
+  assert(!shared.inventoryItems&&!shared.inventoryLog&&persistent.inventoryItems.length&&persistent.inventoryLog.length,'Inventory state must be stored once in the station-persistent payload');
 }
 
 function testOperationalAlertCenter() {

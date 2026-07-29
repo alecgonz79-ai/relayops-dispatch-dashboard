@@ -25,6 +25,7 @@ assert(source.includes("if(card.querySelector('.driver-text-button'))return"),'D
 assert(source.includes("if (name==='import') { state.importSource='computer'; state.importPurpose='morning'; state.importedFile=null; return openLightweightModal('import'); }"),'Upload day files must open without rebuilding the large Morning Sheet');
 assert(source.includes("['picklist-screenshot-review','screenshot','vto-route-swap'")&&source.includes("'early-calloff-reminder','import'].includes(state.modal)"),'Operational popups, including upload and screenshot review, must close without rebuilding the active page');
 assert(source.includes('bindUploadDropZone(backdrop);'),'The lightweight upload modal must preserve drag-and-drop file support');
-assert(source.includes("if(event.type==='saved'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;refreshCloudStatusUi();}"),'Cloud save acknowledgements must refresh only the sync indicator instead of rebuilding the active page');
+const savedHandler=source.match(/if\(event\.type==='saved'\)\{([^}]+)\}/)?.[1]||'';
+assert(savedHandler.includes("state.cloudStatus='synced'")&&savedHandler.includes('refreshCloudStatusUi()')&&!savedHandler.includes('renderFromCloudEvent()'),'Cloud save acknowledgements must refresh only the sync indicator instead of rebuilding the active page');
 
 console.log('Fast tab navigation and one-pass Drivers & Team rendering contracts passed');

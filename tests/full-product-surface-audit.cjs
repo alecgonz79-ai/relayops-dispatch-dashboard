@@ -213,11 +213,10 @@ function testSharedAndPersistentStateContracts() {
     globalThis.__persistentRoster={date:state.rosteringDate,hasPlan:Boolean(state.rosteringPlans['2026-07-16'])};
   `, context);
   const dailyFields = [
-    'organizationName', 'stationCode', 'morningRoutes', 'fleetImport', 'fleetIssues', 'vanParking',
-    'parkingNotes', 'equipmentImport', 'driverContacts', 'driverNameAliases', 'scheduleEntries', 'rosteringDate', 'rosteringPlans',
-    'scheduleBackupRecords', 'scheduleStayHome', 'scheduleStayHomeHistory', 'scheduleReductions',
+    'organizationName', 'stationCode', 'morningRoutes', 'scheduleEntries', 'rosteringDate', 'rosteringPlans',
+    'scheduleBackupRecords', 'scheduleStayHome', 'scheduleReductions',
     'scheduleHelpers', 'openingPicklistTopics', 'openingPicklistNotes', 'whiparoundInspections',
-    'whiparoundComplianceHistory', 'coachingQueue', 'coachingTemplate', 'morningSheetsEndpoint'
+    'whiparoundComplianceHistory', 'coachingQueue'
   ];
   const persistentFields = [
     'organizationName', 'stationCode', 'fleetImport', 'fleetIssues', 'vanParking', 'parkingNotes',
@@ -226,6 +225,9 @@ function testSharedAndPersistentStateContracts() {
   ];
   for (const field of dailyFields) assert(Object.prototype.hasOwnProperty.call(context.__daily, field), `Shared workspace snapshot lost ${field}`);
   for (const field of persistentFields) assert(Object.prototype.hasOwnProperty.call(context.__persistent, field), `Persistent workspace snapshot lost ${field}`);
+  for (const field of ['fleetImport','fleetIssues','vanParking','parkingNotes','equipmentImport','driverContacts','driverNameAliases','scheduleStayHomeHistory','coachingTemplate','morningSheetsEndpoint']) {
+    assert(!Object.prototype.hasOwnProperty.call(context.__daily, field), `Daily operations snapshot still duplicates station field ${field}`);
+  }
   assert(context.__applied.organizationName === 'Shared DSP' && context.__applied.stationCode === 'DJT6' && context.__applied.route === 'CX777' && context.__applied.parkingNotes === 'Shared note', 'Remote shared state did not apply across organization, Morning Sheet, and Van Parking');
   assert(context.__persistentRoster.date === '2026-07-16' && context.__persistentRoster.hasPlan, 'Station-persistent Rostering plans did not restore');
   console.log('Shared daily and station-persistent state contracts passed');

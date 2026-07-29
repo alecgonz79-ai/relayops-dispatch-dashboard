@@ -43,7 +43,7 @@ vm.runInContext(`
   globalThis.__aliceProfileAfterImport=JSON.parse(JSON.stringify(driverProfileEntry('Alice A. Driver').profile));
   persist();
   globalThis.__savedProfiles=JSON.parse(localStorage.getItem('relayops_driver_profiles'));
-  globalThis.__sharedProfiles=JSON.parse(JSON.stringify(sharedWorkspaceState().driverProfiles));
+  globalThis.__sharedProfiles=JSON.parse(JSON.stringify(persistentWorkspaceState().driverProfiles));
   openDriverAlias('Alice A. Driver');globalThis.__profileModal=modal();state.modal=null;globalThis.__teamHtml=teamPage();
 
   const vehicle=(number,battery=80,operational='Operational')=>({name:'EV'+number,vin:'7FCEHEB79PN'+String(number).padStart(6,'0'),battery,miles:120,vehicleType:'Rivian EDV 700',operational,active:'Active',source:'Amazon fleet list + FleetOS tracker',hasBattery:true,hasMiles:true,hasActive:true,hasOperational:true});

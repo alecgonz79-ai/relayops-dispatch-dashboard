@@ -28,7 +28,7 @@ function testCoachingWorkflow(){
     globalThis.__templateStored=localStorage.getItem('relayops_coaching_template');
   `,context);
   assert(context.__queued.length===3&&context.__queued.every(item=>item.status==='draft'),'Due coaching must enter a real draft review queue');
-  assert(context.__shared.coachingQueue.length===3&&context.__shared.coachingTemplate,'Coaching queue/template must be included in shared workspace state');
+  assert(context.__shared.coachingQueue.length===3&&!context.__shared.coachingTemplate&&context.persistentWorkspaceState().coachingTemplate,'Daily coaching work and the station-persistent template must sync without duplicating the template');
   assert(context.__reviewModal.includes('role="dialog"')&&context.__reviewModal.includes('Copy reviewed message')&&context.__reviewModal.includes('Automatic sending is unavailable'),'Coaching review must be accessible and honest about external delivery');
   assert(context.__message.includes('Andre')&&context.__message.includes('Following distance')&&context.__message.includes('Reviewed safe following distance'),'Coaching template tokens did not render the reviewed message');
   assert(context.__templateStored==='Hello {first}: {focus}. {notes}','Shared coaching template did not persist locally');

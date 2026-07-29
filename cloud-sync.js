@@ -3,12 +3,13 @@
   const configured=Boolean(config.supabaseUrl&&config.supabaseAnonKey&&config.organizationId&&config.stationId&&!config.supabaseUrl.includes('YOUR_PROJECT'));
   const PERSISTENT_DATE='2000-01-01';
   const SYNC_META='__relayopsSync';
+  const DAILY_STATION_FIELDS=new Set(['fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','inventoryItems','inventoryLog','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports']);
   let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,pollTimer=null,polling=false,saveTimer=null,saveInFlight=null,pendingSaveAction='',saveRetryTimer=null,saveRetryAttempts=0,applying=false,initializing=false,initializingSince=0,basePayload={},basePersistentPayload={},memoryPending=null,lastPersistentPollAt=0,lastActivityAt=Date.now();
   const CLOUD_TIMEOUT_MS=Math.max(4000,Math.min(30000,Number(config.requestTimeoutMs)||10000));
   const CLOUD_SAVE_TIMEOUT_MS=Math.max(CLOUD_TIMEOUT_MS,Math.min(60000,Number(config.saveTimeoutMs)||30000));
-  const CLOUD_POLL_MS=Math.max(10000,Math.min(60000,Number(config.pollIntervalMs)||15000));
-  const CLOUD_IDLE_POLL_MS=Math.max(CLOUD_POLL_MS,Math.min(180000,Number(config.idlePollIntervalMs)||60000));
-  const CLOUD_PERSISTENT_POLL_MS=Math.max(60000,Math.min(900000,Number(config.persistentPollIntervalMs)||300000));
+  const CLOUD_POLL_MS=Math.max(15000,Math.min(60000,Number(config.pollIntervalMs)||30000));
+  const CLOUD_IDLE_POLL_MS=Math.max(CLOUD_POLL_MS,Math.min(300000,Number(config.idlePollIntervalMs)||120000));
+  const CLOUD_PERSISTENT_POLL_MS=Math.max(60000,Math.min(900000,Number(config.persistentPollIntervalMs)||60000));
   const CLOUD_ACTIVE_WINDOW_MS=Math.max(60000,Math.min(600000,Number(config.activeWindowMs)||120000));
   const listeners=new Set();
   const notify=event=>listeners.forEach(fn=>{try{fn(event);}catch(error){console.error(error);}});
@@ -41,6 +42,19 @@
     return result;
   }
   function clone(value){if(value===undefined)return undefined;try{return sanitizeCloudValue(JSON.parse(JSON.stringify(value)));}catch{return sanitizeCloudValue(value);}}
+  function compactDailyPayload(value={}){
+    const output=clone(value||{});
+    DAILY_STATION_FIELDS.forEach(key=>delete output[key]);
+    const meta=output?.[SYNC_META];
+    if(meta){
+      for(const bucket of ['versions','tombstones']){
+        Object.keys(meta[bucket]||{}).forEach(path=>{
+          if(DAILY_STATION_FIELDS.has(String(path||'').split('.')[0]))delete meta[bucket][path];
+        });
+      }
+    }
+    return output;
+  }
   function canonical(value){
     if(value===undefined)return 'undefined';if(value===null||typeof value!=='object')return JSON.stringify(value);
     if(Array.isArray(value))return `[${value.map(canonical).join(',')}]`;
@@ -411,7 +425,7 @@
     // parallel PostgREST requests can compete for the same tiny connection pool.
     const dailyResult=await query(date),persistentResult=await query(PERSISTENT_DATE);
     if(dailyResult.error)throw dailyResult.error;if(persistentResult.error)throw persistentResult.error;
-    const data=dailyResult.data,persistent=persistentResult.data,dailyRemote=data?.payload||{},persistentRemote=persistent?.payload||{};
+    const data=dailyResult.data,persistent=persistentResult.data,dailyRemote=compactDailyPayload(data?.payload||{}),persistentRemote=persistent?.payload||{};
     let pending=pendingSnapshot();
     // Pre-cloud and signed-out browser queues are device-local caches, not
     // authoritative shared edits. Never merge one dispatcher's stale cache
@@ -518,7 +532,7 @@
       applying=true;window.RelayOpsApp?.applyPersistentState?.(next);applying=false;notify({type:'remote-update',revision,persistentRevision,updatedAt:row.updated_at});
     }else{
       if(row.operation_date!==date||Number(row.revision)<=revision)return false;
-      const remote=row.payload||{},next=pending?.payload?reconcilePayload(remote,pending.payload,pending?.basePayload||basePayload||{}):remote;
+      const remote=compactDailyPayload(row.payload||{}),next=pending?.payload?reconcilePayload(remote,pending.payload,pending?.basePayload||basePayload||{}):remote;
       revision=Number(row.revision);basePayload=clone(remote);
       if(pending)writePending({...pending,payload:next,basePayload:clone(remote),updatedAt:new Date().toISOString()});
       applying=true;window.RelayOpsApp?.applySharedState?.(next);applying=false;notify({type:'remote-update',revision,persistentRevision,updatedAt:row.updated_at});
@@ -552,7 +566,7 @@
   function subscribe(date){
     // Realtime's WAL polling consumed nearly all CPU on the project's nano
     // compute even with only a few tabs. Use adaptive revision checks instead:
-    // 15 seconds while dispatch is active, 60 seconds while idle, and fetch the
+    // 30 seconds while dispatch is active, 120 seconds while idle, and fetch the
     // large JSON payload only after its revision changes.
     if(channel)client.removeChannel(channel);if(presenceChannel)client.removeChannel(presenceChannel);channel=null;presenceChannel=null;
     notify({type:'presence',users:session?[{userId:session.user.id,email:session.user.email||'Shared link',onlineAt:new Date().toISOString()}]:[]});scheduleNextPoll(date);
@@ -607,5 +621,5 @@
       pollForUpdates(operationDate()).catch(error=>notify({type:'offline',reason:'visibility-refresh-failed',error}));
     });
   }
-  window.RelayOpsCloud={configured,init,retryLinkAccess,reclaimStorageForSharedSession,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{sanitizeCloudString,sanitizeCloudValue,preparePayload,reconcilePayload,semanticKey,canonical,sameStoredPayload,reclaimStorageForSharedSession,withCloudTimeout,pollForUpdates,applyRemoteSnapshot}};
+  window.RelayOpsCloud={configured,init,retryLinkAccess,reclaimStorageForSharedSession,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{sanitizeCloudString,sanitizeCloudValue,compactDailyPayload,preparePayload,reconcilePayload,semanticKey,canonical,sameStoredPayload,reclaimStorageForSharedSession,withCloudTimeout,pollForUpdates,applyRemoteSnapshot}};
 })();

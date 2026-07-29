@@ -43,7 +43,7 @@ function run(){
   assert((saved.morning.match(/equipment-issue-trigger active/g)||[]).length===1&&saved.morning.includes('data-equipment-type="portable"'),'Morning Sheet must flag only the exact affected item cell');
   assert((saved.picklist.match(/equipment-issue-trigger active/g)||[]).length===1&&saved.picklist.includes('data-equipment-type="portable"'),'Opening Picklist must flag only the exact affected item cell');
   assert(saved.readiness[0]===true&&saved.readiness[1]===false,'High Portable issue must block only Portable readiness');
-  assert(saved.shared.equipmentIssues['portable:12']&&saved.persistent.equipmentIssues['portable:12'],'Equipment issues must be included in shared and persistent cloud snapshots');
+  assert(!saved.shared.equipmentIssues&&saved.persistent.equipmentIssues['portable:12'],'Equipment issues must be stored once in the station-persistent cloud snapshot');
   assert(JSON.parse(storage.get('relayops_equipment_issues'))['portable:12'],'Equipment issue must persist in local storage');
 
   const fixed=context.__fixed;

@@ -70,7 +70,7 @@ function run() {
   assert(context.__aliasImportContact?.phone === '(555) 333-4444', 'A nickname-based import must still update the linked driver contact details');
   assert(context.__oldResolves === 'Alejandro Jonathan Gonzalez' && context.__nicknameResolves === 'Alejandro Jonathan Gonzalez', 'Old names and nicknames must resolve to the updated canonical driver');
   assert(storage.has('relayops_driver_profiles'), 'Driver profiles must be written to local storage');
-  assert(context.__daily.driverProfiles && context.__persistent.driverProfiles, 'Driver profiles must be included in shared and persistent cloud snapshots');
+  assert(!context.__daily.driverProfiles && context.__persistent.driverProfiles, 'Driver profiles must be stored once in the station-persistent cloud snapshot');
   assert(context.__teamHtml.includes('team-directory-layout') && context.__teamHtml.includes('team-message-column') && context.__teamHtml.includes('Trainer') && context.__teamHtml.includes('Helper Driver'), 'Drivers & Team must render the compact right-side queue and capability controls');
   assert(context.__teamHtml.includes('data-team-search') && context.__teamHtml.includes('data-team-driver-name'), 'Drivers & Team must expose a dedicated searchable name index');
   assert((context.__teamHtml.match(/dispatcher-driver-card/g)||[]).length === 2 && context.__teamHtml.includes('dispatcher-badge'), 'Designated dispatchers must render with the gold dispatcher frame and badge');
@@ -106,7 +106,7 @@ function run() {
   assert(context.__savedChargerReports.length === 1 && context.__savedChargerReports[0].chargerKey === 'middle-1-left', 'Charger report must persist against the selected charger key');
   assert(context.__savedChargerStatus['middle-1-left'] === 'red', 'Saving a charger concern must mark that exact charger as a fault');
   assert(JSON.parse(storage.get('relayops_charger_reports')).length === 1, 'Charger report history must survive a local reload');
-  assert(context.__chargerShared.chargerReports.length === 1 && context.__chargerPersistent.chargerReports.length === 1, 'Charger report history must be included in daily and persistent shared state');
+  assert(!context.__chargerShared.chargerReports && context.__chargerPersistent.chargerReports.length === 1, 'Charger report history must be stored once in station-persistent shared state');
   assert(context.__chargerButton.includes('data-action="report-charging-station"') && context.__chargerButton.includes('data-charger-key="middle-1-left"'), 'Every charger control must expose a report action tied to its charger/spot');
   assert(context.__chargerModal.includes('Copy only') && context.__chargerModal.includes('Copy & open saved Slack') && context.__chargerModal.includes('Recent reports for this charger'), 'Charger modal must provide safe Slack fallback actions and recent spot history');
 
