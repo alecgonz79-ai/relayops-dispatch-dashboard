@@ -3,8 +3,9 @@
   const configured=Boolean(config.supabaseUrl&&config.supabaseAnonKey&&config.organizationId&&config.stationId&&!config.supabaseUrl.includes('YOUR_PROJECT'));
   const PERSISTENT_DATE='2000-01-01';
   const SYNC_META='__relayopsSync';
-  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,pollTimer=null,polling=false,saveTimer=null,saveInFlight=null,pendingSaveAction='',applying=false,initializing=false,initializingSince=0,basePayload={},basePersistentPayload={},memoryPending=null,lastPersistentPollAt=0,lastActivityAt=Date.now();
+  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,pollTimer=null,polling=false,saveTimer=null,saveInFlight=null,pendingSaveAction='',saveRetryTimer=null,saveRetryAttempts=0,applying=false,initializing=false,initializingSince=0,basePayload={},basePersistentPayload={},memoryPending=null,lastPersistentPollAt=0,lastActivityAt=Date.now();
   const CLOUD_TIMEOUT_MS=Math.max(4000,Math.min(30000,Number(config.requestTimeoutMs)||10000));
+  const CLOUD_SAVE_TIMEOUT_MS=Math.max(CLOUD_TIMEOUT_MS,Math.min(60000,Number(config.saveTimeoutMs)||30000));
   const CLOUD_POLL_MS=Math.max(10000,Math.min(60000,Number(config.pollIntervalMs)||15000));
   const CLOUD_IDLE_POLL_MS=Math.max(CLOUD_POLL_MS,Math.min(180000,Number(config.idlePollIntervalMs)||60000));
   const CLOUD_PERSISTENT_POLL_MS=Math.max(60000,Math.min(900000,Number(config.persistentPollIntervalMs)||300000));
@@ -248,7 +249,7 @@
     let timer;
     return Promise.race([
       Promise.resolve(promise),
-      new Promise((_,reject)=>{timer=setTimeout(()=>{const error=new Error(`${label} timed out. RelayOps will start a fresh shared session.`);error.code='cloud_timeout';reject(error);},timeout);})
+      new Promise((_,reject)=>{timer=setTimeout(()=>{const saving=/save/i.test(label),error=new Error(saving?`${label} is taking longer than normal. Your edits are safe on this device and will retry automatically.`:`${label} timed out. Please retry.`);error.code='cloud_timeout';reject(error);},timeout);})
     ]).finally(()=>clearTimeout(timer));
   }
   function transientPoolError(error){return /PGRST003|connection pool|timed out acquiring connection|database.*busy/i.test(String(error?.code||'')+' '+String(error?.message||error||''));}
@@ -258,7 +259,7 @@
     notify({type:'reconnecting',reason:'database-busy'});await pause(3500);
     result=await withCloudTimeout(factory(),label);return result;
   }
-  function isAuthSessionError(error){return /jwt|refresh.?token|invalid.?token|session.*(missing|expired|invalid)|unauthorized|not authenticated|cloud_timeout/i.test(String(error?.message||error||''));}
+  function isAuthSessionError(error){return /jwt|refresh.?token|invalid.?token|session.*(missing|expired|invalid)|unauthorized|not authenticated/i.test(String(error?.message||error||''));}
   function isStorageQuotaError(error){return /quota|storage.*full|exceeded/i.test(String(error?.message||error||''));}
   function reclaimStorageForSharedSession(){
     const target=storage();if(!target)return 0;
@@ -447,19 +448,37 @@
       }
       let daily=null,persistent=null;
       if(dailyChanged){
-        daily=await withCloudTimeout(client.rpc('save_workspace_snapshot_v2',{target_station:config.stationId,target_date:operationDate(),expected_revision:revision,new_payload:payload,action_name:action}),'Daily operations save');
+        daily=await withCloudTimeout(client.rpc('save_workspace_snapshot_v2',{target_station:config.stationId,target_date:operationDate(),expected_revision:revision,new_payload:payload,action_name:action}),'Daily operations save',CLOUD_SAVE_TIMEOUT_MS);
         if(daily.error){if(String(daily.error.message||'').includes('revision_conflict')){notify({type:'conflict'});await load();return null;}throw daily.error;}
         revision=Number(daily.data?.revision)||revision+1;basePayload=clone(payload);
       }
       if(persistentChanged){
-        persistent=await withCloudTimeout(client.rpc('save_workspace_snapshot_v2',{target_station:config.stationId,target_date:PERSISTENT_DATE,expected_revision:persistentRevision,new_payload:persistentPayload,action_name:`${action}.persistent` }),'Station settings save');
+        persistent=await withCloudTimeout(client.rpc('save_workspace_snapshot_v2',{target_station:config.stationId,target_date:PERSISTENT_DATE,expected_revision:persistentRevision,new_payload:persistentPayload,action_name:`${action}.persistent` }),'Station settings save',CLOUD_SAVE_TIMEOUT_MS);
         if(persistent.error){if(String(persistent.error.message||'').includes('revision_conflict')){notify({type:'conflict'});await load();return null;}throw persistent.error;}
         persistentRevision=Number(persistent.data?.revision)||persistentRevision+1;basePersistentPayload=clone(persistentPayload);
       }
       const latest=pendingSnapshot();
       if(!latest||(same(latest.payload,payload)&&same(latest.persistentPayload,persistentPayload)))clearPending();
       notify({type:'saved',revision,persistentRevision,updatedAt:daily?.data?.updated_at||persistent?.data?.updated_at});return daily?.data||persistent?.data||null;
-    }catch(error){queueSnapshot(currentPayload,action,currentPersistentPayload);notify({type:'offline',reason:'save-failed',error});throw error;}
+    }catch(error){
+      // Capture the newest in-memory edit, not only the snapshot that began the
+      // slow request. A later retry can then safely reconcile every mobile edit.
+      queueSnapshot(window.RelayOpsApp?.sharedState?.()||currentPayload,action,window.RelayOpsApp?.persistentState?.()||currentPersistentPayload);
+      if(error?.code==='cloud_timeout'){notify({type:'save-delayed',error});return {delayed:true,action};}
+      notify({type:'offline',reason:'save-failed',error});throw error;
+    }
+  }
+  function clearSaveRetry(){clearTimeout(saveRetryTimer);saveRetryTimer=null;saveRetryAttempts=0;}
+  function schedulePendingSaveRetry(action='workspace.retry'){
+    clearTimeout(saveRetryTimer);
+    const delay=Math.min(120000,15000*(2**Math.min(saveRetryAttempts,3)));saveRetryAttempts+=1;
+    saveRetryTimer=setTimeout(()=>{
+      saveRetryTimer=null;
+      if(!pendingSnapshot()||!session||!membership)return;
+      if(typeof document!=='undefined'&&document.visibilityState==='hidden')return schedulePendingSaveRetry(action);
+      save(action).catch(error=>notify({type:'error',error}));
+    },delay);
+    if(typeof saveRetryTimer?.unref==='function')saveRetryTimer.unref();
   }
   function save(action='workspace.save'){
     // Explicit critical saves (for example, clearing a shared sheet) replace
@@ -470,6 +489,8 @@
     return saveInFlight.then(result=>{
       saveInFlight=null;
       const next=pendingSaveAction;pendingSaveAction='';
+      if(result?.delayed){schedulePendingSaveRetry(next||result.action||action);return null;}
+      clearSaveRetry();
       if(next&&session&&membership)setTimeout(()=>save(next).catch(error=>notify({type:'error',error})),0);
       return result;
     },error=>{saveInFlight=null;pendingSaveAction='';throw error;});
@@ -484,7 +505,8 @@
     if(membership&&!canWrite())return;
     lastActivityAt=Date.now();
     const payload=window.RelayOpsApp?.sharedState?.();if(payload)queueSnapshot(payload,action,window.RelayOpsApp?.persistentState?.()||{});
-    clearTimeout(saveTimer);if(client&&session)saveTimer=setTimeout(()=>save(action).catch(error=>notify({type:'error',error})),900);
+    clearTimeout(saveRetryTimer);saveRetryTimer=null;
+    clearTimeout(saveTimer);if(client&&session)saveTimer=setTimeout(()=>save(action).catch(error=>notify({type:'error',error})),1800);
   }
   function applyRemoteSnapshot(row,date){
     const pending=pendingSnapshot();if(!row?.operation_date)return false;

@@ -4351,7 +4351,7 @@ function operationalSheetSnapshot() {
 function restoreOperationalSheetSnapshot(snapshot={}) {
   ['morningRoutes','morningOperationDate','morningWaveTimeOverrides','fitMorningRows','fitOpeningPicklistRows','callOffDriverKeys','callOffReasons','scheduleDriverMarks','scheduleBackupRecords','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels'].forEach(key=>{if(Object.prototype.hasOwnProperty.call(snapshot,key))state[key]=JSON.parse(JSON.stringify(snapshot[key]));});ensureMorningRouteUids();recalculateEquipmentReadiness();
 }
-function pushSheetHistory(label='Sheet change',scope='both',snapshot=null) { state.sheetHistory=state.sheetHistory&&Array.isArray(state.sheetHistory.past)?state.sheetHistory:{past:[],future:[]};state.sheetHistory.past.push({id:`history-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,label,scope,at:new Date().toISOString(),by:state.cloudUser||'Dispatcher',snapshot:snapshot?JSON.parse(JSON.stringify(snapshot)):operationalSheetSnapshot()});state.sheetHistory.past=state.sheetHistory.past.slice(-40);state.sheetHistory.future=[]; }
+function pushSheetHistory(label='Sheet change',scope='both',snapshot=null) { state.sheetHistory=state.sheetHistory&&Array.isArray(state.sheetHistory.past)?state.sheetHistory:{past:[],future:[]};state.sheetHistory.past.push({id:`history-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,label,scope,at:new Date().toISOString(),by:state.cloudUser||'Dispatcher',snapshot:snapshot?JSON.parse(JSON.stringify(snapshot)):operationalSheetSnapshot()});state.sheetHistory.past=state.sheetHistory.past.slice(-12);state.sheetHistory.future=[]; }
 const sheetInputHistoryDrafts=new WeakMap();
 function beginSheetInputHistory(el,label='Edit Picklist field',scope='picklist') { if(!el||sheetInputHistoryDrafts.has(el))return;sheetInputHistoryDrafts.set(el,{label,scope,value:String(el.value??''),snapshot:operationalSheetSnapshot()}); }
 function commitSheetInputHistory(el) { const draft=el?sheetInputHistoryDrafts.get(el):null;if(!draft)return false;sheetInputHistoryDrafts.delete(el);if(String(el.value??'')===draft.value)return false;pushSheetHistory(draft.label,draft.scope,draft.snapshot);persist();return true; }
@@ -6134,8 +6134,13 @@ async function lockAdminAccess() {
   try{await window.RelayOpsCloud?.lockAdmin?.();}catch(error){console.warn('Could not clear the server Admin session',error);}
   toast('Admin controls locked');
 }
-let cloudRetryInFlight=false,cloudAutoRetryAttempts=0,cloudConnectingWatchdog=null;
+let cloudRetryInFlight=false,cloudAutoRetryAttempts=0,cloudConnectingWatchdog=null,lastCloudNotice='',lastCloudNoticeAt=0;
 function clearCloudConnectingWatchdog(){clearTimeout(cloudConnectingWatchdog);cloudConnectingWatchdog=null;}
+function cloudToastOnce(message,type='error',windowMs=12000) {
+  const now=Date.now();
+  if(message===lastCloudNotice&&now-lastCloudNoticeAt<windowMs)return;
+  lastCloudNotice=message;lastCloudNoticeAt=now;toast(message,type);
+}
 function armCloudConnectingWatchdog(){
   clearCloudConnectingWatchdog();
   cloudConnectingWatchdog=setTimeout(()=>{
@@ -9564,6 +9569,10 @@ window.RelayOpsCloud?.schedule?.('workspace.autosave');
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';stack.setAttribute('role','status');stack.setAttribute('aria-live','polite');stack.setAttribute('aria-atomic','false');document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
 function sharedWorkspaceState() {
+  // Full operational snapshots are the largest part of the shared document.
+  // Six reversible changes are enough for dispatcher recovery without making
+  // every mobile edit upload dozens of complete Morning Sheets.
+  const sharedSheetHistory={past:(state.sheetHistory?.past||[]).slice(-6),future:(state.sheetHistory?.future||[]).slice(-6)};
   return {
     schemaVersion:2,dspCode:state.dspCode,organizationName:state.organizationName,stationCode:state.stationCode,routes:state.routes,morningRoutes:state.morningRoutes,
     lastImportExcluded:state.lastImportExcluded,rosterPublished:state.rosterPublished,
@@ -9572,7 +9581,7 @@ function sharedWorkspaceState() {
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,removedDeviceVehicleIds:state.removedDeviceVehicleIds,
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),
     messageQueueTemplate:state.messageQueueTemplate,messageQueueStatus:state.messageQueueStatus,coachingQueue:normalizeCoachingQueue(state.coachingQueue),coachingTemplate:state.coachingTemplate,
-    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringHelperPool:state.rosteringHelperPool,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleBackupRecords:state.scheduleBackupRecords,scheduleStayHome:state.scheduleStayHome,scheduleStayHomeHistory:state.scheduleStayHomeHistory,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,morningWaveTimeOverrides:state.morningWaveTimeOverrides,earlyCalloffAcknowledgements:state.earlyCalloffAcknowledgements,padCheckAcknowledgements:state.padCheckAcknowledgements,lastMorningImportFingerprint:state.lastMorningImportFingerprint,fitMorningRows:state.fitMorningRows,fitOpeningPicklistRows:state.fitOpeningPicklistRows,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,picklistSwapAudit:state.picklistSwapAudit,sheetHistory:state.sheetHistory,
+    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringHelperPool:state.rosteringHelperPool,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleBackupRecords:state.scheduleBackupRecords,scheduleStayHome:state.scheduleStayHome,scheduleStayHomeHistory:state.scheduleStayHomeHistory,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,morningWaveTimeOverrides:state.morningWaveTimeOverrides,earlyCalloffAcknowledgements:state.earlyCalloffAcknowledgements,padCheckAcknowledgements:state.padCheckAcknowledgements,lastMorningImportFingerprint:state.lastMorningImportFingerprint,fitMorningRows:state.fitMorningRows,fitOpeningPicklistRows:state.fitOpeningPicklistRows,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,picklistSwapAudit:state.picklistSwapAudit,sheetHistory:sharedSheetHistory,
     whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
     inventoryItems:state.inventoryItems,inventoryLog:state.inventoryLog,
     morningSheetsEndpoint:state.morningSheetsEndpoint,slackReportRoomUrl:state.slackReportRoomUrl,chargerReports:normalizeChargerReports(state.chargerReports||[])
@@ -9664,12 +9673,13 @@ window.RelayOpsCloud?.on?.(event=>{
   if(event.type==='link-access-error'){clearCloudConnectingWatchdog();state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';renderFromCloudEvent();toast(`Shared access failed: ${state.cloudAccessError}`,'error');if(cloudAutoRetryAttempts<2){cloudAutoRetryAttempts++;setTimeout(()=>retryCloudLinkAccess(true),750*cloudAutoRetryAttempts);}}
   if(event.type==='workspace-empty'){clearCloudConnectingWatchdog();state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';renderFromCloudEvent();toast('Shared workspace is not initialized for this day yet','error');}
   if(event.type==='presence'){state.cloudPresence=event.users||[];refreshCloudStatusUi();}
-  if(event.type==='loaded'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;renderFromCloudEvent();}
-  if(event.type==='ready'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;refreshCloudStatusUi();}
-  if(event.type==='saved'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;refreshCloudStatusUi();}
+  if(event.type==='loaded'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;renderFromCloudEvent();}
+  if(event.type==='ready'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;refreshCloudStatusUi();}
+  if(event.type==='saved'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;refreshCloudStatusUi();}
+  if(event.type==='save-delayed'){clearCloudConnectingWatchdog();state.cloudStatus='connecting';state.cloudAccessError='Cloud save delayed; edits are safe on this device and will retry automatically.';refreshCloudStatusUi();cloudToastOnce('Cloud is busy. Your edit is safe on this device and will retry automatically.','error',20000);}
   if(event.type==='remote-update'){clearCloudConnectingWatchdog();state.cloudStatus='synced';renderFromCloudEvent();toast('Another dispatcher updated today’s workspace');}
   if(event.type==='conflict')toast('A newer dispatcher update was loaded before saving','error');
-  if(event.type==='error'){clearCloudConnectingWatchdog();state.cloudStatus='error';refreshCloudStatusUi();toast(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
+  if(event.type==='error'){clearCloudConnectingWatchdog();state.cloudStatus='error';refreshCloudStatusUi();cloudToastOnce(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
 });
 render();
 if(window.RelayOpsCloud?.configured)armCloudConnectingWatchdog();
