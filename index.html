@@ -22,7 +22,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase/config.js?v=20260720-auth-redirect"></script>
     <script src="cloud-sync.js?v=20260728-egress-budget-r2"></script>
-    <script src="app.js?v=20260728-egress-budget-r2"></script>
+    <script src="app.js?v=20260729-fast-navigation-r7"></script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -33,7 +33,7 @@
             window.location.reload();
           });
           navigator.serviceWorker
-            .register('./service-worker.js?v=20260728-egress-budget-r2', { updateViaCache: 'none' })
+            .register('./service-worker.js?v=20260729-fast-navigation-r7', { updateViaCache: 'none' })
             .then(registration => registration.update())
             .catch(() => {});
         });

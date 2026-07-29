@@ -518,6 +518,15 @@ let state = {
   rating: Number(localStorage.getItem('relayops_rating') || 0)
 };
 
+let driverProfileLookupCache=null;
+let driverProfileLookupSource=null;
+let teamDriverRowsCache=null;
+let teamDriverRowsCacheSource=null;
+let teamDriverRowsRemovedSignature='';
+const morningContactLookupCache=new Map();
+const driverIdentityLookupCache=new Map();
+const driverDisplayLookupCache=new Map();
+
 (state.driverContacts||[]).forEach(contact=>ensureDriverProfile(contact));
 state.sheetHistory=state.sheetHistory&&Array.isArray(state.sheetHistory.past)&&Array.isArray(state.sheetHistory.future)?state.sheetHistory:{past:[],future:[]};
 if(Object.keys(state.fleetSourceUploads||{}).length) state.fleetImport=fleetImportFromSourceUploads();
@@ -561,13 +570,30 @@ function driverProfileStorageKey(contact={}) {
   const transporter=String(contact?.transporterId||'').trim().toUpperCase();
   return transporter?`id:${transporter}`:`name:${nameKey(contact?.name||contact?.canonical||'unknown')}`;
 }
+function invalidateDriverDirectoryCaches() {
+  driverProfileLookupCache=null;
+  driverProfileLookupSource=null;
+  teamDriverRowsCache=null;
+  teamDriverRowsCacheSource=null;
+  teamDriverRowsRemovedSignature='';
+  morningContactLookupCache.clear();
+  driverIdentityLookupCache.clear();
+  driverDisplayLookupCache.clear();
+}
 function driverProfileEntry(name='') {
   const query=nameKey(name);if(!query)return null;
-  for(const [key,profile] of Object.entries(state?.driverProfiles||{})){
-    const names=[profile.canonical,profile.nickname,...(profile.names||[])].map(nameKey);
-    if(names.includes(query))return {key,profile};
+  const source=state?.driverProfiles||{};
+  if(!driverProfileLookupCache||driverProfileLookupSource!==source){
+    driverProfileLookupSource=source;
+    driverProfileLookupCache=new Map();
+    driverIdentityLookupCache.clear();driverDisplayLookupCache.clear();
+    for(const [key,profile] of Object.entries(source)){
+      [profile.canonical,profile.nickname,...(profile.names||[])].map(nameKey).filter(Boolean).forEach(value=>{
+        if(!driverProfileLookupCache.has(value))driverProfileLookupCache.set(value,{key,profile});
+      });
+    }
   }
-  return null;
+  return driverProfileLookupCache.get(query)||null;
 }
 function ensureDriverProfile(contact={}) {
   const input=typeof contact==='string'?{name:contact}:contact||{},name=String(input.name||input.canonical||'').replace(/\s+/g,' ').trim();if(!name)return null;
@@ -575,7 +601,7 @@ function ensureDriverProfile(contact={}) {
   const targetKey=transporterId?`id:${transporterId}`:(existing?.key||driverProfileStorageKey({name})),prior=existing?.profile||{},legacy=state.driverNameAliases?.[nameKey(prior.canonical||name)],legacyRecord=typeof legacy==='string'?{display:legacy}:legacy||{};
   const names=[...new Set([...(prior.names||[]),prior.canonical,prior.nickname,name,...(Array.isArray(input.knownNames)?input.knownNames:[]),legacyRecord.display,...(Array.isArray(legacyRecord.aliases)?legacyRecord.aliases:[])].map(value=>String(value||'').replace(/\s+/g,' ').trim()).filter(Boolean))];
   const nicknameValue=String(prior.nickname||legacyRecord.display||'').trim(),profile={canonical:name,nickname:nameKey(nicknameValue)===nameKey(name)?'':nicknameValue,names,tags:[...new Set([...(prior.tags||[]),...(Array.isArray(input.tags)?input.tags:[])])].filter(tag=>['trainer','helper-driver'].includes(tag)),flags:[...new Set([...(prior.flags||[]),...(Array.isArray(input.flags)?input.flags:[])])].filter(flag=>DRIVER_NOTE_FLAG_LABELS[flag]),customFlags:normalizeDriverCustomFlags([...(prior.customFlags||[]),...(Array.isArray(input.customFlags)?input.customFlags:[])]),preferredEvs:normalizePreferredVehicleIds(input.preferredEvs?.length?input.preferredEvs:prior.preferredEvs||[]),transporterId:transporterId||prior.transporterId||'',updatedAt:new Date().toISOString()};
-  if(existing?.key&&existing.key!==targetKey)delete state.driverProfiles[existing.key];state.driverProfiles[targetKey]=profile;return {key:targetKey,profile};
+  if(existing?.key&&existing.key!==targetKey)delete state.driverProfiles[existing.key];state.driverProfiles[targetKey]=profile;invalidateDriverDirectoryCaches();return {key:targetKey,profile};
 }
 function driverCapabilities(name='') { return driverProfileEntry(name)?.profile?.tags||[]; }
 function driverHasCapability(name='',tag='') { return driverCapabilities(name).includes(tag); }
@@ -703,10 +729,16 @@ function canonicalDriverName(name='') {
   const clean=String(name||'').trim(),alias=driverAliasRecord(clean),contact=contactForMorningDriverRaw(alias?.canonical||clean);
   return contact?.name||alias?.canonical||clean;
 }
-function driverIdentityKey(name='') { return nameKey(canonicalDriverName(name)); }
+function driverIdentityKey(name='') {
+  const query=nameKey(name);if(!query)return '';
+  if(driverIdentityLookupCache.has(query))return driverIdentityLookupCache.get(query);
+  const identity=nameKey(canonicalDriverName(name));driverIdentityLookupCache.set(query,identity);return identity;
+}
 function driverDisplayName(name='') {
+  const query=nameKey(name);if(query&&driverDisplayLookupCache.has(query))return driverDisplayLookupCache.get(query);
   const canonical=canonicalDriverName(name),profile=driverProfileEntry(canonical)?.profile,alias=state.driverNameAliases?.[nameKey(canonical)];
-  return String(profile?.nickname||(typeof alias==='string'?alias:alias?.display)||canonical||name).trim();
+  const display=String(profile?.nickname||(typeof alias==='string'?alias:alias?.display)||canonical||name).trim();
+  if(query)driverDisplayLookupCache.set(query,display);return display;
 }
 function driverDisplayValue(value='') { return morningDriverNames(value).map(driverDisplayName).join(' + '); }
 function canonicalDriverValue(value='') { return morningDriverNames(value).map(canonicalDriverName).join(' + '); }
@@ -832,8 +864,12 @@ function driverContactForName(name='') {
   return (state.driverContacts||[]).find(contact=>known.has(contact.key||nameKey(contact.name))||Boolean(profile?.transporterId&&String(contact.transporterId||'').trim().toUpperCase()===String(profile.transporterId).trim().toUpperCase()));
 }
 function teamDriverRows() {
+  const source=state.driverContacts||[],removedSignature=(state.removedDriverKeys||[]).map(nameKey).sort().join('|');
+  if(teamDriverRowsCache&&teamDriverRowsCacheSource===source&&teamDriverRowsRemovedSignature===removedSignature)return teamDriverRowsCache;
+  teamDriverRowsCacheSource=source;teamDriverRowsRemovedSignature=removedSignature;
+  morningContactLookupCache.clear();driverIdentityLookupCache.clear();driverDisplayLookupCache.clear();
   const removed=new Set(state.removedDriverKeys||[]);
-  return (state.driverContacts||[]).map((contact,i)=>({
+  teamDriverRowsCache=source.map((contact,i)=>({
     name:contact.name,
     role:contact.role||'Delivery Associate',
     status:String(contact.status||'').trim(),
@@ -845,6 +881,7 @@ function teamDriverRows() {
     qualifications:contact.qualifications||'',
     imported:true
   })).filter(driver=>driver.name&&!removed.has(nameKey(driver.name))).sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
+  return teamDriverRowsCache;
 }
 function requestDriverRemoval(key='') {
   const normalized=nameKey(key),driver=teamDriverRows().find(item=>nameKey(item.name)===normalized);
@@ -1096,12 +1133,12 @@ function openingPicklistSwapTrackerHtml() {
   const changes=currentPicklistRosterChanges(),confirmed=changes.filter(change=>change.cortexConfirmed).length;
   return `<section class="picklist-swap-tracker"><header><span><strong>CORTEX SWAP TRACKER</strong><small>Confirm each change after it is updated in Cortex · ${confirmed}/${changes.length} complete</small></span><b>${changes.length}</b></header><div class="picklist-swap-tracker-list">${changes.length?changes.map(change=>`<label class="${change.cortexConfirmed?'confirmed':''}" title="${esc(`${change.from} to ${change.to} · ${change.route}`)}"><span><em>${esc(driverDisplayName(change.from)||change.from)}</em><i aria-hidden="true">→</i><em>${esc(driverDisplayName(change.to)||change.to)}</em><small>${esc(change.route)}${change.wave?` · ${esc(change.wave)}`:''}${change.kind==='adhoc'?' · ADHOC':''}</small></span><input type="checkbox" data-picklist-swap-check="${esc(change.id)}" ${change.cortexConfirmed?'checked':''} aria-label="Confirm ${esc(change.from)} to ${esc(change.to)} was updated in Cortex"><b>✓</b></label>`).join(''):'<div class="picklist-swap-empty"><b>✓</b><strong>No swaps to review</strong><span>Driver swaps and Adhoc additions will appear here.</span></div>'}</div></section>`;
 }
-function openingPicklistRightHtml() {
+function openingPicklistRightHtml(backups=openingPicklistBackupRows(),calloffs=openingPicklistCallOffRows()) {
   const controls=area=>`<span class="picklist-row-controls" aria-label="Add or subtract ${esc(area)} row"><button type="button" data-action="resize-picklist-area" data-area="${esc(area)}" data-delta="-1" title="Subtract one line">−</button><button type="button" data-action="resize-picklist-area" data-area="${esc(area)}" data-delta="1" title="Add one line">+</button></span>`;
-  const backups=openingPicklistBackupRows(),vto2=backups.filter(row=>row.vto==='VTO 2'),vto4=backups.filter(row=>row.vto!=='VTO 2'),backupCount=Math.max(1,state.openingPicklistBackupRows||21,vto2.length,vto4.length);
+  const vto2=backups.filter(row=>row.vto==='VTO 2'),vto4=backups.filter(row=>row.vto!=='VTO 2'),backupCount=Math.max(1,state.openingPicklistBackupRows||21,vto2.length,vto4.length);
   const overrides=state.openingPicklistBackupOverrides||{},backupValue=(group,index,fallback)=>Object.prototype.hasOwnProperty.call(overrides,`${group}:${index}`)?overrides[`${group}:${index}`]:fallback;
   const backupRows=Array.from({length:backupCount},(_,index)=>{const left=backupValue('vto2',index,vto2[index]?.name||''),right=backupValue('vto4',index,vto4[index]?.name||'');return `<tr><td>${picklistVtoDriverCell('vto2',index,vto2[index],left)}</td><td>${picklistVtoDriverCell('vto4',index,vto4[index],right)}</td></tr>`;}).join('');
-  const calloffs=openingPicklistCallOffRows(),drafts=Array.isArray(state.openingPicklistCalloffDrafts)?state.openingPicklistCalloffDrafts:[],filledDrafts=drafts.filter(row=>String(row?.name||row?.reason||'').trim()).length,calloffCount=Math.max(1,state.openingPicklistCalloffRows||6,calloffs.length+filledDrafts),calloffRows=Array.from({length:calloffCount},(_,index)=>{const row=calloffs[index],draftIndex=index-calloffs.length,draft=draftIndex>=0?(drafts[draftIndex]||{}):null;return `<tr><td><input ${row?`data-picklist-calloff-name="${esc(row.key)}"`:`data-picklist-calloff-draft="${draftIndex}" data-picklist-calloff-field="name"`} data-driver-name-input="true" value="${esc(row?.name||draft?.name||'')}" aria-label="Call off ${index+1}" placeholder="Driver"></td><td><input ${row?`data-picklist-calloff-reason="${esc(row.key)}"`:`data-picklist-calloff-draft="${draftIndex}" data-picklist-calloff-field="reason"`} value="${esc(row?.reason||draft?.reason||'')}" aria-label="Reason ${index+1}" placeholder="Reason"></td></tr>`;}).join('');
+  const drafts=Array.isArray(state.openingPicklistCalloffDrafts)?state.openingPicklistCalloffDrafts:[],filledDrafts=drafts.filter(row=>String(row?.name||row?.reason||'').trim()).length,calloffCount=Math.max(1,state.openingPicklistCalloffRows||6,calloffs.length+filledDrafts),calloffRows=Array.from({length:calloffCount},(_,index)=>{const row=calloffs[index],draftIndex=index-calloffs.length,draft=draftIndex>=0?(drafts[draftIndex]||{}):null;return `<tr><td><input ${row?`data-picklist-calloff-name="${esc(row.key)}"`:`data-picklist-calloff-draft="${draftIndex}" data-picklist-calloff-field="name"`} data-driver-name-input="true" value="${esc(row?.name||draft?.name||'')}" aria-label="Call off ${index+1}" placeholder="Driver"></td><td><input ${row?`data-picklist-calloff-reason="${esc(row.key)}"`:`data-picklist-calloff-draft="${draftIndex}" data-picklist-calloff-field="reason"`} value="${esc(row?.reason||draft?.reason||'')}" aria-label="Reason ${index+1}" placeholder="Reason"></td></tr>`;}).join('');
   const topicValues=state.openingPicklistTopics||[],lastTopic=Math.max(0,...topicValues.map((value,index)=>String(value||'').trim()?index+1:0)),topicCount=Math.max(1,state.openingPicklistTopicRows||4,lastTopic),topics=Array.from({length:topicCount},(_,index)=>`<tr><td colspan="2"><input data-picklist-topic="${index}" value="${esc(topicValues[index]||'')}" aria-label="Stand up topic ${index+1}" placeholder="Stand up topic"></td></tr>`).join('');
   return `<aside class="opening-picklist-right"><table class="picklist-side-table backup-table"><thead><tr><th colspan="2"><span>Back Ups</span>${controls('backup')}</th></tr><tr><th>VTO 2</th><th>VTO 4</th></tr></thead><tbody>${backupRows}</tbody></table><table class="picklist-side-table calloff-table"><thead><tr><th>CALL OFF</th><th><span>REASON</span>${controls('calloff')}</th></tr></thead><tbody>${calloffRows}</tbody></table><table class="picklist-side-table topics-table"><thead><tr><th colspan="2"><span>STAND UP TOPICS</span>${controls('topic')}</th></tr></thead><tbody>${topics}</tbody></table><section class="picklist-notes"><strong>NOTES</strong><textarea data-picklist-notes aria-label="Opening picklist notes" placeholder="Opening notes">${esc(state.openingPicklistNotes||'')}</textarea></section><label class="picklist-date"><span>DATE</span><input data-picklist-date value="${esc(openingPicklistDateText())}" inputmode="numeric" aria-label="Opening picklist date" placeholder="Month/Day/Year"></label></aside>`;
 }
@@ -1109,7 +1146,7 @@ function openingPicklistDateText() { const [year,month,day]=String(state.morning
 function openingPicklistHtml() {
   const sections=openingPicklistSections(),routeCount=sections.reduce((total,section)=>total+section.rows.length,0),backups=openingPicklistBackupRows(),calloffs=openingPicklistCallOffRows();
   const tools=`<details class="card picklist-more-tools" open><summary><span><strong>More picklist tools</strong><small>Edit live Morning Sheet data, fit rows, assign helper bags, capture the driver view, or print one page</small></span><b>Tools</b></summary><div class="picklist-tool-actions"><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-picklist-edit">${state.editMode?'✓ Finish editing':'✎ Edit picklist'}</button><button class="btn small" data-action="sheet-undo" ${state.sheetHistory?.past?.length?'':'disabled'}>↶ Undo</button><button class="btn small" data-action="sheet-redo" ${state.sheetHistory?.future?.length?'':'disabled'}>↷ Redo</button><button class="btn small" data-action="open-sheet-history">History</button><button class="btn small ${state.fitOpeningPicklistRows?'lime':''}" data-action="toggle-picklist-fit-rows">${state.fitOpeningPicklistRows?'✓ Wave rows fitted':'Remove blank wave rows'}</button><button class="btn small" data-action="assign-helper-bags">${ICONS.box} Assign Helper Bags</button><button class="btn small" data-action="preview-picklist-screenshot">${ICONS.download} Screenshot waves + Adhocs</button><button class="btn small danger-soft" data-action="clear-picklist">${ICONS.trash} Clear Picklist</button><button class="btn small primary print-picklist-button" data-action="print-opening-picklist">${ICONS.download} Print one-page Picklist</button></div></details>`;
-  return `${tools}<article class="card opening-picklist-print"><div class="opening-picklist-toolbar"><div><span class="eyebrow">UNIVERSAL OPENING VIEW</span><h2>Opening Picklist</h2><p>${routeCount} Morning Sheet routes · ${backups.length} backups · ${calloffs.length} call offs · Helpers and DSP excluded</p></div></div>${state.editMode?`<div class="picklist-edit-help">Editing is on. Click any worksheet cell and press Enter to save. Every route edit immediately updates the Morning Sheet.</div>`:''}<div class="opening-picklist-scroll"><div class="opening-picklist-sheet"><table class="opening-picklist-main"><colgroup><col class="pick-col-wave"><col class="pick-col-driver"><col class="pick-col-route"><col class="pick-col-staging"><col class="pick-col-pad"><col class="pick-col-ev"><col class="pick-col-device"><col class="pick-col-portable"></colgroup><thead><tr><th>WAVE</th><th>DRIVER</th><th>ROUTE</th><th>STAGING</th><th>PAD</th><th>EV</th><th>DEVICE</th><th>PORTABLE</th></tr></thead>${sections.map(openingPicklistSectionHtml).join('')}</table>${openingPicklistRightHtml()}<aside class="opening-picklist-swap-rail" aria-label="Cortex driver swap review">${openingPicklistSwapTrackerHtml()}</aside></div></div></article>`;
+  return `${tools}<article class="card opening-picklist-print"><div class="opening-picklist-toolbar"><div><span class="eyebrow">UNIVERSAL OPENING VIEW</span><h2>Opening Picklist</h2><p>${routeCount} Morning Sheet routes · ${backups.length} backups · ${calloffs.length} call offs · Helpers and DSP excluded</p></div></div>${state.editMode?`<div class="picklist-edit-help">Editing is on. Click any worksheet cell and press Enter to save. Every route edit immediately updates the Morning Sheet.</div>`:''}<div class="opening-picklist-scroll"><div class="opening-picklist-sheet"><table class="opening-picklist-main"><colgroup><col class="pick-col-wave"><col class="pick-col-driver"><col class="pick-col-route"><col class="pick-col-staging"><col class="pick-col-pad"><col class="pick-col-ev"><col class="pick-col-device"><col class="pick-col-portable"></colgroup><thead><tr><th>WAVE</th><th>DRIVER</th><th>ROUTE</th><th>STAGING</th><th>PAD</th><th>EV</th><th>DEVICE</th><th>PORTABLE</th></tr></thead>${sections.map(openingPicklistSectionHtml).join('')}</table>${openingPicklistRightHtml(backups,calloffs)}<aside class="opening-picklist-swap-rail" aria-label="Cortex driver swap review">${openingPicklistSwapTrackerHtml()}</aside></div></div></article>`;
 }
 function rosterPage() {
   const controlsOpen=Boolean(state.openingRosterControlsOpen);
@@ -3659,19 +3696,22 @@ function sendAChatMessage(prompt='') {
 }
 function clearAChat() { state.aChatMessages=[];persist();render();toast('A-Chat history cleared'); }
 
-function pageContent() {
-  return ({dashboard,morning:morningSheetPage,roster:rosterPage,rostering:rosteringPage,live:livePage,achat:aChatPage,team:teamPage,fleet:fleetPage,parking:vanParkingPage,performance:performancePage,coaching:coachingPage,checklists:checklistsPage,inbox:inboxPage,inventory:inventoryPage,reports:reportsPage,admin:adminPage}[state.page] || dashboard)();
+function pageContent(page=state.page) {
+  return ({dashboard,morning:morningSheetPage,roster:rosterPage,rostering:rosteringPage,live:livePage,achat:aChatPage,team:teamPage,fleet:fleetPage,parking:vanParkingPage,performance:performancePage,coaching:coachingPage,checklists:checklistsPage,inbox:inboxPage,inventory:inventoryPage,reports:reportsPage,admin:adminPage}[page] || dashboard)();
 }
 
 function messageQueueStatusKey(route='') { return `${state.morningOperationDate}|${route}`; }
 function callOffStatusKey(name='') { return `${state.morningOperationDate}|${nameKey(name)}`; }
 function contactForMorningDriverRaw(name='') {
   const key=nameKey(firstDriverName(name));
+  if(!key)return null;
   const contacts=teamDriverRows();
-  return contacts.find(row=>nameKey(row.name)===key)||contacts.find(row=>{
+  if(morningContactLookupCache.has(key))return morningContactLookupCache.get(key);
+  const contact=contacts.find(row=>nameKey(row.name)===key)||contacts.find(row=>{
     const parts=key.split(' ').filter(Boolean), candidate=nameKey(row.name);
     return parts.length>1&&candidate.includes(parts[0])&&candidate.includes(parts[parts.length-1]);
   });
+  morningContactLookupCache.set(key,contact||null);return contact||null;
 }
 function contactForMorningDriver(name='') { return contactForMorningDriverRaw(driverAliasRecord(firstDriverName(name))?.canonical||name); }
 function morningDriverNames(value='') { return String(value||'').split(/\s*(?:\||\+|&|\band\b)\s*/i).map(name=>name.trim()).filter(Boolean); }
@@ -4773,6 +4813,7 @@ const UI_SCROLL_MEMORY_SELECTORS=['.sheet-scroll','.opening-picklist-scroll','.d
 const NAVIGATION_PAGE_CACHE_LIMIT=6;
 const navigationPageCache=new Map();
 let navigationRenderToken=0;
+let navigationBuildTimer=null;
 let deferredCloudRender=false;
 let operationalInteractionUntil=0;
 let operationalScrollAnchor=null;
@@ -4784,20 +4825,32 @@ let operationalUserScrollUntil=0;
 let operationalScrollGuardRestoring=false;
 let operationalScrollLockVersion=0;
 let operationalScrollGuardFrame=0;
-function invalidateNavigationPageCache() { navigationPageCache.clear();navigationRenderToken+=1; }
+function cancelNavigationBuild() {
+  if(navigationBuildTimer!==null&&window.clearTimeout)window.clearTimeout(navigationBuildTimer);
+  navigationBuildTimer=null;
+}
+function invalidateNavigationPageCache() {
+  navigationPageCache.clear();
+  navigationRenderToken+=1;
+  cancelNavigationBuild();
+}
+function storeNavigationPage(page='',nodes=[],bound=true) {
+  if(!page||!nodes?.length)return;
+  navigationPageCache.delete(page);
+  navigationPageCache.set(page,{nodes:[...nodes],bound});
+  while(navigationPageCache.size>NAVIGATION_PAGE_CACHE_LIMIT)navigationPageCache.delete(navigationPageCache.keys().next().value);
+}
 function rememberNavigationPage(page='',content=null) {
   if(!page||!content||content.dataset.page!==page||content.dataset.ready!=='true')return;
-  navigationPageCache.delete(page);
-  navigationPageCache.set(page,{nodes:[...content.childNodes]});
-  while(navigationPageCache.size>NAVIGATION_PAGE_CACHE_LIMIT)navigationPageCache.delete(navigationPageCache.keys().next().value);
+  storeNavigationPage(page,[...content.childNodes],true);
 }
 function takeNavigationPage(page='') { const entry=navigationPageCache.get(page)||null;if(entry)navigationPageCache.delete(page);return entry; }
 function navigationLoadingHtml() {
   return `<section class="navigation-skeleton" role="status" aria-live="polite" aria-label="Opening ${esc(pageInfo[state.page]?.[0]||'workspace')}"><div class="navigation-skeleton-title"></div><div class="navigation-skeleton-grid"><i></i><i></i><i></i></div><span>Opening ${esc(pageInfo[state.page]?.[0]||'workspace')}…</span></section>`;
 }
-function recordNavigationTiming(page='',startedAt=Date.now(),cached=false) {
-  const metric={page,ms:Math.max(0,Date.now()-startedAt),cached,at:new Date().toISOString()},content=document.querySelector?.('.content');
-  window.__relayOpsLastNavigation=metric;if(content){content.dataset.navigationMs=String(metric.ms);content.dataset.navigationCached=String(cached);}
+function recordNavigationTiming(page='',startedAt=Date.now(),cached=false,phases={}) {
+  const metric={page,ms:Math.max(0,Date.now()-startedAt),cached,...phases,at:new Date().toISOString()},content=document.querySelector?.('.content');
+  window.__relayOpsLastNavigation=metric;if(content){content.dataset.navigationMs=String(metric.ms);content.dataset.navigationCached=String(cached);content.dataset.navigationPhases=JSON.stringify(phases||{});}
 }
 function activeOperationalEditor() {
   const el=document.activeElement;
@@ -4939,8 +4992,22 @@ function render() {
   scheduleOperationalReminderCheck();
 }
 
+let initialCloudHydrationPending=Boolean(window.RelayOpsCloud?.configured);
+function renderInitialShell() {
+  if(!initialCloudHydrationPending)return render();
+  app.innerHTML=`<div class="app-shell ${PARKING_ONLY_VIEW?'parking-only-shell':''}">${sidebar()}<main class="main">${topbar()}<div class="content navigation-loading" data-page="${esc(state.page)}" data-ready="false" aria-busy="true">${navigationLoadingHtml()}</div></main></div><div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>`;
+  bind();
+}
+function completeInitialCloudHydration() {
+  if(!initialCloudHydrationPending)return false;
+  initialCloudHydrationPending=false;
+  render();
+  return true;
+}
+
 function renderNavigationPage(previousPage='') {
   const startedAt=Date.now(),targetPage=state.page,token=++navigationRenderToken;
+  cancelNavigationBuild();
   closeDriverProfilePopover();closeDriverRouteContextMenu();closeDriverSuggestions();
   const content=document.querySelector?.('.content'),currentTopbar=document.querySelector?.('.topbar'),currentSidebar=document.getElementById?.('sidebar');
   if(!content||!currentTopbar||!currentSidebar)return render();
@@ -4955,20 +5022,26 @@ function renderNavigationPage(previousPage='') {
   currentTopbar.outerHTML=topbar();
   const cached=takeNavigationPage(targetPage);
   if(cached){
-    content.replaceChildren(...cached.nodes);content.dataset.page=targetPage;content.dataset.ready='true';content.classList.remove('navigation-loading');content.removeAttribute('aria-busy');
-    bindGlobalDocumentControls();bindNavigationTopbar(document.querySelector?.('.topbar'));scheduleOperationalReminderCheck();recordNavigationTiming(targetPage,startedAt,true);return;
+    content.replaceChildren(...cached.nodes);
+    content.dataset.page=targetPage;content.dataset.ready='true';content.classList.remove('navigation-loading');content.removeAttribute('aria-busy');
+    bindGlobalDocumentControls();bindNavigationTopbar(document.querySelector?.('.topbar'));
+    scheduleOperationalReminderCheck();recordNavigationTiming(targetPage,startedAt,true);return;
   }
   content.dataset.page=targetPage;content.dataset.ready='false';content.classList.add('navigation-loading');content.setAttribute('aria-busy','true');content.innerHTML=navigationLoadingHtml();
   const build=()=>{
+    navigationBuildTimer=null;
     if(token!==navigationRenderToken||state.page!==targetPage||content.dataset.page!==targetPage)return;
-    content.innerHTML=pageContent();
-    enhanceDriverTextButtons();enhanceDriverStayHomeControls();enhanceOpeningRoster();enhanceMorningParkingAssignment();enhanceItineraryRtsModal();bind();
-    content.dataset.ready='true';content.classList.remove('navigation-loading');content.removeAttribute('aria-busy');window.scrollTo?.({top:0,behavior:'auto'});scheduleOperationalReminderCheck();recordNavigationTiming(targetPage,startedAt,false);
+    const contentStarted=Date.now(),html=pageContent(targetPage),contentMs=Date.now()-contentStarted,domStarted=Date.now();
+    content.innerHTML=html;
+    const domMs=Date.now()-domStarted,enhanceStarted=Date.now();
+    enhanceDriverTextButtons();enhanceDriverStayHomeControls();enhanceOpeningRoster();enhanceMorningParkingAssignment();enhanceItineraryRtsModal();
+    const enhanceMs=Date.now()-enhanceStarted,bindStarted=Date.now();bind();const bindMs=Date.now()-bindStarted;
+    content.dataset.ready='true';content.classList.remove('navigation-loading');content.removeAttribute('aria-busy');window.scrollTo?.({top:0,behavior:'auto'});scheduleOperationalReminderCheck();recordNavigationTiming(targetPage,startedAt,false,{contentMs,domMs,enhanceMs,bindMs});
   };
   // Yield one task so the navigation shell can paint, but do not wait on
   // requestAnimationFrame: background/mobile Safari can throttle RAF by whole
   // seconds and make an otherwise quick tab feel frozen.
-  if(window.setTimeout)window.setTimeout(build,0);else build();
+  if(window.setTimeout)navigationBuildTimer=window.setTimeout(build,0);else build();
 }
 
 function enhanceItineraryRtsModal() {
@@ -9479,6 +9552,7 @@ function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function persist(){
 invalidateNavigationPageCache();
 invalidateOperationalAlertGroups();
+invalidateDriverDirectoryCaches();
 const nativeStorage=window.localStorage||globalThis.localStorage;
 const cloudRedundantCaches=new Set(['relayops_fleet_import','relayops_fleet_source_uploads','relayops_van_parking','relayops_driver_contacts','relayops_schedule_entries','relayops_rostering_plans','relayops_whiparound_inspections','relayops_whiparound_roster_snapshots','relayops_inventory_log','relayops_equipment_import']);
 const localStorage={setItem(key,value){
@@ -9633,7 +9707,7 @@ function applySharedWorkspaceState(payload={}) {
   state.picklistSwapAudit=Array.isArray(state.picklistSwapAudit)?state.picklistSwapAudit.slice(-160):[];
   state.inventoryItems=normalizeInventoryItems(state.inventoryItems);state.inventoryLog=normalizeInventoryLog(state.inventoryLog);
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
-  persist();
+  invalidateDriverDirectoryCaches();
 }
 function applyPersistentWorkspaceState(payload={}) {
   const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringDate','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
@@ -9655,27 +9729,27 @@ function applyPersistentWorkspaceState(payload={}) {
   state.rosteringHelperPool=state.rosteringHelperPool&&typeof state.rosteringHelperPool==='object'?state.rosteringHelperPool:{};
   state.inventoryItems=normalizeInventoryItems(state.inventoryItems);state.inventoryLog=normalizeInventoryLog(state.inventoryLog);
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
-  persist();
+  invalidateDriverDirectoryCaches();
 }
 window.RelayOpsApp={sharedState:sharedWorkspaceState,persistentState:persistentWorkspaceState,applySharedState:applySharedWorkspaceState,applyPersistentState:applyPersistentWorkspaceState,operationDate:()=>state.morningOperationDate,morningSheetsPayload:()=>morningSheetsConnectorPayload()};
 window.RelayOpsCloud?.on?.(event=>{
-  if(event.type==='offline'){clearCloudConnectingWatchdog();state.cloudStatus='offline';refreshCloudStatusUi();}
+  if(event.type==='offline'){clearCloudConnectingWatchdog();state.cloudStatus='offline';if(!completeInitialCloudHydration())refreshCloudStatusUi();}
   if(event.type==='reconnecting'){state.cloudStatus='connecting';armCloudConnectingWatchdog();refreshCloudStatusUi();}
-  if(event.type==='auth'){state.cloudStatus='connecting';armCloudConnectingWatchdog();state.cloudUser=event.session?.user?.is_anonymous?'Shared link':event.session?.user?.email||'Shared link';state.cloudAccessError='';state.cloudSigninError='';state.cloudSigninCooldownUntil=0;localStorage.removeItem('relayops_cloud_signin_cooldown_until');if(!event.session)state.role='viewer';renderFromCloudEvent();}
-  if(event.type==='admin-status'){state.adminPinUnlocked=Boolean(event.unlocked);renderFromCloudEvent();}
-  if(event.type==='access-granted'){state.cloudAccessError='';state.role=['fleet_lead','viewer'].includes(event.membership?.role)?event.membership.role:'dispatcher';renderFromCloudEvent();}
-  if(event.type==='access-denied'){clearCloudConnectingWatchdog();state.cloudStatus='access-denied';state.cloudAccessError='Automatic shared-link access has not been provisioned for this browser.';renderFromCloudEvent();toast('Shared link access needs repair in Supabase','error');}
-  if(event.type==='link-access-error'){clearCloudConnectingWatchdog();state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';renderFromCloudEvent();toast(`Shared access failed: ${state.cloudAccessError}`,'error');if(cloudAutoRetryAttempts<2){cloudAutoRetryAttempts++;setTimeout(()=>retryCloudLinkAccess(true),750*cloudAutoRetryAttempts);}}
-  if(event.type==='workspace-empty'){clearCloudConnectingWatchdog();state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';renderFromCloudEvent();toast('Shared workspace is not initialized for this day yet','error');}
+  if(event.type==='auth'){state.cloudStatus='connecting';armCloudConnectingWatchdog();state.cloudUser=event.session?.user?.is_anonymous?'Shared link':event.session?.user?.email||'Shared link';state.cloudAccessError='';state.cloudSigninError='';state.cloudSigninCooldownUntil=0;localStorage.removeItem('relayops_cloud_signin_cooldown_until');if(!event.session)state.role='viewer';refreshCloudStatusUi();}
+  if(event.type==='admin-status'){state.adminPinUnlocked=Boolean(event.unlocked);if(state.page==='admin')renderFromCloudEvent();else refreshCloudStatusUi();}
+  if(event.type==='access-granted'){state.cloudAccessError='';state.role=['fleet_lead','viewer'].includes(event.membership?.role)?event.membership.role:'dispatcher';refreshCloudStatusUi();}
+  if(event.type==='access-denied'){clearCloudConnectingWatchdog();state.cloudStatus='access-denied';state.cloudAccessError='Automatic shared-link access has not been provisioned for this browser.';if(!completeInitialCloudHydration())renderFromCloudEvent();toast('Shared link access needs repair in Supabase','error');}
+  if(event.type==='link-access-error'){clearCloudConnectingWatchdog();state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';if(!completeInitialCloudHydration())renderFromCloudEvent();toast(`Shared access failed: ${state.cloudAccessError}`,'error');if(cloudAutoRetryAttempts<2){cloudAutoRetryAttempts++;setTimeout(()=>retryCloudLinkAccess(true),750*cloudAutoRetryAttempts);}}
+  if(event.type==='workspace-empty'){clearCloudConnectingWatchdog();state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';if(!completeInitialCloudHydration())renderFromCloudEvent();toast('Shared workspace is not initialized for this day yet','error');}
   if(event.type==='presence'){state.cloudPresence=event.users||[];refreshCloudStatusUi();}
-  if(event.type==='loaded'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;renderFromCloudEvent();}
+  if(event.type==='loaded'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;if(!completeInitialCloudHydration())renderFromCloudEvent();}
   if(event.type==='ready'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;refreshCloudStatusUi();}
   if(event.type==='saved'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;refreshCloudStatusUi();}
   if(event.type==='save-delayed'){clearCloudConnectingWatchdog();state.cloudStatus='connecting';state.cloudAccessError='Cloud save delayed; edits are safe on this device and will retry automatically.';refreshCloudStatusUi();cloudToastOnce('Cloud is busy. Your edit is safe on this device and will retry automatically.','error',20000);}
   if(event.type==='remote-update'){clearCloudConnectingWatchdog();state.cloudStatus='synced';renderFromCloudEvent();toast('Another dispatcher updated today’s workspace');}
   if(event.type==='conflict')toast('A newer dispatcher update was loaded before saving','error');
-  if(event.type==='error'){clearCloudConnectingWatchdog();state.cloudStatus='error';refreshCloudStatusUi();cloudToastOnce(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
+  if(event.type==='error'){clearCloudConnectingWatchdog();state.cloudStatus='error';if(!completeInitialCloudHydration())refreshCloudStatusUi();cloudToastOnce(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
 });
-render();
+renderInitialShell();
 if(window.RelayOpsCloud?.configured)armCloudConnectingWatchdog();
 window.RelayOpsCloud?.init?.().catch(error=>console.error('RelayOps cloud initialization failed',error));
