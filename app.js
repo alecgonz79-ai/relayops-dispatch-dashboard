@@ -586,6 +586,21 @@ function invalidateDriverDirectoryCaches() {
   driverIdentityLookupCache.clear();
   driverDisplayLookupCache.clear();
 }
+function driverProfileIdentityNames(profile={}) {
+  return [...new Set([profile.canonical,profile.nickname,...(profile.names||[])].map(value=>String(value||'').replace(/\s+/g,' ').trim()).filter(Boolean))];
+}
+function driverProfileLookupRank(key='',profile={},identity='') {
+  const profileId=String(profile.transporterId||'').trim().toUpperCase();
+  const contact=(state.driverContacts||[]).find(row=>nameKey(row.name)===identity);
+  const contactId=String(contact?.transporterId||'').trim().toUpperCase();
+  let score=0;
+  if(contactId&&profileId===contactId)score+=100;
+  else if(contactId&&profileId)score-=100;
+  if(profileId)score+=10;
+  if(/^id:/i.test(key))score+=5;
+  if(normalizePreferredVehicleIds(profile.preferredEvs||[]).length)score+=1;
+  return score;
+}
 function driverProfileEntry(name='') {
   const query=nameKey(name);if(!query)return null;
   const source=state?.driverProfiles||{};
@@ -595,7 +610,10 @@ function driverProfileEntry(name='') {
     driverIdentityLookupCache.clear();driverDisplayLookupCache.clear();
     for(const [key,profile] of Object.entries(source)){
       [profile.canonical,profile.nickname,...(profile.names||[])].map(nameKey).filter(Boolean).forEach(value=>{
-        if(!driverProfileLookupCache.has(value))driverProfileLookupCache.set(value,{key,profile});
+        const candidate={key,profile},current=driverProfileLookupCache.get(value);
+        const candidateRank=driverProfileLookupRank(key,profile,value),currentRank=current?driverProfileLookupRank(current.key,current.profile,value):-Infinity;
+        const candidateUpdated=Date.parse(profile.updatedAt||'')||0,currentUpdated=Date.parse(current?.profile?.updatedAt||'')||0;
+        if(!current||candidateRank>currentRank||(candidateRank===currentRank&&candidateUpdated>currentUpdated))driverProfileLookupCache.set(value,candidate);
       });
     }
   }
@@ -603,11 +621,41 @@ function driverProfileEntry(name='') {
 }
 function ensureDriverProfile(contact={}) {
   const input=typeof contact==='string'?{name:contact}:contact||{},name=String(input.name||input.canonical||'').replace(/\s+/g,' ').trim();if(!name)return null;
-  const transporterId=String(input.transporterId||'').trim().toUpperCase(),byId=transporterId&&Object.entries(state.driverProfiles||{}).find(([,profile])=>String(profile.transporterId||'').trim().toUpperCase()===transporterId),byName=driverProfileEntry(name),existing=byId?{key:byId[0],profile:byId[1]}:byName;
-  const targetKey=transporterId?`id:${transporterId}`:(existing?.key||driverProfileStorageKey({name})),prior=existing?.profile||{},legacy=state.driverNameAliases?.[nameKey(prior.canonical||name)],legacyRecord=typeof legacy==='string'?{display:legacy}:legacy||{};
-  const names=[...new Set([...(prior.names||[]),prior.canonical,prior.nickname,name,...(Array.isArray(input.knownNames)?input.knownNames:[]),legacyRecord.display,...(Array.isArray(legacyRecord.aliases)?legacyRecord.aliases:[])].map(value=>String(value||'').replace(/\s+/g,' ').trim()).filter(Boolean))];
-  const nicknameValue=String(prior.nickname||legacyRecord.display||'').trim(),profile={canonical:name,nickname:nameKey(nicknameValue)===nameKey(name)?'':nicknameValue,names,tags:[...new Set([...(prior.tags||[]),...(Array.isArray(input.tags)?input.tags:[])])].filter(tag=>['trainer','helper-driver'].includes(tag)),flags:[...new Set([...(prior.flags||[]),...(Array.isArray(input.flags)?input.flags:[])])].filter(flag=>DRIVER_NOTE_FLAG_LABELS[flag]),customFlags:normalizeDriverCustomFlags([...(prior.customFlags||[]),...(Array.isArray(input.customFlags)?input.customFlags:[])]),preferredEvs:normalizePreferredVehicleIds(input.preferredEvs?.length?input.preferredEvs:prior.preferredEvs||[]),transporterId:transporterId||prior.transporterId||'',updatedAt:new Date().toISOString()};
-  if(existing?.key&&existing.key!==targetKey)delete state.driverProfiles[existing.key];state.driverProfiles[targetKey]=profile;invalidateDriverDirectoryCaches();return {key:targetKey,profile};
+  const transporterId=String(input.transporterId||'').trim().toUpperCase(),profiles=Object.entries(state.driverProfiles||{});
+  const identityNames=new Set([name,...(Array.isArray(input.knownNames)?input.knownNames:[])].map(nameKey).filter(Boolean));
+  if(transporterId)(state.driverContacts||[]).filter(row=>String(row.transporterId||'').trim().toUpperCase()===transporterId).forEach(row=>identityNames.add(nameKey(row.name)));
+  const matches=[];
+  let changed=true;
+  while(changed){
+    changed=false;
+    profiles.forEach(([key,profile])=>{
+      if(matches.some(record=>record.key===key))return;
+      const profileId=String(profile.transporterId||'').trim().toUpperCase();
+      const sameTransporter=Boolean(transporterId&&profileId===transporterId);
+      const conflictingTransporter=Boolean(transporterId&&profileId&&profileId!==transporterId);
+      const aliases=driverProfileIdentityNames(profile),sameIdentity=!conflictingTransporter&&aliases.some(alias=>identityNames.has(nameKey(alias)));
+      if(!sameTransporter&&!sameIdentity)return;
+      matches.push({key,profile});aliases.map(nameKey).filter(Boolean).forEach(alias=>{if(!identityNames.has(alias)){identityNames.add(alias);changed=true;}});
+    });
+  }
+  const idTargetKey=transporterId?`id:${transporterId}`:'',authoritative=matches.find(record=>record.key===idTargetKey)||matches.find(record=>String(record.profile.transporterId||'').trim().toUpperCase()===transporterId)||matches[0];
+  const targetKey=idTargetKey||(authoritative?.key||driverProfileStorageKey({name})),orderedMatches=authoritative?[authoritative,...matches.filter(record=>record!==authoritative)]:matches,records=orderedMatches.map(record=>record.profile),prior=authoritative?.profile||{};
+  const legacyCandidates=[name,...records.flatMap(driverProfileIdentityNames)].map(value=>state.driverNameAliases?.[nameKey(value)]).filter(Boolean),legacyRecords=legacyCandidates.map(value=>typeof value==='string'?{display:value}:value||{});
+  const names=[...new Set([...records.flatMap(driverProfileIdentityNames),name,...(Array.isArray(input.knownNames)?input.knownNames:[]),...legacyRecords.flatMap(record=>[record.display,...(Array.isArray(record.aliases)?record.aliases:[])])].map(value=>String(value||'').replace(/\s+/g,' ').trim()).filter(Boolean))];
+  const nicknameValue=String(input.nickname||prior.nickname||legacyRecords.find(record=>record.display)?.display||records.find(record=>record.nickname)?.nickname||'').trim();
+  const profile={
+    canonical:name,
+    nickname:nameKey(nicknameValue)===nameKey(name)?'':nicknameValue,
+    names,
+    tags:[...new Set([...records.flatMap(record=>record.tags||[]),...(Array.isArray(input.tags)?input.tags:[])])].filter(tag=>['trainer','helper-driver'].includes(tag)),
+    flags:[...new Set([...records.flatMap(record=>record.flags||[]),...(Array.isArray(input.flags)?input.flags:[])])].filter(flag=>DRIVER_NOTE_FLAG_LABELS[flag]),
+    customFlags:normalizeDriverCustomFlags([...records.flatMap(record=>record.customFlags||[]),...(Array.isArray(input.customFlags)?input.customFlags:[])]),
+    preferredEvs:normalizePreferredVehicleIds([...(Array.isArray(input.preferredEvs)?input.preferredEvs:[]),...records.flatMap(record=>record.preferredEvs||[])]),
+    transporterId:transporterId||String(prior.transporterId||'').trim().toUpperCase(),
+    updatedAt:new Date().toISOString()
+  };
+  matches.forEach(record=>{if(record.key!==targetKey)delete state.driverProfiles[record.key];});
+  state.driverProfiles[targetKey]=profile;invalidateDriverDirectoryCaches();return {key:targetKey,profile};
 }
 function driverCapabilities(name='') { return driverProfileEntry(name)?.profile?.tags||[]; }
 function driverHasCapability(name='',tag='') { return driverCapabilities(name).includes(tag); }
@@ -632,7 +680,15 @@ function normalizeDriverCustomFlags(values=[]) {
   source.forEach(value=>{const clean=String(value||'').replace(/[<>]/g,'').replace(/\s+/g,' ').trim().slice(0,48),key=nameKey(clean);if(clean&&key&&!seen.has(key)){seen.add(key);result.push(clean);}});return result.slice(0,16);
 }
 function driverProfileCustomFlags(name='') { return normalizeDriverCustomFlags(driverProfileEntry(name)?.profile?.customFlags||[]); }
-function driverPreferredVehicleIds(name='') { return normalizePreferredVehicleIds(driverProfileEntry(name)?.profile?.preferredEvs||[]); }
+function driverPreferredVehicleIds(name='') {
+  const direct=driverProfileEntry(name);
+  if(direct)return normalizePreferredVehicleIds(direct.profile?.preferredEvs||[]);
+  const canonical=canonicalDriverName(name),canonicalEntry=nameKey(canonical)!==nameKey(name)?driverProfileEntry(canonical):null;
+  if(canonicalEntry)return normalizePreferredVehicleIds(canonicalEntry.profile?.preferredEvs||[]);
+  const contact=contactForMorningDriverRaw(name),transporterId=String(contact?.transporterId||'').trim().toUpperCase();
+  const byTransporter=transporterId?Object.values(state.driverProfiles||{}).find(profile=>String(profile.transporterId||'').trim().toUpperCase()===transporterId):null;
+  return normalizePreferredVehicleIds(byTransporter?.preferredEvs||[]);
+}
 function preferredVehicleDisplayId(value='') {
   const key=normalizeEquipmentId(value);return /^\d+$/.test(key)?`EV${Number(key)}`:key;
 }
