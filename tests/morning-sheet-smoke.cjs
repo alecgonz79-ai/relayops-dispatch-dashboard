@@ -191,15 +191,20 @@ const checks = `
     {dsp:'LLOL',driver:'Wave Three Driver',route:'CX301',wave:'11:25 AM',staging:'STG.Z.1',padOverride:'C',ev:'3',deviceName:'12',portable:'22',service:'Standard Parcel'},
     {dsp:'LLOL',driver:'Wave Four Driver',route:'CX401',wave:'11:40 AM',staging:'STG.U.1',padOverride:'A',ev:'4',deviceName:'13',portable:'23',service:'Standard Parcel'},
     {dsp:'LLOL',driver:'Wave Five Driver',route:'CX501',wave:'11:45 AM',staging:'STG.X.1',padOverride:'B',ev:'5',deviceName:'14',portable:'24',service:'Standard Parcel'},
+    {dsp:'LLOL',driver:'Wave Six Driver',route:'CX601',wave:'11:50 AM',staging:'STG.Y.1',padOverride:'C',ev:'6',deviceName:'15',portable:'25',service:'Standard Parcel'},
     {dsp:'LLOL',driver:'Adhoc Driver',route:'ADHOC-1',wave:'Ad hoc',staging:'',padOverride:'',ev:'F33',deviceName:'15',portable:'25',service:'Adhoc'},
     {dsp:'LLOL',driver:'HELPER PERSON',route:'HELPER-1',wave:'Ad hoc',staging:'',padOverride:'',ev:'H1',deviceName:'16',portable:'26',service:'Helper'}
-  ];state.callOffReasons={[callOffStatusKey('Maya Collins')]:'No car'};state.openingPicklistTopics=['Safety first','New policy','',''];state.openingPicklistNotes='Bring keys to stand up';state.openingPicklistWaveSlots=5;state.openingPicklistShowAdhoc=true;
+  ];state.callOffReasons={[callOffStatusKey('Maya Collins')]:'No car'};state.openingPicklistTopics=['Safety first','New policy','',''];state.openingPicklistNotes='Bring keys to stand up';state.openingPicklistWaveSlots=6;state.openingPicklistShowAdhoc=true;
+  state.fitMorningRows=false;
+  const morningTemplateSections=morningSections(state.morningRoutes),expectedMorningLabels=['WAVE 1','WAVE 2','WAVE 3','WAVE 4','WAVE 5','WAVE 6',"ADHOC's",'HELPERS','DSP'],expectedMorningCapacities=[13,13,13,13,14,14,15,15,6];
+  if(morningTemplateSections.length!==9||morningTemplateSections.some((section,index)=>section.label!==expectedMorningLabels[index]||section.routeCapacity!==expectedMorningCapacities[index])) throw new Error('Morning Sheet must preserve the exact six-wave, Adhocs, Helpers, and DSP capacities of the 132-row template');
   const picklistSections=openingPicklistSections(),picklistHtml=openingPicklistHtml(),picklistRoster=rosterPage();
-  if(picklistSections.length!==6||picklistSections.slice(0,5).some((section,index)=>section.label!=='WAVE '+(index+1)||section.capacity!==15)||picklistSections[5].label!=="ADHOC'S"||picklistSections[5].capacity!==15||picklistHtml.includes('HELPER PERSON')||picklistHtml.includes('>DSP<')) throw new Error('Opening Picklist did not create five 15-driver waves plus Adhoc while excluding Helpers and DSP');
+  const expectedWaveCapacities=[13,13,13,13,14,14];
+  if(picklistSections.length!==7||picklistSections.slice(0,6).some((section,index)=>section.label!=='WAVE '+(index+1)||section.capacity!==expectedWaveCapacities[index])||picklistSections[6].label!=="ADHOC'S"||picklistSections[6].capacity!==15||picklistHtml.includes('HELPER PERSON')||picklistHtml.includes('>DSP<')) throw new Error('Opening Picklist did not create six exact-capacity waves plus 15-driver Adhocs while excluding Helpers and DSP');
   const oneWaveRows=state.morningRoutes;
-  state.morningRoutes=Array.from({length:15},(_,index)=>({dsp:'LLOL',driver:'Driver '+(index+1),route:'CX'+(600+index),wave:'11:15 AM',staging:'STG.V.'+(index+1),padOverride:'A',ev:String(index+1),deviceName:String(index+1),portable:String(index+2),service:'Standard Parcel'}));
-  const fifteenSection=openingPicklistSections()[0],fifteenHtml=openingPicklistSectionHtml(fifteenSection,0);
-  if(fifteenSection.rows.length!==15||fifteenSection.capacity!==15||!fifteenHtml.includes('rowspan="15"')||!fifteenHtml.includes('rowspan="16"')||!fifteenHtml.includes('Driver 15'))throw new Error('A full 15-driver Picklist wave must keep its Wave/Pad cells merged through the final driver row');
+  state.morningRoutes=Array.from({length:13},(_,index)=>({dsp:'LLOL',driver:'Driver '+(index+1),route:'CX'+(600+index),wave:'11:15 AM',staging:'STG.V.'+(index+1),padOverride:'A',ev:String(index+1),deviceName:String(index+1),portable:String(index+2),service:'Standard Parcel'}));
+  const thirteenSection=openingPicklistSections()[0],thirteenHtml=openingPicklistSectionHtml(thirteenSection,0);
+  if(thirteenSection.rows.length!==13||thirteenSection.capacity!==13||!thirteenHtml.includes('rowspan="13"')||!thirteenHtml.includes('rowspan="14"')||!thirteenHtml.includes('Driver 13'))throw new Error('A full 13-driver Wave 1 Picklist section must keep its Wave/Pad cells merged through the final driver row');
   state.morningRoutes=oneWaveRows;
   if(!picklistHtml.includes('Wave One Driver')||!picklistHtml.includes('CX101')||!picklistHtml.includes('STG.V.1')||!picklistHtml.includes('Back Ups')||!picklistHtml.includes('VTO 2')||!picklistHtml.includes('data-picklist-backup="vto2:0"')||!picklistHtml.includes('CALL OFF')||!picklistHtml.includes('No car')||!picklistHtml.includes('STAND UP TOPICS')||!picklistHtml.includes('Bring keys to stand up')||!picklistHtml.includes('Print one-page Picklist')||!picklistHtml.includes('More picklist tools')||!picklistHtml.includes('data-area="backup"')||!picklistHtml.includes('data-area="calloff"')||!picklistHtml.includes('data-area="topic"')||!picklistHtml.includes('Screenshot waves + Adhocs')||!picklistHtml.includes('data-picklist-date')||!picklistHtml.includes('request-delete-picklist-wave')) throw new Error('Opening Picklist data, inline +/− controls, screenshot/delete tools, dated notes, right-side worksheet, or print action is incomplete');
   if(!picklistRoster.includes('Opening Picklist')||picklistRoster.includes('Amazon roster → verified dispatch plan')||picklistRoster.includes('class="phase-strip"')||picklistRoster.indexOf('Opening Picklist')>picklistRoster.indexOf('Opening roster controls')) throw new Error('Opening Picklist did not replace the legacy roster box as the primary Opening Roster view, or the unused phase strip returned');
@@ -527,7 +532,7 @@ const checks = `
     ['Route Code','Driver Name','Stop Count','Planned Departure Time'],
     ['CX901','Taylor Driver|Helper Name','177','12:05pm']
   ]);
-  if (details.CX901.driver !== 'Taylor Driver' || details.CX901.stops !== 177 || details.CX901.plannedRts !== '12:05 PM') throw new Error('ROUTE_DJT6 detail parsing failed');
+  if (details.CX901.driver !== 'Taylor Driver' || details.CX901.stops !== 177 || details.CX901.plannedDeparture !== '12:05 PM' || details.CX901.plannedRts) throw new Error('ROUTE_DJT6 detail parsing failed or confused departure time with Planned RTS');
   state.importedFile = {
     name: 'DAYOFOPSPLAN.xlsx + ROUTE_DJT6.xlsx', kind: 'plan', routeDetails: details, routeDetailsCount: 1,
     headers: ['DSP','Route Code','Wave','Staging Location','Num Zones','Num Packages'],
@@ -535,6 +540,7 @@ const checks = `
   };
   applyImport();
   if (state.morningRoutes[0].driver !== 'Taylor Driver' || state.morningRoutes[0].stops !== 177) throw new Error('CX route merge failed');
+  if (state.morningRoutes[0].plannedRts) throw new Error('ROUTE_DJT6 Planned Departure Time must not fill the purple Planned RTS column');
   const matchedTemplateProof = morningImportTemplateProofHtml();
   if (!matchedTemplateProof.includes('DAYOFOPSPLAN.xlsx + ROUTE_DJT6.xlsx') || !matchedTemplateProof.includes('CX matches') || !matchedTemplateProof.includes('1 matched to ROUTE_DJT6') || matchedTemplateProof.includes('Taylor Driver|Helper Name')) throw new Error('ROUTE_DJT6 import proof should show CX matching and first-driver-only cleanup');
   state.morningRoutes[0].ev = '21';
@@ -711,7 +717,7 @@ const checks = `
   const tsv = morningSheetTsv();
   const tsvRows = tsv.split('\\n').map(row => row.split('\\t'));
   if (!tsv.startsWith('WAVE 1\\tTaylor Driver') || !tsv.includes('\\n11:15 (1)\\t') || tsvRows.some(row => row.length !== 22) || tsvRows[0][8] !== '' || tsvRows[0][13] !== '' || tsv.includes('WAVE\\tDRIVER\\tROUTE')) throw new Error('Google Sheets TSV output should match the A-V template body');
-  if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 15) throw new Error('15-route Wave template padding missing');
+  if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 13) throw new Error('13-route Wave 1 template padding missing');
   state.fitMorningRows = true;
   if (morningDisplayRows(morningSections(filteredMorningRows())[0]).length !== 1) throw new Error('Fit-to-drivers row sizing failed');
   if (!morningSheetPage().includes('✓ Fit to drivers')) throw new Error('Fit-to-drivers toggle missing');
@@ -721,7 +727,7 @@ const checks = `
   let capturedFormattedMorning = null;
   downloadBlob = (data,type,name) => { capturedFormattedMorning = { data, type, name }; };
   exportMorningTemplateSheet();
-  if (!capturedFormattedMorning || capturedFormattedMorning.name !== 'LLOL-opening-operations-formatted.xls' || capturedFormattedMorning.type !== 'application/vnd.ms-excel' || !capturedFormattedMorning.data.includes('rowspan="15"') || !capturedFormattedMorning.data.includes('WAVE 1') || !capturedFormattedMorning.data.includes('11:15 (1)') || !capturedFormattedMorning.data.includes('class="spacer"') || !capturedFormattedMorning.data.includes('PRE DVIC') || !capturedFormattedMorning.data.includes('CLOCK OUT TIME') || !capturedFormattedMorning.data.includes('<x:FreezePanes/>') || !capturedFormattedMorning.data.includes('<x:SplitHorizontal>1</x:SplitHorizontal>') || !capturedFormattedMorning.data.includes('<x:Name>Morning Operations</x:Name>')) throw new Error('Formatted morning XLS export missing 15-route Wave layout');
+  if (!capturedFormattedMorning || capturedFormattedMorning.name !== 'LLOL-opening-operations-formatted.xls' || capturedFormattedMorning.type !== 'application/vnd.ms-excel' || !capturedFormattedMorning.data.includes('rowspan="13"') || !capturedFormattedMorning.data.includes('rowspan="14"') || !capturedFormattedMorning.data.includes('WAVE 1') || !capturedFormattedMorning.data.includes('11:15 (1)') || !capturedFormattedMorning.data.includes('class="spacer"') || !capturedFormattedMorning.data.includes('PRE DVIC') || !capturedFormattedMorning.data.includes('CLOCK OUT TIME') || !capturedFormattedMorning.data.includes('<x:FreezePanes/>') || !capturedFormattedMorning.data.includes('<x:SplitHorizontal>1</x:SplitHorizontal>') || !capturedFormattedMorning.data.includes('<x:Name>Morning Operations</x:Name>')) throw new Error('Formatted morning XLS export missing the exact 13-route Wave 1 layout');
   state.screenshotPreview = 'data:image/jpeg;base64,demo'; state.modal = 'screenshot';
   if (!modal().includes('Approve & save JPEG') || !modal().includes('Driver/Helper')) throw new Error('JPEG approval dialog missing');
   globalThis.__parseXlsx = parseXlsxArrayBuffer;

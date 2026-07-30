@@ -22,7 +22,7 @@ Serve this folder with any static web server, then open `index.html` through tha
 ## Included
 
 - Opening roster, live routes, rescue log, drivers, fleet/devices, performance, coaching, checklists, inbox, inventory, reports, and owner controls
-- Screenshot-matched morning operations board with WAVE 1–5, ADHOC's, HELPERS, and DSP sections
+- Screenshot-matched morning operations board with WAVE 1–6, ADHOC's, HELPERS, and DSP sections
 - Yellow/purple input zones, edit mode, planned RTS import, and light-red RTS flags for review
 - DSP-only route filtering plus visual Slack Import and Cortex Import choices
 - Working CSV and `.xlsx` roster import with flexible Amazon-style column mapping
@@ -50,7 +50,8 @@ There are three connector types in the Morning Sheet workflow:
    - Run Test connector, then Dry run, then Send to Google Sheet.
    - The dashboard still sends a compact 13-column payload, but the Apps Script maps setup data to `A:H`, stop/package counts to `P:Q`, and Planned RTS to `U`.
    - It preserves the original A:V headers, widths, colors, checkbox columns J:M, black divider N, operations-entry columns O/R/S/T/V, and all template merges.
-   - It uses the fixed `OPS LOG 2026` anchors: Wave rows 3/18/33/48/63, ADHOC 79, HELPERS 95, and DSP 111.
+   - It uses the fixed 132-row `OPS LOG 2026` layout: Wave 1–6 start at rows 3/18/33/48/63/79, ADHOC starts at 95, HELPERS at 111, and DSP at 127.
+   - Full connector writes are bounded to the original `A3:V132` template; Wave 1–4 have 13 route rows, Wave 5–6 have 14, ADHOC/HELPERS have 15, and DSP has 6.
    - If the selected date tab is missing, it duplicates `OPS LOG 2026` and names the new tab only `M/D/YY` or `M.D.YY`; it never falls back to another date or the active tab.
 
 2. Slack / day-of-operations connector — demo/import mode today.

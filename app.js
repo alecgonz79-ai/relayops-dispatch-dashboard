@@ -70,6 +70,12 @@ const MORNING_SHEETS_DEFAULT_ENDPOINT = '';
 const MORNING_TEMPLATE_SHEET_NAME = 'OPS LOG 2026';
 const MORNING_TEMPLATE_SHEET_CANDIDATES = [MORNING_TEMPLATE_SHEET_NAME];
 const MORNING_APPS_SCRIPT_URL = 'google-sheets/relayops-morning-connector.gs';
+const MORNING_CORE_WAVE_COUNT = 6;
+const MORNING_CORE_WAVE_TIMES = Object.freeze(['11:15 AM','11:20 AM','11:25 AM','11:40 AM','11:45 AM','12:05 PM']);
+const MORNING_CORE_WAVE_PADS = Object.freeze(['A','B','C','A','B','C']);
+// Exact route capacities in the current 132-row OPS LOG 2026 master.
+const MORNING_CORE_WAVE_CAPACITIES = Object.freeze([13,13,13,13,14,14]);
+const MORNING_CONNECTOR_BUILD = '2026-07-29-six-wave-132-row-layout';
 const PERFORMANCE_TRAINING_URL = 'https://cdfda-performance.pplx.app/#/';
 const AMAZON_SCHEDULING_URL = 'https://logistics.amazon.com/scheduling?serviceAreaId=f0c05ae0-b2c0-462c-8ee0-f72f5ab653ec';
 const LOW_BATTERY_SECTION_THRESHOLD = 80;
@@ -467,7 +473,7 @@ let state = {
   openingPicklistCalloffRows: Math.max(1,Number(localStorage.getItem('relayops_opening_picklist_calloff_rows') || 6)),
   openingPicklistTopicRows: Math.max(1,Number(localStorage.getItem('relayops_opening_picklist_topic_rows') || 4)),
   openingPicklistBackupRows: Math.max(1,Number(localStorage.getItem('relayops_opening_picklist_backup_rows') || 21)),
-  openingPicklistWaveSlots: Math.max(0,Math.min(5,Number(localStorage.getItem('relayops_opening_picklist_wave_slots') ?? 5))),
+  openingPicklistWaveSlots: Math.max(0,Math.min(MORNING_CORE_WAVE_COUNT,Number(localStorage.getItem('relayops_opening_picklist_wave_slots') ?? MORNING_CORE_WAVE_COUNT))),
   openingPicklistShowAdhoc: localStorage.getItem('relayops_opening_picklist_show_adhoc') !== 'false',
   openingPicklistCalloffDrafts: JSON.parse(localStorage.getItem('relayops_opening_picklist_calloff_drafts') || 'null') || [],
   openingPicklistBackupOverrides: JSON.parse(localStorage.getItem('relayops_opening_picklist_backup_overrides') || 'null') || {},
@@ -1065,19 +1071,16 @@ function openingPicklistSections() {
   ensureMorningRouteUids();
   const eligible=(state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&!isExplicitHelperMorningRoute(row)&&!String(row.route||'').startsWith('__blank_'));
   const waveNames=[...new Set(eligible.filter(row=>!isExplicitAdhocMorningRoute(row)).map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b));
-  const waveSlots=Math.max(0,Math.min(5,Number(state.openingPicklistWaveSlots??5)));
+  const waveSlots=Math.max(0,Math.min(MORNING_CORE_WAVE_COUNT,Number(state.openingPicklistWaveSlots??MORNING_CORE_WAVE_COUNT)));
   const waves=Array.from({length:waveSlots},(_,index)=>{
     const key=`wave-${index+1}`,wave=waveNames[index]||'',rows=wave?eligible.filter(row=>row.wave===wave):[];
-    // Every Picklist wave is a real 15-driver block. The old 13-row fallback
-    // left row 14/15 outside the Wave and Pad rowspans, which shifted the final
-    // driver's cells one column to the left.
-    const capacity=state.fitOpeningPicklistRows?Math.max(1,rows.length):15;
+    const capacity=state.fitOpeningPicklistRows?Math.max(1,rows.length):MORNING_CORE_WAVE_CAPACITIES[index];
     return {key,label:state.openingPicklistLabels?.[key]||`WAVE ${index+1}`,wave,rows,capacity,hasTime:true,pad:rows[0]?.padOverride||rows[0]?.pad||padForWave(wave)};
   });
   const used=new Set(waves.flatMap(section=>section.rows.map(row=>row.route)));
   const adhoc=eligible.filter(row=>!used.has(row.route)&&isExplicitAdhocMorningRoute(row));
   // Adhocs intentionally keep their full worksheet block. The Picklist
-  // compact control applies only to Wave 1–5 so late additions still have a
+  // compact control applies only to the six core Waves so late additions still have a
   // visible place to be entered.
   if(state.openingPicklistShowAdhoc)waves.push({key:'adhoc',label:state.openingPicklistLabels?.adhoc||"ADHOC'S",wave:'Ad hoc',rows:adhoc,capacity:15,hasTime:false,pad:''});
   return waves;
@@ -1592,7 +1595,7 @@ function morningConnectorGuide() {
   return `<details class="morning-connectors card"><summary><div><strong>Ops Log connector setup</strong><span>Google Sheets is ready through Apps Script. Slack stays locked until its secure connector is built.</span></div><b>Open</b></summary><div class="morning-connector-grid"><div><strong>1 · Slack / day file</strong><span>Locked for now. Use Amazon XLSX/CSV upload so no dispatcher expects an unfinished connection to work.</span><button class="btn small locked" disabled>Slack Import · locked</button></div><div><strong>2 · Cortex / Amazon Logistics</strong><span>Upload XLSX/CSV files. RelayOps reads them locally and filters ${esc(state.dspCode)} routes.</span><button class="btn small primary" data-action="import">Upload Amazon files</button></div><div><strong>3 · Google Sheets Ops Log</strong><span>${connected?`Connected. Sends only to ${esc(tabs.join(' or '))} using the original A:V layout.`:'Install the Apps Script once, save the /exec URL, then send to the selected operation-date tab.'}</span><button class="btn small lime" data-action="morning-sheets-connector">${connected?'Open Ops Log connector':'Connect Ops Log'}</button><a class="btn small" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open ops log</a></div></div><p>If the exact date tab is missing, RelayOps creates it by duplicating the blank OPS LOG 2026 template.</p></details>`;
 }
 
-const defaultMorningWaveTimes=['11:15 AM','11:20 AM','11:25 AM','11:40 AM','11:45 AM'];
+const defaultMorningWaveTimes=MORNING_CORE_WAVE_TIMES;
 function morningWaveOverrideKey(label='') { return `${state.morningOperationDate}|${morningFixedSectionKey(label)}`; }
 function morningWaveTimeOverride(section={}) {
   const key=morningWaveOverrideKey(section.label||'');
@@ -1616,25 +1619,25 @@ function saveMorningWaveTimeValue(label='',wave='',rawValue='') {
   return state.morningWaveTimeOverrides[key];
 }
 function morningBlankWaveAnchors() {
-  const existing=morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-5]$/i.test(section.label)).slice(0,5);
-  return Array.from({length:5},(_,index)=>{
+  const existing=morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-6]$/i.test(section.label)).slice(0,MORNING_CORE_WAVE_COUNT);
+  return Array.from({length:MORNING_CORE_WAVE_COUNT},(_,index)=>{
     const label=`WAVE ${index+1}`,section=existing[index]||{},override=morningWaveTimeOverride({label}),wave=override?.time||section.wave||defaultMorningWaveTimes[index];
-    const pad=section.rows?.[0]?.padOverride||section.rows?.[0]?.pad||['A','B','C','A','B'][index];
+    const pad=section.rows?.[0]?.padOverride||section.rows?.[0]?.pad||MORNING_CORE_WAVE_PADS[index];
     return {routeUid:`WAVE-ANCHOR-${state.morningOperationDate}-${index+1}`,dsp:state.dspCode,driver:'',route:`__blank_wave_${index+1}`,service:'Morning Sheet wave anchor',wave,staging:'',pad,padOverride:pad,ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true,_waveAnchor:true};
   });
 }
 
 function morningSections(rows) {
   const regular=rows.filter(r=>isCxMorningRoute(r)||(!isExplicitHelperMorningRoute(r)&&!isExplicitAdhocMorningRoute(r)));
-  const importedWaves=[...new Set(regular.map(r=>r.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).slice(0,5);
+  const importedWaves=[...new Set(regular.map(r=>r.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).slice(0,MORNING_CORE_WAVE_COUNT);
   const sectionWaves=[...importedWaves],usedWaves=new Set(sectionWaves);
-  while(sectionWaves.length<5){
+  while(sectionWaves.length<MORNING_CORE_WAVE_COUNT){
     const index=sectionWaves.length,label=`WAVE ${index+1}`,override=morningWaveTimeOverride({label});
     const candidates=[override?.time,defaultMorningWaveTimes[index],...defaultMorningWaveTimes].filter(Boolean);
     const wave=candidates.find(value=>!usedWaves.has(value))||override?.time||defaultMorningWaveTimes[index]||`Wave ${index+1}`;
     sectionWaves.push(wave);usedWaves.add(wave);
   }
-  const sections=sectionWaves.map((wave,i)=>({label:`WAVE ${i+1}`,wave,rows:regular.filter(r=>r.wave===wave),pad:['A','B','C','A','B'][i],routeCapacity:15,hasTime:true,separatorRows:1}));
+  const sections=sectionWaves.map((wave,i)=>({label:`WAVE ${i+1}`,wave,rows:regular.filter(r=>r.wave===wave),pad:MORNING_CORE_WAVE_PADS[i],routeCapacity:MORNING_CORE_WAVE_CAPACITIES[i],hasTime:true,separatorRows:1}));
   const used=new Set(sections.flatMap(s=>s.rows.map(r=>r.route)));
   const adHoc=rows.filter(r=>!used.has(r.route)&&isExplicitAdhocMorningRoute(r));
   const helpers=rows.filter(r=>!used.has(r.route)&&isExplicitHelperMorningRoute(r)&&!adHoc.some(x=>x.route===r.route));
@@ -3362,11 +3365,23 @@ function importColumnIndexes(file=state.importedFile) {
     dsp:index('dsp','dspcode','company'),
     route:index('route','routecode','cxnumber','cxroute','blockid'),
     driver:index('driver','drivername','transportername','employeename','daname','associatename','da'),
-    wave:index('wave','wavetime','starttime'),
+    wave:index('wave','wavetime','starttime','planneddeparturetime','planneddeparttime','departuretime'),
     staging:index('staging','staginglocation'),
-    stops:index('stops','stopcount','plannedstops','stopsplanned','numstops'),
-    packages:index('packages','packagecount','numpackages')
+    stops:index('stops','stopcount','plannedstops','stopsplanned','numstops','totalstops','allstops'),
+    packages:index('packages','packagecount','numpackages','totalpackages','totaldeliveries')
   };
+}
+function morningPlanHeaderIndex(rows=[]) {
+  return findImportHeader(rows,[
+    ['route','routecode','cxnumber','cxroute','blockid'],
+    ['wave','wavetime','starttime','planneddeparturetime','planneddeparttime','departuretime']
+  ]);
+}
+function morningImportDspMatches(value='') {
+  const candidate=headerKey(value),code=headerKey(state.dspCode),organization=headerKey(state.organizationName);
+  if(!candidate)return false;
+  if(candidate===code)return true;
+  return organization.length>=4&&(candidate.includes(organization)||organization.includes(candidate));
 }
 function normalizedImportRouteCode(value='') {
   const route=String(value??'').replace(/\s+/g,' ').trim().toUpperCase();
@@ -3374,8 +3389,8 @@ function normalizedImportRouteCode(value='') {
 }
 function morningImportCandidates(file=state.importedFile) {
   if(!file)return [];
-  const ix=importColumnIndexes(file),dspKey=headerKey(state.dspCode);
-  return (file.rows||[]).map(row=>({row,route:ix.route>=0?normalizedImportRouteCode(row[ix.route]):''})).filter(item=>item.route&&(ix.dsp<0||headerKey(item.row[ix.dsp])===dspKey));
+  const ix=importColumnIndexes(file);
+  return (file.rows||[]).map(row=>({row,route:ix.route>=0?normalizedImportRouteCode(row[ix.route]):''})).filter(item=>item.route&&(ix.dsp<0||morningImportDspMatches(item.row[ix.dsp])));
 }
 function normalizeMorningWaveTime(value='') {
   if(typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<1){
@@ -3403,8 +3418,7 @@ function importPreflight(file=state.importedFile) {
   }
   const ix=importColumnIndexes(file), rows=file.rows||[], required=[
     ['Route / CX',ix.route],
-    ['Wave time',ix.wave],
-    ['Staging location',ix.staging]
+    ['Wave time',ix.wave]
   ];
   const candidates=morningImportCandidates(file);
   const routeKeys=new Set(candidates.map(item=>item.route));
@@ -3420,7 +3434,8 @@ function importPreflight(file=state.importedFile) {
     missing,
     checks:[
       {label:'DSP filter + valid Route Code',ok:ix.dsp>=0,detail:ix.dsp>=0?`${candidates.length} ${state.dspCode} route${candidates.length===1?'':'s'} kept · ${rows.length-candidates.length} other-DSP or non-route row${rows.length-candidates.length===1?'':'s'} skipped`:'No DSP column found — every nonblank Route Code row will be treated as your DSP'},
-      {label:'Required columns',ok:!missing.length,detail:missing.length?`Missing: ${missing.join(', ')}`:'Route, Wave, and Staging columns are ready'},
+      {label:'Required columns',ok:!missing.length,detail:missing.length?`Missing: ${missing.join(', ')}`:'Route and wave-time columns are ready'},
+      {label:'Staging locations',ok:ix.staging>=0,detail:ix.staging>=0?'Staging locations will transfer with each CX route':'This Routes_DJT6 file has no staging column; routes will remain editable with blank staging until a DayOfOpsPlan file is added'},
       {label:'Earliest waves first',ok:ix.wave>=0,detail:ix.wave>=0?'Routes will sort by launch time before hitting the template':'Wave column is required for morning order'},
       {label:'All Service Types included',ok:true,detail:'Standard, Nursery, Helper, XL, Donation, and other DSP route services stay in the import'},
       {label:'CX route matching',ok:matched>0||!detailKeys.size,detail:detailKeys.size?`${matched} of ${routeKeys.size} plan CX route${routeKeys.size===1?'':'s'} matched ROUTE_DJT6 details`:'No ROUTE_DJT6 details uploaded — names/stops use the plan file or stay reviewable'},
@@ -3478,7 +3493,7 @@ function modal() {
   }
   if (state.modal === 'picklist-screenshot-review') {
     const pads=morningPadCheckRows(),changes=currentPicklistRosterChanges(),review=state.screenshotReview||{pads:false,cortex:false},ready=review.pads&&review.cortex;
-    return `<div class="modal-backdrop required-reminder-backdrop picklist-review-backdrop"><div class="modal picklist-screenshot-review-modal" role="alertdialog" aria-modal="true" aria-labelledby="picklist-screenshot-review-title"><div class="modal-head"><div><span class="eyebrow">FINAL CHECK BEFORE SCREENSHOT</span><h2 id="picklist-screenshot-review-title">Confirm pads and Cortex swaps</h2><p>Complete both checks before RelayOps creates the Waves + Adhocs JPEG.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="picklist-review-grid"><section class="picklist-review-panel pad-panel ${review.pads?'confirmed':''}"><header><span>1</span><div><strong>Double check pads</strong><small>Tap any pad letter to correct it here. Changes update the Morning Sheet and Picklist immediately.</small></div></header><div class="pad-check-grid compact">${pads.length?pads.map(row=>`<article><span>${esc(row.label)}</span><input class="screenshot-review-pad-input" data-screenshot-review-pad="${esc(row.wave)}" value="${esc(row.pad==='—'?'':row.pad)}" maxlength="4" autocomplete="off" aria-label="Edit ${esc(row.label)} pad" title="Tap to edit this pad"><small>${esc(row.wave)} · ${row.count}<b>Tap to edit</b></small></article>`).join(''):'<div class="review-empty">No Wave 1–5 pad rows are loaded.</div>'}</div><button class="btn ${review.pads?'lime':'pad-confirm-button'}" data-action="acknowledge-screenshot-review" data-review-check="pads">${review.pads?'✓ Pads confirmed':'I checked every pad'}</button></section><section class="picklist-review-panel cortex-panel ${review.cortex?'confirmed':''}"><header><span>2</span><div><strong>Confirm swaps in Cortex</strong><small>Make sure every new route or Adhoc name below also changed in Cortex.</small></div></header><div class="cortex-swap-review-list">${changes.length?changes.map(change=>`<article><div><strong>${esc(driverDisplayName(change.from)||change.from)}</strong><b aria-hidden="true">→</b><strong>${esc(driverDisplayName(change.to)||change.to)}</strong></div><small>${esc(change.route)}${change.wave?` · ${esc(change.wave)}`:''} · ${change.kind==='adhoc'?'Added to Adhocs':'Driver change'}</small></article>`).join(''):'<div class="review-empty"><strong>No recorded swaps or Adhoc additions</strong><span>Confirm Cortex has no other manual driver changes.</span></div>'}</div><button class="btn ${review.cortex?'lime':'cortex-confirm-button'}" data-action="acknowledge-screenshot-review" data-review-check="cortex">${review.cortex?'✓ Cortex changes confirmed':'I confirmed Cortex swaps'}</button></section></div><div class="modal-actions picklist-review-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="continue-picklist-screenshot" ${ready?'':'disabled'}>Preview Waves + Adhocs JPEG</button></div></div></div></div>`;
+    return `<div class="modal-backdrop required-reminder-backdrop picklist-review-backdrop"><div class="modal picklist-screenshot-review-modal" role="alertdialog" aria-modal="true" aria-labelledby="picklist-screenshot-review-title"><div class="modal-head"><div><span class="eyebrow">FINAL CHECK BEFORE SCREENSHOT</span><h2 id="picklist-screenshot-review-title">Confirm pads and Cortex swaps</h2><p>Complete both checks before RelayOps creates the Waves + Adhocs JPEG.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="picklist-review-grid"><section class="picklist-review-panel pad-panel ${review.pads?'confirmed':''}"><header><span>1</span><div><strong>Double check pads</strong><small>Tap any pad letter to correct it here. Changes update the Morning Sheet and Picklist immediately.</small></div></header><div class="pad-check-grid compact">${pads.length?pads.map(row=>`<article><span>${esc(row.label)}</span><input class="screenshot-review-pad-input" data-screenshot-review-pad="${esc(row.wave)}" value="${esc(row.pad==='—'?'':row.pad)}" maxlength="4" autocomplete="off" aria-label="Edit ${esc(row.label)} pad" title="Tap to edit this pad"><small>${esc(row.wave)} · ${row.count}<b>Tap to edit</b></small></article>`).join(''):'<div class="review-empty">No Wave 1–6 pad rows are loaded.</div>'}</div><button class="btn ${review.pads?'lime':'pad-confirm-button'}" data-action="acknowledge-screenshot-review" data-review-check="pads">${review.pads?'✓ Pads confirmed':'I checked every pad'}</button></section><section class="picklist-review-panel cortex-panel ${review.cortex?'confirmed':''}"><header><span>2</span><div><strong>Confirm swaps in Cortex</strong><small>Make sure every new route or Adhoc name below also changed in Cortex.</small></div></header><div class="cortex-swap-review-list">${changes.length?changes.map(change=>`<article><div><strong>${esc(driverDisplayName(change.from)||change.from)}</strong><b aria-hidden="true">→</b><strong>${esc(driverDisplayName(change.to)||change.to)}</strong></div><small>${esc(change.route)}${change.wave?` · ${esc(change.wave)}`:''} · ${change.kind==='adhoc'?'Added to Adhocs':'Driver change'}</small></article>`).join(''):'<div class="review-empty"><strong>No recorded swaps or Adhoc additions</strong><span>Confirm Cortex has no other manual driver changes.</span></div>'}</div><button class="btn ${review.cortex?'lime':'cortex-confirm-button'}" data-action="acknowledge-screenshot-review" data-review-check="cortex">${review.cortex?'✓ Cortex changes confirmed':'I confirmed Cortex swaps'}</button></section></div><div class="modal-actions picklist-review-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="continue-picklist-screenshot" ${ready?'':'disabled'}>Preview Waves + Adhocs JPEG</button></div></div></div></div>`;
   }
   if (state.modal === 'rostering-driver-swap' && state.pendingRosteringSwap) {
     const pending=state.pendingRosteringSwap,assignments=currentRosteringPlan().assignments.filter(row=>String(row.associate||'').trim());
@@ -3539,7 +3554,7 @@ function modal() {
   }
   if (state.modal === 'clear-operational-sheet' && state.pendingSheetClear) {
     const picklist=state.pendingSheetClear==='picklist',routeCount=picklist?openingPicklistSections().reduce((total,section)=>total+section.rows.length,0):(state.morningRoutes||[]).filter(route=>route.dsp===state.dspCode).length;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal confirm-clear-sheet-modal" role="dialog" aria-modal="true" aria-labelledby="clear-sheet-title"><div class="modal-head"><div><span class="eyebrow">CONFIRM CLEAR</span><h2 id="clear-sheet-title">Clear ${picklist?'Opening Picklist':'Morning Sheet'}?</h2><p>${picklist?`${routeCount} visible Picklist route row${routeCount===1?'':'s'} will clear from both shared views. Helper/DSP-only Morning rows stay in place; Picklist notes, current-date backups, and call-offs reset.`:`All ${routeCount} current DSP route row${routeCount===1?'':'s'} will clear, while five blank Wave 1–5 sections and their wave times stay ready for the next import. Other saved fleet, driver, and device data stays unchanged.`}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="private-contact-note danger"><b>Undo protection is on</b><span>This change will be placed in Sheet History so it can be immediately restored.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Keep current sheet</button><button class="btn danger" data-action="confirm-clear-operational-sheet">${ICONS.trash} Clear ${picklist?'Picklist':'Morning Sheet'}</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal confirm-clear-sheet-modal" role="dialog" aria-modal="true" aria-labelledby="clear-sheet-title"><div class="modal-head"><div><span class="eyebrow">CONFIRM CLEAR</span><h2 id="clear-sheet-title">Clear ${picklist?'Opening Picklist':'Morning Sheet'}?</h2><p>${picklist?`${routeCount} visible Picklist route row${routeCount===1?'':'s'} will clear from both shared views. Helper/DSP-only Morning rows stay in place; Picklist notes, current-date backups, and call-offs reset.`:`All ${routeCount} current DSP route row${routeCount===1?'':'s'} will clear, while six blank Wave 1–6 sections and their wave times stay ready for the next import. Other saved fleet, driver, and device data stays unchanged.`}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="private-contact-note danger"><b>Undo protection is on</b><span>This change will be placed in Sheet History so it can be immediately restored.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Keep current sheet</button><button class="btn danger" data-action="confirm-clear-operational-sheet">${ICONS.trash} Clear ${picklist?'Picklist':'Morning Sheet'}</button></div></div></div></div>`;
   }
   if (state.modal === 'sheet-history') {
     const history=[...(state.sheetHistory?.past||[])].reverse();
@@ -3897,7 +3912,7 @@ function acknowledgeEarlyCalloffReminder() {
   rows.forEach(row=>{state.earlyCalloffAcknowledgements[earlyCalloffAcknowledgementKey(row.name)]={name:canonicalDriverName(row.name)||row.name,date:state.morningOperationDate,acknowledgedAt:now};});state.modal=null;persist();render();toast(`${rows.length} early call-off reminder${rows.length===1?'':'s'} acknowledged`);
 }
 function morningPadCheckRows() {
-  return morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-5]$/i.test(section.label)).slice(0,5).map(section=>({label:section.label,wave:section.wave||'',pad:section.rows?.[0]?.padOverride||section.rows?.[0]?.pad||section.pad||'—',count:section.rows?.filter(row=>!row._blank&&isCxMorningRoute(row)).length||0}));
+  return morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-6]$/i.test(section.label)).slice(0,MORNING_CORE_WAVE_COUNT).map(section=>({label:section.label,wave:section.wave||'',pad:section.rows?.[0]?.padOverride||section.rows?.[0]?.pad||section.pad||'—',count:section.rows?.filter(row=>!row._blank&&isCxMorningRoute(row)).length||0}));
 }
 function saveScreenshotReviewPad(input,commit=false) {
   const wave=String(input?.dataset?.screenshotReviewPad||''),value=String(input?.value||'').trim().toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,4);
@@ -4534,7 +4549,7 @@ function confirmDeletePicklistWave() {
   const pending=state.pendingPicklistWaveDelete;if(!pending)return;
   pushSheetHistory(`Delete ${pending.label}`,'both');
   if(pending.key==='adhoc'){state.morningRoutes=(state.morningRoutes||[]).filter(row=>!(isExplicitAdhocMorningRoute(row)&&row.dsp===state.dspCode));state.openingPicklistShowAdhoc=false;}
-  else {state.morningRoutes=(state.morningRoutes||[]).filter(row=>!(row.dsp===state.dspCode&&row.wave===pending.wave));state.openingPicklistWaveSlots=Math.max(0,Number(state.openingPicklistWaveSlots||5)-1);}
+  else {state.morningRoutes=(state.morningRoutes||[]).filter(row=>!(row.dsp===state.dspCode&&row.wave===pending.wave));state.openingPicklistWaveSlots=Math.max(0,Number(state.openingPicklistWaveSlots||MORNING_CORE_WAVE_COUNT)-1);}
   const label=pending.label;state.pendingPicklistWaveDelete=null;state.modal=null;persist();render();toast(`${label} deleted from Picklist and Morning Sheet`);
 }
 function acknowledgeVanIssueInline(route='',equipment='') {
@@ -6554,7 +6569,7 @@ function action(name,el) {
   if (name==='toggle-morning-edit') { state.editMode=!state.editMode;if(state.editMode)state.copyMode=false;render();return toast(state.editMode?'Editing is on — columns and rows are labeled':'Edits saved'); }
   if (name==='toggle-morning-copy') { state.copyMode=!state.copyMode;if(state.copyMode)state.editMode=false;sheetSelection={anchor:null,focus:null,dragging:false};render();return toast(state.copyMode?'Copy mode is on — drag cells, then press ⌘C/Ctrl+C':'Copy mode off'); }
   if (name==='toggle-fit-rows') { state.fitMorningRows=!state.fitMorningRows;persist();render();return toast(state.fitMorningRows?'Blank rows removed — waves fit driver count':'Template rows restored'); }
-  if (name==='toggle-picklist-fit-rows') { state.fitOpeningPicklistRows=!state.fitOpeningPicklistRows;persist();render();return toast(state.fitOpeningPicklistRows?'Blank rows removed from Wave 1–5 · Adhocs kept full size':'Full Wave 1–5 rows restored'); }
+  if (name==='toggle-picklist-fit-rows') { state.fitOpeningPicklistRows=!state.fitOpeningPicklistRows;persist();render();return toast(state.fitOpeningPicklistRows?'Blank rows removed from Wave 1–6 · Adhocs kept full size':'Full Wave 1–6 rows restored'); }
   if (name==='assign-ev-low') return assignElectricVehicles('low');
   if (name==='assign-ev-random') return assignElectricVehicles('random');
   if (name==='assign-operational-vans') return assignOperationalVehicles();
@@ -6739,7 +6754,7 @@ function routeDetailsFromRows(rows) {
   const headers=rows[header].map(headerKey), index=(...names)=>headers.findIndex(h=>names.map(headerKey).includes(h));
   const routeIx=index('route','routecode','routeid','cx','cxnumber','cxroute','blockid','routeidentifier'), driverIx=index('driver','drivername','transportername','transporter','employeename','daname','associatename','name','deliveryassociate','associate'), firstIx=index('firstname','driverfirstname'), lastIx=index('lastname','driverlastname'), stopsIx=index('stops','stopcount','plannedstops','stopsplanned','numstops','totalstops','allstops'), plannedIx=index('planneddeparturetime','planneddeparttime','departuretime','plannedstarttime');
   const details={};
-  rows.slice(header+1).forEach(row=>{const route=String(row[routeIx]||'').trim().toUpperCase();if(!route)return;const combined=[row[firstIx],row[lastIx]].filter(Boolean).join(' ').trim();const stops=Number(row[stopsIx]);const plannedRts=plannedIx>=0?normalizeTimeDisplay(row[plannedIx]):'';details[route]={driver:firstDriverName(row[driverIx]||combined||''),stops:Number.isFinite(stops)?stops:null,plannedRts};});
+  rows.slice(header+1).forEach(row=>{const route=String(row[routeIx]||'').trim().toUpperCase();if(!route)return;const combined=[row[firstIx],row[lastIx]].filter(Boolean).join(' ').trim();const stops=Number(row[stopsIx]);const plannedDeparture=plannedIx>=0?normalizeTimeDisplay(row[plannedIx]):'';details[route]={driver:firstDriverName(row[driverIx]||combined||''),stops:Number.isFinite(stops)?stops:null,plannedDeparture};});
   return details;
 }
 function normalizeCxRoute(value='') {
@@ -7271,12 +7286,12 @@ async function readFiles(files) {
       state.modal=null;state.page='morning';state.importPurpose='morning';persist();render();
       return toast(`${matched} Planned return to station times filled automatically${flagged?` · ${flagged} flagged for review`:''}`);
     }
-    const plan=parsed.find(f=>/day\s*of\s*ops\s*plan/i.test(f.name)||findImportHeader(f.rows,[['route','routecode','cxnumber','cxroute','blockid'],['wave','wavetime','starttime'],['staging','staginglocation']])>=0);
+    const plan=parsed.find(f=>/day\s*of\s*ops\s*plan/i.test(f.name)||morningPlanHeaderIndex(f.rows)>=0);
     const routeFile=parsed.find(f=>/route[_\s-]*djt6/i.test(f.name))||parsed.find(f=>f!==plan&&Object.keys(routeDetailsFromRows(f.rows)).length);
     const details=routeFile?routeDetailsFromRows(routeFile.rows):{};
     const primary=plan||routeFile;
     if(!primary)throw new Error('unrecognized');
-    const planHeader=plan?findImportHeader(plan.rows,[['route','routecode','cxnumber','cxroute','blockid'],['wave','wavetime','starttime'],['staging','staginglocation']]):findImportHeader(primary.rows,[['route','routecode','routeid','cx','cxnumber','cxroute','blockid']]);
+    const planHeader=plan?morningPlanHeaderIndex(plan.rows):findImportHeader(primary.rows,[['route','routecode','routeid','cx','cxnumber','cxroute','blockid']]);
     const rows=primary.rows.slice(Math.max(0,planHeader));
     state.importedFile={name:parsed.map(f=>f.name).join(' + '),headers:rows[0],rows:rows.slice(1),kind:state.importPurpose==='rts'?'rts':(plan?'plan':'details'),routeDetails:details,routeDetailsCount:Object.keys(details).length};
     if(state.modal==='import')renderLightweightModal();else render();
@@ -7695,19 +7710,24 @@ function applyImport() {
   }
   const norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
   const index=(...names)=>{const n=names.map(norm);return f.headers.findIndex(h=>n.includes(norm(h)));};
-  const ix={dsp:index('dsp','dspcode','company'),route:index('route','routecode','cxnumber','cxroute','blockid'),driver:index('driver','drivername','transportername','employeename','daname','associatename','da'),service:index('servicetype','service'),wave:index('wave','wave time','wavetime','starttime'),staging:index('staging','staginglocation'),duration:index('routeduration','duration'),zones:index('numzones','zones'),commercial:index('numcommercialpkgs','commercialpackages','commercial'),van:index('van','vehicle','vehicleid'),device:index('device','deviceid'),stops:index('stops','stopcount','plannedstops','stopsplanned','numstops'),packages:index('packages','packagecount','numpackages')};
-  if(ix.wave>=0&&ix.staging>=0) {
+  const ix={dsp:index('dsp','dspcode','company'),route:index('route','routecode','cxnumber','cxroute','blockid'),driver:index('driver','drivername','transportername','employeename','daname','associatename','da'),service:index('servicetype','deliveryservicetype','service'),wave:index('wave','wave time','wavetime','starttime','planneddeparturetime','planneddeparttime','departuretime'),staging:index('staging','staginglocation'),duration:index('routeduration','duration'),zones:index('numzones','zones'),commercial:index('numcommercialpkgs','commercialpackages','commercial'),van:index('van','vehicle','vehicleid'),device:index('device','deviceid'),stops:index('stops','stopcount','plannedstops','stopsplanned','numstops','totalstops','allstops'),packages:index('packages','packagecount','numpackages','totalpackages','totaldeliveries')};
+  if(ix.wave>=0) {
     const candidates=morningImportCandidates(f);
     const excluded=f.rows.length-candidates.length;
+    // A complete day-file import is authoritative for today's launch times.
+    // Remove stale manual footer overrides so the visible Wave rows, footer
+    // labels, screenshot, and Google connector all use the same six times.
+    state.morningWaveTimeOverrides=state.morningWaveTimeOverrides&&typeof state.morningWaveTimeOverrides==='object'?state.morningWaveTimeOverrides:{};
+    for(let waveIndex=1;waveIndex<=MORNING_CORE_WAVE_COUNT;waveIndex++)delete state.morningWaveTimeOverrides[morningWaveOverrideKey(`WAVE ${waveIndex}`)];
     state.morningRoutes=candidates.map(({row:r,route},i)=>{
       const detail=f.routeDetails?.[route];
       const packages=Number(r[ix.packages])||0, zones=Number(r[ix.zones])||0;
       const importedStops=Number(r[ix.stops]);
       const wave=normalizeMorningWaveTime(r[ix.wave])||'Wave pending', plannedRts=detail?.plannedRts||'', duration=Number(r[ix.duration])||0;
-      return {dsp:ix.dsp>=0?String(r[ix.dsp]).trim().toUpperCase():state.dspCode,driver:firstDriverName(detail?.driver||(ix.driver>=0&&r[ix.driver])||'Unassigned driver'),route,service:(ix.service>=0&&r[ix.service])||'Standard Parcel',wave,staging:r[ix.staging]||'—',duration,zones,packages,commercial:Number(r[ix.commercial])||0,stops:detail?.stops!==null&&detail?.stops!==undefined?detail.stops:(Number.isFinite(importedStops)?importedStops:0),eta:'—',bags:Math.max(1,Math.round(packages/13)),overflow:Math.max(0,Math.round(packages/24)),parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts,plannedRtsIssue:isIrregularPlannedRts(plannedRts,wave,duration),clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
+      return {dsp:state.dspCode,driver:firstDriverName(detail?.driver||(ix.driver>=0&&r[ix.driver])||'Unassigned driver'),route,service:(ix.service>=0&&r[ix.service])||'Standard Parcel',wave,staging:ix.staging>=0?(r[ix.staging]||'—'):'—',duration,zones,packages,commercial:Number(r[ix.commercial])||0,stops:detail?.stops!==null&&detail?.stops!==undefined?detail.stops:(Number.isFinite(importedStops)?importedStops:0),eta:'—',bags:Math.max(1,Math.round(packages/13)),overflow:Math.max(0,Math.round(packages/24)),parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts,plannedRtsIssue:isIrregularPlannedRts(plannedRts,wave,duration),clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
     }).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||routeCompare(a.route,b.route)||a.staging.localeCompare(b.staging,undefined,{numeric:true}));
     state.routes=state.morningRoutes.map((r,i)=>({route:r.route,driver:r.driver,id:`DA-${1100+i}`,wave:r.wave,staging:r.staging,van:'Unassigned',device:'Unassigned',stops:r.stops,packages:r.packages,progress:0,delta:0,status:r.driver==='Unassigned driver'?'Needs review':'Assigned',rescue:'—'}));
-    const importedWaves=[...new Set(state.morningRoutes.filter(row=>!isExplicitAdhocMorningRoute(row)&&!isExplicitHelperMorningRoute(row)).map(row=>row.wave).filter(Boolean))];state.openingPicklistWaveSlots=Math.min(5,importedWaves.length);state.openingPicklistShowAdhoc=true;
+    const importedWaves=[...new Set(state.morningRoutes.filter(row=>!isExplicitAdhocMorningRoute(row)&&!isExplicitHelperMorningRoute(row)).map(row=>row.wave).filter(Boolean))];state.openingPicklistWaveSlots=Math.min(MORNING_CORE_WAVE_COUNT,importedWaves.length);state.openingPicklistShowAdhoc=true;
     state.lastImportExcluded=excluded;state.lastMorningImportFingerprint=`${state.morningOperationDate}|${Date.now()}|${String(f.name||'morning-files').slice(0,120)}`;state.modal=null;state.page='morning';state.morningFilters={wave:'all',staging:'all',pad:'all'};state.rosterPublished=false;persist();render();return toast(`${state.morningRoutes.length} ${state.dspCode} routes loaded across every Service Type · ${excluded} other-DSP or non-route rows skipped`);
   }
   state.routes=f.rows.map((r,i)=>({route:r[ix.route]||`IMP-${i+1}`,driver:firstDriverName(r[ix.driver]||'Unassigned driver'),id:`DA-${1100+i}`,wave:r[ix.wave]||'Wave pending',staging:r[ix.staging]||'—',van:r[ix.van]||'Unassigned',device:r[ix.device]||'Unassigned',stops:Number(r[ix.stops])||0,packages:Number(r[ix.packages])||0,progress:0,delta:0,status:(r[ix.driver]&&r[ix.van])?'Assigned':'Needs review',rescue:'—'}));
@@ -8376,8 +8396,8 @@ function morningSheetCopyRows() {
 }
 function morningSheetTsv(){ return morningSheetCopyRows().map(row=>row.join('\t')).join('\n'); }
 function morningCoreWaveLabels() {
-  const byKey=new Map(morningSections(allMorningRows()).filter(section=>section.hasTime&&/^WAVE\s*[1-5]$/i.test(section.label)).map(section=>[morningFixedSectionKey(section.label),section]));
-  return Array.from({length:5},(_,index)=>{
+  const byKey=new Map(morningSections(allMorningRows()).filter(section=>section.hasTime&&/^WAVE\s*[1-6]$/i.test(section.label)).map(section=>[morningFixedSectionKey(section.label),section]));
+  return Array.from({length:MORNING_CORE_WAVE_COUNT},(_,index)=>{
     const label=`WAVE ${index+1}`,section=byKey.get(`WAVE${index+1}`)||{label,wave:defaultMorningWaveTimes[index],rows:[]};
     return {label,value:morningWaveTimeText(section)};
   });
@@ -8443,7 +8463,7 @@ function morningSheetsPreflight(payload=morningSheetsConnectorPayload()) {
     {label:'Row 1 headers ready',ok:headers.length===13&&headers[0]==='WAVE'&&headers[12]==='PLANNED RTS',detail:'A–M headers match the opening template.'},
     {label:'Every row has 13 columns',ok:rows.length>0&&rows.every(row=>Array.isArray(row)&&row.length===13),detail:`${rows.length} row${rows.length===1?'':'s'} will write across A–M.`},
     {label:'Black dividers are real rows',ok:separatorIndexes.length>0&&separatorIndexes.every(i=>rows[i]?.length===13&&rows[i].every(cell=>String(cell||'')==='')),detail:`${separatorIndexes.length} divider row${separatorIndexes.length===1?'':'s'} included as numbered sheet rows.`},
-    {label:'All five wave times ready',ok:waves.length===5&&waves.every((wave,index)=>morningFixedSectionKey(wave.label)===`WAVE${index+1}`&&String(wave.value||'').trim()),detail:`${waves.length}/5 wave time/count labels will be written to the fixed footer rows.`},
+    {label:'All six wave times ready',ok:waves.length===MORNING_CORE_WAVE_COUNT&&waves.every((wave,index)=>morningFixedSectionKey(wave.label)===`WAVE${index+1}`&&String(wave.value||'').trim()),detail:`${waves.length}/${MORNING_CORE_WAVE_COUNT} wave time/count labels will be written to the fixed footer rows.`},
     {label:'Wave/Pad merge map ready',ok:sections.length>0&&sections.every(section=>Number(section.startRow)>=3&&Number(section.rowCount)>0&&((section.hasTimeRow===false&&Number(section.timeRow)===Number(section.startRow)+Number(section.rowCount)-1)||(!section.timeRow||Number(section.timeRow)>=Number(section.startRow)+Number(section.rowCount)))&&(!section.separatorRow||Number(section.separatorRow)>Number(section.startRow))),detail:`${sections.length} section${sections.length===1?'':'s'} tell Google which Wave and Pad cells to merge.`},
     {label:'Row types match payload',ok:rowTypes.length===rows.length&&rowTypes.includes('route')&&(payload.writeMode==='partial-update'||(rowTypes.includes('time')&&rowTypes.includes('separator'))),detail:payload.writeMode==='partial-update'?'Partial update carries only the selected fixed-slot routes.':'Google can tell route rows, wave-time rows, blank rows, and dividers apart.'}
   ];
@@ -8530,7 +8550,8 @@ function morningSheetsReceiptHtml() {
 function morningSheetsAppsScript() {
   return String.raw`// RelayOps Morning Sheet connector
 // Install in the Google Sheet template: Extensions > Apps Script.
-// Deploy: Deploy > New deployment > Web app > Execute as me > Anyone with link.
+// First install: Deploy > New deployment > Web app > Execute as me > Anyone with link.
+// Updates: Deploy > Manage deployments > Edit > New version > Deploy.
 const RELAYOPS_START_ROW = 3;
 const RELAYOPS_START_COL = 1;
 const RELAYOPS_COLS = 13;
@@ -8539,26 +8560,18 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-27-fifteen-route-wave-layout';
-const RELAYOPS_LEGACY_LAYOUT = [
+const RELAYOPS_BUILD = '2026-07-29-six-wave-132-row-layout';
+const RELAYOPS_LAST_ROW = 132;
+const RELAYOPS_LAYOUT = [
   {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
   {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
   {key:'WAVE3', label:'WAVE 3', startRow:33, routeCapacity:13, timeRow:46, separatorRow:47},
   {key:'WAVE4', label:'WAVE 4', startRow:48, routeCapacity:13, timeRow:61, separatorRow:62},
   {key:'WAVE5', label:'WAVE 5', startRow:63, routeCapacity:14, timeRow:77, separatorRow:78},
-  {key:'ADHOCS', label:"ADHOC's", startRow:79, routeCapacity:15, separatorRow:94},
-  {key:'HELPERS', label:'HELPERS', startRow:95, routeCapacity:15, separatorRow:110},
-  {key:'DSP', label:'DSP', startRow:111, routeCapacity:6}
-];
-const RELAYOPS_LAYOUT = [
-  {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:15, timeRow:18, separatorRow:19},
-  {key:'WAVE2', label:'WAVE 2', startRow:20, routeCapacity:15, timeRow:35, separatorRow:36},
-  {key:'WAVE3', label:'WAVE 3', startRow:37, routeCapacity:15, timeRow:52, separatorRow:53},
-  {key:'WAVE4', label:'WAVE 4', startRow:54, routeCapacity:15, timeRow:69, separatorRow:70},
-  {key:'WAVE5', label:'WAVE 5', startRow:71, routeCapacity:15, timeRow:86, separatorRow:87},
-  {key:'ADHOCS', label:"ADHOC's", startRow:88, routeCapacity:15, separatorRow:103},
-  {key:'HELPERS', label:'HELPERS', startRow:104, routeCapacity:15, separatorRow:119},
-  {key:'DSP', label:'DSP', startRow:120, routeCapacity:6}
+  {key:'WAVE6', label:'WAVE 6', startRow:79, routeCapacity:14, timeRow:93, separatorRow:94},
+  {key:'ADHOCS', label:"ADHOC's", startRow:95, routeCapacity:15, separatorRow:110},
+  {key:'HELPERS', label:'HELPERS', startRow:111, routeCapacity:15, separatorRow:126},
+  {key:'DSP', label:'DSP', startRow:127, routeCapacity:6}
 ];
 
 function onOpen() {
@@ -8566,7 +8579,7 @@ function onOpen() {
     .createMenu('RelayOps')
     .addItem('Connector status', 'relayOpsConnectorStatus')
     .addItem('Validate template layout', 'relayOpsValidateTemplate')
-    .addItem('Run demo write', 'testRelayOpsMorningSheet')
+    .addItem('Run demo preflight', 'testRelayOpsMorningSheet')
     .addToUi();
 }
 
@@ -8583,6 +8596,7 @@ function doGet(e) {
   const ss = relayOpsSpreadsheet();
   const sheet = ss.getSheetByName(RELAYOPS_TEMPLATE_SHEET);
   if (!sheet) throw new Error('Blank template tab "' + RELAYOPS_TEMPLATE_SHEET + '" was not found');
+  validateRelayOpsTemplateSignature(sheet);
   const layout = relayOpsTemplateLayout(sheet, 0);
   return relayOpsJson({
     ok: true,
@@ -8637,10 +8651,11 @@ function doPost(e) {
         sheet: target.targetName,
         templateSheet: sheet.getName(),
         wouldCreateSheet: target.wouldCreate,
+        wouldBackupSheets: target.wouldBackup || [],
         startCell: payload.startCell,
         writeRange: payload.writeRange,
-        writtenRange: 'A3:V125',
-        lastCell: 'V125',
+        writtenRange: 'A3:V132',
+        lastCell: 'V132',
         rows: (payload.rows || []).length,
         sections: (payload.sections || []).length,
         waveTimes: relayOpsWaveLabels(payload).filter(function(wave) { return Boolean(wave.value); }).length,
@@ -8668,6 +8683,7 @@ function doPost(e) {
       waveTimes: result.waveTimes,
       missingRoutes: result.missingRoutes,
       sectionMismatches: result.sectionMismatches,
+      backups: result.backups || [],
       preflight: validation,
       updatedAt: new Date().toISOString()
     });
@@ -8737,18 +8753,25 @@ function relayOpsWaveLabels(payload) {
   return RELAYOPS_LAYOUT.filter(function(layout) { return Boolean(layout.timeRow); }).map(function(layout) { return {layout:layout,value:byKey[layout.key] || ''}; });
 }
 
+function relayOpsWaveLabelCell(sheet, layout) {
+  const nominalCell = sheet.getRange(layout.timeRow, 1);
+  const merged = nominalCell.getMergedRanges();
+  if (!merged.length) return nominalCell;
+  return sheet.getRange(merged[0].getRow(), merged[0].getColumn());
+}
+
 function writeRelayOpsWaveLabels(sheet, payload) {
   const waves = relayOpsWaveLabels(payload);
   waves.forEach(function(wave) {
     if (!wave.value) return;
-    const cell = sheet.getRange(wave.layout.timeRow, 1);
+    const cell = relayOpsWaveLabelCell(sheet, wave.layout);
     cell.clearContent();
     cell.setValue(String(wave.value));
   });
   if (SpreadsheetApp.flush) SpreadsheetApp.flush();
   const failed = waves.filter(function(wave) {
     if (!wave.value) return true;
-    return String(sheet.getRange(wave.layout.timeRow, 1).getDisplayValue() || '').trim() !== String(wave.value).trim();
+    return String(relayOpsWaveLabelCell(sheet, wave.layout).getDisplayValue() || '').trim() !== String(wave.value).trim();
   });
   if (failed.length) throw new Error('Wave footer verification failed for ' + failed.map(function(wave) { return wave.layout.label; }).join(', '));
   return waves.length;
@@ -8779,7 +8802,7 @@ function validateRelayOpsMorningPayload(payload) {
   });
   if (!sections.length) errors.push('No wave sections sent');
   const waveLabels = relayOpsWaveLabels(payload);
-  if (waveLabels.length !== 5 || waveLabels.some(function(wave) { return !wave.value; })) errors.push('All five Wave 1-5 time/count labels are required');
+  if (waveLabels.length !== 6 || waveLabels.some(function(wave) { return !wave.value; })) errors.push('All six Wave 1-6 time/count labels are required');
   sections.forEach(function(section, i) {
     const start = Number(section.startRow);
     const count = Number(section.rowCount);
@@ -8790,6 +8813,9 @@ function validateRelayOpsMorningPayload(payload) {
     else {
       if (section.slotKey && relayOpsSectionKey(section.slotKey) !== fixedLayout.key) errors.push('Section ' + (i + 1) + ' slot identity does not match ' + fixedLayout.label);
       const invalidBase = !start || start < RELAYOPS_START_ROW || !count;
+      // Payload row numbers describe the dashboard copy grid. Google writes to
+      // the authoritative fixed anchors above, but the supplied grid must still
+      // contain a valid time row after its route rows.
       const invalidTime = Boolean(fixedLayout.timeRow) && (!time || time <= start);
       const invalidSeparator = Boolean(fixedLayout.separatorRow) && (!separator || separator <= start || (fixedLayout.timeRow && separator <= time));
       if (invalidBase || invalidTime || invalidSeparator) errors.push('Section ' + (i + 1) + ' has invalid merge rows');
@@ -8809,7 +8835,7 @@ function validateRelayOpsRtsPayload(payload) {
     if (update.expectedSection && !relayOpsLayoutForSection({label:update.expectedSection})) errors.push('RTS update ' + (index + 1) + ' has an unsupported fixed wave slot');
   });
   const waveLabels = relayOpsWaveLabels(payload);
-  if (waves.length !== 5 || waveLabels.some(function(wave) { return !wave.value; })) errors.push('All five Wave 1-5 time/count labels are required');
+  if (waves.length !== 6 || waveLabels.some(function(wave) { return !wave.value; })) errors.push('All six Wave 1-6 time/count labels are required');
   return {ready:errors.length===0,errors:errors};
 }
 
@@ -8858,7 +8884,7 @@ function relayOpsRouteIndex(sheet) {
 
 function writeRelayOpsRtsOnly(payload) {
   const target = resolveRelayOpsTarget(payload, false);if (target.wouldCreate) throw new Error('Send the full Morning Sheet once before RTS-only updates');const sheet = target.sheet;
-  validateRelayOpsTemplateSignature(sheet);ensureRelayOps15RowLayout(sheet);
+  validateRelayOpsTemplateSignature(sheet);
   const byRoute = relayOpsRouteIndex(sheet);
   let updated = 0;const missingRoutes = [], sectionMismatches = [];
   (payload.updates || []).forEach(function(update) {
@@ -8874,7 +8900,7 @@ function writeRelayOpsRtsOnly(payload) {
 
 function writeRelayOpsWhiparoundOnly(payload) {
   const target = resolveRelayOpsTarget(payload, false);if (target.wouldCreate) throw new Error('Send the full Morning Sheet once before Whiparound-only updates');const sheet = target.sheet;
-  validateRelayOpsTemplateSignature(sheet);ensureRelayOps15RowLayout(sheet);
+  validateRelayOpsTemplateSignature(sheet);
   const byRoute = relayOpsRouteIndex(sheet);
   let updated = 0;const missingRoutes = [], driverMismatches = [], sectionMismatches = [];
   (payload.updates || []).forEach(function(update) {
@@ -8895,25 +8921,27 @@ function relayOpsValidateTemplate() {
   if (!sheet) throw new Error('Blank template tab "' + RELAYOPS_TEMPLATE_SHEET + '" was not found');
   validateRelayOpsTemplateSignature(sheet);
   const layout = relayOpsTemplateLayout(sheet, 0);
-  const ready = layout.hasEnoughColumns && layout.maxRows >= RELAYOPS_START_ROW;
-  SpreadsheetApp.getUi().alert(
-    ready ? 'RelayOps template layout is ready' : 'RelayOps template needs review',
-    'Sheet tab: ' + sheet.getName() +
-      '\nDashboard payload: ' + RELAYOPS_WRITE_RANGE +
-      '\nOriginal template: ' + RELAYOPS_TEMPLATE_RANGE +
-      '\nRows available: ' + layout.maxRows + ' / needs ' + layout.neededRows +
-      '\nColumns available: ' + layout.maxColumns + ' / needs ' + layout.neededColumns +
-      '\nFrozen rows: ' + layout.frozenRows +
-      '\nStatus: ' + (ready ? 'Ready for Dry run / Send' : 'The original Ops Log needs columns A through V'),
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
+  const ready = layout.hasEnoughRows && layout.hasEnoughColumns;
+  const title = ready ? 'RelayOps template layout is ready' : 'RelayOps template needs review';
+  const message = 'Sheet tab: ' + sheet.getName() +
+    '\nDashboard payload: ' + RELAYOPS_WRITE_RANGE +
+    '\nOriginal template: ' + RELAYOPS_TEMPLATE_RANGE +
+    '\nRows available: ' + layout.maxRows + ' / needs ' + layout.neededRows +
+    '\nColumns available: ' + layout.maxColumns + ' / needs ' + layout.neededColumns +
+    '\nFrozen rows: ' + layout.frozenRows +
+    '\nStatus: ' + (ready ? 'Ready for Dry run / Send' : 'The original Ops Log needs columns A through V');
+  try {
+    SpreadsheetApp.getUi().alert(title, message, SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch (uiError) {
+    console.log(title + '\n' + message);
+  }
   return layout;
 }
 
 function relayOpsTemplateLayout(sheet, sentRows) {
-  // A dated RelayOps tab expands the original 116-row form by nine rows so
-  // Waves 1-5 each have 15 route slots. The master OPS LOG tab stays intact.
-  const neededRows = 125;
+  // The 132-row OPS LOG 2026 master is authoritative. RelayOps never inserts
+  // rows, rebuilds merges, or derives a dated layout from an older template.
+  const neededRows = RELAYOPS_LAST_ROW;
   return {
     maxRows: sheet.getMaxRows(),
     maxColumns: sheet.getMaxColumns(),
@@ -8925,12 +8953,6 @@ function relayOpsTemplateLayout(sheet, sentRows) {
   };
 }
 
-function ensureRelayOpsTemplateCapacity(sheet, rowCount) {
-  const layout = relayOpsTemplateLayout(sheet, rowCount);
-  if (!layout.hasEnoughRows) sheet.insertRowsAfter(sheet.getMaxRows(), layout.neededRows - sheet.getMaxRows());
-  if (!layout.hasEnoughColumns) sheet.insertColumnsAfter(sheet.getMaxColumns(), RELAYOPS_TEMPLATE_COLS - sheet.getMaxColumns());
-}
-
 function relayOpsLayoutMatches(sheet, layout) {
   if (!sheet || sheet.getMaxRows() < layout[layout.length - 1].startRow) return false;
   return layout.every(function(section) {
@@ -8938,57 +8960,6 @@ function relayOpsLayoutMatches(sheet, layout) {
     const wanted = String(section.label).toUpperCase().replace(/[^A-Z0-9]/g, '');
     return actual === wanted;
   });
-}
-
-function relayOpsResetWaveMerges(sheet, layout) {
-  [1, 5].forEach(function(column) {
-    sheet.getRange(layout.startRow, column, layout.routeCapacity + 1, 1).getMergedRanges().forEach(function(range) {
-      range.breakApart();
-    });
-  });
-  sheet.getRange(layout.startRow, 1, layout.routeCapacity, 1).merge();
-  sheet.getRange(layout.startRow, 5, layout.routeCapacity + 1, 1).merge();
-  sheet.getRange(layout.startRow, 1).setValue(layout.label);
-}
-
-function ensureRelayOps15RowLayout(sheet) {
-  if (relayOpsLayoutMatches(sheet, RELAYOPS_LAYOUT)) return false;
-  if (!relayOpsLayoutMatches(sheet, RELAYOPS_LEGACY_LAYOUT)) {
-    throw new Error('Target tab is neither the original nor expanded RelayOps Ops Log layout');
-  }
-  RELAYOPS_LEGACY_LAYOUT.slice(0, 5).reverse().forEach(function(layout) {
-    const missing = 15 - layout.routeCapacity;
-    if (missing <= 0) return;
-    const sourceRow = layout.timeRow - 1;
-    sheet.insertRowsBefore(layout.timeRow, missing);
-    const source = sheet.getRange(sourceRow, 1, 1, RELAYOPS_TEMPLATE_COLS);
-    const inserted = sheet.getRange(layout.timeRow, 1, missing, RELAYOPS_TEMPLATE_COLS);
-    source.copyTo(inserted, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
-    source.copyTo(inserted, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
-    inserted.clearContent();
-    sheet.getRange(layout.timeRow, 10, missing, 4).setValue(false);
-    sheet.getRange(layout.timeRow, 15, missing, 1).setValue(false);
-    sheet.getRange(layout.timeRow, 16, missing, 2).setNumberFormat('0');
-    if (typeof sheet.getRowHeight === 'function' && typeof sheet.setRowHeights === 'function') {
-      sheet.setRowHeights(layout.timeRow, missing, sheet.getRowHeight(sourceRow));
-    }
-  });
-  RELAYOPS_LAYOUT.slice(0, 5).forEach(function(layout) {
-    relayOpsResetWaveMerges(sheet, layout);
-  });
-  if (!relayOpsLayoutMatches(sheet, RELAYOPS_LAYOUT)) {
-    throw new Error('RelayOps could not expand all five Waves to 15 route rows');
-  }
-  return true;
-}
-
-function freezeRelayOpsHeader(sheet) {
-  try {
-    sheet.getRange(1, 1, 2, RELAYOPS_COLS).getMergedRanges().forEach(function(range) {
-      if (range.getRow() === 1) range.breakApart();
-    });
-  } catch (error) {}
-  return sheet.getFrozenRows();
 }
 
 function writeRelayOpsMorningSheet(payload) {
@@ -8999,7 +8970,6 @@ function writeRelayOpsMorningSheet(payload) {
   if (writeMode === 'partial-update' && target.wouldCreate) throw new Error('Send all waves once before using a filtered partial update');
   const sheet = target.sheet;
   validateRelayOpsTemplateSignature(sheet);
-  ensureRelayOps15RowLayout(sheet);
 
   // Clear only dashboard-owned cells inside the fixed OPS LOG 2026 sections.
   // Existing merges, headers, widths, colors, checkboxes J:M, divider N,
@@ -9012,7 +8982,7 @@ function writeRelayOpsMorningSheet(payload) {
       sheet.getRange(layout.startRow, 16, layout.routeCapacity, 2).setNumberFormat('0');
       sheet.getRange(layout.startRow, 21, layout.routeCapacity, 1).clearContent();
       sheet.getRange(layout.startRow, 1).setValue(layout.label);
-      if (layout.timeRow) sheet.getRange(layout.timeRow, 1).clearContent();
+      if (layout.timeRow) relayOpsWaveLabelCell(sheet, layout).clearContent();
     });
   }
 
@@ -9031,7 +9001,7 @@ function writeRelayOpsMorningSheet(payload) {
       });
     });
     const waveTimes = writeRelayOpsWaveLabels(sheet, payload);
-    return {sheetName:sheet.getName(),startCell:'A3',writeRange:RELAYOPS_TEMPLATE_RANGE,writtenRange:'matched routes + five wave labels',lastCell:'',createdSheet:false,writeMode:writeMode,updated:updated,waveTimes:waveTimes,missingRoutes:missingRoutes,sectionMismatches:sectionMismatches};
+    return {sheetName:sheet.getName(),startCell:'A3',writeRange:RELAYOPS_TEMPLATE_RANGE,writtenRange:'matched routes + six wave labels',lastCell:'',createdSheet:false,writeMode:writeMode,updated:updated,waveTimes:waveTimes,missingRoutes:missingRoutes,sectionMismatches:sectionMismatches};
   }
 
   (payload.sections || []).forEach(function(section) {
@@ -9048,22 +9018,63 @@ function writeRelayOpsMorningSheet(payload) {
     if (section.pad !== undefined && section.pad !== null && String(section.pad) !== '') sheet.getRange(layout.startRow, 5).setValue(section.pad);
   });
   const waveTimes = writeRelayOpsWaveLabels(sheet, payload);
-  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V125', lastCell: 'V125', createdSheet: target.created, writeMode:writeMode, updated:(payload.rows || []).filter(function(row){return row && String(row[2] || '').trim();}).length, waveTimes:waveTimes, missingRoutes:[], sectionMismatches:[]};
+  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V132', lastCell: 'V132', createdSheet: target.created, writeMode:writeMode, updated:(payload.rows || []).filter(function(row){return row && String(row[2] || '').trim();}).length, waveTimes:waveTimes, missingRoutes:[], sectionMismatches:[], backups:target.backups || []};
 }
 
 function validateRelayOpsTemplateSignature(sheet) {
   if (!sheet) throw new Error('OPS LOG sheet was not found');
-  if (sheet.getMaxRows() < 116 || sheet.getMaxColumns() < 22) throw new Error('Target tab is not the 116-row, 22-column OPS LOG 2026 layout');
+  if (sheet.getMaxRows() < RELAYOPS_LAST_ROW || sheet.getMaxColumns() < RELAYOPS_TEMPLATE_COLS) {
+    throw new Error('Target tab is not the 132-row, 22-column six-wave OPS LOG 2026 layout');
+  }
   const expected = [['A1','WAVE'],['J1','PRE DVIC'],['P1','STOP COUNT'],['U1','PLANNED RTS'],['V1','CLOCK OUT TIME']];
   expected.forEach(function(item) {
     const actual = String(sheet.getRange(item[0]).getDisplayValue() || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     const wanted = String(item[1]).toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (actual !== wanted) throw new Error('Target tab does not match OPS LOG 2026 at ' + item[0] + ' (expected ' + item[1] + ')');
   });
-  if (!relayOpsLayoutMatches(sheet, RELAYOPS_LEGACY_LAYOUT) && !relayOpsLayoutMatches(sheet, RELAYOPS_LAYOUT)) {
-    throw new Error('Target tab does not match the original or expanded RelayOps section anchors');
+  if (!relayOpsLayoutMatches(sheet, RELAYOPS_LAYOUT)) {
+    throw new Error('Target tab does not match the Wave 1-6, ADHOC, HELPERS, and DSP anchors in the 132-row OPS LOG 2026 master');
   }
   return true;
+}
+
+function relayOpsTemplateSignatureError(sheet) {
+  try {
+    validateRelayOpsTemplateSignature(sheet);
+    return '';
+  } catch (error) {
+    return error && error.message ? error.message : String(error);
+  }
+}
+
+function relayOpsUniqueBackupName(ss, originalName) {
+  const suffix = ' old layout';
+  const base = String(originalName || 'dated Ops Log').slice(0, 100 - suffix.length);
+  let candidate = base + suffix;
+  let number = 2;
+  while (ss.getSheetByName(candidate)) {
+    const numberedSuffix = suffix + ' ' + number;
+    candidate = String(originalName || 'dated Ops Log').slice(0, 100 - numberedSuffix.length) + numberedSuffix;
+    number++;
+  }
+  return candidate;
+}
+
+function relayOpsBackupOldDatedSheets(ss, sheets) {
+  return sheets.map(function(sheet) {
+    const originalName = sheet.getName();
+    const backupName = relayOpsUniqueBackupName(ss, originalName);
+    try {
+      sheet.setName(backupName);
+    } catch (error) {
+      throw new Error(
+        'The dated tab "' + originalName + '" uses an old layout and could not be preserved as "' +
+        backupName + '". Rename that tab manually, then send the full Morning Sheet again. ' +
+        (error && error.message ? error.message : String(error))
+      );
+    }
+    return {originalName:originalName, backupName:backupName};
+  });
 }
 
 function resolveRelayOpsTarget(payload, createIfMissing) {
@@ -9072,16 +9083,48 @@ function resolveRelayOpsTarget(payload, createIfMissing) {
   if (!allowedNames.length) throw new Error('A valid operationDate is required before choosing a dated Ops Log tab');
   if (allowedNames.indexOf(payload.sheetName) < 0) throw new Error('Refusing non-date target. Expected ' + allowedNames.join(' or '));
   const sheetNames = [payload.sheetName].concat(allowedNames).filter(function(name, index, values) { return name && values.indexOf(name) === index; });
-  let sheet = null;
-  for (var s = 0; s < sheetNames.length && !sheet; s++) sheet = ss.getSheetByName(sheetNames[s]);
-  if (sheet) { validateRelayOpsTemplateSignature(sheet);return {sheet:sheet,targetName:sheet.getName(),wouldCreate:false,created:false}; }
+  const validSheets = [];
+  const invalidSheets = [];
+  for (var s = 0; s < sheetNames.length; s++) {
+    const datedSheet = ss.getSheetByName(sheetNames[s]);
+    if (!datedSheet) continue;
+    const signatureError = relayOpsTemplateSignatureError(datedSheet);
+    if (signatureError) invalidSheets.push({sheet:datedSheet,error:signatureError});
+    else validSheets.push(datedSheet);
+  }
+  if (validSheets.length) {
+    const exact = validSheets.filter(function(sheet) { return sheet.getName() === payload.sheetName; })[0];
+    const sheet = exact || validSheets[0];
+    return {sheet:sheet,targetName:sheet.getName(),wouldCreate:false,created:false};
+  }
   const template = ss.getSheetByName(RELAYOPS_TEMPLATE_SHEET);
   if (!template) throw new Error('Blank template tab "' + RELAYOPS_TEMPLATE_SHEET + '" was not found');
   validateRelayOpsTemplateSignature(template);
+  if (invalidSheets.length && !createIfMissing) {
+    // A full-send dry run must be able to pass before the real send preserves
+    // the old tab and creates the new master copy. Partial modes must stop.
+    if (payload && payload.dryRun && payload.writeMode === 'full-replace') {
+      return {
+        sheet:template,
+        targetName:payload.sheetName,
+        wouldCreate:true,
+        created:false,
+        wouldBackup:invalidSheets.map(function(item) { return item.sheet.getName(); })
+      };
+    }
+    throw new Error(
+      'The dated Ops Log tab "' + invalidSheets[0].sheet.getName() +
+      '" uses an old layout. Send the full Morning Sheet first so RelayOps can preserve it as an "old layout" backup and create a fresh six-wave copy from "' +
+      RELAYOPS_TEMPLATE_SHEET + '".'
+    );
+  }
   if (!createIfMissing) return {sheet:template,targetName:payload.sheetName,wouldCreate:true,created:false};
+  const backups = invalidSheets.length
+    ? relayOpsBackupOldDatedSheets(ss, invalidSheets.map(function(item) { return item.sheet; }))
+    : [];
   const created = template.copyTo(ss).setName(payload.sheetName);
   validateRelayOpsTemplateSignature(created);
-  return {sheet:created,targetName:created.getName(),wouldCreate:false,created:true};
+  return {sheet:created,targetName:created.getName(),wouldCreate:false,created:true,backups:backups};
 }
 
 function relayOpsSpreadsheet() {
@@ -9093,22 +9136,81 @@ function findRelayOpsMorningSheet(payload) {
 }
 
 function testRelayOpsMorningSheet() {
+  const demoWaveDefinitions = [
+    {label:'WAVE 1', time:'11:15 AM', value:'11:15 (1)', pad:'A'},
+    {label:'WAVE 2', time:'11:20 AM', value:'11:20 (1)', pad:'B'},
+    {label:'WAVE 3', time:'11:25 AM', value:'11:25 (1)', pad:'C'},
+    {label:'WAVE 4', time:'11:40 AM', value:'11:40 (1)', pad:'A'},
+    {label:'WAVE 5', time:'11:45 AM', value:'11:45 (1)', pad:'B'},
+    {label:'WAVE 6', time:'12:05 PM', value:'12:05 (1)', pad:'C'}
+  ];
+  const rows = [];
+  const rowTypes = [];
+  const sections = [];
+  demoWaveDefinitions.forEach(function(wave, index) {
+    const sourceIndex = rows.length;
+    const startRow = RELAYOPS_START_ROW + sourceIndex;
+    rows.push([
+      wave.label,
+      'Demo Driver ' + (index + 1),
+      'CX20' + (index + 1),
+      'STG.V.' + (index + 1),
+      wave.pad,
+      String(index + 1),
+      String(index + 1),
+      '-',
+      '',
+      180 + index,
+      300 + index,
+      '',
+      '6:' + String(20 + index).padStart(2, '0') + ' PM'
+    ]);
+    rowTypes.push('route');
+    rows.push([wave.value,'','','','','','','','','','','','']);
+    rowTypes.push('time');
+    rows.push(['','','','','','','','','','','','','']);
+    rowTypes.push('separator');
+    sections.push({
+      label:wave.label,
+      slotKey:relayOpsSectionKey(wave.label),
+      wave:wave.time,
+      waveTime:wave.value,
+      pad:wave.pad,
+      sourceIndex:sourceIndex,
+      startRow:startRow,
+      rowCount:1,
+      timeRow:startRow + 1,
+      separatorRow:startRow + 2
+    });
+  });
   const sample = {
     version: 'relayops-morning-v1',
     writeMode: 'full-replace',
     startCell: 'A3',
     writeRange: 'A3:M',
     headers: ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','STOP COUNT','PACKAGE COUNT','','PLANNED RTS'],
-    operationDate: '2026-07-12',
-    sheetName: '7/12/26',
-    sheetNameCandidates: ['7/12/26','7.12.26'],
-    rows: [['WAVE 1','Demo Driver','CX200','STG.V.1','A','21','3','-','','188','331','','6:20 PM'], ['11:15 (1)','','','','','','','','','','','',''], ['','','','','','','','','','','','','']],
-    rowTypes: ['route','time','separator'],
-    sections: [{label:'WAVE 1', wave:'11:15 AM', waveTime:'11:15 (1)', pad:'A', startRow:3, rowCount:1, timeRow:4, separatorRow:5}],
-    waves: [{label:'WAVE 1',value:'11:15 (1)'},{label:'WAVE 2',value:'11:20 (0)'},{label:'WAVE 3',value:'11:25 (0)'},{label:'WAVE 4',value:'11:40 (0)'},{label:'WAVE 5',value:'11:45 (0)'}]
+    operationDate: '2026-07-29',
+    sheetName: '7/29/26',
+    sheetNameCandidates: ['7/29/26','7.29.26'],
+    rows: rows,
+    rowTypes: rowTypes,
+    sections: sections,
+    waves: demoWaveDefinitions.map(function(wave) { return {label:wave.label,value:wave.value}; })
   };
-  writeRelayOpsMorningSheet(sample);
-}`;
+  const validation = validateRelayOpsMorningPayload(sample);
+  const template = relayOpsSpreadsheet().getSheetByName(RELAYOPS_TEMPLATE_SHEET);
+  if (!template) throw new Error('Blank template tab "' + RELAYOPS_TEMPLATE_SHEET + '" was not found');
+  validateRelayOpsTemplateSignature(template);
+  SpreadsheetApp.getUi().alert(
+    validation.ready ? 'RelayOps demo preflight passed' : 'RelayOps demo preflight failed',
+    validation.ready
+      ? 'The connector accepted a six-wave sample and verified the 132-row OPS LOG 2026 master. No dated tab was changed.'
+      : validation.errors.join('\n'),
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+  return validation;
+}
+`;
 }
 function saveMorningSheetsConnector() {
   const input=document.getElementById('morning-sheets-endpoint');
@@ -9200,15 +9302,15 @@ async function syncFilteredMorningToSheets() {
   try {
     const dryResult=await postMorningSheetsPayload(endpoint,{...payload,dryRun:true});
     if(!dryResult.dryRun)throw new Error('Google did not confirm the safety check');
-    if(String(dryResult.build||'')!=='2026-07-27-fifteen-route-wave-layout')throw confirmedConnectorError('Google is using an older Apps Script build that cannot safely fit 15 routes in every Wave. Download, paste, and redeploy the revised connector once.');
-    if(Number(dryResult.waveTimes)!==5)throw confirmedConnectorError('Google is still using the older connector that can skip Wave 1–4 times. Install and redeploy the newest five-wave Apps Script before sending.');
+    if(String(dryResult.build||'')!==MORNING_CONNECTOR_BUILD)throw confirmedConnectorError('Google is using an older Apps Script build that does not support the 132-row six-wave template. Download, paste, and redeploy the revised connector once.');
+    if(Number(dryResult.waveTimes)!==MORNING_CORE_WAVE_COUNT)throw confirmedConnectorError('Google is still using the older connector that can skip Wave 6. Install and redeploy the newest six-wave Apps Script before sending.');
     if(payload.writeMode==='partial-update'&&dryResult.wouldCreateSheet)throw new Error('Send all waves once before using a filtered partial update. No unrelated wave sections were changed.');
     if(button)button.textContent='Sending filtered waves…';
     const result=await postMorningSheetsPayload(endpoint,payload);
     const requestedRoutes=payload.sections.reduce((count,section)=>count+(payload.rows||[]).slice(Number(section.sourceIndex)||0,(Number(section.sourceIndex)||0)+Number(section.rowCount||0)).filter(row=>String(row?.[2]||'').trim()).length,0);
     if(result.writeMode!==payload.writeMode)throw confirmedConnectorError('Google did not confirm the requested full/partial write mode. Update and redeploy the revised Apps Script.');
-    if(String(result.build||'')!=='2026-07-27-fifteen-route-wave-layout')throw confirmedConnectorError('Google did not confirm the revised 15-route Wave connector build.');
-    if(Number(result.waveTimes)!==5)throw confirmedConnectorError(`Google updated ${result.waveTimes||0} of 5 wave time/count labels. Update and redeploy the newest Apps Script connector, then send again.`);
+    if(String(result.build||'')!==MORNING_CONNECTOR_BUILD)throw confirmedConnectorError('Google did not confirm the revised six-wave connector build.');
+    if(Number(result.waveTimes)!==MORNING_CORE_WAVE_COUNT)throw confirmedConnectorError(`Google updated ${result.waveTimes||0} of ${MORNING_CORE_WAVE_COUNT} wave time/count labels. Update and redeploy the newest Apps Script connector, then send again.`);
     if(payload.writeMode==='partial-update'&&(result.missingRoutes?.length||result.sectionMismatches?.length||Number(result.updated)!==requestedRoutes))throw confirmedConnectorError(`Google updated ${result.updated||0} of ${requestedRoutes} filtered routes; ${result.missingRoutes?.length||0} CX missing and ${result.sectionMismatches?.length||0} in a different fixed wave slot. Unrelated sections were left unchanged.`);
     const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastDryRun=sentAt;
@@ -9216,7 +9318,7 @@ async function syncFilteredMorningToSheets() {
     state.morningSheetsLastReceipt={sheet:result.sheet||payload.sheetName,startCell:result.startCell||payload.startCell,writeRange:result.writtenRange||result.writeRange||payload.writeRange,lastCell:result.lastCell||'',rows:result.rows||payload.rows.length,sections:result.sections||payload.sections.length,status:'confirmed',updatedAt:result.updatedAt||sentAt,sentAt,filterScope:morningFilterScopeText()};
     state.morningSheetsLastError='';
     persist(); render();
-    toast(`Google confirmed ${filteredMorningRows().length} filtered routes + all 5 wave times · ${result.writtenRange||payload.writeRange}`);
+    toast(`Google confirmed ${filteredMorningRows().length} filtered routes + all ${MORNING_CORE_WAVE_COUNT} wave times · ${result.writtenRange||payload.writeRange}`);
     return true;
   } catch(error) {
     if(!error?.relayOpsConfirmed) {
@@ -9239,7 +9341,7 @@ async function syncFilteredMorningToSheets() {
 }
 async function copyMorningAppsScript() {
   const code=morningSheetsAppsScript();
-  if(!code.includes('2026-07-27-fifteen-route-wave-layout')){toast('The 15-route Wave Apps Script is still loading — refresh the dashboard and try again','error');return false;}
+  if(!code.includes(MORNING_CONNECTOR_BUILD)){toast('The six-wave Apps Script is still loading — refresh the dashboard and try again','error');return false;}
   const ok=await writeClipboardText(code);
   toast(ok?'Revised original-template Apps Script copied — replace the old code, save, and deploy a new version':'Clipboard blocked — download the .gs script file instead',ok?'':'error');
   return ok;
@@ -9260,7 +9362,8 @@ function morningSheetsSetupChecklist() {
     '4. Save the Apps Script project.',
     '5. Reload the Google Sheet and confirm a RelayOps menu appears.',
     '5a. In the RelayOps menu, click Validate template layout. Confirm it recognizes the original A:V Ops Log.',
-    '6. In Apps Script, click Deploy > New deployment > Web app.',
+    '6. Existing connector: click Deploy > Manage deployments > Edit (pencil) > Version: New version > Deploy. Keep the same /exec URL.',
+    '6a. First-time connector only: click Deploy > New deployment > Web app.',
     '7. Set Execute as: Me.',
     '8. Set Who has access: Anyone with the link.',
     '9. Copy the Web app /exec URL. Do not copy passwords, cookies, or Amazon/Rivian credentials.',
@@ -9335,7 +9438,7 @@ async function testMorningSheetsConnector() {
     const response=await fetch(connectorUrlWithPing(endpoint),{method:'GET'});
     const text=await response.text();
     if(!response.ok||!/relayops-morning-v1/.test(text)||!/A3:V/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
-    if(!/2026-07-27-fifteen-route-wave-layout/.test(text))throw new Error('Connector deployment is outdated. Replace the Apps Script with the 15-route Wave connector, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
+    if(!text.includes(MORNING_CONNECTOR_BUILD))throw new Error('Connector deployment is outdated. Replace it with the 132-row six-wave Apps Script, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
     state.morningSheetsLastError='';
     persist(); render();
     toast('Google Sheets connector confirmed');
@@ -9373,7 +9476,7 @@ async function dryRunMorningToSheets() {
     if(!response.ok)throw new Error(`Connector returned ${response.status}`);
     const result=parseMorningSheetsResponse(text,response.status);
     if(!result.dryRun)throw new Error('Connector did not confirm dry run mode');
-    if(String(result.build||'')!=='2026-07-27-fifteen-route-wave-layout'||Number(result.waveTimes)!==5)throw confirmedConnectorError('Google is using an older connector that cannot verify the five 15-route Wave sections. Install and redeploy the revised Apps Script once.');
+    if(String(result.build||'')!==MORNING_CONNECTOR_BUILD||Number(result.waveTimes)!==MORNING_CORE_WAVE_COUNT)throw confirmedConnectorError('Google is using an older connector that cannot verify all six Wave sections. Install and redeploy the revised Apps Script once.');
     state.morningSheetsLastDryRun=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastError='';
     state.modal='morning-sheets-connector';
@@ -9414,7 +9517,7 @@ async function sendMorningToSheets() {
     const text=await response.text();
     if(!response.ok)throw new Error(`Connector returned ${response.status}`);
     const result=parseMorningSheetsResponse(text,response.status);
-    if(String(result.build||'')!=='2026-07-27-fifteen-route-wave-layout'||Number(result.waveTimes)!==5)throw confirmedConnectorError('Google did not verify all five 15-route Wave sections. Install and redeploy the revised Apps Script once before sending.');
+    if(String(result.build||'')!==MORNING_CONNECTOR_BUILD||Number(result.waveTimes)!==MORNING_CORE_WAVE_COUNT)throw confirmedConnectorError('Google did not verify all six Wave sections. Install and redeploy the revised Apps Script once before sending.');
     const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastPush=sentAt;
     state.morningSheetsLastReceipt={sheet:result.sheet||payload.sheetName,startCell:result.startCell||payload.startCell,writeRange:result.writtenRange||result.writeRange||payload.writeRange,lastCell:result.lastCell||'',rows:result.rows||payload.rows.length,sections:result.sections||payload.sections.length,status:'confirmed',updatedAt:result.updatedAt||sentAt,sentAt};
@@ -9607,7 +9710,7 @@ localStorage.setItem('relayops_opening_picklist_notes',state.openingPicklistNote
 localStorage.setItem('relayops_opening_picklist_calloff_rows',String(state.openingPicklistCalloffRows||6));
 localStorage.setItem('relayops_opening_picklist_topic_rows',String(state.openingPicklistTopicRows||4));
 localStorage.setItem('relayops_opening_picklist_backup_rows',String(state.openingPicklistBackupRows||21));
-localStorage.setItem('relayops_opening_picklist_wave_slots',String(state.openingPicklistWaveSlots??5));
+localStorage.setItem('relayops_opening_picklist_wave_slots',String(state.openingPicklistWaveSlots??MORNING_CORE_WAVE_COUNT));
 localStorage.setItem('relayops_opening_picklist_show_adhoc',String(state.openingPicklistShowAdhoc!==false));
 localStorage.setItem('relayops_fit_picklist_rows',String(Boolean(state.fitOpeningPicklistRows)));
 localStorage.setItem('relayops_opening_picklist_calloff_drafts',JSON.stringify(state.openingPicklistCalloffDrafts||[]));
@@ -9698,7 +9801,7 @@ function applySharedWorkspaceState(payload={}) {
   state.openingPicklistCalloffRows=Math.max(1,Number(state.openingPicklistCalloffRows)||6);
   state.openingPicklistTopicRows=Math.max(1,Number(state.openingPicklistTopicRows)||4);
   state.openingPicklistBackupRows=Math.max(1,Number(state.openingPicklistBackupRows)||21);
-  state.openingPicklistWaveSlots=Math.max(0,Math.min(5,Number(state.openingPicklistWaveSlots??5)));
+  state.openingPicklistWaveSlots=Math.max(0,Math.min(MORNING_CORE_WAVE_COUNT,Number(state.openingPicklistWaveSlots??MORNING_CORE_WAVE_COUNT)));
   state.openingPicklistShowAdhoc=state.openingPicklistShowAdhoc!==false;
   state.scheduleHelpers=state.scheduleHelpers&&typeof state.scheduleHelpers==='object'?state.scheduleHelpers:{};
   state.openingPicklistCalloffDrafts=Array.isArray(state.openingPicklistCalloffDrafts)?state.openingPicklistCalloffDrafts:[];

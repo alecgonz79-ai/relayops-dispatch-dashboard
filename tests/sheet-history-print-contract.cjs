@@ -26,7 +26,7 @@ function testPicklistClearUndoRedoAndScope() {
   const context = appContext();
   vm.runInContext(`
     window.RelayOpsCloud={configured:true,session:{user:{id:'dispatcher-clear-test'}},save:action=>{globalThis.__criticalClearSave=action;return Promise.resolve(null);}};
-    state.dspCode='LLOL';state.morningOperationDate='2026-07-16';state.fitMorningRows=true;state.openingPicklistWaveSlots=5;state.openingPicklistShowAdhoc=true;
+    state.dspCode='LLOL';state.morningOperationDate='2026-07-16';state.fitMorningRows=true;state.openingPicklistWaveSlots=6;state.openingPicklistShowAdhoc=true;
     state.morningRoutes=[
       {routeUid:'uid-a',dsp:'LLOL',driver:'First Driver',route:'CX100',wave:'11:15 AM',service:'Standard Parcel',ev:'1'},
       {routeUid:'uid-b',dsp:'LLOL',driver:'Second Driver',route:'CX100',wave:'11:20 AM',service:'Standard Parcel',ev:'2'},
@@ -70,13 +70,13 @@ function testMorningClearAndRouteUidVehicleClear() {
     ];
     state.morningFilters={wave:'11:15 AM',staging:'all',pad:'all'};clearMorningVehicleAssignments();
     globalThis.__vehicleClear=state.morningRoutes.map(row=>({uid:row.routeUid,ev:row.ev,device:row.deviceName,portable:row.portable}));
-    state.morningFilters={wave:'all',staging:'all',pad:'all'};action('clear-morning-sheet',{});globalThis.__morningConfirm=modal();globalThis.__beforeMorning=state.morningRoutes.length;action('confirm-clear-operational-sheet',{});globalThis.__afterMorning={uids:state.morningRoutes.map(row=>row.routeUid),sections:morningSections(allMorningRows()).filter(section=>/^WAVE\\s*[1-5]$/.test(section.label)).map(section=>section.label),times:morningSections(allMorningRows()).filter(section=>/^WAVE\\s*[1-5]$/.test(section.label)).map(section=>morningWaveTimeText(section)),fit:state.fitMorningRows};undoSheetChange();globalThis.__morningUndo={uids:state.morningRoutes.map(row=>row.routeUid),fit:state.fitMorningRows};
+    state.morningFilters={wave:'all',staging:'all',pad:'all'};action('clear-morning-sheet',{});globalThis.__morningConfirm=modal();globalThis.__beforeMorning=state.morningRoutes.length;action('confirm-clear-operational-sheet',{});globalThis.__afterMorning={uids:state.morningRoutes.map(row=>row.routeUid),sections:morningSections(allMorningRows()).filter(section=>/^WAVE\\s*[1-6]$/.test(section.label)).map(section=>section.label),times:morningSections(allMorningRows()).filter(section=>/^WAVE\\s*[1-6]$/.test(section.label)).map(section=>morningWaveTimeText(section)),fit:state.fitMorningRows};undoSheetChange();globalThis.__morningUndo={uids:state.morningRoutes.map(row=>row.routeUid),fit:state.fitMorningRows};
   `, context);
   const visible = context.__vehicleClear.find(row => row.uid === 'uid-visible'), duplicate = context.__vehicleClear.find(row => row.uid === 'uid-duplicate');
   assert(!visible.ev && !visible.device && !visible.portable && duplicate.ev === '2', 'Filtered Clear EVs must mutate the selected route UID, not another duplicate CX route');
   assert(context.__morningConfirm.includes('All 2 current DSP route rows') && context.__beforeMorning === 3, 'Morning clear must confirm its all-current-DSP scope before mutation');
-  assert(context.__afterMorning.uids[0] === 'uid-other' && context.__afterMorning.uids.length === 6, 'Morning clear must preserve other DSP rows and add exactly five blank current-DSP wave anchors');
-  assert(context.__afterMorning.sections.join(',') === 'WAVE 1,WAVE 2,WAVE 3,WAVE 4,WAVE 5', 'Morning clear must retain all five core wave sections');
+  assert(context.__afterMorning.uids[0] === 'uid-other' && context.__afterMorning.uids.length === 7, 'Morning clear must preserve other DSP rows and add exactly six blank current-DSP wave anchors');
+  assert(context.__afterMorning.sections.join(',') === 'WAVE 1,WAVE 2,WAVE 3,WAVE 4,WAVE 5,WAVE 6', 'Morning clear must retain all six core wave sections');
   assert(context.__afterMorning.times.every(value=>/\(0\)$/.test(value)) && context.__afterMorning.fit === false, 'Cleared wave footers must remain visible with zero drivers and the full blank template');
   assert(context.__criticalClearSave === 'sheet.clear.morning', 'Morning clear must immediately flush the critical deletion to the shared workspace');
   assert(context.__morningUndo.uids.join(',') === 'uid-visible,uid-duplicate,uid-other' && context.__morningUndo.fit === true, 'Morning clear must be fully undoable, including Fit Rows state');
