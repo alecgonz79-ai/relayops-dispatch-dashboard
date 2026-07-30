@@ -34,6 +34,8 @@ assert(/@media\s+print[\s\S]*?\.opening-picklist-print[^{}]*\{[^}]*height\s*:\s*
 assert(/@media\s+print[\s\S]*?\.opening-picklist-scroll[^{}]*\{[^}]*position\s*:\s*relative[^}]*height\s*:\s*var\(--picklist-print-height,1530px\)[^}]*overflow\s*:\s*hidden/i.test(css), 'Picklist print scroller must become a single-page positioning frame');
 assert(/@media\s+print[\s\S]*?\.opening-picklist-sheet[^{}]*\{[^}]*position\s*:\s*absolute[^}]*zoom\s*:\s*1[^}]*transform\s*:\s*scale\(var\(--picklist-print-scale,.72\)\)/i.test(css), 'Picklist print sheet must use transform scaling instead of CSS zoom pagination');
 assert(/function\s+printOpeningPicklistOnePage\s*\(\)[\s\S]*?targetWidth=1000,targetHeight=1530[\s\S]*?--picklist-print-scale[\s\S]*?window\.print\(\)/i.test(app), 'Picklist print action must measure the live worksheet and set one-page scale variables before printing');
+assert(/@media\s+print[\s\S]*?\.opening-picklist-print\s+input::placeholder\s*,\s*\.opening-picklist-print\s+textarea::placeholder[^{}]*\{[^}]*color\s*:\s*transparent\s*!important[^}]*opacity\s*:\s*0\s*!important/i.test(css), 'Picklist printing must hide empty Driver, Reason, topic, and notes placeholder text while preserving cells');
+assert(/@media\s+print[\s\S]*?\.picklist-wave-delete\s*,\s*\.picklist-row-controls\s*,\s*\.picklist-vto-actions[\s\S]*?\{[^}]*display\s*:\s*none\s*!important/i.test(css), 'Picklist printouts must hide add/remove controls and driver action popups');
 
 // Modal markup should expose a dialog name and a keyboard-reachable close
 // control. Escape/focus-trap behavior can be layered on without changing this

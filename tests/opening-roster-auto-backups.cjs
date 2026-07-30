@@ -87,7 +87,7 @@ function testMarkedDriversInnerTab() {
       backups:currentBackupDriverRows(),stayHome:rosterStatusRows(state.scheduleStayHome),reductions:rosterStatusRows(state.scheduleReductions),
       calledOff:rosterStatusRows(state.callOffDriverKeys),helpers:helperRosterRows()
     });
-    globalThis.__unmarked=openingRosterUnmarkedDrivers(currentScheduleEntries().filter(entry=>scheduleRoleGroup(entry.role)==='driver'),globalThis.__marked);
+    globalThis.__unmarked=openingRosterUnmarkedDrivers(currentScheduleEntries(),globalThis.__marked);
     globalThis.__html=openingRosterScheduleHtml();
     action('opening-paycom-tab',{dataset:{paycomTab:'unmarked'}});globalThis.__tab=state.openingRosterPaycomTab;globalThis.__saved=localStorage.getItem('relayops_opening_roster_paycom_tab');globalThis.__unmarkedHtml=openingRosterScheduleHtml();globalThis.__unmarkedPaycom=globalThis.__unmarkedHtml.split('All Scheduled driver shifts (PAYCOM)')[1].split('scheduled-section called-off')[0];
   `, context);
@@ -100,8 +100,8 @@ function testMarkedDriversInnerTab() {
   assert(context.__html.includes('data-paycom-pane="marked"') && context.__html.includes('aria-selected="true" data-action="opening-paycom-tab" data-paycom-tab="marked"'), 'Marked Drivers must render as the active accessible inner tab');
   ['marked-driver-route','marked-driver-adhoc','marked-driver-vto2','marked-driver-vto4','marked-driver-reduction','marked-driver-called-off','marked-driver-stay-home','marked-driver-helper'].forEach(className=>assert(context.__html.includes(className), `${className} color status is missing`));
   assert(!markedPaycom.includes('Plain Midshift') && context.__html.includes('Plain Midshift'), 'Marked Drivers pane must omit Midshift while Other Scheduled Shifts retains it');
-  assert(context.__unmarked.length === 0, 'Midshift must not appear as an unmarked route-eligible driver');
-  assert(context.__unmarkedPaycom.includes('data-paycom-pane="unmarked"') && context.__unmarkedPaycom.includes('Every route-eligible scheduled driver has been marked.') && !context.__unmarkedPaycom.includes('Plain Midshift') && !context.__unmarkedPaycom.includes('Route Driver'), 'Unmarked Drivers pane must exclude Midshift and show only route-eligible drivers still needing a decision');
+  assert(context.__unmarked.length === 1 && context.__unmarked[0].name === 'Plain Midshift', 'Non-Rescue and non-Delivery Associate shifts must remain visible for review in Unmarked Drivers');
+  assert(context.__unmarkedPaycom.includes('data-paycom-pane="unmarked"') && context.__unmarkedPaycom.includes('Plain Midshift') && !context.__unmarkedPaycom.includes('Route Driver'), 'Unmarked Drivers pane must retain other PAYCOM shifts without placing them into VTO');
   assert(context.__tab === 'unmarked' && context.__saved === 'unmarked', 'Unmarked PAYCOM inner-tab selection must persist locally');
 }
 

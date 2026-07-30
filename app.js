@@ -3933,7 +3933,26 @@ function clearPicklistBackupDriver(name='') {
   Object.entries(state.openingPicklistBackupOverrides||{}).forEach(([key,value])=>{if(driverIdentityKey(value)===wanted)delete state.openingPicklistBackupOverrides[key];});
 }
 function scheduleBackupLabel(role='') { const key=headerKey(role);return key.includes('deliveryassociate')?'VTO 4':'VTO 2'; }
-function automaticBackupLabel(role='') { const key=headerKey(role);return isNonRosterableOtherShift(role)?'':key.includes('rescue')?'VTO 2':key.includes('deliveryassociate')?'VTO 4':''; }
+function automaticBackupLabel(role='') {
+  const key=headerKey(role);
+  return key==='rescue'?'VTO 2':key==='deliveryassociate'?'VTO 4':'';
+}
+function reconcileOpeningPaycomAutoBackups(entries=[]) {
+  const rostered=morningRosterDriverKeys(),operationDate=state.morningOperationDate;
+  (entries||[]).filter(entry=>{const date=scheduleDateKey(entry?.date);return !date||date===operationDate;}).forEach(entry=>{
+    if(!automaticBackupLabel(entry.role)||rostered.has(driverIdentityKey(entry.name)))return;
+    const explicitlyPlaced=dailyRosterIdentityKeys(state.scheduleStayHome,entry.name).length
+      ||dailyRosterIdentityKeys(state.scheduleReductions,entry.name).length
+      ||dailyRosterIdentityKeys(state.scheduleHelpers,entry.name).length
+      ||dailyRosterIdentityKeys(state.callOffDriverKeys,entry.name).length;
+    if(explicitlyPlaced)return;
+    let released=false;
+    dailyRosterIdentityKeys(state.scheduleDriverMarks,entry.name).forEach(key=>{
+      if(state.scheduleDriverMarks[key]==='paycom'){delete state.scheduleDriverMarks[key];released=true;}
+    });
+    if(released)clearPicklistBackupDriver(entry.name);
+  });
+}
 function morningRosterDriverKeys() {
   const keys=new Set();(state.morningRoutes||[]).filter(route=>route.dsp===state.dspCode&&route.route&&!String(route.route).startsWith('__blank_')).forEach(route=>morningDriverNames(route.driver).forEach(name=>keys.add(driverIdentityKey(name))));return keys;
 }
@@ -4240,7 +4259,7 @@ function openingPaycomInnerTabsHtml(active='scheduled',scheduledCount=0,markedCo
 function openingRosterScheduleHtml() {
   const morning=filteredMorningRows().filter(row=>row.route&&!String(row.route).startsWith('__blank_')&&!/helper/i.test(String(row.service||''))),onRoute=morning.flatMap(row=>routeMissingPrimary(row)?[{name:'Unassigned driver',sourceName:row.vacatedDriver||'',role:'Delivery Associate',start:row.wave||'',end:'',route:row.route,vacant:true,helperNames:morningDriverNames(row.driver)}]:morningDriverNames(row.driver).map((name,index)=>({name:contactForMorningDriver(name)?.name||name,sourceName:name,role:'Delivery Associate',start:row.wave||'',end:'',route:row.route,helperMissing:index===0&&routeMissingHelper(row)})));
   const routeNames=new Set(onRoute.map(row=>nameKey(row.name))),schedule=currentScheduleEntries(),driverShifts=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='driver'),helpers=helperRosterRows(),allScheduledDrivers=driverShifts.map(entry=>({...entry,paycom:true,route:routeNames.has(nameKey(entry.name))?'On morning sheet':'Not rostered for route'}));
-  const backupDrivers=currentBackupDriverRows(),vto2Drivers=backupDrivers.filter(row=>(row.vto||scheduleBackupLabel(row.role))==='VTO 2'),vto4Drivers=backupDrivers.filter(row=>(row.vto||scheduleBackupLabel(row.role))==='VTO 4'),stayHome=rosterStatusRows(state.scheduleStayHome,'Told to stay home'),reductions=rosterStatusRows(state.scheduleReductions,'Route reduction'),scheduledDrivers=filteredScheduledDrivers(allScheduledDrivers),dispatch=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='dispatch'),other=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='other'),filters=[['all','All shifts'],['deliveryassociate','Delivery Associate'],['rescue','Rescue'],['on-route','On morning sheet'],['not-rostered','Not rostered for route']],calledOff=Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([,value])=>({name:value.name,role:value.role||'Called off',start:value.start||'',end:value.end||'',route:value.route||''})),stayHomeWindow=stayHomeWindowEntries(),paycomTab=['scheduled','marked','unmarked'].includes(state.openingRosterPaycomTab)?state.openingRosterPaycomTab:'scheduled',markedDrivers=openingRosterMarkedDrivers({scheduled:allScheduledDrivers,onRoute,backups:backupDrivers,stayHome,reductions,calledOff,helpers}),unmarkedDrivers=openingRosterUnmarkedDrivers(allScheduledDrivers,markedDrivers),paycomList=paycomTab==='marked'?markedDriverRowsHtml(markedDrivers):paycomTab==='unmarked'?scheduledShiftRowsHtml(unmarkedDrivers,'Every route-eligible scheduled driver has been marked.',{destination:'unmarked'}):scheduledShiftRowsHtml(scheduledDrivers,'No Paycom shifts match this filter.'),paycomSearch=paycomTab==='marked'?'Search marked drivers':paycomTab==='unmarked'?'Search unmarked drivers':'Search all scheduled drivers';
+  const backupDrivers=currentBackupDriverRows(),vto2Drivers=backupDrivers.filter(row=>(row.vto||scheduleBackupLabel(row.role))==='VTO 2'),vto4Drivers=backupDrivers.filter(row=>(row.vto||scheduleBackupLabel(row.role))==='VTO 4'),stayHome=rosterStatusRows(state.scheduleStayHome,'Told to stay home'),reductions=rosterStatusRows(state.scheduleReductions,'Route reduction'),scheduledDrivers=filteredScheduledDrivers(allScheduledDrivers),dispatch=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='dispatch'),other=schedule.filter(entry=>scheduleRoleGroup(entry.role)==='other'),filters=[['all','All shifts'],['deliveryassociate','Delivery Associate'],['rescue','Rescue'],['on-route','On morning sheet'],['not-rostered','Not rostered for route']],calledOff=Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([,value])=>({name:value.name,role:value.role||'Called off',start:value.start||'',end:value.end||'',route:value.route||''})),stayHomeWindow=stayHomeWindowEntries(),paycomTab=['scheduled','marked','unmarked'].includes(state.openingRosterPaycomTab)?state.openingRosterPaycomTab:'scheduled',markedDrivers=openingRosterMarkedDrivers({scheduled:schedule,onRoute,backups:backupDrivers,stayHome,reductions,calledOff,helpers}),unmarkedDrivers=openingRosterUnmarkedDrivers(schedule,markedDrivers),paycomList=paycomTab==='marked'?markedDriverRowsHtml(markedDrivers):paycomTab==='unmarked'?scheduledShiftRowsHtml(unmarkedDrivers,'Every imported PAYCOM shift has been placed.',{destination:'unmarked'}):scheduledShiftRowsHtml(scheduledDrivers,'No Paycom shifts match this filter.'),paycomSearch=paycomTab==='marked'?'Search marked drivers':paycomTab==='unmarked'?'Search unmarked shifts':'Search all scheduled drivers';
   return `<section class="opening-schedule-board"><div class="opening-schedule-head"><div><span class="eyebrow">TODAY'S OPENING TEAM</span><h2>Routes and scheduled shifts</h2><p>${state.scheduleImportName?`Paycom file: ${esc(state.scheduleImportName)}`:'Upload Paycom inside the green Paycom panel below.'}</p></div></div><div class="opening-schedule-grid">
     <article class="card scheduled-section route scroll-roster"><div class="scheduled-section-head"><h3>Drivers on route</h3><b>${onRoute.length}</b></div><div class="scheduled-list">${routeDriverRowsHtml(onRoute)}</div></article>
     <article class="card scheduled-section helper-roster scroll-roster"><div class="scheduled-section-head"><div><h3>Helpers</h3><span>Match helpers to Wave 1 or Wave 2</span></div><b>${helpers.length}</b></div><div class="scheduled-list">${scheduledShiftRowsHtml(helpers,'No Driver Helper shifts or helper assignments found.',{helperBox:true,destination:'helper'})}</div></article>
@@ -7277,6 +7296,7 @@ async function readFiles(files) {
       const entries=parsed.flatMap(file=>file.rows?.length?scheduleEntriesFromRows(file.rows,{fileName:file.name}):scheduleEntriesFromText(file.text||''));
       if(!entries.length)throw new Error('no schedule shifts');
       const destination=state.scheduleImportDestination||'roster',entryDate=alignScheduleImportDate(entries,destination),importName=parsed.map(file=>file.name).join(' + ');state.scheduleEntries=mergeScheduleEntriesByImportedDate(state.scheduleEntries,entries);
+      if(destination==='roster')reconcileOpeningPaycomAutoBackups(entries);
       if(destination==='rostering'){const plan=currentRosteringPlan();plan.importName=importName;plan.importedAt=new Date().toISOString();}else state.scheduleImportName=importName;
       let helperAdded=0;if(destination==='rostering')helperAdded=syncRosteringHelperShifts(currentRosteringPlan());
       state.scheduleImportDestination='';state.importPurpose='morning';state.page=destination==='rostering'?'rostering':'roster';persist();render();

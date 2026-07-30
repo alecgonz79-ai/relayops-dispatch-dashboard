@@ -59,6 +59,38 @@ vm.runInContext(`
     marks:{...state.scheduleDriverMarks}
   };
   globalThis.__hover=picklistVtoDriverCell('vto2',0,{name:'Old Backup Driver',role:'Rescue'},'Old Backup Driver');
+
+  state.morningOperationDate='2026-07-29';
+  state.morningRoutes=[];
+  state.scheduleEntries=[
+    {date:'7/29/2026',name:'Fresh Rescue',role:'Rescue',start:'10:30 AM'},
+    {date:'7/29/2026',name:'Fresh Associate',role:'Delivery Associate',start:'10:30 AM'},
+    {date:'7/29/2026',name:'Pilot Support',role:'Pilot/Rescues',start:'12:00 PM'},
+    {date:'7/29/2026',name:'Modified Support',role:'Modified duty/Rescues',start:'12:00 PM'},
+    {date:'7/29/2026',name:'Called Off Rescue',role:'Rescue',start:'10:30 AM'}
+  ];
+  state.scheduleDriverMarks={
+    '2026-07-29|fresh rescue':'paycom',
+    '2026-07-29|fresh associate':'paycom',
+    '2026-07-29|pilot support':'paycom',
+    '2026-07-29|modified support':'paycom'
+  };
+  state.scheduleBackupRecords={};
+  state.scheduleStayHome={};
+  state.scheduleReductions={};
+  state.scheduleHelpers={};
+  state.callOffDriverKeys={'2026-07-29|called off rescue':{name:'Called Off Rescue',role:'Rescue'}};
+  state.openingPicklistBackupOverrides={'vto2:0':'Fresh Rescue','vto4:0':'Fresh Associate'};
+  reconcileOpeningPaycomAutoBackups(state.scheduleEntries);
+  globalThis.__reimport={
+    marks:{...state.scheduleDriverMarks},
+    overrides:{...state.openingPicklistBackupOverrides},
+    backups:currentBackupDriverRows().map(row=>({name:row.name,vto:row.vto})),
+    unmarked:openingRosterUnmarkedDrivers(state.scheduleEntries,openingRosterMarkedDrivers({
+      scheduled:state.scheduleEntries,onRoute:[],backups:currentBackupDriverRows(),stayHome:[],reductions:[],
+      calledOff:rosterStatusRows(state.callOffDriverKeys),helpers:[]
+    })).map(row=>row.name)
+  };
 `,context);
 
 assert(context.__imports.merged.includes('Opening Driver')&&context.__imports.merged.includes('Future Driver'),'A Rostering PAYCOM import must preserve the Opening Picklist date');
@@ -67,4 +99,9 @@ assert(context.__restored.stayHome.length===0&&context.__restored.mark==='backup
 assert(context.__removed.mark==='paycom'&&!context.__removed.record&&!context.__removed.rows.includes('Stay Home Driver'),'Remove Driver must clear the VTO record and suppress immediate automatic recreation');
 assert(context.__cleared.overrides.length===0&&context.__cleared.records.length===0&&context.__cleared.rows.length===0&&Object.values(context.__cleared.marks).every(mark=>mark==='paycom'),'Clearing either operational sheet must fully empty both VTO lists');
 assert(context.__hover.includes('data-vto-target="remove"')&&context.__hover.includes('Remove Driver'),'The backup hover menu must expose Remove Driver');
+assert(context.__reimport.backups.some(row=>row.name==='Fresh Rescue'&&row.vto==='VTO 2')&&context.__reimport.backups.some(row=>row.name==='Fresh Associate'&&row.vto==='VTO 4'),'A fresh Opening Picklist PAYCOM import must automatically place exact Rescue and Delivery Associate shifts into the correct VTO lists');
+assert(context.__reimport.marks['2026-07-29|pilot support']==='paycom'&&context.__reimport.marks['2026-07-29|modified support']==='paycom','A fresh import must not convert similar-looking Pilot or Modified Duty roles into backups');
+assert(context.__reimport.unmarked.includes('Pilot Support')&&context.__reimport.unmarked.includes('Modified Support')&&!context.__reimport.unmarked.includes('Fresh Rescue')&&!context.__reimport.unmarked.includes('Fresh Associate'),'Non-eligible PAYCOM roles must remain Unmarked while automatically placed backups leave Unmarked');
+assert(!context.__reimport.backups.some(row=>row.name==='Called Off Rescue')&&context.__reimport.unmarked.every(name=>name!=='Called Off Rescue'),'Real call-off destinations must survive import reconciliation');
+assert(!Object.values(context.__reimport.overrides).includes('Fresh Rescue')&&!Object.values(context.__reimport.overrides).includes('Fresh Associate'),'Stale Picklist backup-cell overrides must be cleared when a fresh import releases PAYCOM suppression');
 console.log('PAYCOM import isolation and backup/VTO lifecycle tests passed');

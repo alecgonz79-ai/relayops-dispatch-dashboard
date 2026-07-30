@@ -2976,7 +2976,8 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
   .opening-picklist-swap-rail { display:none!important; }
   .opening-picklist-main,.picklist-side-table,.opening-picklist-right,.picklist-notes { break-inside:avoid!important; print-color-adjust:exact!important; -webkit-print-color-adjust:exact!important; }
   .picklist-side-table input,.picklist-notes textarea,.picklist-date input { color:#000!important; -webkit-text-fill-color:#000!important; opacity:1!important; }
-  .picklist-wave-delete,.vehicle-issue-popover,.van-issue-mark { display:none!important; }
+  .opening-picklist-print input::placeholder,.opening-picklist-print textarea::placeholder { color:transparent!important; -webkit-text-fill-color:transparent!important; opacity:0!important; }
+  .picklist-wave-delete,.picklist-row-controls,.picklist-vto-actions,.equipment-issue-trigger,.equipment-issue-popover,.duplicate-vehicle-popover,.vehicle-issue-popover,.van-issue-mark { display:none!important; }
 }
 
 /* Admin access control and coaching review surfaces */
