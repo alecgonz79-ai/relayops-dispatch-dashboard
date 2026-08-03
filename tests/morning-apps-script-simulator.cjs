@@ -215,12 +215,20 @@ class FakeSpreadsheet {
 }
 
 function createLegacyTemplate(name = 'OPS LOG 2026') {
-  const sheet = new FakeSheet(name, 132, 22);
+  const sheet = new FakeSheet(name, 142, 22);
   const headers = ['WAVE','DRIVER','ROUTE','STAGING','PAD','EV','DEVICE','PORTABLE','','PRE DVIC','PRE-WHIP','POST DVIC','POST-WHIP','','RESCUED','STOP COUNT','PACKAGE COUNT','PACKAGE RETURNS','END TIME','RTS TIME','PLANNED RTS','CLOCK OUT TIME'];
   headers.forEach((value, index) => sheet.setCell(1, index + 1, value));
-  [[3,'WAVE 1'],[18,'WAVE 2'],[33,'WAVE 3'],[48,'WAVE 4'],[63,'WAVE 5'],[79,'WAVE 6'],[95,"ADHOC's"],[111,'HELPERS'],[127,'DSP']].forEach(([row, value]) => sheet.setCell(row, 1, value));
-  [[15,2],[30,2],[45,2],[60,2],[76,2],[92,2]].forEach(([row, numRows]) => sheet.merges.push({row, col:1, numRows, numCols:1}));
-  for (let row = 3; row <= 132; row += 1) for (let col = 10; col <= 13; col += 1) sheet.setCell(row, col, false);
+  const waveStarts = [3,20,37,54,71,88];
+  [[3,'WAVE 1'],[20,'WAVE 2'],[37,'WAVE 3'],[54,'WAVE 4'],[71,'WAVE 5'],[88,'WAVE 6'],[105,"ADHOC's"],[121,'HELPERS'],[137,'DSP']].forEach(([row, value]) => sheet.setCell(row, 1, value));
+  waveStarts.forEach(row => {
+    sheet.merges.push({row, col:1, numRows:15, numCols:1});
+    sheet.merges.push({row, col:5, numRows:16, numCols:1});
+  });
+  [[105,15],[121,15],[137,6]].forEach(([row, numRows]) => {
+    sheet.merges.push({row, col:1, numRows, numCols:1});
+    sheet.merges.push({row, col:5, numRows, numCols:1});
+  });
+  for (let row = 3; row <= 142; row += 1) for (let col = 10; col <= 13; col += 1) sheet.setCell(row, col, false);
   sheet.frozenRows = 2;
   return sheet;
 }
@@ -315,7 +323,7 @@ const resultContext = runConnectorWithSheet(sheet, payload);
 if (resultContext.__ping.writeRange !== 'A3:M' || resultContext.__ping.sheet !== 'OPS LOG 2026' || resultContext.__ping.templateRange !== 'A3:V') throw new Error('Connector ping should report OPS LOG 2026 and its A:V template range');
 if (!resultContext.__templateLayout || resultContext.__templateLayout.neededColumns !== 22) throw new Error('Template validation should require the original A-V Ops Log layout');
 if (!resultContext.__ui.alerts.some(alert => alert.title.includes('RelayOps template'))) throw new Error('Template validation should alert the installer inside Google Sheets');
-if (sheet.getMaxRows() !== 132) throw new Error(`Connector should preserve the dated 132-row template, got ${sheet.getMaxRows()}`);
+if (sheet.getMaxRows() !== 142) throw new Error(`Connector should preserve the dated 142-row template, got ${sheet.getMaxRows()}`);
 if (sheet.getMaxColumns() !== 22) throw new Error(`Connector should expand to the original A-V layout, got ${sheet.getMaxColumns()} columns`);
 if (sheet.frozenRows !== 2) throw new Error('Connector should preserve the template two-row freeze setting');
 if (sheet.getCell(1, 10) !== 'PRE DVIC' || sheet.getCell(1, 21) !== 'PLANNED RTS' || sheet.getCell(1, 22) !== 'CLOCK OUT TIME') throw new Error('Connector should preserve the original A-V headers');
@@ -323,12 +331,12 @@ if (sheet.getCell(3, 2) !== 'Driver One' || sheet.getCell(4, 3) !== 'CX202') thr
 if (sheet.getCell(3, 16) !== '188' || sheet.getCell(3, 17) !== '331' || sheet.getCell(3, 21) !== '5:35 PM') throw new Error('Connector should map stop/package/Planned RTS into P/Q/U');
 if (sheet.formats.get('3:16')?.numberFormat !== '0' || sheet.formats.get('3:17')?.numberFormat !== '0') throw new Error('Stop and Package Count must remain numeric instead of displaying as times');
 if (sheet.getCell(3, 10) !== false || sheet.getCell(3, 13) !== false || sheet.getCell(3, 15) !== 'KEEP RESCUED' || sheet.getCell(3, 18) !== 'KEEP RETURNS' || sheet.getCell(3, 19) !== 'KEEP END' || sheet.getCell(3, 20) !== 'KEEP RTS' || sheet.getCell(3, 22) !== 'KEEP CLOCK OUT') throw new Error('Connector overwrote original checkbox or closing-operations columns');
-if (sheet.getCell(15, 1) !== '11:15 (2)' || sheet.getCell(30, 1) !== '11:20 (0)' || sheet.getCell(45, 1) !== '11:25 (0)' || sheet.getCell(60, 1) !== '11:40 (0)' || sheet.getCell(76, 1) !== '11:45 (0)' || sheet.getCell(92, 1) !== '12:05 (0)') throw new Error('Connector should write all six wave time/count labels into the top-left cells of the exact merged footer ranges');
-if (sheet.getCell(18, 1) !== 'WAVE 2' || sheet.getCell(33, 1) !== 'WAVE 3' || sheet.getCell(79, 1) !== 'WAVE 6' || sheet.getCell(95, 1) !== "ADHOC's" || sheet.getCell(127, 1) !== 'DSP') throw new Error('Connector should preserve the exact 132-row OPS LOG 2026 section anchors');
+if (sheet.getCell(18, 1) !== '11:15 (2)' || sheet.getCell(35, 1) !== '11:20 (0)' || sheet.getCell(52, 1) !== '11:25 (0)' || sheet.getCell(69, 1) !== '11:40 (0)' || sheet.getCell(86, 1) !== '11:45 (0)' || sheet.getCell(103, 1) !== '12:05 (0)') throw new Error('Connector should write all six wave time/count labels into the dedicated footer cells');
+if (sheet.getCell(20, 1) !== 'WAVE 2' || sheet.getCell(37, 1) !== 'WAVE 3' || sheet.getCell(88, 1) !== 'WAVE 6' || sheet.getCell(105, 1) !== "ADHOC's" || sheet.getCell(137, 1) !== 'DSP') throw new Error('Connector should preserve the exact 142-row OPS LOG 2026 section anchors');
 if (sheet.columnWidths.get(9) !== 77 || sheet.columnWidths.get(14) !== 77) throw new Error('Connector should preserve every original column width');
-if (resultContext.__result.writeRange !== 'A3:V' || resultContext.__result.writtenRange !== 'A3:V132' || resultContext.__result.lastCell !== 'V132') throw new Error('Connector should return the exact A3:V132 template proof');
+if (resultContext.__result.writeRange !== 'A3:V' || resultContext.__result.writtenRange !== 'A3:V142' || resultContext.__result.lastCell !== 'V142') throw new Error('Connector should return the exact A3:V142 template proof');
 
-const wave5Rows = Array.from({ length: 14 }, (_, index) => [
+const wave5Rows = Array.from({ length: 15 }, (_, index) => [
   index === 0 ? 'WAVE 5' : '',
   `Wave Five Driver ${index + 1}`,
   `CX${501 + index}`,
@@ -345,28 +353,28 @@ const wave5Rows = Array.from({ length: 14 }, (_, index) => [
 ]);
 const wave5Payload = {
   ...payload,
-  rows: [...wave5Rows, ['11:45 (14)', '', '', '', '', '', '', '', '', '', '', '', ''], Array(13).fill('')],
-  rowTypes: [...Array(14).fill('route'), 'time', 'separator'],
-  sections: [{ label: 'WAVE 5', wave: '11:45 AM', driverCount: 14, waveTime: '', pad: 'B', sourceIndex: 0, startRow: 63, rowCount: 14, timeRow: 77, separatorRow: 78 }],
+  rows: [...wave5Rows, ['11:45 (15)', '', '', '', '', '', '', '', '', '', '', '', ''], Array(13).fill('')],
+  rowTypes: [...Array(15).fill('route'), 'time', 'separator'],
+  sections: [{ label: 'WAVE 5', wave: '11:45 AM', driverCount: 15, waveTime: '', pad: 'B', sourceIndex: 0, startRow: 71, rowCount: 15, timeRow: 86, separatorRow: 87 }],
   waves: [
     {label:'WAVE 1',value:'11:15 (0)'},
     {label:'WAVE 2',value:'11:20 (0)'},
     {label:'WAVE 3',value:'11:25 (0)'},
     {label:'WAVE 4',value:'11:40 (0)'},
-    {label:'WAVE 5',value:'11:45 (14)'},
+    {label:'WAVE 5',value:'11:45 (15)'},
     {label:'WAVE 6',value:'12:05 (0)'}
   ]
 };
 const wave5Sheet = createLegacyTemplate('7/12/26');
 const wave5Context = runConnectorWithSheet(wave5Sheet, wave5Payload);
-if (!wave5Context.__validation.ready || wave5Sheet.getCell(76, 2) !== 'Wave Five Driver 14' || wave5Sheet.getCell(76, 3) !== 'CX514') throw new Error('Connector should accept and write all 14 Wave 5 route rows');
-if (wave5Sheet.getCell(76, 1) !== '11:45 (14)' || wave5Sheet.getCell(79, 1) !== 'WAVE 6' || wave5Sheet.getCell(95, 1) !== "ADHOC's") throw new Error('Full Wave 5 should keep its merged footer at A76:A77 and preserve Wave 6 and Adhocs anchors');
+if (!wave5Context.__validation.ready || wave5Sheet.getCell(85, 2) !== 'Wave Five Driver 15' || wave5Sheet.getCell(85, 3) !== 'CX515') throw new Error('Connector should accept and write all 15 Wave 5 route rows');
+if (wave5Sheet.getCell(86, 1) !== '11:45 (15)' || wave5Sheet.getCell(88, 1) !== 'WAVE 6' || wave5Sheet.getCell(105, 1) !== "ADHOC's") throw new Error('Full Wave 5 should keep its footer at A86 and preserve Wave 6 and Adhocs anchors');
 
 const capacityRows = [], capacityRowTypes = [], capacitySections = [];
-const exactWaveStarts = [3,18,33,48,63,79];
-const exactWaveCapacities = [13,13,13,13,14,14];
-const exactWaveTimes = [16,31,46,61,77,93];
-const exactWaveSeparators = [17,32,47,62,78,94];
+const exactWaveStarts = [3,20,37,54,71,88];
+const exactWaveCapacities = [15,15,15,15,15,15];
+const exactWaveTimes = [18,35,52,69,86,103];
+const exactWaveSeparators = [19,36,53,70,87,104];
 const exactWaveLabels = ['11:15','11:20','11:25','11:40','11:45','12:05'];
 for (let waveIndex = 0; waveIndex < 6; waveIndex += 1) {
   const sourceIndex = capacityRows.length, capacity = exactWaveCapacities[waveIndex];
@@ -405,9 +413,9 @@ for (let waveIndex = 0; waveIndex < 6; waveIndex += 1) {
   });
 }
 [
-  {label:"ADHOC's",startRow:95,capacity:15,separatorRow:110,prefix:'Adhoc',routePrefix:'AX'},
-  {label:'HELPERS',startRow:111,capacity:15,separatorRow:126,prefix:'Helper',routePrefix:'HELPER'},
-  {label:'DSP',startRow:127,capacity:6,separatorRow:null,prefix:'DSP',routePrefix:'DSP'}
+  {label:"ADHOC's",startRow:105,capacity:15,separatorRow:120,prefix:'Adhoc',routePrefix:'AX'},
+  {label:'HELPERS',startRow:121,capacity:15,separatorRow:136,prefix:'Helper',routePrefix:'HELPER'},
+  {label:'DSP',startRow:137,capacity:6,separatorRow:null,prefix:'DSP',routePrefix:'DSP'}
 ].forEach(section => {
   const sourceIndex=capacityRows.length;
   for(let routeIndex=0;routeIndex<section.capacity;routeIndex+=1){
@@ -415,7 +423,16 @@ for (let waveIndex = 0; waveIndex < 6; waveIndex += 1) {
       routeIndex===0?section.label:'',
       `${section.prefix} Driver ${routeIndex+1}`,
       `${section.routePrefix}${routeIndex+1}`,
-      '','','','','','','','','',''
+      `STG.${section.prefix.toUpperCase()}.${routeIndex+1}`,
+      '',
+      `${section.prefix.toUpperCase()}-EV${routeIndex+1}`,
+      `${section.prefix.toUpperCase()}-D${routeIndex+1}`,
+      routeIndex%3?`${section.prefix.toUpperCase()}-P${routeIndex+1}`:'-',
+      '',
+      String(120+routeIndex),
+      String(220+routeIndex),
+      '',
+      '9:15 PM'
     ]);
     capacityRowTypes.push('route');
   }
@@ -427,16 +444,43 @@ for (let waveIndex = 0; waveIndex < 6; waveIndex += 1) {
 });
 const fullCapacityPayload = {...payload,rows:capacityRows,rowTypes:capacityRowTypes,sections:capacitySections};
 const fullCapacitySheet = createLegacyTemplate('7/12/26');
+fullCapacitySheet.setCell(105,5,'STALE PAD');
 const fullCapacityContext = runConnectorWithSheet(fullCapacitySheet, fullCapacityPayload);
-if (!fullCapacityContext.__validation.ready) throw new Error(`Exact 132-row template preflight should pass: ${fullCapacityContext.__validation.errors.join('; ')}`);
-if (fullCapacitySheet.getCell(15, 2) !== 'Wave 1 Driver 13' || fullCapacitySheet.getCell(76, 2) !== 'Wave 5 Driver 14' || fullCapacitySheet.getCell(92, 2) !== 'Wave 6 Driver 14' || fullCapacitySheet.getCell(109, 2) !== 'Adhoc Driver 15' || fullCapacitySheet.getCell(125, 2) !== 'Helper Driver 15' || fullCapacitySheet.getCell(132, 2) !== 'DSP Driver 6') throw new Error('Connector should fill every exact-capacity section through row 132 without overlap');
-if (String(fullCapacitySheet.getCell(17, 1) || '') !== '' || fullCapacitySheet.getCell(18, 1) !== 'WAVE 2' || String(fullCapacitySheet.getCell(94, 1) || '') !== '' || fullCapacitySheet.getCell(95, 1) !== "ADHOC's" || String(fullCapacitySheet.getCell(126, 1) || '') !== '' || fullCapacitySheet.getCell(127, 1) !== 'DSP') throw new Error('Exact-capacity sections should retain every divider row and downstream anchor');
+if (!fullCapacityContext.__validation.ready) throw new Error(`Exact 142-row template preflight should pass: ${fullCapacityContext.__validation.errors.join('; ')}`);
+if (fullCapacitySheet.getCell(17, 2) !== 'Wave 1 Driver 15' || fullCapacitySheet.getCell(85, 2) !== 'Wave 5 Driver 15' || fullCapacitySheet.getCell(102, 2) !== 'Wave 6 Driver 15' || fullCapacitySheet.getCell(119, 2) !== 'Adhoc Driver 15' || fullCapacitySheet.getCell(135, 2) !== 'Helper Driver 15' || fullCapacitySheet.getCell(142, 2) !== 'DSP Driver 6') throw new Error('Connector should fill every exact-capacity section through row 142 without overlap');
+if (String(fullCapacitySheet.getCell(19, 1) || '') !== '' || fullCapacitySheet.getCell(20, 1) !== 'WAVE 2' || String(fullCapacitySheet.getCell(104, 1) || '') !== '' || fullCapacitySheet.getCell(105, 1) !== "ADHOC's" || String(fullCapacitySheet.getCell(136, 1) || '') !== '' || fullCapacitySheet.getCell(137, 1) !== 'DSP') throw new Error('Exact-capacity sections should retain every divider row and downstream anchor');
+if (String(fullCapacitySheet.getCell(105, 5) || '') !== '') throw new Error('Ad Hoc pad must stay blank by default even at full capacity');
+const manualAdhocPadPayload=JSON.parse(JSON.stringify(fullCapacityPayload));
+const manualAdhocSection=manualAdhocPadPayload.sections.find(section=>section.label==="ADHOC's");
+manualAdhocSection.pad='Q';manualAdhocPadPayload.rows[manualAdhocSection.sourceIndex][4]='Q';
+const manualAdhocPadSheet=createLegacyTemplate('7/12/26');
+runConnectorWithSheet(manualAdhocPadSheet,manualAdhocPadPayload);
+if(manualAdhocPadSheet.getCell(105,5)!=='Q')throw new Error('A dispatcher-entered Ad Hoc pad must write to the Ad Hoc Pad block');
+
+for(let waveIndex=0;waveIndex<6;waveIndex+=1){
+  const label=`WAVE ${waveIndex+1}`,waveTime=exactWaveLabels[waveIndex];
+  const overflowWaveRows = Array.from({length:16},(_,index)=>[
+    index===0?label:'',`Overflow Wave ${waveIndex+1} Driver ${index+1}`,`CX${700+waveIndex*20+index}`,`STG.${waveIndex+1}.${index+1}`,index===0?'A':'',
+    String(index+1),`D${index+1}`,`P${index+1}`,'',String(180+index),String(300+index),'','8:45 PM'
+  ]);
+  const overflowPayload = {
+    ...payload,
+    rows:[...overflowWaveRows,[`${waveTime} (16)`,'','','','','','','','','','','',''],Array(13).fill('')],
+    rowTypes:[...Array(16).fill('route'),'time','separator'],
+    sections:[{label,wave:`${waveTime} AM`,driverCount:16,pad:'A',sourceIndex:0,startRow:3,rowCount:16,timeRow:19,separatorRow:20}],
+    waves:payload.waves.map((wave,index)=>index===waveIndex?{...wave,value:`${waveTime} (16)`}:wave)
+  };
+  let overflowRejected=false;
+  try { runConnectorWithSheet(createLegacyTemplate('7/12/26'),overflowPayload); }
+  catch(error) { overflowRejected=new RegExp(label+' exceeds 15 available route rows').test(String(error.message)); }
+  if(!overflowRejected) throw new Error(`${label} must reject a 16th route before writing`);
+}
 
 const rtsOnlyPayload = {version:'relayops-morning-v1',mode:'rts-only',operationDate:'2026-07-12',sheetName:'7/12/26',sheetNameCandidates:['7/12/26','7.12.26'],updates:[{route:'CX201',plannedRts:'8:45 PM'},{route:'CX202',plannedRts:'9:06 PM'}],waves:payload.waves};
 const rtsSheet = createLegacyTemplate('7/12/26');
 const rtsContext = runConnectorWithSheet(rtsSheet, payload, rtsOnlyPayload);
 if (!rtsContext.__rtsValidation.ready || rtsContext.__rtsResult.updated !== 2 || rtsContext.__rtsResult.waveTimes !== 6) throw new Error('RTS-only connector should validate and update two route times plus all six wave labels');
-if (rtsSheet.getCell(3, 21) !== '8:45 PM' || rtsSheet.getCell(4, 21) !== '9:06 PM' || rtsSheet.getCell(15, 1) !== '11:15 (2)' || rtsSheet.getCell(60, 1) !== '11:40 (0)' || rtsSheet.getCell(76, 1) !== '11:45 (0)' || rtsSheet.getCell(92, 1) !== '12:05 (0)') throw new Error('RTS-only connector should write only Planned RTS and all six merged wave-time/count cells');
+if (rtsSheet.getCell(3, 21) !== '8:45 PM' || rtsSheet.getCell(4, 21) !== '9:06 PM' || rtsSheet.getCell(18, 1) !== '11:15 (2)' || rtsSheet.getCell(69, 1) !== '11:40 (0)' || rtsSheet.getCell(86, 1) !== '11:45 (0)' || rtsSheet.getCell(103, 1) !== '12:05 (0)') throw new Error('RTS-only connector should write only Planned RTS and all six wave-time/count cells');
 if (rtsSheet.getCell(3, 2) !== 'Driver One' || rtsSheet.getCell(3, 16) !== '188') throw new Error('RTS-only connector changed non-RTS Morning Sheet data');
 
 const whipOnlyPayload = {version:'relayops-morning-v1',mode:'whiparound-only',operationDate:'2026-07-12',sheetName:'7/12/26',sheetNameCandidates:['7/12/26','7.12.26'],updates:[{route:'CX201',driver:'Driver One',preWhip:true,postWhip:false},{route:'CX202',driver:'Driver Two',preWhip:true,postWhip:true}]};
@@ -455,7 +499,7 @@ if (sentinelSheet.breakApartCalls.length) throw new Error('Connector should pres
 
 const creationContext = runConnectorWithSheet(createLegacyTemplate(), payload);
 const createdDateSheet = creationContext.__spreadsheet.getSheetByName('7/12/26');
-if (creationContext.__result.sheetName !== '7/12/26' || !creationContext.__result.createdSheet || !createdDateSheet || createdDateSheet.getCell(3, 2) !== 'Driver One' || createdDateSheet.getCell(15, 1) !== '11:15 (2)' || createdDateSheet.getCell(127,1)!=='DSP') throw new Error('Connector should create the exact operation-date tab from OPS LOG 2026 and populate the 132-row anchors and merged wave footer');
+if (creationContext.__result.sheetName !== '7/12/26' || !creationContext.__result.createdSheet || !createdDateSheet || createdDateSheet.getCell(3, 2) !== 'Driver One' || createdDateSheet.getCell(18, 1) !== '11:15 (2)' || createdDateSheet.getCell(137,1)!=='DSP') throw new Error('Connector should create the exact operation-date tab from OPS LOG 2026 and populate the 142-row anchors and wave footer');
 
 const datedPayload = { ...payload, operationDate: '2026-07-11', sheetName: '7/11/26', sheetNameCandidates: ['7/11/26', '7.11.26'] };
 const dottedDateSheet = createLegacyTemplate('7.11.26');

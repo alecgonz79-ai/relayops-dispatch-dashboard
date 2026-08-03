@@ -1,4 +1,4 @@
-const CACHE='relayops-fast-navigation-v97';
+const CACHE='relayops-max15-v98';
 const CORE=[
   './',
   './index.html',
@@ -6,7 +6,7 @@ const CORE=[
   './macos-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260726-fleet-warning-r1',
-  './app.js?v=20260729-fast-navigation-r7',
+  './app.js?v=20260803-max15-r1',
   './cloud-sync.js?v=20260728-egress-budget-r2',
   './supabase/config.js?v=20260720-auth-redirect',
   './vendor/jszip.min.js',

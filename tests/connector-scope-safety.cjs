@@ -19,7 +19,7 @@ class Range {
 }
 
 class Sheet {
-  constructor(name = '7/14/26') { this.name = name; this.values = new Map(); this.maxRows = 132; this.maxCols = 22; this.seedTemplate(); }
+  constructor(name = '7/14/26') { this.name = name; this.values = new Map(); this.maxRows = 142; this.maxCols = 22; this.seedTemplate(); }
   key(r, c) { return `${r}:${c}`; }
   set(r, c, value) { this.values.set(this.key(r, c), value); }
   get(r, c) { return this.values.get(this.key(r, c)); }
@@ -39,7 +39,7 @@ class Sheet {
   seedTemplate() {
     const headers = { 1:'WAVE',10:'PRE DVIC',16:'STOP COUNT',21:'PLANNED RTS',22:'CLOCK OUT TIME' };
     Object.entries(headers).forEach(([col, value]) => this.set(1, Number(col), value));
-    [[3,'WAVE 1'],[18,'WAVE 2'],[33,'WAVE 3'],[48,'WAVE 4'],[63,'WAVE 5'],[79,'WAVE 6'],[95,"ADHOC's"],[111,'HELPERS'],[127,'DSP']].forEach(([row, value]) => this.set(row, 1, value));
+    [[3,'WAVE 1'],[20,'WAVE 2'],[37,'WAVE 3'],[54,'WAVE 4'],[71,'WAVE 5'],[88,'WAVE 6'],[105,"ADHOC's"],[121,'HELPERS'],[137,'DSP']].forEach(([row, value]) => this.set(row, 1, value));
   }
 }
 
@@ -81,27 +81,27 @@ function partialPayload(route = 'CX302') {
 function testPartialWritePreservesOtherCells() {
   const sheet = new Sheet();
   sheet.set(3, 2, 'KEEP WAVE ONE'); sheet.set(3, 3, 'CX101'); sheet.set(3, 16, '101');
-  sheet.set(33, 2, 'Wave Three A'); sheet.set(33, 3, 'CX301'); sheet.set(33, 16, 'KEEP ROUTE A');
-  sheet.set(34, 2, 'Wave Three B'); sheet.set(34, 3, 'CX302'); sheet.set(34, 16, '104');
+  sheet.set(37, 2, 'Wave Three A'); sheet.set(37, 3, 'CX301'); sheet.set(37, 16, 'KEEP ROUTE A');
+  sheet.set(38, 2, 'Wave Three B'); sheet.set(38, 3, 'CX302'); sheet.set(38, 16, '104');
   const context = connectorContext(sheet), result = context.writeRelayOpsMorningSheet(partialPayload());
   assert(result.writeMode === 'partial-update', 'Connector receipt must report a partial update');
   assert(result.waveTimes === 6, 'A filtered partial update must write and confirm all six wave labels');
-  assert(sheet.get(16, 1) === '11:15 (7)' && sheet.get(31, 1) === '11:20 (9)' && sheet.get(46, 1) === '11:25 (2)' && sheet.get(61, 1) === '11:40 (11)' && sheet.get(77, 1) === '11:45 (8)' && sheet.get(93, 1) === '12:05 (6)', 'A filtered partial update must preserve every Wave 1-6 footer label');
+  assert(sheet.get(18, 1) === '11:15 (7)' && sheet.get(35, 1) === '11:20 (9)' && sheet.get(52, 1) === '11:25 (2)' && sheet.get(69, 1) === '11:40 (11)' && sheet.get(86, 1) === '11:45 (8)' && sheet.get(103, 1) === '12:05 (6)', 'A filtered partial update must preserve every Wave 1-6 footer label');
   assert(sheet.get(3, 2) === 'KEEP WAVE ONE' && sheet.get(3, 16) === '101', 'A Wave 3 partial send must not clear Wave 1');
-  assert(sheet.get(33, 2) === 'Wave Three A' && sheet.get(33, 16) === 'KEEP ROUTE A', 'A one-route Wave 3 filter must not clear another Wave 3 route');
-  assert(sheet.get(34, 2) === 'Updated Driver' && sheet.get(34, 3) === 'CX302' && String(sheet.get(34, 16)) === '188', 'Partial updates must find and update the selected route in its fixed Wave 3 slot');
+  assert(sheet.get(37, 2) === 'Wave Three A' && sheet.get(37, 16) === 'KEEP ROUTE A', 'A one-route Wave 3 filter must not clear another Wave 3 route');
+  assert(sheet.get(38, 2) === 'Updated Driver' && sheet.get(38, 3) === 'CX302' && String(sheet.get(38, 16)) === '188', 'Partial updates must find and update the selected route in its fixed Wave 3 slot');
 }
 
 function testWhiparoundDriverAndSectionGuard() {
   const sheet = new Sheet();
-  sheet.set(33, 2, 'Maya Collins'); sheet.set(33, 3, 'CX301'); sheet.set(33, 11, false); sheet.set(33, 13, false);
+  sheet.set(37, 2, 'Maya Collins'); sheet.set(37, 3, 'CX301'); sheet.set(37, 11, false); sheet.set(37, 13, false);
   const context = connectorContext(sheet), base = { version:'relayops-morning-v1', mode:'whiparound-only', operationDate:'2026-07-14', sheetName:'7/14/26', sheetNameCandidates:['7/14/26','7.14.26'] };
   const wrongDriver = context.writeRelayOpsWhiparoundOnly({ ...base, updates:[{route:'CX301',driver:'Michael Collins',expectedSection:'WAVE 3',preWhip:true,postWhip:true}] });
-  assert(wrongDriver.updated === 0 && sheet.get(33, 11) === false && sheet.get(33, 13) === false, 'Whiparound connector must reject a route match with the wrong driver');
+  assert(wrongDriver.updated === 0 && sheet.get(37, 11) === false && sheet.get(37, 13) === false, 'Whiparound connector must reject a route match with the wrong driver');
   const wrongSection = context.writeRelayOpsWhiparoundOnly({ ...base, updates:[{route:'CX301',driver:'Maya Collins',expectedSection:'WAVE 2',preWhip:true,postWhip:true}] });
-  assert(wrongSection.updated === 0 && sheet.get(33, 11) === false, 'Whiparound connector must reject a route found outside the expected fixed wave slot');
+  assert(wrongSection.updated === 0 && sheet.get(37, 11) === false, 'Whiparound connector must reject a route found outside the expected fixed wave slot');
   const correct = context.writeRelayOpsWhiparoundOnly({ ...base, updates:[{route:'CX301',driver:'Maya Collins',expectedSection:'WAVE 3',preWhip:true,postWhip:false}] });
-  assert(correct.updated === 1 && sheet.get(33, 11) === true && sheet.get(33, 13) === false, 'Whiparound connector must update only the matching route + driver + fixed wave');
+  assert(correct.updated === 1 && sheet.get(37, 11) === true && sheet.get(37, 13) === false, 'Whiparound connector must update only the matching route + driver + fixed wave');
 }
 
 testPartialWritePreservesOtherCells();

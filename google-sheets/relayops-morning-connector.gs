@@ -10,18 +10,18 @@ const RELAYOPS_TEMPLATE_COLS = 22;
 const RELAYOPS_TEMPLATE_RANGE = 'A3:V';
 const RELAYOPS_TEMPLATE_SHEET = 'OPS LOG 2026';
 const RELAYOPS_SPREADSHEET_ID = '1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ';
-const RELAYOPS_BUILD = '2026-07-29-six-wave-132-row-layout';
-const RELAYOPS_LAST_ROW = 132;
+const RELAYOPS_BUILD = '2026-08-03-six-wave-142-row-layout';
+const RELAYOPS_LAST_ROW = 142;
 const RELAYOPS_LAYOUT = [
-  {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:13, timeRow:16, separatorRow:17},
-  {key:'WAVE2', label:'WAVE 2', startRow:18, routeCapacity:13, timeRow:31, separatorRow:32},
-  {key:'WAVE3', label:'WAVE 3', startRow:33, routeCapacity:13, timeRow:46, separatorRow:47},
-  {key:'WAVE4', label:'WAVE 4', startRow:48, routeCapacity:13, timeRow:61, separatorRow:62},
-  {key:'WAVE5', label:'WAVE 5', startRow:63, routeCapacity:14, timeRow:77, separatorRow:78},
-  {key:'WAVE6', label:'WAVE 6', startRow:79, routeCapacity:14, timeRow:93, separatorRow:94},
-  {key:'ADHOCS', label:"ADHOC's", startRow:95, routeCapacity:15, separatorRow:110},
-  {key:'HELPERS', label:'HELPERS', startRow:111, routeCapacity:15, separatorRow:126},
-  {key:'DSP', label:'DSP', startRow:127, routeCapacity:6}
+  {key:'WAVE1', label:'WAVE 1', startRow:3, routeCapacity:15, timeRow:18, separatorRow:19},
+  {key:'WAVE2', label:'WAVE 2', startRow:20, routeCapacity:15, timeRow:35, separatorRow:36},
+  {key:'WAVE3', label:'WAVE 3', startRow:37, routeCapacity:15, timeRow:52, separatorRow:53},
+  {key:'WAVE4', label:'WAVE 4', startRow:54, routeCapacity:15, timeRow:69, separatorRow:70},
+  {key:'WAVE5', label:'WAVE 5', startRow:71, routeCapacity:15, timeRow:86, separatorRow:87},
+  {key:'WAVE6', label:'WAVE 6', startRow:88, routeCapacity:15, timeRow:103, separatorRow:104},
+  {key:'ADHOCS', label:"ADHOC's", startRow:105, routeCapacity:15, separatorRow:120},
+  {key:'HELPERS', label:'HELPERS', startRow:121, routeCapacity:15, separatorRow:136},
+  {key:'DSP', label:'DSP', startRow:137, routeCapacity:6}
 ];
 
 function onOpen() {
@@ -104,8 +104,8 @@ function doPost(e) {
         wouldBackupSheets: target.wouldBackup || [],
         startCell: payload.startCell,
         writeRange: payload.writeRange,
-        writtenRange: 'A3:V132',
-        lastCell: 'V132',
+        writtenRange: 'A3:V142',
+        lastCell: 'V142',
         rows: (payload.rows || []).length,
         sections: (payload.sections || []).length,
         waveTimes: relayOpsWaveLabels(payload).filter(function(wave) { return Boolean(wave.value); }).length,
@@ -187,6 +187,24 @@ function relayOpsSectionRows(payload, section) {
   });
 }
 
+function relayOpsSectionHasPad(section) {
+  return Boolean(section) && Object.prototype.hasOwnProperty.call(section, 'pad');
+}
+
+function relayOpsWriteSectionPad(sheet, layout, section, clearWhenMissing) {
+  const cell = sheet.getRange(layout.startRow, 5);
+  if (!relayOpsSectionHasPad(section)) {
+    if (clearWhenMissing) cell.clearContent();
+    return false;
+  }
+  const value = section.pad === undefined || section.pad === null
+    ? ''
+    : String(section.pad).trim().toUpperCase();
+  if (value) cell.setValue(value);
+  else cell.clearContent();
+  return true;
+}
+
 function relayOpsWaveTimeValue(section) {
   const explicit = String(section && section.waveTime || '').trim();
   if (explicit) return explicit;
@@ -253,6 +271,7 @@ function validateRelayOpsMorningPayload(payload) {
   if (!sections.length) errors.push('No wave sections sent');
   const waveLabels = relayOpsWaveLabels(payload);
   if (waveLabels.length !== 6 || waveLabels.some(function(wave) { return !wave.value; })) errors.push('All six Wave 1-6 time/count labels are required');
+  const sectionKeys = {};
   sections.forEach(function(section, i) {
     const start = Number(section.startRow);
     const count = Number(section.rowCount);
@@ -261,6 +280,8 @@ function validateRelayOpsMorningPayload(payload) {
     const fixedLayout = relayOpsLayoutForSection(section);
     if (!fixedLayout) errors.push('Section ' + (i + 1) + ' is not supported by OPS LOG 2026: ' + String(section.label || section.wave || 'unnamed'));
     else {
+      if (sectionKeys[fixedLayout.key]) errors.push('Duplicate section slot: ' + fixedLayout.label);
+      sectionKeys[fixedLayout.key] = true;
       if (section.slotKey && relayOpsSectionKey(section.slotKey) !== fixedLayout.key) errors.push('Section ' + (i + 1) + ' slot identity does not match ' + fixedLayout.label);
       const invalidBase = !start || start < RELAYOPS_START_ROW || !count;
       // Payload row numbers describe the dashboard copy grid. Google writes to
@@ -269,6 +290,10 @@ function validateRelayOpsMorningPayload(payload) {
       const invalidTime = Boolean(fixedLayout.timeRow) && (!time || time <= start);
       const invalidSeparator = Boolean(fixedLayout.separatorRow) && (!separator || separator <= start || (fixedLayout.timeRow && separator <= time));
       if (invalidBase || invalidTime || invalidSeparator) errors.push('Section ' + (i + 1) + ' has invalid merge rows');
+      const sourceIndex = section.sourceIndex === undefined
+        ? start - RELAYOPS_START_ROW
+        : Number(section.sourceIndex);
+      if (!Number.isFinite(sourceIndex) || sourceIndex < 0 || sourceIndex + count > rows.length) errors.push('Section ' + (i + 1) + ' points outside the supplied morning rows');
       if (relayOpsSectionRows(payload, section).length > fixedLayout.routeCapacity) errors.push(fixedLayout.label + ' exceeds ' + fixedLayout.routeCapacity + ' available route rows');
     }
   });
@@ -389,7 +414,7 @@ function relayOpsValidateTemplate() {
 }
 
 function relayOpsTemplateLayout(sheet, sentRows) {
-  // The 132-row OPS LOG 2026 master is authoritative. RelayOps never inserts
+  // The 142-row OPS LOG 2026 master is authoritative. RelayOps never inserts
   // rows, rebuilds merges, or derives a dated layout from an older template.
   const neededRows = RELAYOPS_LAST_ROW;
   return {
@@ -431,6 +456,9 @@ function writeRelayOpsMorningSheet(payload) {
       sheet.getRange(layout.startRow, 16, layout.routeCapacity, 2).clearContent();
       sheet.getRange(layout.startRow, 16, layout.routeCapacity, 2).setNumberFormat('0');
       sheet.getRange(layout.startRow, 21, layout.routeCapacity, 1).clearContent();
+      // Pad is one merged section cell. Clear it before the payload is applied
+      // so a blank Ad Hoc pad cannot inherit yesterday's value.
+      sheet.getRange(layout.startRow, 5).clearContent();
       sheet.getRange(layout.startRow, 1).setValue(layout.label);
       if (layout.timeRow) relayOpsWaveLabelCell(sheet, layout).clearContent();
     });
@@ -440,6 +468,9 @@ function writeRelayOpsMorningSheet(payload) {
     const byRoute = relayOpsRouteIndex(sheet), missingRoutes = [], sectionMismatches = [];let updated = 0;
     (payload.sections || []).forEach(function(section) {
       const layout = relayOpsLayoutForSection(section);if (!layout) return;
+      // A partial payload may explicitly update (or clear) a section Pad. If
+      // the property is absent, leave the existing Pad untouched.
+      relayOpsWriteSectionPad(sheet, layout, section, false);
       relayOpsSectionRows(payload, section).forEach(function(row) {
         const key = relayOpsRouteKey(row[2]), record = byRoute[key];
         if (!record) { missingRoutes.push(key);return; }
@@ -465,16 +496,16 @@ function writeRelayOpsMorningSheet(payload) {
       sheet.getRange(layout.startRow, 21, sectionRows.length, 1).setValues(sectionRows.map(function(row) { return [row[12]]; }));
     }
     sheet.getRange(layout.startRow, 1).setValue(layout.label);
-    if (section.pad !== undefined && section.pad !== null && String(section.pad) !== '') sheet.getRange(layout.startRow, 5).setValue(section.pad);
+    relayOpsWriteSectionPad(sheet, layout, section, true);
   });
   const waveTimes = writeRelayOpsWaveLabels(sheet, payload);
-  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V132', lastCell: 'V132', createdSheet: target.created, writeMode:writeMode, updated:(payload.rows || []).filter(function(row){return row && String(row[2] || '').trim();}).length, waveTimes:waveTimes, missingRoutes:[], sectionMismatches:[], backups:target.backups || []};
+  return {sheetName: sheet.getName(), startCell: 'A3', writeRange: RELAYOPS_TEMPLATE_RANGE, writtenRange: 'A3:V142', lastCell: 'V142', createdSheet: target.created, writeMode:writeMode, updated:(payload.rows || []).filter(function(row){return row && String(row[2] || '').trim();}).length, waveTimes:waveTimes, missingRoutes:[], sectionMismatches:[], backups:target.backups || []};
 }
 
 function validateRelayOpsTemplateSignature(sheet) {
   if (!sheet) throw new Error('OPS LOG sheet was not found');
   if (sheet.getMaxRows() < RELAYOPS_LAST_ROW || sheet.getMaxColumns() < RELAYOPS_TEMPLATE_COLS) {
-    throw new Error('Target tab is not the 132-row, 22-column six-wave OPS LOG 2026 layout');
+    throw new Error('Target tab is not the 142-row, 22-column six-wave OPS LOG 2026 layout');
   }
   const expected = [['A1','WAVE'],['J1','PRE DVIC'],['P1','STOP COUNT'],['U1','PLANNED RTS'],['V1','CLOCK OUT TIME']];
   expected.forEach(function(item) {
@@ -483,7 +514,7 @@ function validateRelayOpsTemplateSignature(sheet) {
     if (actual !== wanted) throw new Error('Target tab does not match OPS LOG 2026 at ' + item[0] + ' (expected ' + item[1] + ')');
   });
   if (!relayOpsLayoutMatches(sheet, RELAYOPS_LAYOUT)) {
-    throw new Error('Target tab does not match the Wave 1-6, ADHOC, HELPERS, and DSP anchors in the 132-row OPS LOG 2026 master');
+    throw new Error('Target tab does not match the Wave 1-6, ADHOC, HELPERS, and DSP anchors in the 142-row OPS LOG 2026 master');
   }
   return true;
 }
@@ -654,7 +685,7 @@ function testRelayOpsMorningSheet() {
   SpreadsheetApp.getUi().alert(
     validation.ready ? 'RelayOps demo preflight passed' : 'RelayOps demo preflight failed',
     validation.ready
-      ? 'The connector accepted a six-wave sample and verified the 132-row OPS LOG 2026 master. No dated tab was changed.'
+      ? 'The connector accepted a six-wave sample and verified the 142-row OPS LOG 2026 master. No dated tab was changed.'
       : validation.errors.join('\n'),
     SpreadsheetApp.getUi().ButtonSet.OK
   );
