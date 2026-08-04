@@ -33,7 +33,7 @@
             window.location.reload();
           });
           navigator.serviceWorker
-            .register('./service-worker.js?v=20260803-max15-r1', { updateViaCache: 'none' })
+            .register('./service-worker.js?v=20260803-parking-crosswalk-r1', { updateViaCache: 'none' })
             .then(registration => registration.update())
             .catch(() => {});
         });
