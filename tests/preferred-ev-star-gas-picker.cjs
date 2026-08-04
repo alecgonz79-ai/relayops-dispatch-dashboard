@@ -60,8 +60,8 @@ assert(context.__preferenceModal.includes('Who should receive EV1?')&&context.__
 assert(context.__deviceBefore.includes('open-preferred-vehicle-drivers')&&context.__deviceBefore.includes('device-priority-star active'),'Every EV row must expose its star and show saved priority');
 assert(context.__alicePreferred.join(',')==='1'&&context.__bobPreferred.length===0,'Saving an EV star must add selected drivers and remove unchecked drivers for that EV');
 assert(context.__deviceAfter.includes('Alice Driver prioritized for EV1'),'Active EV star must identify the prioritized driver');
-assert(context.__parkingAssignments.join(',')==='3,1,','Parking-order assignment must honor a safe preferred EV and skip parked EVs without both Device and Portable');
-assert(context.__preppedAssignments.join(',')==='3,1,','Prepped Vans must honor preferences while assigning only safe EVs with both Device and Portable');
+assert(context.__parkingAssignments.join(',')==='3,2,1',`Parking-order assignment must honor a safe preferred EV, preserve parking order, and allow a blank Portable when a Device is entered (got ${context.__parkingAssignments.join(',')})`);
+assert(context.__preppedAssignments.join(',')==='3,1,2',`Prepped Vans must honor preferences while assigning safe EVs with a Device; Portable may be blank or dash (got ${context.__preppedAssignments.join(',')})`);
 assert(!fs.readFileSync(require.resolve('../app.js'),'utf8').includes('Bag Ready Vans</button>')&&fs.readFileSync(require.resolve('../app.js'),'utf8').includes('Prepped Vans</button>'),'Morning tools must label the readiness action Prepped Vans');
 assert(context.__gasInitial.routes.length===0,'Gas assignment must never preselect drivers');
 assert(context.__gasInitial.vans.join(',')==='F33','Verified gas vans should be ready automatically so dispatchers only need to choose driver names');

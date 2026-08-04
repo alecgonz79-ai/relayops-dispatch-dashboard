@@ -7999,18 +7999,20 @@ function equipmentAssignmentFor(value='') {
   return usableDeviceAssignment(item?.device)?item:null;
 }
 function preppedEquipmentAssignmentFor(value='') {
-  const item=equipmentAssignmentFor(value);
-  return item&&usableDeviceAssignment(item.portable)?item:null;
+  // A van is ready for dispatch once its assigned Device is present. A
+  // Portable may legitimately be blank or "-" for the day, so it must not
+  // remove an otherwise safe EV from the Prepped Vans/parking-order pool.
+  return equipmentAssignmentFor(value);
 }
 function clearEquipmentForRoute(route={}) {
   route.ev='';route.deviceName='';route.portable='';route.deviceReady=false;route.portableReady=false;
 }
-function automaticFleetVehiclePool({electricOnly=false,random=false,requirePortable=false}={}) {
+function automaticFleetVehiclePool({electricOnly=false,random=false}={}) {
   const seen=new Set(),rows=[];
   rivianFleet.forEach(vehicle=>{
     if(electricOnly&&!isElectricFleetVehicle(vehicle))return;
     const safety=fleetVehicleAssignmentEligibility(vehicle),identity=fleetEquipmentIdentity(vehicle),key=normalizeEquipmentId(identity?.label||'');
-    const equipment=requirePortable?preppedEquipmentAssignmentFor(key):equipmentAssignmentFor(key);
+    const equipment=equipmentAssignmentFor(key);
     if(!safety.eligible||!key||seen.has(key)||!equipment)return;
     seen.add(key);rows.push({vehicle,label:identity.label,key,safety});
   });
@@ -8041,8 +8043,15 @@ function automaticVehicleAssignmentPlan(targets=[],pool=[]) {
 }
 function assignAutomaticVehiclePool(targets=[],pool=[],successLabel='safe vans') {
   pushSheetHistory(`Assign ${successLabel}`,'morning');
+  // A wave/staging/pad filter can limit the assignment target set. Reserve
+  // every EV already used outside that set so a filtered assignment can never
+  // duplicate a van that remains on another wave (or on a helper/Ad Hoc row).
+  const targetRefs=new Set(targets),targetUids=new Set(targets.map(route=>route?.routeUid).filter(Boolean));
+  const isTarget=route=>targetRefs.has(route)||(route?.routeUid&&targetUids.has(route.routeUid));
+  const reservedVehicleKeys=new Set((state.morningRoutes||[]).filter(route=>!isTarget(route)).map(route=>normalizeEquipmentId(route?.ev)).filter(Boolean));
+  const availablePool=pool.filter(item=>!reservedVehicleKeys.has(item.key));
   targets.forEach(clearEquipmentForRoute);
-  const assignments=automaticVehicleAssignmentPlan(targets,pool),count=assignments.size;
+  const assignments=automaticVehicleAssignmentPlan(targets,availablePool),count=assignments.size;
   let preferenceCount=0;
   assignments.forEach((item,route)=>{
     const label=item.label;
@@ -8071,8 +8080,8 @@ function assignOperationalVehicles() {
 }
 function assignBagReadyVehicles() {
   const targets=morningAssignmentTargets().filter(route=>!/helper/i.test(String(route.service||'')));if(!targets.length)return toast('No visible driver rows to assign','error');
-  const pool=automaticFleetVehiclePool({electricOnly:true,requirePortable:true});
-  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No Prepped Vans found · each safe EV needs both a Device and Portable','error');}
+  const pool=automaticFleetVehiclePool({electricOnly:true});
+  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No Prepped Vans found · each safe EV needs a Device entered (Portable may be blank or -)','error');}
   assignAutomaticVehiclePool(targets,pool,'Prepped Vans');
 }
 function clearMorningVehicleAssignments() {
@@ -8103,7 +8112,7 @@ function assignVansByParking() {
   persist();render();
   const shortfall=targets.length-assigned.length;
   const preferredText=preferredRoutes.size?` · ${preferredRoutes.size} driver preference${preferredRoutes.size===1?'':'s'} honored`:'';
-  toast(shortfall?`${assigned.length}/${targets.length} prepped vans assigned by parking order${preferredText} · ${shortfall} left blank because no additional safe parked van had both a Device and Portable`:`${assigned.length} verified prepped vans assigned by parking order${preferredText}${grounded.size?` · ${grounded.size} grounded skipped`:''}`,shortfall?'error':'');
+  toast(shortfall?`${assigned.length}/${targets.length} prepped vans assigned by parking order${preferredText} · ${shortfall} left blank because no additional safe parked van had a Device entered`:`${assigned.length} verified prepped vans assigned by parking order${preferredText}${grounded.size?` · ${grounded.size} grounded skipped`:''}`,shortfall?'error':'');
 }
 function openGasVehicleAssignment() {
   const targets=morningAssignmentTargets();
