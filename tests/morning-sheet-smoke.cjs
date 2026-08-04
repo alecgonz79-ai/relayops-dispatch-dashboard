@@ -84,7 +84,7 @@ const checks = `
   if(!parkingHtml.includes('data-parking-notes')||!parkingHtml.includes('Close lane after charging')||!parkingHtml.includes('data-parking-date')||!parkingHtml.includes('data-charging-check-date')||!parkingHtml.includes('charger-pair')||!parkingHtml.includes('middle-1-left')||!parkingHtml.includes('parking-tent-square')||!parkingHtml.includes('stroke="currentColor"')||!parkingHtml.includes('upper-n1')||!parkingHtml.includes('parking-gas-area')||parkingHtml.includes('middle-4-left')||parkingHtml.includes('DRIVE LANE')) throw new Error('Editable street, crosswalk-safe chargers, gas parking, and white tent square missing');
   state.vanParking=defaultVanParkingSlots();
   const defaultParkingHtml=vanParkingSection();
-  if(defaultParkingHtml.includes('middle-21-left')||!defaultParkingHtml.includes('middle-22-left')||!defaultParkingHtml.includes('middle-23-left')) throw new Error('Chargers should skip crosswalk van 50 but remain beside vans 35 and 51 after inserting spot #4');
+  if(!defaultParkingHtml.includes('middle-20-left')||defaultParkingHtml.includes('middle-21-left')||!defaultParkingHtml.includes('middle-22-left')||!defaultParkingHtml.includes('middle-23-left')) throw new Error('Spots #38/#18 must move above the lower crosswalk while chargers remain aligned with every real stall');
   const visualClasses=new Set();
   const visualInput={value:'56',closest:()=>({classList:{toggle:(name,on)=>on?visualClasses.add(name):visualClasses.delete(name)}})};
   syncParkingSlotVisual(visualInput);

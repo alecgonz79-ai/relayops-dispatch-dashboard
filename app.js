@@ -215,6 +215,45 @@ const morningSeed = [
   ['LLOL','KAITLEN','CX239','Standard Parcel Electric - Rivian MEDIUM','11:45 AM','STG.P.9',23,341,16,183,'6:46 PM']
 ].map((r,i)=>({dsp:r[0],driver:r[1],route:r[2],service:r[3],wave:r[4],staging:r[5],zones:r[6],packages:r[7],commercial:r[8],stops:r[9],eta:r[10],duration:360+i*3,bags:Math.max(8,Math.round(r[7]/13)),overflow:Math.max(2,Math.round(r[7]/24)),parking:i%5===0?`P${12+(i%21)}`:'',checkedIn:i<28,vanReady:i%7!==0,deviceReady:i%9!==0,loadReady:false}));
 
+function lowerParkingChargerMovePlan(slots=[]) {
+  if(!Array.isArray(slots))return [];
+  const normalized=normalizeVanParkingLayout(slots);
+  return [['west','left'],['east','right']].flatMap(([zone,side])=>{
+    const before=slots.filter(slot=>slot?.zone===zone).findIndex(slot=>slot?.id===`${zone}-19`);
+    const after=normalized.filter(slot=>slot?.zone===zone).findIndex(slot=>slot?.id===`${zone}-19`);
+    return before>=0&&after>=0&&before!==after?[{side,from:before+1,to:after+1}]:[];
+  });
+}
+function normalizeVanParkingLayout(slots=[]) {
+  const rows=Array.isArray(slots)?[...slots]:[];
+  const moveBefore=(movingId,beforeId)=>{
+    const from=rows.findIndex(slot=>slot?.id===movingId),before=rows.findIndex(slot=>slot?.id===beforeId);
+    if(from<0||before<0||from<before)return;
+    const [moving]=rows.splice(from,1),target=rows.findIndex(slot=>slot?.id===beforeId);
+    rows.splice(target,0,moving);
+  };
+  moveBefore('west-missing-04','west-05');
+  moveBefore('east-missing-33','east-05');
+  moveBefore('west-19','west-20');
+  moveBefore('east-19','east-20');
+  return rows;
+}
+function migrateLowerParkingChargerRows(status={},reports=[],plan=[]) {
+  const nextStatus=status&&typeof status==='object'?{...status}:{};
+  plan.forEach(({side,from:fromRow,to:toRow})=>{
+    const from=`middle-${fromRow}-${side}`,to=`middle-${toRow}-${side}`;
+    if(!Object.prototype.hasOwnProperty.call(nextStatus,from))return;
+    nextStatus[to]=nextStatus[from];
+    delete nextStatus[from];
+  });
+  const nextReports=normalizeChargerReports(reports).map(report=>{
+    const move=plan.find(({side,from})=>report.chargerKey===`middle-${from}-${side}`);
+    return move?{...report,chargerKey:`middle-${move.to}-${move.side}`}:{...report};
+  });
+  return {status:nextStatus,reports:nextReports};
+}
+
+let loadedParkingChargerMovePlan=[];
 function defaultVanParkingSlots() {
   const west=['57','2','1','4','6','36','55','29','9','40','5','13','42','14','20','16','24','18','30','50','35','51'];
   const east=['38','58','52','15','33','43','31','23','11','28','26','34','53','48','22','21','45','49','44','19'];
@@ -235,17 +274,18 @@ function defaultVanParkingSlots() {
     if(i===3)slots.push({id:'east-missing-33',zone:'east',label:'Right row missing spot above #32',value:'',kind:'spot'});
   });
   gasVehicleIds.forEach((value,i)=>slots.push({id:`gas-${String(i+1).padStart(2,'0')}`,zone:'gas',label:`Gas spot ${i+1}`,value,kind:'spot'}));
-  return slots;
+  return normalizeVanParkingLayout(slots);
 }
 
 function loadVanParkingSlots() {
   try {
     const saved=JSON.parse(localStorage.getItem('relayops_van_parking')||'null');
     if(Array.isArray(saved)&&saved.length) {
+      loadedParkingChargerMovePlan=lowerParkingChargerMovePlan(saved);
       const defaults=defaultVanParkingSlots(),savedById=new Map(saved.filter(slot=>slot?.id).map(slot=>[slot.id,slot])),defaultIds=new Set(defaults.map(slot=>slot.id));
       const merged=defaults.map(slot=>({...slot,...savedById.get(slot.id)}));
       saved.forEach(slot=>{if(slot?.id&&!defaultIds.has(slot.id))merged.push(slot);});
-      return merged;
+      return normalizeVanParkingLayout(merged);
     }
   } catch {}
   return defaultVanParkingSlots();
@@ -527,6 +567,15 @@ let state = {
   aChatMessages: JSON.parse(localStorage.getItem('relayops_achat_messages') || 'null') || [],
   rating: Number(localStorage.getItem('relayops_rating') || 0)
 };
+
+if(loadedParkingChargerMovePlan.length) {
+  const migrated=migrateLowerParkingChargerRows(state.parkingChargerStatus,state.chargerReports,loadedParkingChargerMovePlan);
+  state.parkingChargerStatus=migrated.status;
+  state.chargerReports=migrated.reports;
+  localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking));
+  localStorage.setItem('relayops_parking_charger_status',JSON.stringify(state.parkingChargerStatus));
+  localStorage.setItem('relayops_charger_reports',JSON.stringify(state.chargerReports));
+}
 
 let driverProfileLookupCache=null;
 let driverProfileLookupSource=null;
@@ -9945,8 +9994,11 @@ function persistentWorkspaceState() {
   };
 }
 function applySharedWorkspaceState(payload={}) {
+  const parkingChargerMovePlan=lowerParkingChargerMovePlan(payload.vanParking);
   const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','messageQueueTemplate','messageQueueStatus','coachingQueue','coachingTemplate','scheduleEntries','scheduleImportName','rosteringDate','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleStayHomeHistory','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','morningSectionPadOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','fitMorningRows','fitOpeningPicklistRows','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','picklistSwapAudit','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
+  state.vanParking=normalizeVanParkingLayout(state.vanParking);
+  if(parkingChargerMovePlan.length){const migrated=migrateLowerParkingChargerRows(state.parkingChargerStatus,state.chargerReports,parkingChargerMovePlan);state.parkingChargerStatus=migrated.status;state.chargerReports=migrated.reports;}
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
   state.equipmentIssues=normalizeEquipmentIssuesStore(state.equipmentIssues||{});
   state.removedDeviceVehicleIds=Array.isArray(state.removedDeviceVehicleIds)?[...new Set(state.removedDeviceVehicleIds.map(normalizeEquipmentId).filter(Boolean))]:[];
@@ -9985,8 +10037,11 @@ function applySharedWorkspaceState(payload={}) {
   invalidateDriverDirectoryCaches();
 }
 function applyPersistentWorkspaceState(payload={}) {
+  const parkingChargerMovePlan=lowerParkingChargerMovePlan(payload.vanParking);
   const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringDate','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','morningWaveTimeOverrides','morningSectionPadOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
+  state.vanParking=normalizeVanParkingLayout(state.vanParking);
+  if(parkingChargerMovePlan.length){const migrated=migrateLowerParkingChargerRows(state.parkingChargerStatus,state.chargerReports,parkingChargerMovePlan);state.parkingChargerStatus=migrated.status;state.chargerReports=migrated.reports;}
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
   state.equipmentIssues=normalizeEquipmentIssuesStore(state.equipmentIssues||{});
   state.removedDeviceVehicleIds=Array.isArray(state.removedDeviceVehicleIds)?[...new Set(state.removedDeviceVehicleIds.map(normalizeEquipmentId).filter(Boolean))]:[];
