@@ -4927,7 +4927,7 @@ function filterVtoRouteSwapOptions(input) {
   const confirm=document.querySelector('[data-action="apply-vto-route-swap"]');if(confirm)confirm.disabled=!count;
 }
 
-const UI_SCROLL_MEMORY_SELECTORS=['.sheet-scroll','.opening-picklist-scroll','.device-sheet-table-wrap'];
+const UI_SCROLL_MEMORY_SELECTORS=['.sheet-scroll','.opening-picklist-scroll','.device-sheet-table-wrap','.parking-lot'];
 // Keep the six dispatch pages used during setup warm. This avoids rebuilding
 // the two spreadsheet-sized views every time someone briefly checks Fleet or
 // Drivers & Team, while still bounding memory on phones and older tablets.
@@ -4940,7 +4940,7 @@ let operationalInteractionUntil=0;
 let operationalScrollAnchor=null;
 let operationalScrollAnchorVersion=0;
 const OPERATIONAL_INTERACTION_SELECTOR='[data-device-sheet-field],[data-device-custom-field],[data-picklist-view],[data-picklist-edit],.morning-template-sheet [data-view-field],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-roster-search],[data-screenshot-review-pad],[data-parking-id],[data-parking-battery],[data-parking-notes],[data-parking-date],[data-charging-check-date],[data-parking-kind]';
-const OPERATIONAL_SCROLL_PANE_SELECTOR='.sheet-scroll,.opening-picklist-scroll,.picklist-sheet-scroll,.device-sheet-table-wrap,.device-sheet-scroll';
+const OPERATIONAL_SCROLL_PANE_SELECTOR='.sheet-scroll,.opening-picklist-scroll,.picklist-sheet-scroll,.device-sheet-table-wrap,.device-sheet-scroll,.parking-lot';
 let operationalEditScrollLock=null;
 let operationalUserScrollUntil=0;
 let operationalScrollGuardRestoring=false;
@@ -5385,8 +5385,7 @@ function bind() {
   document.querySelectorAll('[data-parking-id]').forEach(el=>{
     el.dataset.parkingOriginal=el.value;
     el.addEventListener('focus',()=>{selectParkingSlot(el.dataset.parkingId,false);syncParkingSelectionVisual(el.dataset.parkingId);if(!el.readOnly)captureOperationalEditScrollLock(el);});
-    el.addEventListener('pointerup',event=>{if(!['touch','pen'].includes(String(event.pointerType||'')))return;el.dataset.parkingTouchOpened='true';event.preventDefault();event.stopPropagation();beginParkingSlotEdit(el);});
-    el.addEventListener('click',event=>{const now=Date.now(),last=Number(el.dataset.parkingLastClickAt||0),doubleClick=event.detail>=2||now-last<500,mobileTap=el.dataset.parkingTouchOpened==='true'||parkingTapOpensEditor(event);delete el.dataset.parkingTouchOpened;el.dataset.parkingLastClickAt=String(now);selectParkingSlot(el.dataset.parkingId,false);syncParkingSelectionVisual(el.dataset.parkingId);if(mobileTap||doubleClick){event.preventDefault();event.stopPropagation();beginParkingSlotEdit(el);}});
+    el.addEventListener('click',event=>{selectParkingSlot(el.dataset.parkingId,false);syncParkingSelectionVisual(el.dataset.parkingId);if(!parkingTapOpensEditor(event))return;event.preventDefault();event.stopPropagation();beginParkingSlotEdit(el);});
     el.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation();beginParkingSlotEdit(el);});
     el.addEventListener('input',()=>{if(el.readOnly)return;updateParkingSlot(el.dataset.parkingId,el.value,false);syncParkingSlotVisual(el);});
     el.addEventListener('change',()=>{if(!el.readOnly)commitParkingSlotEditor(el);});
@@ -5558,8 +5557,7 @@ function updateParkingSlot(id,value,rerender=true) {
   if(!slot)return;
   slot.value=String(value||'').trim().toUpperCase();
   state.selectedParkingId=id;
-  state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
-  if(rerender){persist();render();}
+  if(rerender){state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());persist();render();}
   return slot;
 }
 
@@ -5568,8 +5566,27 @@ function selectParkingSlot(id,rerender=true) {
   state.selectedParkingId=id;
   if(rerender){persist();render();}
 }
+function focusParkingSlotEditor(editor) {
+  if(!editor)return false;
+  const pageX=window.scrollX||0,pageY=window.scrollY||0,pane=operationalScrollPaneFor(editor),paneTop=pane?.scrollTop||0,paneLeft=pane?.scrollLeft||0;
+  const restorePosition=()=>{
+    if(pane?.isConnected){pane.scrollTop=paneTop;pane.scrollLeft=paneLeft;}
+    if(Math.abs((window.scrollX||0)-pageX)>1||Math.abs((window.scrollY||0)-pageY)>1)window.scrollTo(pageX,pageY);
+  };
+  editor.focus?.({preventScroll:true});
+  editor.select?.();
+  restorePosition();
+  captureOperationalEditScrollLock(editor,{pageX,pageY,paneTop,paneLeft});
+  window.requestAnimationFrame?.(()=>{
+    if(editor.isConnected===false||document.activeElement!==editor)return;
+    restorePosition();
+    captureOperationalEditScrollLock(editor,{pageX,pageY,paneTop,paneLeft});
+  });
+  return true;
+}
 function beginParkingSlotEdit(el) {
-  if(!el)return;
+  if(!el)return false;
+  if(el.dataset.parkingEditing==='true')return true;
   activeParkingEditId=el.dataset.parkingId||'';
   selectParkingSlot(el.dataset.parkingId,false);
   syncParkingSelectionVisual(el.dataset.parkingId);
@@ -5577,7 +5594,8 @@ function beginParkingSlotEdit(el) {
   el.setAttribute?.('aria-readonly','false');
   el.dataset.parkingEditing='true';
   el.closest?.('.parking-slot')?.classList.add('editing');
-  focusOperationalGridEditor(el);
+  focusParkingSlotEditor(el);
+  return true;
 }
 function finishParkingSlotEdit(el) {
   if(!el||el.dataset.parkingEditing!=='true')return;
@@ -5594,8 +5612,7 @@ function updateParkingBattery(id,value,persistChange=true) {
   const clean=String(value||'').replace(/[^\d]/g,'').slice(0,3);
   const n=clean===''?'':Math.max(0,Math.min(100,Number(clean)));
   state.vanParkingBatteries={...(state.vanParkingBatteries||{}),[id]:n};
-  state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
-  if(persistChange)persist();
+  if(persistChange){state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());persist();}
   return n;
 }
 function commitParkingSlotEditor(el) {
@@ -5606,15 +5623,16 @@ function commitParkingSlotEditor(el) {
   el.value=slot.value;
   el.dataset.parkingOriginal=slot.value;
   syncParkingSlotVisual(el);
-  if(slot.value!==previous)persist();
+  if(slot.value!==previous){state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());persist();}
 }
 function commitParkingBatteryEditor(el) {
   if(!el)return;
+  const previous=String(el.dataset.parkingOriginal||'');
   const value=updateParkingBattery(el.dataset.parkingBattery,el.value,false);
   el.value=value;
   el.dataset.parkingOriginal=String(value);
   applyParkingBatteryTone(el,value);
-  persist();
+  if(String(value)!==previous){state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());persist();}
 }
 function handleParkingEditorKeydown(event,el) {
   if(el.matches?.('[data-parking-id]')&&el.readOnly)return;
@@ -6011,7 +6029,7 @@ function stopSheetDrag() {
   if(sheetSelection.dragging)sheetSelection.dragging=false;
 }
 function operationalScrollPaneFor(el) {
-  const explicit=el?.closest?.('.sheet-scroll,.opening-picklist-scroll,.picklist-sheet-scroll,.device-sheet-table-wrap,.device-sheet-scroll,.scroll-roster,.rostering-associate-list,.parking-map-scroll');
+  const explicit=el?.closest?.('.sheet-scroll,.opening-picklist-scroll,.picklist-sheet-scroll,.device-sheet-table-wrap,.device-sheet-scroll,.scroll-roster,.rostering-associate-list,.parking-map-scroll,.parking-lot');
   if(explicit)return explicit;
   let node=el?.parentElement||null;
   while(node&&node!==document.body&&node!==document.documentElement){
