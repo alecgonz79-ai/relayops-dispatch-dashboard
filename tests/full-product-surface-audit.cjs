@@ -207,29 +207,31 @@ function testSharedAndPersistentStateContracts() {
   vm.runInContext(`
     globalThis.__daily=sharedWorkspaceState();
     globalThis.__persistent=persistentWorkspaceState();
-    applySharedWorkspaceState({organizationName:'Shared DSP',stationCode:'DJT6',morningRoutes:[{route:'CX777'}],parkingNotes:'Shared note'});
-    globalThis.__applied={organizationName:state.organizationName,stationCode:state.stationCode,route:state.morningRoutes[0]?.route,parkingNotes:state.parkingNotes};
-    applyPersistentWorkspaceState({rosteringDate:'2026-07-16',rosteringPlans:{'2026-07-16':{services:[],assignments:[]}}});
+    state.messageQueueTemplate='standup';
+    applySharedWorkspaceState({organizationName:'Shared DSP',stationCode:'DJT6',morningRoutes:[{route:'CX777'}],messageQueueTemplate:'simple'});
+    globalThis.__messageAfterDaily=state.messageQueueTemplate;
+    applyPersistentWorkspaceState({parkingNotes:'Shared note',rosteringPlans:{'2026-07-16':{services:[],assignments:[]}},messageQueueTemplate:'route'});
+    globalThis.__applied={organizationName:state.organizationName,stationCode:state.stationCode,route:state.morningRoutes[0]?.route,parkingNotes:state.parkingNotes,messageQueueTemplate:state.messageQueueTemplate};
     globalThis.__persistentRoster={date:state.rosteringDate,hasPlan:Boolean(state.rosteringPlans['2026-07-16'])};
   `, context);
   const dailyFields = [
-    'organizationName', 'stationCode', 'morningRoutes', 'scheduleEntries', 'rosteringDate', 'rosteringPlans',
+    'organizationName', 'stationCode', 'morningRoutes', 'scheduleEntries', 'rosteringDate',
     'scheduleBackupRecords', 'scheduleStayHome', 'scheduleReductions',
-    'scheduleHelpers', 'openingPicklistTopics', 'openingPicklistNotes', 'whiparoundInspections',
-    'whiparoundComplianceHistory', 'coachingQueue'
+    'scheduleHelpers', 'openingPicklistTopics', 'openingPicklistNotes', 'whiparoundInspections'
   ];
   const persistentFields = [
     'organizationName', 'stationCode', 'fleetImport', 'fleetIssues', 'vanParking', 'parkingNotes',
-    'equipmentImport', 'driverContacts', 'driverNameAliases', 'scheduleStayHomeHistory', 'rosteringDate', 'rosteringPlans',
-    'whiparoundInspections', 'whiparoundComplianceHistory', 'coachingTemplate', 'morningSheetsEndpoint'
+    'equipmentImport', 'driverContacts', 'driverNameAliases', 'scheduleStayHomeHistory', 'rosteringPlans',
+    'whiparoundComplianceHistory', 'messageQueueTemplate', 'coachingQueue', 'coachingTemplate', 'morningSheetsEndpoint'
   ];
   for (const field of dailyFields) assert(Object.prototype.hasOwnProperty.call(context.__daily, field), `Shared workspace snapshot lost ${field}`);
   for (const field of persistentFields) assert(Object.prototype.hasOwnProperty.call(context.__persistent, field), `Persistent workspace snapshot lost ${field}`);
-  for (const field of ['fleetImport','fleetIssues','vanParking','parkingNotes','equipmentImport','driverContacts','driverNameAliases','scheduleStayHomeHistory','coachingTemplate','morningSheetsEndpoint']) {
+  for (const field of ['fleetImport','fleetIssues','vanParking','parkingNotes','equipmentImport','driverContacts','driverNameAliases','scheduleStayHomeHistory','rosteringPlans','whiparoundComplianceHistory','messageQueueTemplate','coachingQueue','coachingTemplate','morningSheetsEndpoint']) {
     assert(!Object.prototype.hasOwnProperty.call(context.__daily, field), `Daily operations snapshot still duplicates station field ${field}`);
   }
   assert(context.__applied.organizationName === 'Shared DSP' && context.__applied.stationCode === 'DJT6' && context.__applied.route === 'CX777' && context.__applied.parkingNotes === 'Shared note', 'Remote shared state did not apply across organization, Morning Sheet, and Van Parking');
-  assert(context.__persistentRoster.date === '2026-07-16' && context.__persistentRoster.hasPlan, 'Station-persistent Rostering plans did not restore');
+  assert(context.__messageAfterDaily === 'standup' && context.__applied.messageQueueTemplate === 'route', 'Reusable message template must ignore legacy daily payloads and hydrate from station-persistent state');
+  assert(context.__persistentRoster.hasPlan, 'Station-persistent Rostering plans did not restore');
   console.log('Shared daily and station-persistent state contracts passed');
 }
 

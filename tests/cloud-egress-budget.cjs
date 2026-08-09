@@ -10,6 +10,8 @@ const persistentSource=app.slice(app.indexOf('function persistentWorkspaceState(
 const stationOnly=[
   'fleetImport','fleetSourceUploads','fleetIssues','equipmentIssues','vanParking',
   'equipmentImport','driverContacts','driverProfiles','scheduleStayHomeHistory',
+  'rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining',
+  'whiparoundComplianceHistory','whiparoundReminderTemplates','coachingQueue',
   'inventoryItems','inventoryLog','morningSheetsEndpoint','chargerReports'
 ];
 
@@ -18,8 +20,11 @@ for(const field of stationOnly){
   assert(new RegExp(`\\b${field}\\s*:`).test(persistentSource),`Persistent payload lost station field ${field}`);
 }
 
-assert(cloud.includes('Number(config.pollIntervalMs)||30000'),'Active tabs should use the lower-egress 30 second revision interval');
-assert(cloud.includes('Number(config.idlePollIntervalMs)||120000'),'Idle tabs should use the lower-egress 120 second revision interval');
+assert(cloud.includes('Number(config.pollIntervalMs)||60000'),'Active tabs should use the guarded 60 second revision interval');
+assert(cloud.includes('Number(config.idlePollIntervalMs)||300000'),'Idle tabs should use the guarded 5 minute revision interval');
+assert(cloud.includes('Number(config.persistentPollIntervalMs)||600000'),'Permanent station state should be checked at most every 10 minutes by default');
+assert(cloud.includes("document.visibilityState==='hidden')return"),'Hidden tabs must queue locally without scheduling network writes');
+assert(cloud.includes('CLOUD_DAILY_PAYLOAD_LIMIT')&&cloud.includes('CLOUD_PERSISTENT_PAYLOAD_LIMIT'),'Daily and permanent payloads need hard safety limits');
 assert(cloud.includes("select('revision,updated_at,updated_by,operation_date')"),'Polling must continue fetching only lightweight revision metadata');
 assert(!cloud.includes(".on('postgres_changes'"),'Realtime row broadcasts would restore high egress and CPU usage');
 

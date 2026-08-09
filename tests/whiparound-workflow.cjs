@@ -50,7 +50,7 @@ if(!driverWhiparoundStats('Maya Collins').frequent||!teamPage().includes('Freque
 action('whiparound-import',{});
 if(state.importPurpose!=='whiparound'||!fileInput.accept.includes('.csv')||!fileInput.accept.includes('.xlsx'))throw new Error('Whiparound import file types failed');
 persist();
-if(!localStorage.getItem('relayops_whiparound_inspections')||!sharedWorkspaceState().whiparoundComplianceHistory)throw new Error('Whiparound local/cloud persistence failed');
+if(!localStorage.getItem('relayops_whiparound_inspections')||!persistentWorkspaceState().whiparoundComplianceHistory||sharedWorkspaceState().whiparoundComplianceHistory)throw new Error('Whiparound daily/current and permanent compliance persistence split failed');
 ` ,context);
 
 const actual='/Users/alecgonzo/Downloads/Inspections Report_2026-07-13-07-20-17.csv';

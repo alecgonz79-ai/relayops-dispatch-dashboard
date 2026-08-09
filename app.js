@@ -105,14 +105,21 @@ const DRIVER_NOTE_FLAGS = Object.freeze([
 ]);
 const DRIVER_NOTE_FLAG_LABELS = Object.freeze(Object.fromEntries(DRIVER_NOTE_FLAGS));
 
-function defaultOperationDate() {
-  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));
+function defaultOperationDate(now=new Date()) {
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now).map(part=>[part.type,part.value]));
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 function requestedOperationDate() {
   const requested=String(initialUrlParams.get('date')||'').trim();
   return /^\d{4}-\d{2}-\d{2}$/.test(requested)?requested:defaultOperationDate();
 }
+const initialRequestedOperationDate=String(initialUrlParams.get('date')||'').trim();
+const bootCachedOperationDate=String(localStorage.getItem('relayops_morning_operation_date')||'').trim();
+let operationDatePinned=/^\d{4}-\d{2}-\d{2}$/.test(initialRequestedOperationDate)&&initialRequestedOperationDate!==defaultOperationDate();
+let lastObservedOperationDate=defaultOperationDate();
+let operationDateRolloverInFlight=false;
+let operationDateRolloverTimer=null;
+let cloudScheduleSuppressionDepth=0;
 function sharedDashboardUrl(view='') {
   const url=new URL(DISPATCHER_SHARE_URL);
   url.searchParams.set('date',state?.morningOperationDate||requestedOperationDate());
@@ -383,7 +390,7 @@ function normalizeInventoryItems(raw=null) {
   });
 }
 function normalizeInventoryLog(raw=[]) {
-  return (Array.isArray(raw)?raw:[]).filter(Boolean).map(record=>{const date=new Date(record.createdAt||Date.now());return {id:String(record.id||inventoryRecordId('movement')),itemId:String(record.itemId||''),itemName:String(record.itemName||'Inventory item'),type:['assign','return','unavailable','restore'].includes(record.type)?record.type:'unavailable',quantity:Math.max(1,Math.trunc(Number(record.quantity)||1)),assignee:String(record.assignee||'').trim(),notes:String(record.notes||'').trim(),createdAt:Number.isNaN(date.getTime())?new Date().toISOString():date.toISOString()};});
+  return (Array.isArray(raw)?raw:[]).filter(Boolean).slice(-1000).map(record=>{const date=new Date(record.createdAt||Date.now());return {id:String(record.id||inventoryRecordId('movement')),itemId:String(record.itemId||''),itemName:String(record.itemName||'Inventory item'),type:['assign','return','unavailable','restore'].includes(record.type)?record.type:'unavailable',quantity:Math.max(1,Math.trunc(Number(record.quantity)||1)),assignee:String(record.assignee||'').trim(),notes:String(record.notes||'').trim(),createdAt:Number.isNaN(date.getTime())?new Date().toISOString():date.toISOString()};});
 }
 function normalizeChargerReports(raw=[]) {
   return (Array.isArray(raw)?raw:[]).filter(Boolean).slice(-200).map((record,index)=>{
@@ -549,6 +556,8 @@ let state = {
   pendingVtoRouteSwap: null,
   pendingRouteTrainer: null,
   pendingRouteVtoSwap: null,
+  pendingDuplicateDriverName: null,
+  pendingAdhocRouteSwap: null,
   removedDriverKeys: JSON.parse(localStorage.getItem('relayops_removed_driver_keys') || 'null') || [],
   pendingDriverRemoval: null,
   cloudStatus: window.RelayOpsCloud?.configured?'connecting':'setup-required',
@@ -590,6 +599,7 @@ const driverDisplayLookupCache=new Map();
 state.sheetHistory=state.sheetHistory&&Array.isArray(state.sheetHistory.past)&&Array.isArray(state.sheetHistory.future)?state.sheetHistory:{past:[],future:[]};
 if(Object.keys(state.fleetSourceUploads||{}).length) state.fleetImport=fleetImportFromSourceUploads();
 if(state.fleetImport?.vehicles?.length) applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
+if(bootCachedOperationDate&&bootCachedOperationDate!==state.morningOperationDate){resetDailyOperationsState(state.morningOperationDate);persistWithoutCloud();}
 
 const app = document.getElementById('app');
 const fileInput = document.getElementById('file-input');
@@ -1236,7 +1246,7 @@ function picklistVtoDriverCell(group='',index=0,row=null,value='') {
   if(!name)return input;
   const action=(target,text,tone='')=>`<button type="button" class="${esc(tone)}" data-action="picklist-vto-action" data-vto-target="${esc(target)}" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}">${esc(text)}</button>`;
   const swap=`<button type="button" class="swap-route" data-action="open-vto-route-swap" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}" data-vto-label="${esc(label)}">Swap To Route</button>`;
-  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}" aria-haspopup="menu" aria-expanded="false">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('adhoc','Adhoc','adhoc')}${action('remove','Remove Driver','remove-driver')}</div></div></div>`;
+  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}" aria-haspopup="menu" aria-expanded="false">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('duplicate-name','Duplicate Name','duplicate-name')}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('adhoc','Adhoc','adhoc')}${action('remove','Remove Driver','remove-driver')}</div></div></div>`;
 }
 function openingPicklistCallOffRows() {
   return Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([key,value])=>({key,name:value.name||'',reason:state.callOffReasons?.[key]||'',route:value.route||''})).sort((a,b)=>a.name.localeCompare(b.name));
@@ -1272,11 +1282,12 @@ function rosteringTimeBlueprint(service={},count=0) {
   const source=service.id==='rivian-medium'?medium:Array.from({length:count},()=>service.defaultTime||'11:15 AM');
   return Array.from({length:count},(_,index)=>source[index]||service.defaultTime||'11:15 AM');
 }
+function rosteringPlanFromScreenshot(plan={}) { return plan?.source==='screenshot'||plan?.importKind==='screenshot'||(Array.isArray(plan?.assignments)&&plan.assignments.some(row=>row?.source==='screenshot')); }
 function normalizeRosteringPlan(plan={}) {
   const services=(Array.isArray(plan.services)&&plan.services.length?plan.services:rosteringDefaultServices()).map((service,index)=>({id:String(service.id||`service-${index+1}`),name:String(service.name||`Custom service ${index+1}`),confirmed:Math.max(0,Math.trunc(Number(service.confirmed)||0)),kind:service.kind==='helper'?'helper':'driver',defaultTime:String(service.defaultTime||'11:15 AM')}));
   const serviceIds=new Set(services.map(service=>service.id)),assignments=(Array.isArray(plan.assignments)?plan.assignments:[]).filter(row=>row&&serviceIds.has(row.serviceId)).map(row=>({id:String(row.id||rosteringId()),serviceId:String(row.serviceId),start:String(row.start||'11:15 AM'),associate:String(row.associate||''),route:String(row.route||''),role:String(row.role||''),source:String(row.source||'manual')}));
   if(!assignments.length)services.forEach(service=>rosteringTimeBlueprint(service,service.confirmed).forEach(start=>assignments.push({id:rosteringId(),serviceId:service.id,start,associate:'',route:'',role:'',source:'template'})));
-  return {services,assignments,updatedAt:String(plan.updatedAt||''),importName:String(plan.importName||''),importedAt:String(plan.importedAt||''),_normalized:true};
+  return {services,assignments,updatedAt:String(plan.updatedAt||''),importName:String(plan.importName||''),importedAt:String(plan.importedAt||''),paycomImportName:String(plan.paycomImportName||''),paycomImportedAt:String(plan.paycomImportedAt||''),source:String(plan.source||''),importKind:String(plan.importKind||''),_normalized:true};
 }
 function currentRosteringPlan() {
   state.rosteringPlans=state.rosteringPlans&&typeof state.rosteringPlans==='object'?state.rosteringPlans:{};
@@ -1417,9 +1428,9 @@ function rosteringPlanFromScreenshotText(text='',fileName='Amazon roster screens
   if(!services.length&&rows.length){const fallback=rosteringScreenshotServiceTemplate('Standard Parcel Electric - Rivian MEDIUM');services.push({...fallback});serviceMap.set(fallback.id,services[0]);rows.forEach(row=>row.serviceId=fallback.id);}
   if(!services.length)return null;
   services.forEach(service=>{const rostered=rows.filter(row=>row.serviceId===service.id).length;if(!service.confirmed)service.confirmed=rostered||1;});
-  const plan=normalizeRosteringPlan({services,assignments:[],importName:fileName,importedAt:new Date().toISOString()});
+  const plan=normalizeRosteringPlan({services,assignments:[],importName:fileName,importedAt:new Date().toISOString(),source:'screenshot',importKind:'screenshot'});
   rows.forEach(imported=>{const service=plan.services.find(row=>row.id===imported.serviceId)||plan.services[0];const confirmedRows=plan.assignments.filter(row=>row.serviceId===service.id).slice(0,service.confirmed);let target=confirmedRows.find(row=>!row.associate&&normalizeTimeDisplay(row.start)===normalizeTimeDisplay(imported.start))||confirmedRows.find(row=>!row.associate);if(!target)return;Object.assign(target,imported,{serviceId:service.id});});
-  plan.importName=fileName;plan.importedAt=new Date().toISOString();return plan;
+  plan.importName=fileName;plan.importedAt=new Date().toISOString();plan.source='screenshot';plan.importKind='screenshot';return plan;
 }
 function applyRosteringScreenshotText(text='',fileName='Amazon roster screenshot') {
   const plan=rosteringPlanFromScreenshotText(text,fileName);if(!plan)throw new Error('No Amazon confirmed-service or associate roster rows were recognized');state.rosteringPlans[state.rosteringDate]=plan;state.rosteringOpenServices=Object.fromEntries(plan.services.map(service=>[service.id,true]));syncRosteringHelperShifts(plan);touchRosteringPlan();return plan;
@@ -1547,7 +1558,7 @@ function applyRosteringDriverSwap() {
 function rosteringPaycomHtml(plan=currentRosteringPlan()) {
   const assigned=rosteringAssignedNameKeys(plan),seen=new Set(),entries=scheduleEntriesForDate(state.rosteringDate).filter(entry=>{const key=driverIdentityKey(entry.name);if(!key||seen.has(key))return false;seen.add(key);return true;}).sort((a,b)=>Number(assigned.has(driverIdentityKey(b.name)))-Number(assigned.has(driverIdentityKey(a.name)))||driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})),category=state.rosteringPaycomCategory||'all',categories=[['all','All'],['rostered','Rostered'],['unrostered','Unrostered'],['vto4','Delivery Associate'],['vto2','Rescue / VTO 2'],['midshift','Midshift'],['training','Training'],['helper','Helpers'],['other','Other roles']];
   const categoryCount=key=>entries.filter(entry=>key==='all'||key==='rostered'&&assigned.has(driverIdentityKey(entry.name))||key==='unrostered'&&!assigned.has(driverIdentityKey(entry.name))||rosteringPaycomCategoryFor(entry)===key).length;
-  const importName=plan.importName||state.scheduleImportName;
+  const importName=plan.paycomImportName||state.scheduleImportName;
   return `<section class="card rostering-paycom"><header><div><span class="eyebrow">PAYCOM</span><h2>All Scheduled driver shifts</h2><p>${importName?`Source: ${esc(importName)}`:'Import PAYCOM, then choose Random or ABC before Auto Roster.'}</p></div><div><button class="btn" data-action="schedule-import">${ICONS.upload} Import PAYCOM</button><button class="btn primary" data-action="rostering-auto-roster">Auto Roster scheduled drivers</button></div></header><div class="rostering-paycom-stats"><span><b>${entries.length}</b> scheduled shifts</span><span><b>${entries.filter(entry=>assigned.has(driverIdentityKey(entry.name))).length}</b> rostered</span><span><b>${entries.filter(entry=>rosteringStayHomeCount(entry.name)>0).length}</b> fairness flags</span></div><div class="rostering-paycom-categories" role="group" aria-label="Filter PAYCOM shifts">${categories.map(([key,label])=>`<button type="button" class="${category===key?'active':''}" data-action="rostering-paycom-category" data-rostering-category="${key}">${esc(label)} <b>${categoryCount(key)}</b></button>`).join('')}</div><label class="roster-search rostering-paycom-search">${ICONS.search||'⌕'}<input type="search" data-rostering-paycom-search placeholder="Search names or shift roles" aria-label="Search PAYCOM drivers"></label><div class="rostering-paycom-list">${entries.length?entries.map(entry=>{const isAssigned=assigned.has(driverIdentityKey(entry.name)),entryCategory=rosteringPaycomCategoryFor(entry),visible=category==='all'||category==='rostered'&&isAssigned||category==='unrostered'&&!isAssigned||category===entryCategory,training=entryCategory==='training',haystack=nameKey(`${driverDisplayName(entry.name)} ${entry.role} ${entryCategory}`);return `<div data-rostering-paycom-name="${esc(haystack)}" data-rostering-paycom-category="${entryCategory}" data-rostering-paycom-status="${isAssigned?'rostered':'unrostered'}" class="${isAssigned?'assigned':'unassigned'}" ${visible?'':'hidden'} ${driverProfileAttrs(entry.name)}><span><strong>${esc(driverDisplayName(entry.name))}</strong><small>${esc(entry.role)} · ${esc(entry.start)}${entry.end?`–${esc(entry.end)}`:''}</small></span>${rosteringPaycomFairnessBadge(entry.name)}${driverFlagBadgeHtml(entry.name)}${training?`<button class="btn small" data-action="rostering-focus-training">Training box</button>`:rosteringDriverActionButtons(entry,isAssigned)}</div>`;}).join(''):'<div class="rostering-empty"><strong>No PAYCOM shifts for this date</strong><span>Import CSV, XLS, XLSX, PDF, image, or text.</span></div>'}</div>${rosteringBackupBuilderHtml(plan)}</section>`;
 }
 function rosteringTrainingKey(name='') { return `${state.rosteringDate}|${driverIdentityKey(name)}`; }
@@ -2325,8 +2336,8 @@ function parkingModeControls() {
 }
 function vanParkingSectionLegacy() {
   const stats=vanParkingStats();
-  const headActions=`<span class="parking-updated">Updated ${esc(state.vanParkingUpdated||'today')}</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking list</button><button class="btn small ghost" data-action="reset-parking">Reset mockup</button>`;
-  const editTools=`<div class="parking-import-row"><div class="parking-drop" id="parking-drop" tabindex="0"><b>Drop parking list here</b><span>CSV, XLSX, TXT, or a copied Google Sheets export. One EV per row works best.</span><button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Choose file</button></div>${parkingBatteryEditor()}<div class="parking-paste-box"><label for="parking-paste-text">Paste parking list</label><textarea id="parking-paste-text" placeholder="57&#10;2&#10;1&#10;4&#10;...">${esc(state.vanParkingPasteText)}</textarea><button class="btn small" data-action="parse-parking-paste">Fill parking spots</button></div></div>`;
+  const headActions=`<span class="parking-updated">Updated ${esc(state.vanParkingUpdated||'today')}</span><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking list</button><button class="btn small danger-soft" data-action="clear-parking-spots">${ICONS.trash} Clear Spots</button><button class="btn small ghost" data-action="reset-parking">Reset mockup</button>`;
+  const editTools=`<div class="parking-import-row"><div class="parking-drop" id="parking-drop" tabindex="0"><b>Drop parking list here</b><span>CSV, XLSX, TXT, or a Google Sheets screenshot. Spot numbers like #1 and #36 are matched automatically.</span><button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Choose file</button></div>${parkingBatteryEditor()}<div class="parking-paste-box"><label for="parking-paste-text">Paste parking list</label><textarea id="parking-paste-text" placeholder="#1 57    #36 4&#10;#2 2 (100%)    #35 38&#10;...">${esc(state.vanParkingPasteText)}</textarea><button class="btn small" data-action="parse-parking-paste">Fill parking spots</button></div></div>`;
   const helperText='<strong>Double-click a van number</strong><span>Edit the EV, then press Enter to save.</span>';
   const mapHint='Single-click to select · double-click the van number to edit';
   return `<article class="van-parking-card" id="van-parking"><div class="van-parking-head"><div><span class="eyebrow">Van Parking</span><h2>Parking Map</h2><p>Closing dispatcher and fleet share this live map. Every saved move, battery, note, and charger update appears in both workspaces.</p></div><div class="parking-head-actions">${headActions}</div></div>${parkingModeControls()}<div class="parking-helper-grid park-easy-stats"><div><strong>${stats.filled}</strong><span>occupied / assigned</span></div><div><strong>${stats.overflow}</strong><span>overflow + crosswalk spots</span></div><div>${helperText}</div></div>${editTools}<div class="parking-lot park-easy-map"><div class="parking-map-toolbar"><div><strong>Overhead lot view</strong><span>${mapHint}</span></div><div class="parking-map-legend"><span><i class="ready"></i>Standard stall</span><span><i class="cross"></i>Crosswalk / overflow</span><span><i class="charge"></i>Charging</span></div></div><div class="parking-mobile-gesture-hint" aria-hidden="true"><b>↔</b><span>Tap a van number to edit · swipe or pinch the map</span></div><div class="parking-map-grid"><div class="parking-empty-grid"><span class="lot-entry">ENTRY</span><span class="lane-arrow arrow-east">→</span><span class="lane-arrow arrow-north">↑</span><small>DRIVE LANE</small></div><div class="parking-top-block"><div class="parking-lane"></div>${parkingStack('northLeft','', '')}<div class="parking-lane skinny"><span class="lane-arrow">↕</span></div>${parkingStack('northRight','', '')}<div class="parking-lane"></div></div><div class="parking-street-zone">${parkingStreetRows()}</div><div class="parking-main-block"><div class="parking-lane vertical"><span class="lane-arrow">↓</span></div>${parkingStack('west','', '')}<div class="parking-crosswalk"><div class="tent-icon">TENT</div><strong>TENT</strong>${parkingStack('crosswalk','', '')}</div>${parkingStack('east','', '')}<div class="parking-lane vertical"><span class="lane-arrow">↑</span></div></div><div class="parking-side-area"><div class="parking-date-box"><strong>MAP UPDATED</strong><span>${esc(state.vanParkingUpdated||'')}</span></div><div class="lot-exit"><span>EXIT</span><b>→</b></div></div></div></div></article>`;
@@ -2348,7 +2359,7 @@ function vanParkingSection() {
 function vanParkingPage() {
   const issueCount=Object.values(state.parkingChargerStatus||{}).filter(status=>status==='red').length;
   const sharedStatus=PARKING_ONLY_VIEW?'<span class="status">Live shared editing</span>':'';
-  const actions=`${sharedStatus}<button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Import parking</button><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button><button class="btn small lime" data-action="copy-fleet-parking-link">${ICONS.link} Copy fleet link</button><button class="btn small ${issueCount?'danger':''}" data-action="report-charging-station">⚡ Report charging station${issueCount?` · ${issueCount} fault${issueCount===1?'':'s'}`:''}</button>`;
+  const actions=`${sharedStatus}<button class="btn small primary" data-action="parking-choose-file">${ICONS.upload} Import parking</button><button class="btn small danger-soft" data-action="clear-parking-spots">${ICONS.trash} Clear Spots</button><button class="btn small" data-action="copy-parking-list">${ICONS.copy} Copy parking</button><button class="btn small lime" data-action="copy-fleet-parking-link">${ICONS.link} Copy fleet link</button><button class="btn small ${issueCount?'danger':''}" data-action="report-charging-station">⚡ Report charging station${issueCount?` · ${issueCount} fault${issueCount===1?'':'s'}`:''}</button>`;
   return `${contextBar(actions)}${vanParkingSection()}`;
 }
 
@@ -3731,6 +3742,10 @@ function modal() {
     if(destination!=='reduction'&&destination!=='route')actions.push(button('reduction','Move to Reductions','reduction-button'));
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal roster-destination-modal" role="dialog" aria-modal="true" aria-labelledby="roster-destination-title"><div class="modal-head"><div><span class="eyebrow">OPENING ROSTER ACTIONS</span><h2 id="roster-destination-title">${esc(pending.name)}</h2><p>${esc(pending.role||'Scheduled driver')} · ${esc(destination.replace(/-/g,' ')||'roster destination')}${pending.route?` · ${esc(pending.route)}`:''}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${pending.automatic?`<div class="private-contact-note"><b>Automatic backup</b><span>This ${automaticBackupLabel(pending.role)} assignment comes from a scheduled ${esc(pending.role)} shift that is not on the Morning Sheet. Choose a different destination to override it.</span></div>`:''}<div class="roster-destination-actions">${actions.join('')}</div><div class="modal-actions"><button class="btn" data-action="close-modal">Done</button></div></div></div></div>`;
   }
+  if (state.modal === 'duplicate-driver-name' && state.pendingDuplicateDriverName) {
+    const pending=state.pendingDuplicateDriverName,candidates=duplicateDriverNameCandidates(pending.source),size=Math.min(10,Math.max(5,candidates.length));
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal duplicate-driver-name-modal" role="dialog" aria-modal="true" aria-labelledby="duplicate-driver-name-title"><div class="modal-head"><div><span class="eyebrow">MATCH DUPLICATE NAME</span><h2 id="duplicate-driver-name-title">Who is ${esc(pending.source)}?</h2><p>Match the PAYCOM or Amazon name to the correct Drivers & Team profile.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="duplicate-driver-name-picker"><span>Match with driver</span><select id="duplicate-driver-target" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.name)}" ${index===0?'selected':''}>${esc(row.name)}${driverDisplayName(row.name)!==row.name?` · ${esc(driverDisplayName(row.name))}`:''}</option>`).join('')}</select></label><div class="private-contact-note"><b>One shared driver identity</b><span>After matching, both name versions point to the same driver profile, flags, history, preferred vans, and dashboard records. No backup status or route is changed.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-duplicate-driver-name" ${candidates.length?'':'disabled'}>Match duplicate name</button></div></div></div></div>`;
+  }
   if (state.modal === 'route-trainer' && state.pendingRouteTrainer) {
     const pending=state.pendingRouteTrainer,route=morningRouteByUid(pending.routeUid),candidates=routeTrainerCandidates(route),size=Math.min(10,Math.max(4,candidates.length));
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal route-trainer-modal" role="dialog" aria-modal="true" aria-labelledby="route-trainer-title"><div class="modal-head"><div><span class="eyebrow">ROUTE TRAINER</span><h2 id="route-trainer-title">Add a trainer to ${esc(route?.route||'this route')}</h2><p>The route keeps its CX, staging, pad, van, counts, and Planned RTS. The trainer appears beside the driver everywhere.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="route-trainer-picker"><span>Trainer</span><select id="route-trainer-name" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.name)}" ${index===0?'selected':''}>${esc(driverDisplayName(row.name))}${row.trainer?' · Trainer':''}${row.role?` · ${esc(row.role)}`:''}</option>`).join('')}</select></label><label class="driver-alias-field"><span>Short display name <small>optional</small></span><input id="route-trainer-display" placeholder="${esc(candidates[0]?suggestedDriverAlias(candidates[0].name):'First L.')}" maxlength="28"><small>The exact Drivers & Team identity stays linked for Whiparound, texting, and history.</small></label>${candidates.length?'':`<div class="private-contact-note danger"><b>No available Drivers & Team names</b><span>Import the driver or add them in Drivers & Team, then try again.</span></div>`}<div class="private-contact-note"><b>One shared assignment</b><span>RelayOps removes the selected trainer from VTO, Reductions, Called Off, Told To Stay Home, or Helper boxes before adding them to this route.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-route-trainer" ${candidates.length?'':'disabled'}>Add trainer</button></div></div></div></div>`;
@@ -3743,10 +3758,14 @@ function modal() {
     const pending=state.pendingVtoRouteSwap,candidates=vtoRouteSwapCandidates(pending.name),size=Math.min(10,Math.max(4,candidates.length));
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal vto-route-swap-modal" role="dialog" aria-modal="true" aria-labelledby="vto-route-swap-title"><div class="modal-head"><div><span class="eyebrow">VTO ROUTE SWAP</span><h2 id="vto-route-swap-title">Swap ${esc(pending.name)} to a route</h2><p>${esc(pending.vtoLabel||scheduleBackupLabel(pending.role))} · choose the route driver who will move into this VTO spot.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="vto-route-search"><span>Search driver or CX route</span><input id="vto-route-swap-search" type="search" placeholder="Start typing a name or CX…" autocomplete="off" autofocus></label><label class="vto-route-picker"><span>Driver currently on route</span><select id="vto-route-swap-target" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.routeUid)}" data-vto-route-search="${esc(nameKey(`${row.driver} ${row.route} ${row.wave} ${waveNameForTime(row.wave)}`))}" ${index===0?'selected':''}>${esc(row.driver)} · ${esc(row.route)} · ${esc(waveNameForTime(row.wave))} ${esc(row.wave)}</option>`).join('')}</select><small id="vto-route-swap-count">${candidates.length} route${candidates.length===1?'':'s'} available</small></label>${candidates.length?'':`<div class="private-contact-note"><b>No eligible routes found</b><span>Fill the Morning Sheet with at least one assigned route before using this swap.</span></div>`}<div class="private-contact-note"><b>Safe one-step swap</b><span>${esc(pending.name)} takes the selected route. The current primary driver moves to VTO 2 or VTO 4 based on their scheduled PAYCOM role. Route, staging, pad, van, stop count, package count, Planned RTS, and any helper remain unchanged.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-vto-route-swap" ${candidates.length?'':'disabled'}>Confirm Swap To Route</button></div></div></div></div>`;
   }
+  if (state.modal === 'adhoc-route-swap' && state.pendingAdhocRouteSwap) {
+    const pending=state.pendingAdhocRouteSwap,candidates=adhocRouteSwapCandidates(pending.driverName),size=Math.min(10,Math.max(5,candidates.length));
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal adhoc-route-swap-modal" role="dialog" aria-modal="true" aria-labelledby="adhoc-route-swap-title"><div class="modal-head"><div><span class="eyebrow">ADHOC ↔ DA ROUTE</span><h2 id="adhoc-route-swap-title">Swap ${esc(driverDisplayName(pending.driverName))} with a DA on route</h2><p>Choose the regular route driver who should move into the Adhoc position.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="adhoc-route-swap-picker"><span>DA currently on route</span><select id="adhoc-route-swap-target" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.routeUid)}" ${index===0?'selected':''}>${esc(driverDisplayName(row.driver))} · ${esc(row.route)} · ${esc(waveNameForTime(row.wave))} ${esc(row.wave)}</option>`).join('')}</select></label>${candidates.length?'':`<div class="private-contact-note danger"><b>No eligible DA routes</b><span>Add an assigned regular route before using this swap.</span></div>`}<div class="private-contact-note"><b>Assignments only</b><span>The two drivers exchange positions. Route, staging, pad, van, device, portable, stop count, package count, Planned RTS, and helpers do not move.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-adhoc-route-swap" ${candidates.length?'':'disabled'}>Confirm DA swap</button></div></div></div></div>`;
+  }
   if (state.modal === 'roster-swap' && state.pendingRosterSwap) {
-    const swap=state.pendingRosterSwap,candidates=rosterSwapCandidates(swap.driverName);
+    const swap=state.pendingRosterSwap,candidates=swap.mode==='calloff'?backupRosterSwapCandidates(swap.driverName):rosterSwapCandidates(swap.driverName);
     const isVacancy=swap.mode==='vacancy';
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal add-driver-modal" role="dialog" aria-modal="true" aria-labelledby="roster-swap-title"><div class="modal-head"><div><span class="eyebrow">OPENING ROSTER</span><h2 id="roster-swap-title">${swap.mode==='calloff'?'Call off & replace':isVacancy?'Assign the empty route':'Swap off route'}</h2><p>${esc(isVacancy?'Unassigned driver':swap.driverLabel||swap.driverName)} · ${esc(swap.route)} · updates the Morning Sheet and Picklist immediately.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="cloud-email-field"><span>${isVacancy?'Assign driver':'Replacement driver'}</span><select id="roster-swap-replacement"><option value="">Choose an exact driver name…</option>${candidates.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('')}</select></label><div class="private-contact-note"><b>${swap.mode==='calloff'?'Call-off protection':isVacancy?'Vacancy protection':'Schedule swap'}</b><span>${swap.mode==='calloff'?'The called-off driver is removed from today’s text queue. The replacement takes their Morning Sheet position.':isVacancy?'Assigning a driver clears the red warning everywhere while preserving any helper already on the route.':'Choose a replacement now, or leave the route visibly unassigned so opening dispatch cannot miss it.'}</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button>${!isVacancy&&swap.mode==='swap'?'<button class="btn danger" data-action="leave-route-unassigned">Remove driver · leave unassigned</button>':''}<button class="btn primary" data-action="apply-roster-swap">${isVacancy?'Assign driver':'Confirm swap'}</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal add-driver-modal" role="dialog" aria-modal="true" aria-labelledby="roster-swap-title"><div class="modal-head"><div><span class="eyebrow">OPENING ROSTER</span><h2 id="roster-swap-title">${swap.mode==='calloff'?'Call off & replace':isVacancy?'Assign the empty route':'Swap off route'}</h2><p>${esc(isVacancy?'Unassigned driver':swap.driverLabel||swap.driverName)} · ${esc(swap.route)} · updates the Morning Sheet and Picklist immediately.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="cloud-email-field"><span>${swap.mode==='calloff'?'Backup replacement':isVacancy?'Assign driver':'Replacement driver'}</span><select id="roster-swap-replacement"><option value="">${swap.mode==='calloff'?'Choose a driver from the backup list…':'Choose an exact driver name…'}</option>${candidates.map(row=>{const name=typeof row==='string'?row:row.name,label=typeof row==='string'?driverDisplayName(row):`${driverDisplayName(row.name)} · ${row.vto||scheduleBackupLabel(row.role)}`;return `<option value="${esc(name)}">${esc(label)}</option>`;}).join('')}</select></label>${swap.mode==='calloff'&&!candidates.length?`<div class="private-contact-note danger"><b>No backup drivers available</b><span>Add a driver to VTO 2 or VTO 4 before completing this call-off swap.</span></div>`:''}<div class="private-contact-note"><b>${swap.mode==='calloff'?'Call-off protection':isVacancy?'Vacancy protection':'Schedule swap'}</b><span>${swap.mode==='calloff'?'Only drivers currently shown in the backup list can be selected. The chosen backup is removed from VTO and takes the same Morning Sheet position.':isVacancy?'Assigning a driver clears the red warning everywhere while preserving any helper already on the route.':'Choose a replacement now, or leave the route visibly unassigned so opening dispatch cannot miss it.'}</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button>${!isVacancy&&swap.mode==='swap'?'<button class="btn danger" data-action="leave-route-unassigned">Remove driver · leave unassigned</button>':''}<button class="btn primary" data-action="apply-roster-swap" ${candidates.length?'':'disabled'}>${isVacancy?'Assign driver':'Confirm swap'}</button></div></div></div></div>`;
   }
   if (state.modal === 'morning-diagnostics') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal diagnostics-modal" role="dialog" aria-modal="true" aria-labelledby="diagnostics-title"><div class="modal-head"><div><span class="eyebrow">MORNING SHEET</span><h2 id="diagnostics-title">Setup & diagnostics</h2><p>Use only when imports or Google Sheets are not working.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body morning-advanced-content">${morningConnectorGuide()}${morningHandoffReadinessHtml()}${morningImportTemplateProofHtml()}${morningSheetsHandoffProofHtml()}${morningSheetStructureProofHtml()}${morningCopyFallbackProofHtml()}</div></div></div>`;
   if (state.modal === 'import') {
@@ -4275,6 +4294,7 @@ function markRosterCalledOff(name='',role='') {
   persist();render();toast(`${exactName} moved to Called off today`);return true;
 }
 function applyPicklistVtoAction(name='',role='',target='') {
+  if(target==='duplicate-name')return openDuplicateDriverNameMatch(name);
   const exactName=contactForMorningDriver(name)?.name||name;
   if(!exactName)return false;
   if(target==='return')return restoreRosterStatus(exactName,'backup');
@@ -4287,6 +4307,28 @@ function applyPicklistVtoAction(name='',role='',target='') {
   if(target==='helper')return markPaycomHelper(exactName,role);
   if(target==='adhoc')return markPaycomAdhoc(exactName,role);
   return false;
+}
+
+function duplicateDriverNameCandidates(sourceName='') {
+  const sourceKey=nameKey(sourceName),seen=new Set();
+  return teamDriverRows().filter(row=>{
+    const key=nameKey(row.name);if(!key||key===sourceKey||seen.has(key))return false;seen.add(key);return true;
+  }).sort((a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'}));
+}
+function openDuplicateDriverNameMatch(sourceName='') {
+  const source=String(sourceName||'').replace(/\s+/g,' ').trim();if(!source)return toast('Choose a backup driver first','error');
+  const candidates=duplicateDriverNameCandidates(source);if(!candidates.length)return toast('Import Drivers & Team before matching duplicate names','error');
+  state.pendingDuplicateDriverName={source};return openLightweightModal('duplicate-driver-name');
+}
+function applyDuplicateDriverNameMatch() {
+  const pending=state.pendingDuplicateDriverName,targetName=document.getElementById('duplicate-driver-target')?.value||'';
+  if(!pending?.source||!targetName)return toast('Choose the driver this name belongs to','error');
+  const contact=teamDriverRows().find(row=>nameKey(row.name)===nameKey(targetName))||driverContactForName(targetName)||{name:targetName},entry=ensureDriverProfile({...contact,name:contact.name||targetName,knownNames:[pending.source]});
+  if(!entry)return toast('The selected driver profile could not be updated','error');
+  const canonical=entry.profile.canonical||contact.name||targetName,aliases=[...new Set([...(entry.profile.names||[]),pending.source,canonical].filter(Boolean))];
+  entry.profile.names=aliases;entry.profile.updatedAt=new Date().toISOString();
+  aliases.forEach(alias=>{state.driverNameAliases[nameKey(alias)]={canonical,display:entry.profile.nickname||canonical,aliases};});
+  invalidateDriverDirectoryCaches();state.pendingDuplicateDriverName=null;state.modal=null;persist();render();toast(`${pending.source} is now matched to ${canonical}`);return true;
 }
 function waveNameForTime(time='') { if(/^ad\s*hoc/i.test(String(time)))return 'ADHOC';const waves=morningWaveList().filter(wave=>!/^ad\s*hoc/i.test(String(wave)));const index=waves.indexOf(time);return index>=0?`WAVE ${index+1}`:'WAVE'; }
 function routeDriverRowsHtml(rows=[]) {
@@ -4394,6 +4436,10 @@ function rosterSwapCandidates(currentName='') {
   const onRoute=new Set(filteredMorningRows().flatMap(row=>morningDriverNames(row.driver)).map(nameKey));
   return [...new Set(currentScheduleEntries().filter(entry=>scheduleRoleGroup(entry.role)==='driver').map(entry=>entry.name))].filter(name=>nameKey(name)!==nameKey(currentName)&&!onRoute.has(nameKey(name))&&!rosterDriverUnavailable(name)).sort((a,b)=>a.localeCompare(b));
 }
+function backupRosterSwapCandidates(currentName='') {
+  const currentIdentity=driverIdentityKey(currentName);
+  return currentBackupDriverRows().filter(row=>driverIdentityKey(row.name)!==currentIdentity).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),undefined,{sensitivity:'base'}));
+}
 function isDedicatedHelperMorningRoute(row={}) { return headerKey(row.route)==='helper'||headerKey(row.wave)==='helper'||headerKey(row.service)==='driverhelper'; }
 function vtoRouteSwapCandidates(incomingName='') {
   ensureMorningRouteUids();
@@ -4422,6 +4468,29 @@ function performVtoRouteSwap(routeUid='') {
 function applyVtoRouteSwap() {
   const routeUid=document.getElementById('vto-route-swap-target')?.value||'',result=performVtoRouteSwap(routeUid);if(!result.ok)return toast(result.error,'error');
   state.pendingVtoRouteSwap=null;state.modal=null;persist();render();toast(`${result.incoming} took ${result.route} · ${result.outgoing} moved to ${result.outgoingVto}`);return true;
+}
+function adhocRouteSwapCandidates(incomingName='') {
+  return vtoRouteSwapCandidates(incomingName);
+}
+function openAdhocRouteSwap(routeUid='',driverName='') {
+  const route=morningRouteByUid(routeUid),exact=canonicalDriverName(driverName);
+  if(!route||!isExplicitAdhocMorningRoute(route))return toast('Choose a driver from the Adhoc wave','error');
+  const candidates=adhocRouteSwapCandidates(exact);if(!candidates.length)return toast('No assigned regular routes are available to swap','error');
+  state.pendingAdhocRouteSwap={routeUid,driverName:exact};return openLightweightModal('adhoc-route-swap');
+}
+function applyAdhocRouteSwap() {
+  const pending=state.pendingAdhocRouteSwap,adhocRoute=morningRouteByUid(pending?.routeUid||''),targetRoute=morningRouteByUid(document.getElementById('adhoc-route-swap-target')?.value||'');
+  if(!pending||!adhocRoute||!isExplicitAdhocMorningRoute(adhocRoute)||!targetRoute||isExplicitAdhocMorningRoute(targetRoute))return toast('Choose an available DA route','error');
+  const adhocPeople=morningDriverNames(adhocRoute.driver),adhocIndex=rosterSwapDriverIndex(adhocPeople,pending.driverName),targetPeople=morningDriverNames(targetRoute.driver),targetDriver=canonicalDriverName(targetPeople[0]||''),incoming=canonicalDriverName(adhocPeople[adhocIndex]||pending.driverName);
+  if(adhocIndex<0||!incoming||!targetDriver)return toast('One of the selected drivers is no longer assigned','error');
+  if(driverIdentityKey(incoming)===driverIdentityKey(targetDriver))return toast('Choose a different route driver','error');
+  // Clear the incoming Adhoc mark before reconciliation so its route row is
+  // preserved. Only the two name positions change; operational route data is locked.
+  deleteDailyRosterIdentity(state.scheduleDriverMarks,incoming);reconcileDailyRosterFlags(incoming,'on-route');reconcileDailyRosterFlags(targetDriver,'adhoc');state.scheduleDriverMarks[scheduleDriverMarkKey(targetDriver)]='adhoc';
+  const normalApplied=protectRouteOperationalData(targetRoute,()=>{targetPeople[0]=incoming;targetRoute.driver=targetPeople.join(' + ');clearRouteAssignmentVacancy(targetRoute);return true;});
+  const adhocApplied=protectRouteOperationalData(adhocRoute,()=>{adhocPeople[adhocIndex]=targetDriver;adhocRoute.driver=adhocPeople.join(' + ');adhocRoute.adhocKey=adhocIdentityKey(targetDriver);clearRouteAssignmentVacancy(adhocRoute);return true;});
+  if(!normalApplied||!adhocApplied)return toast('The Adhoc route swap could not be completed','error');
+  recordPicklistRosterChange({from:targetDriver,to:incoming,route:targetRoute.route,wave:targetRoute.wave,kind:'swap'});state.pendingAdhocRouteSwap=null;state.modal=null;persist();render();toast(`${driverDisplayName(incoming)} took ${targetRoute.route} · ${driverDisplayName(targetDriver)} moved to Adhocs`);return true;
 }
 function openRosterSwap(route='',driverName='',mode='swap',driverLabel='') { state.pendingRosterSwap={route,driverName,driverLabel:driverLabel||driverName,mode};return openLightweightModal('roster-swap'); }
 function rosterSwapDriverIndex(people=[],target='') {
@@ -4479,7 +4548,8 @@ function openDriverRouteContextMenu(event,source) {
   const menu=document.createElement('div');menu.id='driver-route-context-menu';menu.className='driver-route-context-menu';menu.setAttribute('role','menu');menu.setAttribute('aria-label',`Route actions for ${route.route}`);
   const personPicker=people.length>1?`<label><span>Choose name</span><select id="driver-route-context-person">${people.map(name=>`<option value="${esc(name)}">${esc(driverDisplayName(name))}</option>`).join('')}</select></label>`:`<input id="driver-route-context-person" type="hidden" value="${esc(people[0])}">`;
   const button=(target,label,tone='',detail='')=>`<button type="button" class="${esc(tone)}" data-action="driver-route-context-action" data-route-target="${esc(target)}" data-route-uid="${esc(route.routeUid)}"><b>${esc(label)}</b>${detail?`<small>${esc(detail)}</small>`:''}</button>`;
-  menu.innerHTML=`<header><div><span>DRIVER ACTIONS</span><strong>${esc(route.route)} · ${esc(waveNameForTime(route.wave))}</strong></div><button type="button" class="driver-route-context-close" aria-label="Close route actions">×</button></header>${personPicker}<div class="driver-route-context-actions">${button('calloff','Call off & swap','calloff','Choose a scheduled replacement')}${button('swap-vto','Put VTO driver on route','swap','One-step VTO swap')}${button('reduction','Move to Reductions','reduction','Leave route visibly unassigned')}${button('vto2','Move to VTO 2','vto2','Rescue backup')}${button('vto4','Move to VTO 4','vto4','Delivery Associate backup')}${button('stay-home','Told To Stay Home','stay-home','Remove from route')}${button('trainer','Add a trainer','trainer','Driver + Trainer')}</div><footer>Route, staging, pad, van, counts, and Planned RTS stay in place.</footer>`;
+  const adhocSwap=isExplicitAdhocMorningRoute(route)?button('swap-route-da','Swap with DA on Route','swap-da','Exchange this Adhoc driver with a regular route DA'):'';
+  menu.innerHTML=`<header><div><span>DRIVER ACTIONS</span><strong>${esc(route.route)} · ${esc(waveNameForTime(route.wave))}</strong></div><button type="button" class="driver-route-context-close" aria-label="Close route actions">×</button></header>${personPicker}<div class="driver-route-context-actions">${adhocSwap}${button('calloff','Call off & swap','calloff','Choose a driver from the backup list')}${button('swap-vto','Put VTO driver on route','swap','One-step VTO swap')}${button('reduction','Move to Reductions','reduction','Leave route visibly unassigned')}${button('vto2','Move to VTO 2','vto2','Rescue backup')}${button('vto4','Move to VTO 4','vto4','Delivery Associate backup')}${button('stay-home','Told To Stay Home','stay-home','Remove from route')}${button('trainer','Add a trainer','trainer','Driver + Trainer')}</div><footer>Route, staging, pad, van, counts, and Planned RTS stay in place.</footer>`;
   document.body?.appendChild?.(menu);menu.querySelector?.('.driver-route-context-close')?.addEventListener?.('click',closeDriverRouteContextMenu);bindActionControls(menu);
   const viewportWidth=window.innerWidth||document.documentElement?.clientWidth||1024,viewportHeight=window.innerHeight||document.documentElement?.clientHeight||768,width=Math.min(360,Math.max(286,menu.offsetWidth||330)),height=Math.min(viewportHeight-16,menu.offsetHeight||430),x=Number(event?.clientX)||source.getBoundingClientRect?.().left||8,y=Number(event?.clientY)||source.getBoundingClientRect?.().bottom||8;
   menu.style.left=`${Math.max(8,Math.min(viewportWidth-width-8,x))}px`;menu.style.top=`${Math.max(8,Math.min(viewportHeight-height-8,y))}px`;
@@ -4531,6 +4601,7 @@ function applyRouteVtoSwap() {
 function applyDriverRouteContextAction(target='',el=null) {
   const menu=el?.closest?.('#driver-route-context-menu')||document.getElementById?.('driver-route-context-menu'),routeUid=el?.dataset?.routeUid||'',name=menu?.querySelector?.('#driver-route-context-person')?.value||'',route=morningRouteByUid(routeUid);closeDriverRouteContextMenu();if(!route||!name)return toast('That driver assignment is no longer available','error');
   const role=routeContextDriverRole(name);
+  if(target==='swap-route-da')return openAdhocRouteSwap(routeUid,name);
   if(target==='calloff')return openRosterSwap(route.route,name,'calloff',driverDisplayName(name));
   if(target==='swap-vto')return openRouteVtoSwap(routeUid,name);
   if(target==='reduction')return addRosterReduction(name,role,route.route,route.wave);
@@ -4670,10 +4741,102 @@ function commitOpeningPicklistCalloffDraft(index) {
   state.callOffDriverKeys[key]={...rosterRecord(exactName,scheduled?.role||''),name:exactName,route:'',at:new Date().toISOString()};
   state.callOffReasons[key]=String(draft.reason||'').trim();state.openingPicklistCalloffDrafts.splice(index,1);persist();render();toast(`${exactName} moved to Called off today`);
 }
-function loadSharedOperationDate(date='',message='') {
-  state.morningOperationDate=date||defaultOperationDate();state.morningSheetsLastReceipt=null;localStorage.setItem('relayops_morning_operation_date',state.morningOperationDate);render();if(message)toast(message);
+function resetSharedDailyOperationsState(date=defaultOperationDate()) {
+  const targetDate=/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))?String(date):defaultOperationDate();
+  state.morningOperationDate=targetDate;
+  state.rosteringDate=targetDate;
+  state.routes=[];
+  state.morningRoutes=[];
+  state.lastImportExcluded=0;
+  state.rosterPublished=false;
+  state.morningWaveTimeOverrides={};
+  state.morningSectionPadOverrides={};
+  state.earlyCalloffAcknowledgements={};
+  state.padCheckAcknowledgements={};
+  state.lastMorningImportFingerprint='';
+  state.morningIssueAcknowledgements={};
+  state.messageQueueStatus={};
+  state.scheduleEntries=[];
+  state.scheduleImportName='';
+  state.callOffDriverKeys={};
+  state.callOffReasons={};
+  state.scheduleDriverMarks={};
+  state.scheduleBackupRecords={};
+  state.scheduleStayHome={};
+  state.scheduleReductions={};
+  state.scheduleHelpers={};
+  state.openingPicklistTopics=['','','',''];
+  state.openingPicklistNotes='';
+  state.openingPicklistCalloffRows=6;
+  state.openingPicklistTopicRows=4;
+  state.openingPicklistBackupRows=21;
+  state.fitMorningRows=false;
+  state.fitOpeningPicklistRows=false;
+  state.openingPicklistCalloffDrafts=[];
+  state.openingPicklistBackupOverrides={};
+  state.openingPicklistLabels={};
+  state.openingPicklistWaveSlots=MORNING_CORE_WAVE_COUNT;
+  state.openingPicklistShowAdhoc=true;
+  state.picklistSwapAudit=[];
+  state.sheetHistory={past:[],future:[]};
+  state.whiparoundInspections=[];
+  state.whiparoundRosterSnapshots={};
+  state.whiparoundNotOnRoute={};
+  state.whiparoundImportName='';
+  state.whiparoundSelectedDate=targetDate;
+  state.morningRoutes=morningBlankWaveAnchors();
+  return sharedWorkspaceState();
+}
+function resetDailyOperationsState(date=defaultOperationDate()) {
+  const targetDate=/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))?String(date):defaultOperationDate();
+  resetSharedDailyOperationsState(targetDate);
+  // Browser-only controls and connector receipts belong to this dispatcher,
+  // not the shared daily document. Clear them for a real date rollover, but
+  // leave them alone while a remote daily snapshot is being hydrated.
+  state.morningFilters={wave:'all',staging:'all',pad:'all'};
+  state.lastItineraryRts={};
+  state.morningSheetsLastPush='';
+  state.morningSheetsLastError='';
+  state.morningSheetsLastReceipt=null;
+  state.morningSheetsLastDryRun='';
+  state.pendingSheetClear=null;
+  state.pendingPicklistWaveDelete=null;
+  state.pendingRosterSwap=null;
+  state.pendingRosterDestination=null;
+  state.pendingVtoRouteSwap=null;
+  state.pendingRouteTrainer=null;
+  state.pendingRouteVtoSwap=null;
+  state.pendingDuplicateDriverName=null;
+  state.pendingAdhocRouteSwap=null;
+  state.screenshotPreview=null;
+  state.screenshotKind='';
+  state.screenshotReview={pads:false,cortex:false};
+  return sharedWorkspaceState();
+}
+function loadSharedOperationDate(date='',message='',options={}) {
+  const nextDate=/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))?String(date):defaultOperationDate();
+  const changed=nextDate!==state.morningOperationDate;
+  if(changed){resetDailyOperationsState(nextDate);persistWithoutCloud();}
+  else state.morningOperationDate=nextDate;
+  operationDatePinned=options.pin===undefined?(!options.automatic&&nextDate!==defaultOperationDate()):Boolean(options.pin);
+  lastObservedOperationDate=defaultOperationDate();
+  state.morningSheetsLastReceipt=null;localStorage.setItem('relayops_morning_operation_date',state.morningOperationDate);render();if(message)toast(message);
   try{const url=new URL(location.href);url.searchParams.set('date',state.morningOperationDate);history.replaceState(null,'',url.href);}catch{}
   if(window.RelayOpsCloud?.session){state.cloudStatus='connecting';window.RelayOpsCloud.load?.().catch(error=>{state.cloudStatus='error';render();toast(`Could not load ${state.morningOperationDate}: ${error?.message||'cloud sync error'}`,'error');});}
+  return changed;
+}
+function rolloverOperationDateIfNeeded(trigger='timer',now=new Date()) {
+  const today=defaultOperationDate(now),previousObserved=lastObservedOperationDate;
+  if(today===previousObserved)return false;
+  lastObservedOperationDate=today;
+  if(operationDateRolloverInFlight||operationDatePinned||state.morningOperationDate!==previousObserved)return false;
+  operationDateRolloverInFlight=true;
+  try{return loadSharedOperationDate(today,'A new operating day started · yesterday remains available from its dated link',{automatic:true,pin:false});}
+  finally{operationDateRolloverInFlight=false;}
+}
+function scheduleDailyOperationRollover() {
+  if(typeof clearInterval==='function')clearInterval(operationDateRolloverTimer);
+  if(typeof setInterval==='function'){operationDateRolloverTimer=setInterval(()=>{if(typeof document!=='undefined'&&document.visibilityState==='hidden')return;rolloverOperationDateIfNeeded('timer',new Date());},60000);operationDateRolloverTimer?.unref?.();}
 }
 function saveOpeningPicklistDate(value='') {
   const date=scheduleDateKey(value);if(!date)return toast('Use Month/Day/Year for the picklist date','error');
@@ -4899,6 +5062,8 @@ function closeLightweightModal() {
   if(state.modal==='roster-swap')state.pendingRosterSwap=null;
   if(state.modal==='route-trainer')state.pendingRouteTrainer=null;
   if(state.modal==='route-vto-swap')state.pendingRouteVtoSwap=null;
+  if(state.modal==='duplicate-driver-name')state.pendingDuplicateDriverName=null;
+  if(state.modal==='adhoc-route-swap')state.pendingAdhocRouteSwap=null;
   if(state.modal==='helper-match')state.pendingHelperMatch=null;
   if(state.modal==='preferred-vehicle-drivers')state.pendingPreferredVehicleId='';
   state.modal=null;document.querySelector?.('.modal-backdrop')?.remove?.();modalWasOpen=false;if(wasOpen)restoreModalFocus();return true;
@@ -5788,6 +5953,25 @@ function removeSelectedParkingSpot() {
   toast('Temporary parking spot removed');
 }
 
+function clearParkingSlotValues() {
+  let cleared=0;
+  (state.vanParking||[]).forEach(slot=>{
+    if(String(slot.value||'').trim())cleared+=1;
+    slot.value='';
+  });
+  state.vanParkingBatteries={};
+  state.selectedParkingId='';
+  return cleared;
+}
+
+function clearParkingSpots() {
+  const cleared=clearParkingSlotValues();
+  state.vanParkingPasteText='';
+  state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
+  persist();render();
+  toast(cleared?`Cleared ${cleared} parking spot${cleared===1?'':'s'}`:'Parking spots were already clear',cleared?'success':'error');
+}
+
 function setParkingMode(mode='manual') {
   state.parkingMode=mode;
   if(mode==='auto') {
@@ -5801,16 +5985,110 @@ function setParkingMode(mode='manual') {
   toast(`${mode[0].toUpperCase()+mode.slice(1)} parking mode on`);
 }
 
+function parkingImportRowsFromText(text='') {
+  const tableRows=rowsFromPastedTable(text);
+  const normalizeRow=row=>{
+    const cells=row.map(cell=>String(cell||'').trim().replace(/^＃/,'#')).filter(Boolean),normalized=[];
+    for(let index=0;index<cells.length;index+=1) {
+      if(cells[index]==='#'&&/^\d{1,2}$/.test(cells[index+1]||'')){normalized.push(`#${cells[index+1]}`);index+=1;}
+      else normalized.push(cells[index]);
+    }
+    return normalized;
+  };
+  if(tableRows.some(row=>row.length>1))return tableRows.map(normalizeRow);
+  return String(text||'').split(/\r?\n/).map(line=>normalizeRow(line.trim().split(/\s+/))).filter(row=>row.length);
+}
+
+function parkingSpotCellNumber(cell='') {
+  const match=String(cell||'').trim().match(/^#\s*(\d{1,2})$/);
+  return match?String(Number(match[1])):'';
+}
+
+function parkingBatteryToken(cell='') {
+  const match=String(cell||'').trim().match(/^\(?\d{1,3}\s*%\)?$/);
+  return match?String(cell).replace(/[^\d]/g,''):'';
+}
+
+function parkingVehicleCell(value='') {
+  let text=String(value||'').toUpperCase().replace(/\s+/g,' ').trim();
+  if(!text||/^(?:TENT|STREET|LAST UPDATED|UPDATED|MAP UPDATED)$/i.test(text))return null;
+  const batteryMatch=text.match(/\(?\b(\d{1,3})\s*%\)?/);
+  const battery=batteryMatch?String(Math.max(0,Math.min(100,Number(batteryMatch[1])))):'';
+  text=text.replace(/\(?\b\d{1,3}\s*%\)?/g,' ').replace(/^(?:EV|VAN|VEHICLE)\s*[:#-]?\s*/i,'').replace(/[()]/g,' ').replace(/\s+/g,' ').trim();
+  if(/^X$/i.test(text))return {value:'X',battery};
+  const prefixed=text.match(/\b([FRH]\d{1,3})\b/i);
+  if(prefixed)return {value:prefixed[1].toUpperCase(),battery};
+  const numeric=text.match(/\b(?:EV\s*)?(\d{1,3})\b/i);
+  if(!numeric)return null;
+  return {value:String(Number(numeric[1])),battery};
+}
+
+function parkingVehicleAt(cells=[],index=0,direction=1) {
+  const cell=String(cells[index]||'').trim();
+  if(!cell||parkingSpotCellNumber(cell))return null;
+  const battery=parkingBatteryToken(cell);
+  if(battery&&direction<0&&index>0) {
+    const combined=parkingVehicleCell(`${cells[index-1]} ${cell}`);
+    if(combined)return combined;
+  }
+  if(battery)return null;
+  const nextBattery=index+1<cells.length?parkingBatteryToken(cells[index+1]):'';
+  const direct=parkingVehicleCell(nextBattery?`${cell} ${cells[index+1]}`:cell);
+  return direct;
+}
+
+function nearestParkingVehicle(cells=[],spotIndex=0,direction=1) {
+  for(let index=spotIndex+direction;index>=0&&index<cells.length;index+=direction) {
+    if(parkingSpotCellNumber(cells[index]))break;
+    const vehicle=parkingVehicleAt(cells,index,direction);
+    if(vehicle)return {...vehicle,distance:Math.abs(index-spotIndex)};
+  }
+  return null;
+}
+
+function parkingSpotSlotMap() {
+  const map=new Map();
+  ['west','east','northLeft','northRight'].forEach(zone=>{
+    parkingSlots(zone).forEach((slot,index)=>{
+      const spot=parkingSpotNumber(zone,index);
+      if(spot!==''&&spot!==null&&spot!==undefined)map.set(String(spot),slot);
+    });
+  });
+  return map;
+}
+
+function parkingSpotAssignmentsFromRows(rows=[]) {
+  const assignments=[];
+  rows.forEach(row=>{
+    const cells=row.map(cell=>String(cell||'').trim()).filter(Boolean);
+    if(!cells.length||cells.some(cell=>/^(spot|parking|location|van|ev|vehicle|street|row)$/i.test(headerKey(cell))))return;
+    cells.forEach((cell,index)=>{
+      const spot=parkingSpotCellNumber(cell);
+      if(!spot)return;
+      const left=nearestParkingVehicle(cells,index,-1),right=nearestParkingVehicle(cells,index,1);
+      const vehicle=left&&right?(left.distance<=right.distance?left:right):(left||right);
+      if(vehicle?.value)assignments.push({spot,value:vehicle.value,battery:vehicle.battery||''});
+    });
+  });
+  return assignments;
+}
+
+function parkingImportPlanFromText(text='') {
+  const rows=parkingImportRowsFromText(text);
+  return {rows,assignments:parkingSpotAssignmentsFromRows(rows)};
+}
+
 function parkingImportValuesFromText(text='') {
-  const rows=rowsFromPastedTable(text);
+  const rows=parkingImportRowsFromText(text);
   if(rows.length) {
     const values=[];
     rows.forEach(row=>{
       const cells=row.map(cell=>String(cell||'').trim()).filter(Boolean);
       if(!cells.length)return;
       if(cells.some(cell=>/^(spot|parking|location|van|ev|vehicle|street|row)$/i.test(headerKey(cell))))return;
-      const vanCell=cells.find(cell=>/^(?:ev|van|vehicle)\s*[:#-]?\s*[A-Z0-9()/-]+$/i.test(cell))||cells.find(cell=>/^[A-Z]?\d{1,3}(?:\(\d{1,3}%\))?$|^[FRH]\d{1,3}$|^X$/i.test(cell));
-      if(vanCell) values.push(vanCell.replace(/^(?:ev|van|vehicle)\s*[:#-]?\s*/i,'').toUpperCase());
+      const vanIndex=cells.findIndex((cell,index)=>/^(?:ev|van|vehicle)\s*[:#-]?\s*[A-Z0-9()/% -]+$/i.test(cell)||parkingVehicleAt(cells,index,1));
+      const vehicle=vanIndex>=0?parkingVehicleAt(cells,vanIndex,1)||parkingVehicleCell(cells[vanIndex]):null;
+      if(vehicle?.value)values.push(vehicle.battery?`${vehicle.value} (${vehicle.battery}%)`:vehicle.value);
     });
     return values;
   }
@@ -5818,6 +6096,23 @@ function parkingImportValuesFromText(text='') {
 }
 
 function applyParkingText(text='') {
+  const plan=parkingImportPlanFromText(text),spotMap=parkingSpotSlotMap(),assignments=plan.assignments.filter(item=>spotMap.has(item.spot)&&item.value);
+  if(assignments.length) {
+    if(assignments.length>=20)clearParkingSlotValues();
+    state.vanParkingBatteries={...(state.vanParkingBatteries||{})};
+    let count=0;
+    assignments.forEach(item=>{
+      const slot=spotMap.get(item.spot);
+      if(!slot)return;
+      slot.value=item.value;
+      if(item.battery!=='')state.vanParkingBatteries[slot.id]=item.battery;
+      else delete state.vanParkingBatteries[slot.id];
+      count+=1;
+    });
+    state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
+    persist();
+    return count;
+  }
   const values=parkingImportValuesFromText(text);
   if(!values.length) return 0;
   const editable=(state.vanParking||[]).filter(slot=>!['street'].includes(slot.kind)||String(slot.value||'').trim());
@@ -5830,7 +6125,7 @@ function applyParkingText(text='') {
 function parseParkingPasteAction() {
   const count=applyParkingText(state.vanParkingPasteText);
   render();
-  toast(count?`${count} parking spot${count===1?'':'s'} filled`:'No EV parking values found — paste one EV number per row',count?'success':'error');
+  toast(count?`${count} parking spot${count===1?'':'s'} filled`:'No EV parking values found — paste one EV per row or rows with # spot numbers',count?'success':'error');
 }
 
 function parkingListText() {
@@ -6552,7 +6847,7 @@ function action(name,el) {
       'toggle-fleet-card','set-fleet-view','clear-fleet-search','fleet-filter-quick',
       'copy-charge-recommendations','copy-visible-fleet-vins','copy-fleet-attention',
       'copy-fleetos-missing','copy-amazon-missing','copy-refresh-missing-vins',
-      'parking-choose-file','copy-parking-list','reset-parking','parse-parking-paste',
+      'parking-choose-file','copy-parking-list','reset-parking','parse-parking-paste','clear-parking-spots',
       'clear-selected-parking','add-parking-spot','remove-selected-parking','set-parking-mode',
       'report-charging-station','copy-charger-report','copy-open-charger-slack'
     ]);
@@ -6625,8 +6920,8 @@ function action(name,el) {
   if (name==='copy-open-charger-slack') return copyChargerReportAndOpenSlack();
   if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return renderLightweightModal(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal'&&['picklist-screenshot-review','screenshot','vto-route-swap','roster-destination','roster-swap','route-trainer','route-vto-swap','helper-match','preferred-vehicle-drivers','early-calloff-reminder','import'].includes(state.modal)) return closeLightweightModal();
-  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingRouteTrainer=null;state.pendingRouteVtoSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingPreferredVehicleId='';state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};state.fleetRefreshPreview=null;return render(); }
+  if (name==='close-modal'&&['picklist-screenshot-review','screenshot','vto-route-swap','roster-destination','roster-swap','route-trainer','route-vto-swap','duplicate-driver-name','adhoc-route-swap','helper-match','preferred-vehicle-drivers','early-calloff-reminder','import'].includes(state.modal)) return closeLightweightModal();
+  if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingRouteTrainer=null;state.pendingRouteVtoSwap=null;state.pendingDuplicateDriverName=null;state.pendingAdhocRouteSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingPreferredVehicleId='';state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=importAcceptForPurpose(state.importPurpose);return fileInput.click(); }
   if (name==='schedule-import') { state.scheduleImportDestination=state.page==='rostering'?'rostering':'roster';state.importPurpose='schedule';fileInput.accept='.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf';return fileInput.click(); }
   if (name==='rostering-import-screenshot') { state.importPurpose='rostering-screenshot';fileInput.accept=importAcceptForPurpose('rostering-screenshot');return fileInput.click(); }
@@ -6663,8 +6958,10 @@ function action(name,el) {
   if (name==='driver-route-context-action') return applyDriverRouteContextAction(el.dataset.routeTarget||'',el);
   if (name==='apply-route-trainer') return applyRouteTrainer();
   if (name==='apply-route-vto-swap') return applyRouteVtoSwap();
+  if (name==='apply-adhoc-route-swap') return applyAdhocRouteSwap();
   if (name==='apply-roster-destination-action') return applyRosterDestinationAction(el.dataset.rosterTarget||'');
   if (name==='picklist-vto-action') return applyPicklistVtoAction(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.vtoTarget||'');
+  if (name==='apply-duplicate-driver-name') return applyDuplicateDriverNameMatch();
   if (name==='open-vto-route-swap') return openVtoRouteSwap(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.vtoLabel||'');
   if (name==='apply-vto-route-swap') return applyVtoRouteSwap();
   if (name==='open-route-swap') return openRosterSwap(el.dataset.route||'',el.dataset.driverName||'',el.dataset.swapMode||'swap',el.dataset.driverLabel||'');
@@ -6726,6 +7023,7 @@ function action(name,el) {
   if (name==='copy-parking-list') return copyParkingList();
   if (name==='reset-parking') return resetVanParking();
   if (name==='parse-parking-paste') return parseParkingPasteAction();
+  if (name==='clear-parking-spots') return clearParkingSpots();
   if (name==='clear-selected-parking') { state.selectedParkingId='';persist();render();return toast('Selected van cleared'); }
   if (name==='add-parking-spot') return addParkingSpot();
   if (name==='remove-selected-parking') return removeSelectedParkingSpot();
@@ -7344,9 +7642,16 @@ function assignHelperBags() {
   let assigned=0;helpers.forEach((helper,index)=>{const key=scheduleHelperKey(helper.name),bag=bags[index];if(!bag)return;const main=state.morningRoutes.find(route=>route.helperAssignmentKey===key&&!/helper/i.test(String(route.service||'')))||state.morningRoutes.find(route=>route.route===helper.matchedRoute);if(!main)return;main.helperBag=bag;const record=state.scheduleHelpers[key]||{name:helper.name,role:helper.role};record.helperBag=bag;record.matchedRoute=main.route;record.matchedRouteUid=main.routeUid;record.matchedDriver=morningDriverNames(main.driver)[0]||main.driver;state.scheduleHelpers[key]=record;let helperRoute=helperMorningRouteFor(helper.name);if(!helperRoute){helperRoute=createManualMorningRoute({route:'HELPER',wave:'Helper'});helperRoute.helperAssignmentKey=key;}const equipment=deviceSheetDetails()[bag]||{};helperRoute.driver=contactForMorningDriver(helper.name)?.name||helper.name;helperRoute.route='HELPER';helperRoute.wave='Helper';helperRoute.service='Driver Helper';helperRoute.ev=bag;helperRoute.deviceName=equipment.device||'';helperRoute.portable=equipment.portable||'';assigned++;});
   persist();render();toast(`${assigned} Helper Bag${assigned===1?'':'s'} assigned to matched drivers and the Helper wave`);
 }
-function scheduleDateKey(value='') { const m=String(value).match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);if(!m)return '';let year=m[3]?Number(m[3]):Number(state.morningOperationDate.slice(0,4));if(year<100)year+=2000;return `${year}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`; }
+function scheduleDateKey(value='') { const iso=String(value||'').match(/\b(\d{4})-(\d{2})-(\d{2})\b/);if(iso)return `${iso[1]}-${iso[2]}-${iso[3]}`;const m=String(value).match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);if(!m)return '';let year=m[3]?Number(m[3]):Number(state.morningOperationDate.slice(0,4));if(year<100)year+=2000;return `${year}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`; }
 function scheduleImportDateKeys(entries=[]) {
   return [...new Set((entries||[]).map(entry=>scheduleDateKey(entry?.date)).filter(Boolean))];
+}
+function activeRosteringScreenshotPlan() {
+  const date=state.rosteringDate||defaultOperationDate(),plan=state.rosteringPlans?.[date];
+  return rosteringPlanFromScreenshot(plan)?plan:null;
+}
+function pinScheduleEntriesToDate(entries=[],date='') {
+  return date?entries.map(entry=>({...entry,date})):entries;
 }
 function mergeScheduleEntriesByImportedDate(existing=[],incoming=[]) {
   const prior=Array.isArray(existing)?existing:[],next=Array.isArray(incoming)?incoming:[],dates=new Set(scheduleImportDateKeys(next)),hasUndated=next.some(entry=>!scheduleDateKey(entry?.date));
@@ -7361,7 +7666,10 @@ function mergeScheduleEntriesByImportedDate(existing=[],incoming=[]) {
 function alignScheduleImportDate(entries=[],destination='roster') {
   const dates=scheduleImportDateKeys(entries);if(!dates.length)return '';
   const current=destination==='rostering'?state.rosteringDate:state.morningOperationDate,target=dates.includes(current)?current:dates[0];
-  if(destination==='rostering')state.rosteringDate=target;
+  if(destination==='rostering') {
+    if(activeRosteringScreenshotPlan())return current;
+    state.rosteringDate=target;
+  }
   else { state.morningOperationDate=target;state.morningSheetsLastReceipt=null; }
   return target;
 }
@@ -7393,11 +7701,14 @@ async function readFiles(files) {
       return toast(`${records.length} DVIR rows read · ${applied.pre} Pre-Trip and ${applied.post} Post-Trip Morning Sheet checks updated`);
     }
     if(state.importPurpose==='schedule') {
-      const entries=parsed.flatMap(file=>file.rows?.length?scheduleEntriesFromRows(file.rows,{fileName:file.name}):scheduleEntriesFromText(file.text||''));
+      let entries=parsed.flatMap(file=>file.rows?.length?scheduleEntriesFromRows(file.rows,{fileName:file.name}):scheduleEntriesFromText(file.text||''));
       if(!entries.length)throw new Error('no schedule shifts');
-      const destination=state.scheduleImportDestination||'roster',entryDate=alignScheduleImportDate(entries,destination),importName=parsed.map(file=>file.name).join(' + ');state.scheduleEntries=mergeScheduleEntriesByImportedDate(state.scheduleEntries,entries);
+      const destination=state.scheduleImportDestination||'roster',importName=parsed.map(file=>file.name).join(' + ');
+      let entryDate=alignScheduleImportDate(entries,destination);
+      if(destination==='rostering'&&activeRosteringScreenshotPlan()){entries=pinScheduleEntriesToDate(entries,state.rosteringDate);entryDate=state.rosteringDate;}
+      state.scheduleEntries=mergeScheduleEntriesByImportedDate(state.scheduleEntries,entries);
       if(destination==='roster')reconcileOpeningPaycomAutoBackups(entries);
-      if(destination==='rostering'){const plan=currentRosteringPlan();plan.importName=importName;plan.importedAt=new Date().toISOString();}else state.scheduleImportName=importName;
+      if(destination==='rostering'){const plan=currentRosteringPlan();plan.paycomImportName=importName;plan.paycomImportedAt=new Date().toISOString();}else state.scheduleImportName=importName;
       let helperAdded=0;if(destination==='rostering')helperAdded=syncRosteringHelperShifts(currentRosteringPlan());
       state.scheduleImportDestination='';state.importPurpose='morning';state.page=destination==='rostering'?'rostering':'roster';persist();render();
       const dateNote=entryDate?` · ${formatShortOperationDate(entryDate)}`:'';
@@ -7408,12 +7719,12 @@ async function readFiles(files) {
       const name=parsed.map(file=>file.name).join(' + '),plan=applyRosteringScreenshotText(text,name),rostered=plan.assignments.filter(row=>row.associate).length;state.importPurpose='morning';state.page='rostering';persist();render();return toast(`${plan.services.length} confirmed service${plan.services.length===1?'':'s'} rebuilt · ${rostered} associate${rostered===1?'':'s'} recognized`);
     }
     if(state.importPurpose==='parking') {
-      const text=parsed.map(f=>f.text||rowsToText(f.rows)).filter(Boolean).join('\n');
-      applyParkingText(text);
+      const text=parsed.map(f=>[f.text,rowsToText(f.rows||[])].filter(Boolean).join('\n')).filter(Boolean).join('\n');
+      const count=applyParkingText(text);
       state.vanParkingPasteText=text;
       state.importPurpose='fleet';
       persist();render();
-      return toast('Van Parking updated from imported file');
+      return toast(count?`Van Parking updated from imported file · ${count} spot${count===1?'':'s'} matched`:'No parking spots found in that file — use a clear Google Sheets screenshot or paste rows with # spot numbers',count?'success':'error');
     }
     if(state.importPurpose==='equipment') {
       const textParts=parsed.map(f=>f.text||rowsToText(f.rows)).filter(Boolean);
@@ -9961,8 +10272,9 @@ localStorage.setItem('relayops_last_itinerary_rts',JSON.stringify(state.lastItin
 localStorage.setItem('relayops_fleet_name_overrides',JSON.stringify(state.fleetNameOverrides||{}));
 localStorage.setItem('relayops_fleet_issues',JSON.stringify(state.fleetIssues||{}));
 localStorage.setItem('relayops_morning_issue_acknowledgements',JSON.stringify(state.morningIssueAcknowledgements||{}));
-window.RelayOpsCloud?.schedule?.('workspace.autosave');
+if(!cloudScheduleSuppressionDepth)window.RelayOpsCloud?.schedule?.('workspace.autosave');
 }
+function persistWithoutCloud(){cloudScheduleSuppressionDepth+=1;try{persist();}finally{cloudScheduleSuppressionDepth=Math.max(0,cloudScheduleSuppressionDepth-1);}}
 function toast(message,type='success') { let stack=document.getElementById('toast-stack');if(!stack){stack=document.createElement('div');stack.id='toast-stack';stack.className='toast-stack';stack.setAttribute('role','status');stack.setAttribute('aria-live','polite');stack.setAttribute('aria-atomic','false');document.body.appendChild(stack);}const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="toast-icon">${type==='error'?'!':'✓'}</span><span>${esc(message)}</span>`;stack.appendChild(el);setTimeout(()=>el.remove(),3200); }
 
 function sharedWorkspaceState() {
@@ -9974,9 +10286,9 @@ function sharedWorkspaceState() {
     schemaVersion:2,dspCode:state.dspCode,organizationName:state.organizationName,stationCode:state.stationCode,routes:state.routes,morningRoutes:state.morningRoutes,
     lastImportExcluded:state.lastImportExcluded,rosterPublished:state.rosterPublished,
     morningIssueAcknowledgements:state.morningIssueAcknowledgements,
-    messageQueueTemplate:state.messageQueueTemplate,messageQueueStatus:state.messageQueueStatus,coachingQueue:normalizeCoachingQueue(state.coachingQueue),
-    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringHelperPool:state.rosteringHelperPool,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleBackupRecords:state.scheduleBackupRecords,scheduleStayHome:state.scheduleStayHome,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,morningWaveTimeOverrides:state.morningWaveTimeOverrides,morningSectionPadOverrides:state.morningSectionPadOverrides,earlyCalloffAcknowledgements:state.earlyCalloffAcknowledgements,padCheckAcknowledgements:state.padCheckAcknowledgements,lastMorningImportFingerprint:state.lastMorningImportFingerprint,fitMorningRows:state.fitMorningRows,fitOpeningPicklistRows:state.fitOpeningPicklistRows,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,picklistSwapAudit:state.picklistSwapAudit,sheetHistory:sharedSheetHistory,
-    whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
+    messageQueueStatus:state.messageQueueStatus,
+    scheduleEntries:state.scheduleEntries,scheduleImportName:state.scheduleImportName,rosteringDate:state.rosteringDate,callOffDriverKeys:state.callOffDriverKeys,scheduleDriverMarks:state.scheduleDriverMarks,scheduleBackupRecords:state.scheduleBackupRecords,scheduleStayHome:state.scheduleStayHome,scheduleReductions:state.scheduleReductions,scheduleHelpers:state.scheduleHelpers,callOffReasons:state.callOffReasons,morningWaveTimeOverrides:state.morningWaveTimeOverrides,morningSectionPadOverrides:state.morningSectionPadOverrides,earlyCalloffAcknowledgements:state.earlyCalloffAcknowledgements,padCheckAcknowledgements:state.padCheckAcknowledgements,lastMorningImportFingerprint:state.lastMorningImportFingerprint,fitMorningRows:state.fitMorningRows,fitOpeningPicklistRows:state.fitOpeningPicklistRows,openingPicklistTopics:state.openingPicklistTopics,openingPicklistNotes:state.openingPicklistNotes,openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts,openingPicklistBackupOverrides:state.openingPicklistBackupOverrides,openingPicklistLabels:state.openingPicklistLabels,picklistSwapAudit:state.picklistSwapAudit,sheetHistory:sharedSheetHistory,
+    whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,
   };
 }
 function persistentWorkspaceState() {
@@ -9987,15 +10299,15 @@ function persistentWorkspaceState() {
     vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,chargingStationChecked:state.chargingStationChecked,
     vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,
     equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,removedDeviceVehicleIds:state.removedDeviceVehicleIds,
-    driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),scheduleStayHomeHistory:state.scheduleStayHomeHistory,rosteringDate:state.rosteringDate,rosteringPlans:state.rosteringPlans,rosteringHelperPool:state.rosteringHelperPool,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,morningWaveTimeOverrides:state.morningWaveTimeOverrides,morningSectionPadOverrides:state.morningSectionPadOverrides,earlyCalloffAcknowledgements:state.earlyCalloffAcknowledgements,padCheckAcknowledgements:state.padCheckAcknowledgements,lastMorningImportFingerprint:state.lastMorningImportFingerprint,
-    whiparoundInspections:state.whiparoundInspections,whiparoundRosterSnapshots:state.whiparoundRosterSnapshots,whiparoundNotOnRoute:state.whiparoundNotOnRoute,whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundImportName:state.whiparoundImportName,whiparoundSelectedDate:state.whiparoundSelectedDate,whiparoundReminderTemplates:state.whiparoundReminderTemplates,
-    inventoryItems:state.inventoryItems,inventoryLog:state.inventoryLog,coachingTemplate:state.coachingTemplate,
+    driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),scheduleStayHomeHistory:state.scheduleStayHomeHistory,rosteringPlans:state.rosteringPlans,rosteringHelperPool:state.rosteringHelperPool,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,
+    whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundReminderTemplates:state.whiparoundReminderTemplates,messageQueueTemplate:state.messageQueueTemplate,
+    inventoryItems:state.inventoryItems,inventoryLog:state.inventoryLog,coachingQueue:normalizeCoachingQueue(state.coachingQueue),coachingTemplate:state.coachingTemplate,
     morningSheetsEndpoint:state.morningSheetsEndpoint,slackReportRoomUrl:state.slackReportRoomUrl,chargerReports:normalizeChargerReports(state.chargerReports||[])
   };
 }
 function applySharedWorkspaceState(payload={}) {
   const parkingChargerMovePlan=lowerParkingChargerMovePlan(payload.vanParking);
-  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','morningIssueAcknowledgements','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','messageQueueTemplate','messageQueueStatus','coachingQueue','coachingTemplate','scheduleEntries','scheduleImportName','rosteringDate','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleStayHomeHistory','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','morningSectionPadOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','fitMorningRows','fitOpeningPicklistRows','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','picklistSwapAudit','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','morningIssueAcknowledgements','messageQueueStatus','scheduleEntries','scheduleImportName','rosteringDate','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','morningSectionPadOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','fitMorningRows','fitOpeningPicklistRows','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','picklistSwapAudit','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundImportName','whiparoundSelectedDate'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.vanParking=normalizeVanParkingLayout(state.vanParking);
   if(parkingChargerMovePlan.length){const migrated=migrateLowerParkingChargerRows(state.parkingChargerStatus,state.chargerReports,parkingChargerMovePlan);state.parkingChargerStatus=migrated.status;state.chargerReports=migrated.reports;}
@@ -10038,7 +10350,7 @@ function applySharedWorkspaceState(payload={}) {
 }
 function applyPersistentWorkspaceState(payload={}) {
   const parkingChargerMovePlan=lowerParkingChargerMovePlan(payload.vanParking);
-  const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringDate','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','morningWaveTimeOverrides','morningSectionPadOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundComplianceHistory','whiparoundImportName','whiparoundSelectedDate','whiparoundReminderTemplates','inventoryItems','inventoryLog','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
+  const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','whiparoundComplianceHistory','whiparoundReminderTemplates','messageQueueTemplate','inventoryItems','inventoryLog','coachingQueue','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.vanParking=normalizeVanParkingLayout(state.vanParking);
   if(parkingChargerMovePlan.length){const migrated=migrateLowerParkingChargerRows(state.parkingChargerStatus,state.chargerReports,parkingChargerMovePlan);state.parkingChargerStatus=migrated.status;state.chargerReports=migrated.reports;}
@@ -10049,21 +10361,24 @@ function applyPersistentWorkspaceState(payload={}) {
   state.driverProfiles=normalizeDriverProfiles(state.driverProfiles||{});(state.driverContacts||[]).forEach(contact=>ensureDriverProfile(contact));
   state.rosteringTrainingMatches=state.rosteringTrainingMatches&&typeof state.rosteringTrainingMatches==='object'?state.rosteringTrainingMatches:{};
   state.rosteringManualTraining=state.rosteringManualTraining&&typeof state.rosteringManualTraining==='object'?state.rosteringManualTraining:{};
-  state.morningWaveTimeOverrides=state.morningWaveTimeOverrides&&typeof state.morningWaveTimeOverrides==='object'?state.morningWaveTimeOverrides:{};
-  state.morningSectionPadOverrides=state.morningSectionPadOverrides&&typeof state.morningSectionPadOverrides==='object'?state.morningSectionPadOverrides:{};
   state.slackReportRoomUrl=String(state.slackReportRoomUrl||'https://app.slack.com/client');
   state.chargerReports=normalizeChargerReports(state.chargerReports||[]);
-  state.coachingTemplate=String(state.coachingTemplate||DEFAULT_COACHING_TEMPLATE);
+  state.coachingQueue=normalizeCoachingQueue(state.coachingQueue);state.coachingTemplate=String(state.coachingTemplate||DEFAULT_COACHING_TEMPLATE);
+  state.messageQueueTemplate=['standup','route','simple'].includes(state.messageQueueTemplate)?state.messageQueueTemplate:'standup';
   state.scheduleStayHomeHistory=state.scheduleStayHomeHistory&&typeof state.scheduleStayHomeHistory==='object'?state.scheduleStayHomeHistory:{};
-  state.earlyCalloffAcknowledgements=state.earlyCalloffAcknowledgements&&typeof state.earlyCalloffAcknowledgements==='object'?state.earlyCalloffAcknowledgements:{};
-  state.padCheckAcknowledgements=state.padCheckAcknowledgements&&typeof state.padCheckAcknowledgements==='object'?state.padCheckAcknowledgements:{};state.lastMorningImportFingerprint=String(state.lastMorningImportFingerprint||'');
-  state.rosteringDate=String(state.rosteringDate||defaultOperationDate());state.rosteringPlans=state.rosteringPlans&&typeof state.rosteringPlans==='object'?state.rosteringPlans:{};
+  state.rosteringPlans=state.rosteringPlans&&typeof state.rosteringPlans==='object'?state.rosteringPlans:{};
   state.rosteringHelperPool=state.rosteringHelperPool&&typeof state.rosteringHelperPool==='object'?state.rosteringHelperPool:{};
   state.inventoryItems=normalizeInventoryItems(state.inventoryItems);state.inventoryLog=normalizeInventoryLog(state.inventoryLog);
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   invalidateDriverDirectoryCaches();
 }
-window.RelayOpsApp={sharedState:sharedWorkspaceState,persistentState:persistentWorkspaceState,applySharedState:applySharedWorkspaceState,applyPersistentState:applyPersistentWorkspaceState,operationDate:()=>state.morningOperationDate,morningSheetsPayload:()=>morningSheetsConnectorPayload()};
+window.RelayOpsApp={sharedState:sharedWorkspaceState,persistentState:persistentWorkspaceState,applySharedState:applySharedWorkspaceState,applyPersistentState:applyPersistentWorkspaceState,resetDailyState:resetDailyOperationsState,resetSharedDailyState:resetSharedDailyOperationsState,rolloverOperationDateIfNeeded,operationDate:()=>state.morningOperationDate,morningSheetsPayload:()=>morningSheetsConnectorPayload(),__test:{defaultOperationDate,resetDailyOperationsState,resetSharedDailyOperationsState,rolloverOperationDateIfNeeded}};
+if(window.addEventListener){
+  window.addEventListener('focus',()=>rolloverOperationDateIfNeeded('focus',new Date()));
+  window.addEventListener('online',()=>rolloverOperationDateIfNeeded('online',new Date()));
+}
+if(document.addEventListener)document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')rolloverOperationDateIfNeeded('visibilitychange',new Date());});
+scheduleDailyOperationRollover();
 window.RelayOpsCloud?.on?.(event=>{
   if(event.type==='offline'){clearCloudConnectingWatchdog();state.cloudStatus='offline';if(!completeInitialCloudHydration())refreshCloudStatusUi();}
   if(event.type==='reconnecting'){state.cloudStatus='connecting';armCloudConnectingWatchdog();refreshCloudStatusUi();}

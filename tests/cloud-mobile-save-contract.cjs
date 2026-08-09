@@ -19,8 +19,8 @@ assert(
   'A slow save must remain queued instead of becoming a destructive cloud error'
 );
 assert(
-  cloud.includes('schedulePendingSaveRetry')&&cloud.includes('Math.min(120000,15000*'),
-  'Slow mobile saves must retry with bounded backoff'
+  cloud.includes('schedulePendingSaveRetry')&&cloud.includes('CLOUD_MAX_AUTOMATIC_RETRIES')&&cloud.includes('const steps=[30000,60000,120000,300000]'),
+  'Slow mobile saves must retry with a capped, jittered backoff'
 );
 assert(
   !cloud.includes('RelayOps will start a fresh shared session'),

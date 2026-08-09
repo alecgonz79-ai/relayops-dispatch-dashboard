@@ -44,5 +44,5 @@ assert(!context.__customDeviceRemoval.ids.includes('EV60')&&context.__customDevi
 assert(context.__picklist.waveCaps.length===6&&context.__picklist.waveCaps.every(value=>value===1)&&context.__picklist.adhoc===15,'Picklist blank-row compaction must affect only Wave 1–6');
 assert(context.__picklist.duplicate.includes('duplicate-van-cell')&&context.__picklist.duplicate.includes('EV assigned twice')&&context.__picklist.morning.includes('duplicate-van-cell'),'Duplicate EV warning must appear in both Picklist and Morning Sheet cells');
 assert(context.__swapModal.includes('vto-route-swap-search')&&context.__swapModal.includes('Search driver or CX route'),'Swap To Route modal lost its searchable route picker');
-assert(context.__shared.fitOpeningPicklistRows===true&&context.__shared.rosteringHelperPool&&context.__persistent.rosteringHelperPool,'Shared snapshots must include Picklist compaction and Helper-box state');
+assert(context.__shared.fitOpeningPicklistRows===true&&!context.__shared.rosteringHelperPool&&context.__persistent.rosteringHelperPool,'Picklist compaction must stay daily while Helper-box state syncs once as station-persistent data');
 console.log('Shared dispatcher sync, roster cap, equipment readiness, duplicate EV, and Picklist compaction tests passed');
