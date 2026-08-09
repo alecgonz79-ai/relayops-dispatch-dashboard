@@ -599,7 +599,11 @@ const driverDisplayLookupCache=new Map();
 state.sheetHistory=state.sheetHistory&&Array.isArray(state.sheetHistory.past)&&Array.isArray(state.sheetHistory.future)?state.sheetHistory:{past:[],future:[]};
 if(Object.keys(state.fleetSourceUploads||{}).length) state.fleetImport=fleetImportFromSourceUploads();
 if(state.fleetImport?.vehicles?.length) applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
-if(bootCachedOperationDate&&bootCachedOperationDate!==state.morningOperationDate){resetDailyOperationsState(state.morningOperationDate);persistWithoutCloud();}
+let bootOperationDateReset=false;
+if(bootCachedOperationDate&&bootCachedOperationDate!==state.morningOperationDate){
+  resetDailyOperationsState(state.morningOperationDate);
+  bootOperationDateReset=true;
+}
 
 const app = document.getElementById('app');
 const fileInput = document.getElementById('file-input');
@@ -1734,7 +1738,6 @@ function morningConnectorGuide() {
   return `<details class="morning-connectors card"><summary><div><strong>Ops Log connector setup</strong><span>Google Sheets is ready through Apps Script. Slack stays locked until its secure connector is built.</span></div><b>Open</b></summary><div class="morning-connector-grid"><div><strong>1 · Slack / day file</strong><span>Locked for now. Use Amazon XLSX/CSV upload so no dispatcher expects an unfinished connection to work.</span><button class="btn small locked" disabled>Slack Import · locked</button></div><div><strong>2 · Cortex / Amazon Logistics</strong><span>Upload XLSX/CSV files. RelayOps reads them locally and filters ${esc(state.dspCode)} routes.</span><button class="btn small primary" data-action="import">Upload Amazon files</button></div><div><strong>3 · Google Sheets Ops Log</strong><span>${connected?`Connected. Sends only to ${esc(tabs.join(' or '))} using the original A:V layout.`:'Install the Apps Script once, save the /exec URL, then send to the selected operation-date tab.'}</span><button class="btn small lime" data-action="morning-sheets-connector">${connected?'Open Ops Log connector':'Connect Ops Log'}</button><a class="btn small" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open ops log</a></div></div><p>If the exact date tab is missing, RelayOps creates it by duplicating the blank OPS LOG 2026 template.</p></details>`;
 }
 
-const defaultMorningWaveTimes=MORNING_CORE_WAVE_TIMES;
 function morningWaveOverrideKey(label='') { return `${state.morningOperationDate}|${morningFixedSectionKey(label)}`; }
 function morningWaveTimeOverride(section={}) {
   const key=morningWaveOverrideKey(section.label||'');
@@ -1760,7 +1763,7 @@ function saveMorningWaveTimeValue(label='',wave='',rawValue='') {
 function morningBlankWaveAnchors() {
   const existing=morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-6]$/i.test(section.label)).slice(0,MORNING_CORE_WAVE_COUNT);
   return Array.from({length:MORNING_CORE_WAVE_COUNT},(_,index)=>{
-    const label=`WAVE ${index+1}`,section=existing[index]||{},override=morningWaveTimeOverride({label}),wave=override?.time||section.wave||defaultMorningWaveTimes[index];
+    const label=`WAVE ${index+1}`,section=existing[index]||{},override=morningWaveTimeOverride({label}),wave=override?.time||section.wave||MORNING_CORE_WAVE_TIMES[index];
     const pad=section.rows?.[0]?.padOverride||section.rows?.[0]?.pad||MORNING_CORE_WAVE_PADS[index];
     return {routeUid:`WAVE-ANCHOR-${state.morningOperationDate}-${index+1}`,dsp:state.dspCode,driver:'',route:`__blank_wave_${index+1}`,service:'Morning Sheet wave anchor',wave,staging:'',pad,padOverride:pad,ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true,_waveAnchor:true};
   });
@@ -1772,8 +1775,8 @@ function morningSections(rows) {
   const sectionWaves=[...importedWaves],usedWaves=new Set(sectionWaves);
   while(sectionWaves.length<MORNING_CORE_WAVE_COUNT){
     const index=sectionWaves.length,label=`WAVE ${index+1}`,override=morningWaveTimeOverride({label});
-    const candidates=[override?.time,defaultMorningWaveTimes[index],...defaultMorningWaveTimes].filter(Boolean);
-    const wave=candidates.find(value=>!usedWaves.has(value))||override?.time||defaultMorningWaveTimes[index]||`Wave ${index+1}`;
+    const candidates=[override?.time,MORNING_CORE_WAVE_TIMES[index],...MORNING_CORE_WAVE_TIMES].filter(Boolean);
+    const wave=candidates.find(value=>!usedWaves.has(value))||override?.time||MORNING_CORE_WAVE_TIMES[index]||`Wave ${index+1}`;
     sectionWaves.push(wave);usedWaves.add(wave);
   }
   const sections=sectionWaves.map((wave,i)=>({label:`WAVE ${i+1}`,wave,rows:regular.filter(r=>r.wave===wave),pad:MORNING_CORE_WAVE_PADS[i],routeCapacity:MORNING_CORE_WAVE_CAPACITIES[i],hasTime:true,separatorRows:1}));
@@ -8895,7 +8898,7 @@ function morningSheetTsv(){ return morningSheetCopyRows().map(row=>row.join('\t'
 function morningCoreWaveLabels() {
   const byKey=new Map(morningSections(allMorningRows()).filter(section=>section.hasTime&&/^WAVE\s*[1-6]$/i.test(section.label)).map(section=>[morningFixedSectionKey(section.label),section]));
   return Array.from({length:MORNING_CORE_WAVE_COUNT},(_,index)=>{
-    const label=`WAVE ${index+1}`,section=byKey.get(`WAVE${index+1}`)||{label,wave:defaultMorningWaveTimes[index],rows:[]};
+    const label=`WAVE ${index+1}`,section=byKey.get(`WAVE${index+1}`)||{label,wave:MORNING_CORE_WAVE_TIMES[index],rows:[]};
     return {label,value:morningWaveTimeText(section)};
   });
 }
@@ -10398,6 +10401,7 @@ window.RelayOpsCloud?.on?.(event=>{
   if(event.type==='conflict')toast('A newer dispatcher update was loaded before saving','error');
   if(event.type==='error'){clearCloudConnectingWatchdog();state.cloudStatus='error';if(!completeInitialCloudHydration())refreshCloudStatusUi();cloudToastOnce(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
 });
+if(bootOperationDateReset)persistWithoutCloud();
 renderInitialShell();
 if(window.RelayOpsCloud?.configured)armCloudConnectingWatchdog();
 window.RelayOpsCloud?.init?.().catch(error=>console.error('RelayOps cloud initialization failed',error));

@@ -9,7 +9,8 @@ const clone = value => JSON.parse(JSON.stringify(value));
 
 function appContext({
   href = 'https://relayops.example.test/?date=2026-08-04',
-  now = '2026-08-04T19:00:00.000Z'
+  now = '2026-08-04T19:00:00.000Z',
+  bootStoredDate = ''
 } = {}) {
   let nowMs = Date.parse(now);
   class FakeDate extends Date {
@@ -20,6 +21,7 @@ function appContext({
   const app = { innerHTML: '' };
   const fileInput = { accept: '', addEventListener() {}, click() {} };
   const storage = new Map();
+  if (bootStoredDate) storage.set('relayops_morning_operation_date', bootStoredDate);
   const windowListeners = new Map();
   const documentListeners = new Map();
   const replacedUrls = [];
@@ -79,6 +81,24 @@ function appContext({
   context.__documentListeners = documentListeners;
   context.__replacedUrls = replacedUrls;
   return context;
+}
+
+function testStaleSavedDateBootsIntoCurrentDay() {
+  const context = appContext({
+    href: 'https://relayops.example.test/',
+    now: '2026-08-04T19:00:00.000Z',
+    bootStoredDate: '2026-08-03'
+  });
+  const boot = clone(vm.runInContext(`JSON.parse(JSON.stringify({
+    date:state.morningOperationDate,
+    routes:state.morningRoutes.map(row=>({route:row.route,wave:row.wave,waveAnchor:row._waveAnchor}))
+  }))`, context));
+  assert.strictEqual(boot.date, '2026-08-04', 'A browser carrying yesterday\'s saved date must advance to today during startup');
+  assert.strictEqual(boot.routes.length, 6, 'Startup recovery must create all six blank Wave anchors');
+  boot.routes.forEach((row,index)=>{
+    assert.strictEqual(row.route, `__blank_wave_${index+1}`, `Startup recovery lost Wave ${index+1}`);
+    assert.strictEqual(row.waveAnchor, true, `Startup recovery did not preserve Wave ${index+1} as an anchor`);
+  });
 }
 
 function seedDirtyDay(context) {
@@ -414,6 +434,7 @@ async function testCloudResetsBeforeMissingDayInitialization() {
 
 async function run() {
   testLosAngelesDateBoundaries();
+  testStaleSavedDateBootsIntoCurrentDay();
   testFreshDayResetAndPermanentPreservation();
   testSharedHydrationResetPreservesLocalDispatcherState();
   testRolloverPolicyAndIdempotence();
