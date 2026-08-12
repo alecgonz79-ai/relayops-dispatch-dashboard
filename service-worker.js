@@ -1,12 +1,12 @@
-const CACHE='relayops-startup-recovery-v101';
+const CACHE='relayops-fleet-recovery-v102';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=20260726-fleet-warning-r1',
+  './styles.css?v=20260812-fleet-recovery-r1',
   './macos-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260726-fleet-warning-r1',
-  './app.js?v=20260809-startup-recovery-r1',
+  './app.js?v=20260812-fleet-recovery-r1',
   './cloud-sync.js?v=20260728-egress-budget-r2',
   './supabase/config.js?v=20260720-auth-redirect',
   './vendor/jszip.min.js',

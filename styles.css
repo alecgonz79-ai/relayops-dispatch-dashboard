@@ -2367,6 +2367,12 @@ body .morning-board .exact-ops-sheet .sheet-letters-row th { background:#dbe7f7;
 .parking-tent-square { height:42px; display:grid; grid-template-columns:28px 1fr; place-items:center; gap:3px; padding:4px; border:1px solid rgba(255,255,255,.72); border-radius:7px; background:#26313a; color:#fff; box-shadow:inset 0 0 0 1px rgba(0,0,0,.18),0 4px 10px rgba(18,26,31,.18); }
 .parking-tent-square svg { width:27px; height:25px; color:#fff; }
 .parking-tent-square span { color:#fff; font-size:7px; font-weight:1000; letter-spacing:.08em; }
+.parking-slot.tent-spot { grid-template-columns:1fr!important; }
+.parking-slot.tent-spot .parking-tent-spot { display:grid; grid-template-columns:34px 1fr; align-items:center; gap:7px; padding:4px 7px; background:#f7fafc!important; border-color:#f7fafc!important; box-shadow:0 5px 12px rgba(7,15,22,.2),inset 0 0 0 1px rgba(13,30,42,.08)!important; }
+.parking-slot.tent-spot .parking-tent-spot > span { color:#1a2b36; font-size:12px; text-shadow:none; }
+.parking-slot.tent-spot .parking-tent-square { width:100%; height:34px; min-width:0; grid-template-columns:28px 1fr; padding:2px 5px; background:transparent; border:0; box-shadow:none; color:#162733; }
+.parking-slot.tent-spot .parking-tent-square svg { width:27px; height:24px; color:#162733; }
+.parking-slot.tent-spot .parking-tent-square span { color:#162733; font-size:8px; }
 .parking-main-block { grid-template-columns:82px 260px 120px 260px 82px!important; }
 .charger-pair.tent-row { grid-template-columns:1fr 38px 1fr; }
 .charger-pair.tent-row .parking-tent-square { grid-template-columns:1fr; padding:3px; }
