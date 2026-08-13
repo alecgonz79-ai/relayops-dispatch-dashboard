@@ -1250,7 +1250,7 @@ function picklistVtoDriverCell(group='',index=0,row=null,value='') {
   if(!name)return input;
   const action=(target,text,tone='')=>`<button type="button" class="${esc(tone)}" data-action="picklist-vto-action" data-vto-target="${esc(target)}" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}">${esc(text)}</button>`;
   const swap=`<button type="button" class="swap-route" data-action="open-vto-route-swap" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}" data-vto-label="${esc(label)}">Swap To Route</button>`;
-  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}" aria-haspopup="menu" aria-expanded="false">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('duplicate-name','Duplicate Name','duplicate-name')}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('adhoc','Adhoc','adhoc')}${action('remove','Remove Driver','remove-driver')}</div></div></div>`;
+  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}" aria-haspopup="menu" aria-expanded="false">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('duplicate-name','Match with driver name on route','duplicate-name')}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('adhoc','Adhoc','adhoc')}${action('remove','Remove Driver','remove-driver')}</div></div></div>`;
 }
 function openingPicklistCallOffRows() {
   return Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([key,value])=>({key,name:value.name||'',reason:state.callOffReasons?.[key]||'',route:value.route||''})).sort((a,b)=>a.name.localeCompare(b.name));
@@ -3765,7 +3765,8 @@ function modal() {
   }
   if (state.modal === 'duplicate-driver-name' && state.pendingDuplicateDriverName) {
     const pending=state.pendingDuplicateDriverName,candidates=duplicateDriverNameCandidates(pending.source),size=Math.min(10,Math.max(5,candidates.length));
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal duplicate-driver-name-modal" role="dialog" aria-modal="true" aria-labelledby="duplicate-driver-name-title"><div class="modal-head"><div><span class="eyebrow">MATCH DUPLICATE NAME</span><h2 id="duplicate-driver-name-title">Who is ${esc(pending.source)}?</h2><p>Match the PAYCOM or Amazon name to the correct Drivers & Team profile.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="duplicate-driver-name-picker"><span>Match with driver</span><select id="duplicate-driver-target" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.name)}" ${index===0?'selected':''}>${esc(row.name)}${driverDisplayName(row.name)!==row.name?` · ${esc(driverDisplayName(row.name))}`:''}</option>`).join('')}</select></label><div class="private-contact-note"><b>One shared driver identity</b><span>After matching, both name versions point to the same driver profile, flags, history, preferred vans, and dashboard records. No backup status or route is changed.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-duplicate-driver-name" ${candidates.length?'':'disabled'}>Match duplicate name</button></div></div></div></div>`;
+    const suggested=candidates[0],suggestion=suggested?.score>=60?`<div class="route-name-match-summary"><span>Suggested first and last name match</span><strong>${esc(suggested.name)}</strong><small>${esc(suggested.route)}${suggested.wave?` - ${esc(waveNameForTime(suggested.wave))}`:''}</small></div>`:'';
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal duplicate-driver-name-modal" role="dialog" aria-modal="true" aria-labelledby="duplicate-driver-name-title"><div class="modal-head"><div><span class="eyebrow">MATCH BACKUP NAME</span><h2 id="duplicate-driver-name-title">Match ${esc(pending.source)} with a route driver</h2><p>Choose the Amazon route name that belongs to this PAYCOM backup name.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${suggestion}<label class="duplicate-driver-name-picker"><span>Driver name on route</span><select id="duplicate-driver-target" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.name)}" ${index===0?'selected':''}>${esc(row.name)} - ${esc(row.route)}${row.wave?` - ${esc(waveNameForTime(row.wave))}`:''}</option>`).join('')}</select></label><div class="private-contact-note"><b>RelayOps remembers both names</b><span>This saves one shared driver identity for future PAYCOM and Amazon imports. No route assignment moves. If both names are the same person, the duplicate backup entry will no longer be counted separately.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-duplicate-driver-name" ${candidates.length?'':'disabled'}>Match with route driver</button></div></div></div></div>`;
   }
   if (state.modal === 'route-trainer' && state.pendingRouteTrainer) {
     const pending=state.pendingRouteTrainer,route=morningRouteByUid(pending.routeUid),candidates=routeTrainerCandidates(route),size=Math.min(10,Math.max(4,candidates.length));
@@ -4330,15 +4331,35 @@ function applyPicklistVtoAction(name='',role='',target='') {
   return false;
 }
 
+function driverFirstLastName(name='') {
+  const parts=nameKey(name).split(' ').filter(Boolean).filter(part=>!['jr','sr','ii','iii','iv'].includes(part));
+  return {first:parts[0]||'',last:parts.at(-1)||'',parts};
+}
+function routeDriverNameMatchScore(sourceName='',targetName='') {
+  const source=driverFirstLastName(sourceName),target=driverFirstLastName(targetName);if(!source.first||!source.last||!target.first||!target.last)return 0;
+  if(nameKey(sourceName)===nameKey(targetName))return 100;
+  const firstExact=source.first===target.first,lastExact=source.last===target.last,firstClose=source.first.startsWith(target.first)||target.first.startsWith(source.first),lastClose=source.last.startsWith(target.last)||target.last.startsWith(source.last);
+  if(firstExact&&lastExact)return 96;
+  if(lastExact&&firstClose)return 88;
+  if(firstExact&&lastClose)return 82;
+  if(lastExact)return 64;
+  if(firstExact)return 48;
+  return source.parts.filter(part=>target.parts.includes(part)).length*12;
+}
 function duplicateDriverNameCandidates(sourceName='') {
-  const sourceKey=nameKey(sourceName),seen=new Set();
-  return teamDriverRows().filter(row=>{
-    const key=nameKey(row.name);if(!key||key===sourceKey||seen.has(key))return false;seen.add(key);return true;
-  }).sort((a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'}));
+  const sourceKey=nameKey(sourceName),sourceProfileKey=driverProfileEntry(sourceName)?.key||'',seen=new Set(),rows=[];
+  openingPicklistSections().flatMap(section=>section.rows||[]).forEach(route=>{
+    if(!route||route._blank||!String(route.route||'').trim())return;
+    morningDriverNames(route.driver).forEach(name=>{
+      const key=nameKey(name),profileKey=driverProfileEntry(name)?.key||'';if(!key||key===sourceKey||(sourceProfileKey&&profileKey===sourceProfileKey)||seen.has(key))return;
+      seen.add(key);rows.push({name:String(name||'').trim(),route:route.route,wave:route.wave||'',score:routeDriverNameMatchScore(sourceName,name)});
+    });
+  });
+  return rows.sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name,undefined,{sensitivity:'base'})||a.route.localeCompare(b.route));
 }
 function openDuplicateDriverNameMatch(sourceName='') {
   const source=String(sourceName||'').replace(/\s+/g,' ').trim();if(!source)return toast('Choose a backup driver first','error');
-  const candidates=duplicateDriverNameCandidates(source);if(!candidates.length)return toast('Import Drivers & Team before matching duplicate names','error');
+  const candidates=duplicateDriverNameCandidates(source);if(!candidates.length)return toast('Add driver names to the Opening Picklist routes before matching','error');
   state.pendingDuplicateDriverName={source};return openLightweightModal('duplicate-driver-name');
 }
 function applyDuplicateDriverNameMatch() {
