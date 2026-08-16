@@ -1140,7 +1140,7 @@ function topbarLegacy() {
 function cloudStatusControl() {
   const synced=state.cloudStatus==='synced',connecting=state.cloudStatus==='connecting';
   const needsRetry=['error','access-denied','offline','signed-out'].includes(state.cloudStatus);
-  const label=synced?'Shared & synced':connecting?'Connecting shared workspace…':needsRetry?'Sync issue · retry':'Starting shared sync…';
+  const busy=cloudDatabaseBusy(),label=synced?'Shared & synced':connecting?'Connecting shared workspace…':busy?'Database busy · retry later':needsRetry?'Sync issue · retry':'Starting shared sync…';
   const retryable=needsRetry||connecting,title=needsRetry?(state.cloudAccessError||'Shared cloud is disconnected. Tap to retry.'):connecting?'Still connecting? Tap to restart shared sync.':'Shared cloud synchronization';
   const tag=retryable?'button':'span';
   return `<${tag} class="btn cloud-status-button ${esc(state.cloudStatus)}" ${retryable?'data-action="retry-cloud-link"':''} aria-live="polite" title="${esc(title)}"><i></i><span class="hide-mobile">${esc(label)}</span></${tag}>`;
@@ -1151,7 +1151,7 @@ function topbar() {
 }
 
 function contextBar(extra='') {
-  const synced=state.cloudStatus==='synced',label=synced?'Shared workspace · everyone with the link sees these updates':state.cloudStatus==='access-denied'?'Shared link access needs repair':state.cloudStatus==='workspace-empty'?'Starting today’s shared workspace…':state.cloudStatus==='offline'?'Offline · edits saved and will sync automatically':state.cloudStatus==='connecting'?'Connecting shared workspace…':'Shared cloud setup required';
+  const synced=state.cloudStatus==='synced',label=synced?'Shared workspace · everyone with the link sees these updates':state.cloudStatus==='access-denied'?'Shared link access needs repair':state.cloudStatus==='workspace-empty'?'Starting today’s shared workspace…':state.cloudStatus==='offline'?'Offline · edits saved and will sync automatically':state.cloudStatus==='connecting'?'Connecting shared workspace…':cloudDatabaseBusy()?'Database busy · edits saved locally':'Shared cloud setup required';
   return `<div class="context-bar"><div class="date-nav"><div class="date-chip">${ICONS.calendar}${fmtDate()}</div>${extra}</div><div class="sync-state ${synced?'cloud-live':''}"><i class="live-dot"></i>${esc(label)}</div></div>`;
 }
 
@@ -5333,7 +5333,7 @@ function refreshCloudStatusUi() {
   const currentTopbar=document.querySelector?.('.topbar');
   if(currentTopbar){currentTopbar.outerHTML=topbar();bindNavigationTopbar(document.querySelector?.('.topbar'));}
   const synced=state.cloudStatus==='synced';
-  const label=synced?'Shared workspace · everyone with the link sees these updates':state.cloudStatus==='access-denied'?'Shared link access needs repair':state.cloudStatus==='workspace-empty'?'Starting today’s shared workspace…':state.cloudStatus==='offline'?'Offline · edits saved and will sync automatically':state.cloudStatus==='connecting'?'Connecting shared workspace…':'Shared cloud setup required';
+  const label=synced?'Shared workspace · everyone with the link sees these updates':state.cloudStatus==='access-denied'?'Shared link access needs repair':state.cloudStatus==='workspace-empty'?'Starting today’s shared workspace…':state.cloudStatus==='offline'?'Offline · edits saved and will sync automatically':state.cloudStatus==='connecting'?'Connecting shared workspace…':cloudDatabaseBusy()?'Database busy · edits saved locally':'Shared cloud setup required';
   document.querySelectorAll?.('.sync-state').forEach(el=>{el.classList.toggle('cloud-live',synced);el.innerHTML=`<i class="live-dot"></i>${esc(label)}`;});
 }
 function flushDeferredCloudRender() {
@@ -6735,6 +6735,7 @@ async function lockAdminAccess() {
   toast('Admin controls locked');
 }
 let cloudRetryInFlight=false,cloudAutoRetryAttempts=0,cloudConnectingWatchdog=null,lastCloudNotice='',lastCloudNoticeAt=0;
+function cloudDatabaseBusy(error=state.cloudAccessError){return /PGRST003|connection pool|database.*busy|timed out|timeout/i.test(String(error?.message||error||''));}
 function clearCloudConnectingWatchdog(){clearTimeout(cloudConnectingWatchdog);cloudConnectingWatchdog=null;}
 function cloudToastOnce(message,type='error',windowMs=12000) {
   const now=Date.now();
@@ -10429,7 +10430,7 @@ window.RelayOpsCloud?.on?.(event=>{
   if(event.type==='admin-status'){state.adminPinUnlocked=Boolean(event.unlocked);if(state.page==='admin')renderFromCloudEvent();else refreshCloudStatusUi();}
   if(event.type==='access-granted'){state.cloudAccessError='';state.role=['fleet_lead','viewer'].includes(event.membership?.role)?event.membership.role:'dispatcher';refreshCloudStatusUi();}
   if(event.type==='access-denied'){clearCloudConnectingWatchdog();state.cloudStatus='access-denied';state.cloudAccessError='Automatic shared-link access has not been provisioned for this browser.';if(!completeInitialCloudHydration())renderFromCloudEvent();toast('Shared link access needs repair in Supabase','error');}
-  if(event.type==='link-access-error'){clearCloudConnectingWatchdog();state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';if(!completeInitialCloudHydration())renderFromCloudEvent();toast(`Shared access failed: ${state.cloudAccessError}`,'error');if(cloudAutoRetryAttempts<2){cloudAutoRetryAttempts++;setTimeout(()=>retryCloudLinkAccess(true),750*cloudAutoRetryAttempts);}}
+  if(event.type==='link-access-error'){clearCloudConnectingWatchdog();state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';if(!completeInitialCloudHydration())renderFromCloudEvent();toast(`Shared access failed: ${state.cloudAccessError}`,'error');if(!cloudDatabaseBusy(event.error)&&cloudAutoRetryAttempts<2){cloudAutoRetryAttempts++;setTimeout(()=>retryCloudLinkAccess(true),750*cloudAutoRetryAttempts);}}
   if(event.type==='workspace-empty'){clearCloudConnectingWatchdog();state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';if(!completeInitialCloudHydration())renderFromCloudEvent();toast('Shared workspace is not initialized for this day yet','error');}
   if(event.type==='presence'){state.cloudPresence=event.users||[];refreshCloudStatusUi();}
   if(event.type==='loaded'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;if(!completeInitialCloudHydration())renderFromCloudEvent();}

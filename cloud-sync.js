@@ -273,6 +273,21 @@
   }
   function authSessionStorage(){try{return window.sessionStorage||null;}catch{return null;}}
   async function unlockedAuthOperation(_name,_acquireTimeout,operation){return operation();}
+  function cloudFetch(input,init={}){
+    const fetchImpl=window.fetch||globalThis.fetch;
+    if(typeof fetchImpl!=='function')throw new Error('Shared cloud networking is unavailable');
+    if(typeof AbortController!=='function')return fetchImpl(input,init);
+    const method=String(init?.method||'GET').toUpperCase(),controller=new AbortController(),sourceSignal=init?.signal;
+    let timedOut=false;
+    if(sourceSignal?.aborted)controller.abort(sourceSignal.reason);
+    else sourceSignal?.addEventListener?.('abort',()=>controller.abort(sourceSignal.reason),{once:true});
+    const timeout=Math.max(3500,(method==='GET'||method==='HEAD'?CLOUD_TIMEOUT_MS:CLOUD_SAVE_TIMEOUT_MS)-250);
+    const timer=setTimeout(()=>{timedOut=true;controller.abort();},timeout);
+    return fetchImpl(input,{...init,signal:controller.signal}).catch(error=>{
+      if(!timedOut)throw error;
+      const wrapped=new Error('Shared database is busy. Your edits remain safe on this device; retry in a minute.');wrapped.code='cloud_timeout';throw wrapped;
+    }).finally(()=>clearTimeout(timer));
+  }
   function createClient(){
     if(!configured||!window.supabase?.createClient)return null;
     // RelayOps uses an anonymous, link-scoped session. Keep that session inside
@@ -282,7 +297,7 @@
     // anonymous session, so running the small auth operation directly is safe.
     const auth={persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,lock:unlockedAuthOperation};
     const isolatedStorage=authSessionStorage();if(isolatedStorage)auth.storage=isolatedStorage;
-    return window.supabase.createClient(config.supabaseUrl,config.supabaseAnonKey,{auth});
+    return window.supabase.createClient(config.supabaseUrl,config.supabaseAnonKey,{auth,global:{fetch:cloudFetch}});
   }
   function authRedirectUrl(){
     const configuredRedirect=String(config.authRedirectUrl||'').trim();
@@ -320,10 +335,12 @@
   }
   function transientPoolError(error){return /PGRST003|connection pool|timed out acquiring connection|database.*busy/i.test(String(error?.code||'')+' '+String(error?.message||error||''));}
   async function cloudRequest(factory,label){
-    let result=await withCloudTimeout(factory(),label);
-    if(!transientPoolError(result?.error))return result;
-    notify({type:'reconnecting',reason:'database-busy'});await pause(3500);
-    result=await withCloudTimeout(factory(),label);return result;
+    const result=await withCloudTimeout(factory(),label);
+    // Retrying PGRST003 immediately creates another waiter in PostgREST's
+    // already exhausted pool. Surface the busy response and let the guarded
+    // minute-scale retry path handle it instead.
+    if(transientPoolError(result?.error))notify({type:'reconnecting',reason:'database-busy'});
+    return result;
   }
   function isAuthSessionError(error){return /jwt|refresh.?token|invalid.?token|session.*(missing|expired|invalid)|unauthorized|not authenticated/i.test(String(error?.message||error||''));}
   function isStorageQuotaError(error){return /quota|storage.*full|exceeded/i.test(String(error?.message||error||''));}
@@ -616,6 +633,7 @@
       saveInFlight=null;
       const next=pendingSaveAction;pendingSaveAction='';
       if(result?.delayed){schedulePendingSaveRetry(next||result.action||action);return null;}
+      if(result?.conflict){schedulePendingSaveRetry(next||'workspace.conflict-retry');return result;}
       clearSaveRetry();
       if(next&&session&&membership)setTimeout(()=>save(next).catch(error=>notify({type:'error',error})),0);
       return result;

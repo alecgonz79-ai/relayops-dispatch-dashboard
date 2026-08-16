@@ -23,6 +23,18 @@ assert(
   'Slow mobile saves must retry with a capped, jittered backoff'
 );
 assert(
+  cloud.includes("global:{fetch:cloudFetch}")&&cloud.includes('controller.abort()'),
+  'Timed-out Supabase requests must be aborted instead of continuing to occupy the database pool'
+);
+assert(
+  cloud.includes("if(result?.conflict){schedulePendingSaveRetry(next||'workspace.conflict-retry');return result;}"),
+  'Revision conflicts must back off instead of immediately starting another write loop'
+);
+assert(
+  !cloud.includes('notify({type:\'reconnecting\',reason:\'database-busy\'});await pause(3500)'),
+  'A saturated PostgREST pool must not be retried immediately'
+);
+assert(
   !cloud.includes('RelayOps will start a fresh shared session'),
   'A save timeout must never claim that the shared session will be replaced'
 );
@@ -44,6 +56,10 @@ assert(
 assert(
   app.includes('function cloudToastOnce('),
   'Repeated failures from the same save must be collapsed into one mobile notice'
+);
+assert(
+  app.includes('function cloudDatabaseBusy(')&&app.includes('Database busy · edits saved locally')&&app.includes('!cloudDatabaseBusy(event.error)'),
+  'Database saturation must be labeled accurately and must disable rapid link retries'
 );
 
 console.log('cloud mobile save contract tests passed');

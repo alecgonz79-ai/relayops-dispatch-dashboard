@@ -1,4 +1,4 @@
-const CACHE='relayops-fleet-recovery-v102';
+const CACHE='relayops-pool-recovery-v103';
 const CORE=[
   './',
   './index.html',
@@ -6,9 +6,9 @@ const CORE=[
   './macos-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260726-fleet-warning-r1',
-  './app.js?v=20260812-fleet-recovery-r1',
-  './cloud-sync.js?v=20260728-egress-budget-r2',
-  './supabase/config.js?v=20260720-auth-redirect',
+  './app.js?v=20260816-pool-recovery-r1',
+  './cloud-sync.js?v=20260816-pool-recovery-r1',
+  './supabase/config.js?v=20260816-pool-recovery-r1',
   './vendor/jszip.min.js',
   './assets/rivian-prime-van.png'
 ];
