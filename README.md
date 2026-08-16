@@ -13,7 +13,7 @@ https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/
 Send the full `https://` URL so GroupMe, Slack, text messages, and email turn it into a clickable link.
 Do not shorten or swap the GitHub account name in the URL. For example, `https://AG79.github.io/...` will show GitHub's 404 page unless a GitHub account or organization named `AG79` owns and publishes the site.
 
-The dashboard's **Share link** button appends the selected operation date. Every dispatcher must open their secure email sign-in link once; after the owner invites that email, imports and edits use the same dated Supabase snapshot and update open screens in realtime.
+The dashboard's **Share link** button appends the selected operation date. Every dispatcher must open their secure email sign-in link once; after the owner invites that email, imports and edits use the same dated Supabase snapshot and update open screens in realtime. Route, PAYCOM, Whiparound, fleet-source, Device/Portable, and Van Parking import results are shared for that operation date. At Los Angeles midnight the dashboard opens a clean day, and the database removes expired daily snapshots while preserving driver identities/name matches, issue history, the parking layout, inventory, templates, and connector settings.
 
 ## Local preview
 
@@ -36,7 +36,7 @@ Serve this folder with any static web server, then open `index.html` through tha
 
 ## Current boundary
 
-GitHub Pages serves only the public front-end files. Authentication, organization/station membership, realtime workspace data, and row-level access are handled by the configured Supabase project; they are not trusted to browser-only controls. Imports are parsed locally before the resulting operational state is synchronized to authorized dispatchers. Amazon Logistics and FleetOS credentials still must never be stored in the public front end. True live pulls require the authenticated server-side proxy documented under `live-connector/`; file imports remain the safe fallback whenever that proxy is unavailable.
+GitHub Pages serves only the public front-end files. Authentication, organization/station membership, realtime workspace data, and row-level access are handled by the configured Supabase project; they are not trusted to browser-only controls. Imports are parsed locally before the normalized operational values and source filenames are synchronized to authorized dispatchers; the original uploaded file bytes are not stored. Amazon Logistics and FleetOS credentials still must never be stored in the public front end. True live pulls require the authenticated server-side proxy documented under `live-connector/`; file imports remain the safe fallback whenever that proxy is unavailable.
 
 ## Morning Sheet connectors
 

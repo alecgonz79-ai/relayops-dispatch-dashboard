@@ -3,7 +3,8 @@
   const configured=Boolean(config.supabaseUrl&&config.supabaseAnonKey&&config.organizationId&&config.stationId&&!config.supabaseUrl.includes('YOUR_PROJECT'));
   const PERSISTENT_DATE='2000-01-01';
   const SYNC_META='__relayopsSync';
-  const DAILY_STATION_FIELDS=new Set(['fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','whiparoundComplianceHistory','whiparoundReminderTemplates','messageQueueTemplate','coachingQueue','inventoryItems','inventoryLog','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports']);
+  const DAILY_IMPORT_FIELDS=['fleetImport','fleetSourceUploads','fleetExpectedCount','fleetLastRefresh','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes'];
+  const PERSISTENT_STATION_FIELDS=new Set(['fleetNameOverrides','fleetIssues','equipmentIssues','vanParkingLayout','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','whiparoundComplianceHistory','whiparoundReminderTemplates','messageQueueTemplate','coachingQueue','inventoryItems','inventoryLog','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports']);
   let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,pollTimer=null,polling=false,saveTimer=null,saveInFlight=null,pendingSaveAction='',saveRetryTimer=null,saveRetryAttempts=0,applying=false,initializing=false,initializingSince=0,basePayload={},basePersistentPayload={},lastPersistentPollAt=0,lastActivityAt=Date.now(),loadGeneration=0;
   const memoryPendingByKey=new Map();
   const CLOUD_TIMEOUT_MS=Math.max(4000,Math.min(30000,Number(config.requestTimeoutMs)||10000));
@@ -67,12 +68,12 @@
   }
   function compactDailyPayload(value={}){
     const output=clone(value||{});
-    DAILY_STATION_FIELDS.forEach(key=>delete output[key]);
+    PERSISTENT_STATION_FIELDS.forEach(key=>delete output[key]);
     const meta=output?.[SYNC_META];
     if(meta){
       for(const bucket of ['versions','tombstones']){
         Object.keys(meta[bucket]||{}).forEach(path=>{
-          if(DAILY_STATION_FIELDS.has(String(path||'').split('.')[0]))delete meta[bucket][path];
+          if(PERSISTENT_STATION_FIELDS.has(String(path||'').split('.')[0]))delete meta[bucket][path];
         });
       }
     }
@@ -257,9 +258,17 @@
     let next=clone(remote||{}),carried=false;
     const records=stationPendingRecords().filter(item=>item.date!==currentDate&&item.record?.shared&&item.record.userId===session?.user?.id)
       .sort((left,right)=>timestamp(left.record?.updatedAt)-timestamp(right.record?.updatedAt));
-    records.forEach(({record})=>{
-      if(!record?.persistentPayload||sameStoredPayload(record.persistentPayload,record.basePersistentPayload||{}))return;
-      next=reconcilePayload(next,record.persistentPayload,record.basePersistentPayload||{});carried=true;
+    records.forEach(({date,record})=>{
+      if(!record?.persistentPayload||sameStoredPayload(record.persistentPayload,record.basePersistentPayload||{})){
+        if(!operationDateIsWritable(date))clearPending(date);
+        return;
+      }
+      const reconciled=reconcilePayload(next,record.persistentPayload,record.basePersistentPayload||{});
+      if(sameStoredPayload(reconciled,next)){
+        if(!operationDateIsWritable(date))clearPending(date);
+        return;
+      }
+      next=reconciled;carried=true;
     });
     if(currentPending?.persistentPayload)next=reconcilePayload(next,currentPending.persistentPayload,currentPending.basePersistentPayload||{});
     return {payload:next,carried};
@@ -267,6 +276,10 @@
   function acknowledgeStationPersistentPayload(payload={}){
     stationPendingRecords().forEach(({date,record})=>{
       if(!record?.shared||record.userId!==session?.user?.id||!record.persistentPayload)return;
+      // Once permanent edits from an expired queue are safely acknowledged,
+      // discard its unsavable daily payload so large imports cannot build up
+      // in localStorage across shifts.
+      if(!operationDateIsWritable(date)){clearPending(date);return;}
       const reconciled=reconcilePayload(payload,record.persistentPayload,record.basePersistentPayload||{});
       writePending({...record,persistentPayload:reconciled,basePersistentPayload:clone(payload),updatedAt:new Date().toISOString()},date);
     });
@@ -482,7 +495,8 @@
     return membership;
   }
   function canWrite(){return Boolean(membership&&membership.active&&membership.role!=='viewer');}
-  function canInitialize(){return canWrite();}
+  function operationDateIsWritable(date=operationDate()){return window.RelayOpsApp?.operationDateIsWritable?.(date)!==false;}
+  function canInitialize(){return canWrite()&&operationDateIsWritable(operationDate());}
   function currentOperationRequest(date,generation){return date===operationDate()&&generation===loadGeneration;}
   async function load(){
     if(!client||!session)return null;
@@ -498,11 +512,23 @@
     const persistentResult=await query(PERSISTENT_DATE);
     if(!currentOperationRequest(date,generation))return null;
     if(dailyResult.error)throw dailyResult.error;if(persistentResult.error)throw persistentResult.error;
-    const data=dailyResult.data,persistent=persistentResult.data,legacyDaily=clone(data?.payload||{}),dailyRemote=compactDailyPayload(legacyDaily),persistentBaseRemote=clone(persistent?.payload||{}),persistentRemote=clone(persistentBaseRemote);
-    let legacyPersistentMigration=false;
+    const data=dailyResult.data,persistent=persistentResult.data,legacyDaily=clone(data?.payload||{}),dailyBaseRemote=compactDailyPayload(legacyDaily),dailyRemote=clone(dailyBaseRemote),persistentBaseRemote=clone(persistent?.payload||{}),persistentRemote=clone(persistentBaseRemote);
+    let legacyPersistentMigration=false,legacyDailyImportMigration=false;
     for(const key of ['coachingQueue','messageQueueTemplate']){
       if(!Object.prototype.hasOwnProperty.call(persistentBaseRemote,key)&&Object.prototype.hasOwnProperty.call(legacyDaily,key)){
         persistentRemote[key]=clone(legacyDaily[key]);legacyPersistentMigration=true;
+      }
+    }
+    // Earlier builds saved fleet and equipment file results in the permanent
+    // station row. Move them into today's existing dated row once, then let
+    // the normal persistent save remove the legacy copies. Never carry them
+    // into a missing/new day.
+    if(data){
+      for(const key of DAILY_IMPORT_FIELDS){
+        if(Object.prototype.hasOwnProperty.call(persistentBaseRemote,key)){
+          legacyDailyImportMigration=true;
+          if(!Object.prototype.hasOwnProperty.call(dailyBaseRemote,key))dailyRemote[key]=clone(persistentBaseRemote[key]);
+        }
       }
     }
     let pending=pendingSnapshot(date);
@@ -514,7 +540,7 @@
     const carriedPersistent=carriedPersistentPayload(persistentRemote,date,pending),hasPersistentPending=Boolean(pending?.persistentPayload)||carriedPersistent.carried;
     const dailyPayload=pending?.payload?reconcilePayload(dailyRemote,pending.payload,pending.basePayload||basePayload||{}):dailyRemote;
     const persistentPayload=carriedPersistent.payload;
-    basePayload=clone(dailyRemote);basePersistentPayload=clone(persistentBaseRemote);lastPersistentPollAt=Date.now();
+    basePayload=clone(dailyBaseRemote);basePersistentPayload=clone(persistentBaseRemote);lastPersistentPollAt=Date.now();
     applying=true;
     try{
       // A missing date is a true new-day initialization. Existing snapshots
@@ -529,8 +555,8 @@
     notify({type:'loaded',revision,persistentRevision,updatedAt:data?.updated_at||persistent?.updated_at,operationDate:date});
     if(pending)writePending({...pending,payload:dailyPayload,persistentPayload,basePayload:clone(dailyRemote),basePersistentPayload:clone(persistentBaseRemote),updatedAt:new Date().toISOString()},date);
     if((!data||!persistent)&&!canInitialize())notify({type:'workspace-empty',operationDate:date,missingDaily:!data,missingPersistent:!persistent});
-    if(((!data||!persistent)&&canInitialize())||pending?.payload||carriedPersistent.carried||legacyPersistentMigration){
-      const action=legacyPersistentMigration?'workspace.legacy-station-migration':carriedPersistent.carried?'workspace.prior-date-station-reconcile':!data||!persistent?'workspace.initialize':'workspace.offline-reconcile';
+    if(((!data||!persistent)&&canInitialize())||pending?.payload||carriedPersistent.carried||legacyPersistentMigration||legacyDailyImportMigration){
+      const action=legacyDailyImportMigration?'workspace.daily-import-migration':legacyPersistentMigration?'workspace.legacy-station-migration':carriedPersistent.carried?'workspace.prior-date-station-reconcile':!data||!persistent?'workspace.initialize':'workspace.offline-reconcile';
       setTimeout(()=>save(action).catch(error=>notify({type:'error',error})),0);
     }
     subscribe(date);subscribePresence(date);return data;
@@ -547,7 +573,8 @@
     const queued=queueSnapshot(currentPayload,action,currentPersistentPayload,saveDate,{daily:saveBasePayload,persistent:saveBasePersistentPayload}),payload=queued.payload,persistentPayload=queued.persistentPayload;
     if(!membership)await currentMembership({refresh:true});
     if(!canWrite())throw new Error('This account does not have permission to edit the shared workspace');
-    const dailyChanged=!sameStoredPayload(payload,saveBasePayload),persistentChanged=!sameStoredPayload(persistentPayload,saveBasePersistentPayload);
+    const dailyDirty=!sameStoredPayload(payload,saveBasePayload),dailyWritable=operationDateIsWritable(saveDate),dailyChanged=dailyWritable&&dailyDirty,persistentChanged=!sameStoredPayload(persistentPayload,saveBasePersistentPayload);
+    if(dailyDirty&&!dailyWritable)notify({type:'expired-date',operationDate:saveDate});
     try{
       if(!dailyChanged&&!persistentChanged){
         const latest=pendingSnapshot(saveDate);
@@ -557,7 +584,7 @@
       let daily=null,persistent=null;
       if(dailyChanged){
         enforcePayloadBudget(payload,'Daily operations data',CLOUD_DAILY_PAYLOAD_LIMIT);
-        daily=await withCloudTimeout(client.rpc('save_workspace_snapshot_v3',{target_station:config.stationId,target_date:saveDate,expected_revision:saveRevision,new_payload:payload,action_name:action}),'Daily operations save',CLOUD_SAVE_TIMEOUT_MS);
+        daily=await withCloudTimeout(client.rpc('save_workspace_snapshot_v4',{target_station:config.stationId,target_date:saveDate,expected_revision:saveRevision,new_payload:payload,action_name:action}),'Daily operations save',CLOUD_SAVE_TIMEOUT_MS);
         if(daily.error){
           if(String(daily.error.message||'').includes('revision_conflict')){
             notify({type:'conflict',operationDate:saveDate});
@@ -570,7 +597,7 @@
       }
       if(persistentChanged){
         enforcePayloadBudget(persistentPayload,'Permanent station data',CLOUD_PERSISTENT_PAYLOAD_LIMIT);
-        persistent=await withCloudTimeout(client.rpc('save_workspace_snapshot_v3',{target_station:config.stationId,target_date:PERSISTENT_DATE,expected_revision:savePersistentRevision,new_payload:persistentPayload,action_name:`${action}.persistent` }),'Station settings save',CLOUD_SAVE_TIMEOUT_MS);
+        persistent=await withCloudTimeout(client.rpc('save_workspace_snapshot_v4',{target_station:config.stationId,target_date:PERSISTENT_DATE,expected_revision:savePersistentRevision,new_payload:persistentPayload,action_name:`${action}.persistent` }),'Station settings save',CLOUD_SAVE_TIMEOUT_MS);
         if(persistent.error){
           if(String(persistent.error.message||'').includes('revision_conflict')){
             notify({type:'conflict',operationDate:saveDate});

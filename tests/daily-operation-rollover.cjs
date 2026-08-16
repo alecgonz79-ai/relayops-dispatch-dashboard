@@ -164,12 +164,8 @@ function seedDirtyDay(context) {
 }
 
 const PERMANENT_FIELDS = [
-  'dspCode', 'organizationName', 'stationCode', 'fleetImport', 'fleetSourceUploads',
-  'fleetExpectedCount', 'fleetNameOverrides', 'fleetIssues', 'equipmentIssues',
-  'vanParking', 'vanParkingUpdated', 'chargingStationChecked', 'vanParkingBatteries',
-  'parkingChargerStatus', 'parkingNotes', 'equipmentImport', 'deviceCustomRows',
-  'removedDeviceVehicleIds', 'driverContacts', 'driverContactsLastImport',
-  'removedDriverKeys', 'driverNameAliases', 'driverProfiles', 'scheduleStayHomeHistory',
+  'dspCode', 'organizationName', 'stationCode', 'fleetNameOverrides', 'fleetIssues', 'equipmentIssues',
+  'driverContacts', 'driverContactsLastImport', 'removedDriverKeys', 'driverNameAliases', 'driverProfiles', 'scheduleStayHomeHistory',
   'rosteringPlans', 'rosteringHelperPool', 'rosteringTrainingMatches',
   'rosteringManualTraining', 'whiparoundComplianceHistory',
   'whiparoundReminderTemplates', 'messageQueueTemplate', 'coachingQueue', 'inventoryItems', 'inventoryLog',
@@ -190,6 +186,8 @@ function testLosAngelesDateBoundaries() {
     defaultOperationDate(new Date('2026-12-15T08:00:00.000Z'))
   ]`, context);
   assert.deepStrictEqual(Array.from(values), ['2026-08-04', '2026-08-05', '2026-12-14', '2026-12-15'], 'Operation dates must roll at Los Angeles midnight in both PDT and PST');
+  assert.strictEqual(vm.runInContext("window.RelayOpsApp.operationDateIsWritable('2026-08-05')", context), true, 'A future operation date must remain writable for advance planning');
+  assert.strictEqual(vm.runInContext("window.RelayOpsApp.operationDateIsWritable('2026-08-03')", context), false, 'An expired operation date must remain read-only');
 }
 
 function testFreshDayResetAndPermanentPreservation() {
@@ -197,9 +195,12 @@ function testFreshDayResetAndPermanentPreservation() {
   assert.strictEqual(typeof context.window.RelayOpsApp?.resetDailyState, 'function', 'RelayOpsApp must expose resetDailyState(date) for a missing shared day');
   seedDirtyDay(context);
   const beforePermanent = snapshotFields(context, PERMANENT_FIELDS);
+  const beforeParkingLayout = clone(vm.runInContext('parkingLayoutSnapshot(state.vanParking)', context));
   vm.runInContext(`window.RelayOpsApp.resetDailyState('2026-08-05')`, context);
   const afterPermanent = snapshotFields(context, PERMANENT_FIELDS);
-  assert.deepStrictEqual(afterPermanent, beforePermanent, 'A daily reset must not mutate fleet, parking, equipment, driver, history, inventory, or connector data');
+  const afterParkingLayout = clone(vm.runInContext('parkingLayoutSnapshot(state.vanParking)', context));
+  assert.deepStrictEqual(afterPermanent, beforePermanent, 'A daily reset must not mutate permanent issues, driver identities, history, inventory, or connector data');
+  assert.deepStrictEqual(afterParkingLayout, beforeParkingLayout, 'A daily reset must preserve the permanent parking layout');
 
   const after = clone(vm.runInContext(`JSON.parse(JSON.stringify({
     date:state.morningOperationDate,routes:state.routes,morningRoutes:state.morningRoutes,
@@ -237,6 +238,14 @@ function testFreshDayResetAndPermanentPreservation() {
   })) assert.strictEqual(Object.keys(value || {}).length, 0, `Fresh day retained ${name}`);
   assert.strictEqual(after.scheduleEntries.length, 0, 'Fresh day retained the prior PAYCOM import');
   assert.strictEqual(after.scheduleImportName, '', 'Fresh day retained the prior PAYCOM filename');
+  assert.strictEqual(vm.runInContext('state.fleetImport', context), null, 'Fresh day retained the prior fleet import');
+  assert.deepStrictEqual(clone(vm.runInContext('state.fleetSourceUploads', context)), {}, 'Fresh day retained fleet source uploads');
+  assert.strictEqual(vm.runInContext('state.equipmentImport', context), null, 'Fresh day retained the prior device/portable import');
+  assert(!clone(vm.runInContext('state.vanParking', context)).some(slot => !/^x$/i.test(String(slot.value || '').trim()) && String(slot.value || '').trim()), 'Fresh day retained prior parking assignments');
+  assert.strictEqual(vm.runInContext('state.vanParkingUpdated', context), '', 'Fresh day retained the parking import date');
+  assert.deepStrictEqual(clone(vm.runInContext('state.vanParkingBatteries', context)), {}, 'Fresh day retained parking battery readings');
+  assert.deepStrictEqual(clone(vm.runInContext('state.parkingChargerStatus', context)), {}, 'Fresh day retained charger statuses');
+  assert.strictEqual(vm.runInContext('state.parkingNotes', context), '', 'Fresh day retained parking notes');
   assert(after.topics.every(value => value === '') && after.notes === '', 'Fresh day retained Picklist topics or notes');
   assert.strictEqual(after.calloffDrafts.length, 0, 'Fresh day retained Picklist call-off drafts');
   assert.strictEqual(after.swapAudit.length, 0, 'Fresh day retained prior-day swap audit rows');
@@ -354,12 +363,8 @@ async function testCloudResetsBeforeMissingDayInitialization() {
   const order = [], rpcCalls = [];
   let dailyState = { morningRoutes: [{ routeUid: 'stale', route: 'CXOLD', driver: 'Yesterday Driver' }] };
   const remotePersistentState = {
-    fleetImport: { vehicles: [{ vin: 'VIN-1', name: 'EV1', battery: 88 }] },
     fleetIssues: { EV1: { active: [{ id: 'issue-1', text: 'Mirror' }], history: [] } },
-    vanParking: [{ id: 'west-1', zone: 'west', value: '1' }],
-    vanParkingBatteries: { 'west-1': 88 },
-    parkingChargerStatus: { 'west-1': 'green' },
-    parkingNotes: 'Permanent parking note',
+    vanParkingLayout: [{ id: 'west-1', zone: 'west', label: 'Left 1', value: '', kind: 'spot' }],
     driverContacts: [{ key: 'driver-one', name: 'Driver One', phone: '5551112222' }],
     driverNameAliases: { 'driver one': ['D One'] },
     driverProfiles: { 'driver one': { name: 'Driver One', preferredVehicleIds: ['1'] } },
@@ -388,7 +393,7 @@ async function testCloudResetsBeforeMissingDayInitialization() {
     },
     rpc: async (name, args) => {
       if (name === 'relayops_admin_status') return { data: false, error: null };
-      if (name === 'save_workspace_snapshot_v3') {
+      if (name === 'save_workspace_snapshot_v4') {
         order.push(`write:${args.target_date}`); rpcCalls.push(clone(args));
         return { data: { revision: 1, updated_at: '2026-08-05T07:00:01Z' }, error: null };
       }
@@ -429,7 +434,7 @@ async function testCloudResetsBeforeMissingDayInitialization() {
   assert.strictEqual(dailyWrite.new_payload.morningRoutes.length, 6, 'Missing day initialization did not write six blank wave anchors');
   assert(!dailyWrite.new_payload.morningRoutes.some(row => row.route === 'CXOLD' || row.driver === 'Yesterday Driver'), 'Missing day initialization copied prior-day operational data');
   assert(!rpcCalls.some(call => call.target_date === '2000-01-01'), 'Missing daily row caused an unnecessary permanent workspace write');
-  assert.deepStrictEqual(persistentState, remotePersistentState, 'A missing-day reset failed to preserve or hydrate permanent driver, fleet, parking, and coaching data');
+  assert.deepStrictEqual(persistentState, remotePersistentState, 'A missing-day reset failed to preserve or hydrate permanent driver, fleet-issue, parking-layout, and coaching data');
 }
 
 async function run() {

@@ -5,11 +5,12 @@ RelayOps uses automatic Supabase anonymous sessions for synchronized station dat
 ## Owner setup
 
 1. Create a Supabase project for Legacy Logistics / LLOL.
-2. In **SQL Editor**, run `schema.sql` once. Existing projects created before July 14, 2026 must also run `migrations/20260714_owner_member_access.sql` once.
-3. Run `migrations/20260720_link_access_admin_pin.sql` once.
-4. In **Authentication → Sign In / Providers**, enable **Allow anonymous sign-ins**.
-5. Copy Project URL and the public anon key from **Project Settings → API** into `config.js`.
-6. Commit and deploy `config.js`. Never place the service-role key, Admin PIN, Amazon cookies, or FleetOS cookies in this repository.
+2. In **SQL Editor**, run `schema.sql` once. It installs the guarded v4 writer and the Los Angeles midnight expiration job.
+3. Existing projects created before July 14, 2026 must also run `migrations/20260714_owner_member_access.sql` once, followed by `migrations/20260720_link_access_admin_pin.sql`.
+4. Existing projects created before August 16, 2026 must run `migrations/20260816_daily_workspace_expiration_v4.sql`; after the v4 browser client is live, run `migrations/20260816_revoke_writer_v3_after_v4.sql`.
+5. In **Authentication → Sign In / Providers**, enable **Allow anonymous sign-ins**.
+6. Copy Project URL and the public anon key from **Project Settings → API** into `config.js`.
+7. Commit and deploy `config.js`. Never place the service-role key, Admin PIN, Amazon cookies, or FleetOS cookies in this repository.
 
 ## First organization bootstrap
 
@@ -47,13 +48,13 @@ Treat the dashboard URL as operationally sensitive. Anyone who receives it can v
 
 - Morning Sheet rows and published roster state
 - Drivers & Team contacts and removals
-- Fleet imports, operational/grounded status, battery state, and name mappings
-- Device and Portable assignments and custom rows
-- Van Parking layout, battery entries, and last-updated value
+- Daily Fleet imports, operational/grounded status, and battery state; permanent fleet name mappings and issue history
+- Daily Device and Portable assignments and custom rows
+- Permanent Van Parking layout plus daily assignments, battery entries, charger status, notes, and last-updated value
 - Station/DSP settings needed by daily operations
 - Coaching review queue and shared message template
 
-Each day is stored as a versioned station workspace. Writes use an expected revision, reload newer work on a conflict, publish realtime changes to open dispatcher sessions, and write an audit event.
+Each day is stored as a versioned station workspace. Writes use an expected revision, reload newer work on a conflict, poll efficiently for other-dispatcher updates, and write an audit event. At Los Angeles midnight, the database deletes expired daily workspaces while preserving the permanent station row.
 
 Shared links include `?date=YYYY-MM-DD`, so every dispatcher opens the same operational day. The anonymous browser session is restricted to the configured station and is automatically restored. A new date is initialized through the same synchronized dispatcher workspace.
 

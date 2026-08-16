@@ -8,8 +8,7 @@ const dailySource=app.slice(app.indexOf('function sharedWorkspaceState()'),app.i
 const persistentSource=app.slice(app.indexOf('function persistentWorkspaceState()'),app.indexOf('function applySharedWorkspaceState('));
 
 const stationOnly=[
-  'fleetImport','fleetSourceUploads','fleetIssues','equipmentIssues','vanParking',
-  'equipmentImport','driverContacts','driverProfiles','scheduleStayHomeHistory',
+  'fleetIssues','equipmentIssues','vanParkingLayout','driverContacts','driverProfiles','scheduleStayHomeHistory',
   'rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining',
   'whiparoundComplianceHistory','whiparoundReminderTemplates','coachingQueue',
   'inventoryItems','inventoryLog','morningSheetsEndpoint','chargerReports'
@@ -18,6 +17,12 @@ const stationOnly=[
 for(const field of stationOnly){
   assert(!new RegExp(`\\b${field}\\s*:`).test(dailySource),`Daily payload duplicates station field ${field}`);
   assert(new RegExp(`\\b${field}\\s*:`).test(persistentSource),`Persistent payload lost station field ${field}`);
+}
+
+const dailyImports=['fleetImport','fleetSourceUploads','fleetExpectedCount','fleetLastRefresh','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes'];
+for(const field of dailyImports){
+  assert(new RegExp(`\\b${field}\\s*:`).test(dailySource),`Daily payload lost shared import field ${field}`);
+  assert(!new RegExp(`\\b${field}\\s*:`).test(persistentSource),`Permanent payload duplicated daily import field ${field}`);
 }
 
 assert(cloud.includes('Number(config.pollIntervalMs)||60000'),'Active tabs should use the guarded 60 second revision interval');
@@ -38,7 +43,7 @@ const compact=context.window.RelayOpsCloud.__test.compactDailyPayload({
   __relayopsSync:{version:1,versions:{'fleetImport.vehicles':{'vin:vin1':'2026-07-28T12:00:00Z'},morningRoutes:{'route:cx100':'2026-07-28T12:00:00Z'}},tombstones:{driverContacts:{'driver:driver':'2026-07-28T12:00:00Z'}}}
 });
 assert(compact.morningRoutes?.[0]?.route==='CX100','Daily compaction removed operational route data');
-assert(!compact.fleetImport&&!compact.driverContacts,'Daily compaction retained duplicate station data');
-assert(!compact.__relayopsSync.versions['fleetImport.vehicles']&&!compact.__relayopsSync.tombstones.driverContacts,'Daily compaction retained station-only synchronization metadata');
+assert(compact.fleetImport?.vehicles?.[0]?.vin==='VIN1'&&!compact.driverContacts,'Daily compaction removed a daily import or retained permanent driver data');
+assert(compact.__relayopsSync.versions['fleetImport.vehicles']&&!compact.__relayopsSync.tombstones.driverContacts,'Daily compaction removed import synchronization metadata or retained station-only metadata');
 
 console.log('Cloud egress budget contracts passed');

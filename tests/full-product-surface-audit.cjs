@@ -208,25 +208,28 @@ function testSharedAndPersistentStateContracts() {
     globalThis.__daily=sharedWorkspaceState();
     globalThis.__persistent=persistentWorkspaceState();
     state.messageQueueTemplate='standup';
-    applySharedWorkspaceState({organizationName:'Shared DSP',stationCode:'DJT6',morningRoutes:[{route:'CX777'}],messageQueueTemplate:'simple'});
+    applySharedWorkspaceState({organizationName:'Shared DSP',stationCode:'DJT6',morningRoutes:[{route:'CX777'}],parkingNotes:'Shared note',messageQueueTemplate:'simple'});
     globalThis.__messageAfterDaily=state.messageQueueTemplate;
-    applyPersistentWorkspaceState({parkingNotes:'Shared note',rosteringPlans:{'2026-07-16':{services:[],assignments:[]}},messageQueueTemplate:'route'});
+    applyPersistentWorkspaceState({vanParkingLayout:[{id:'w1',zone:'west',label:'Left 1',value:'',kind:'spot'}],rosteringPlans:{'2026-07-16':{services:[],assignments:[]}},messageQueueTemplate:'route'});
     globalThis.__applied={organizationName:state.organizationName,stationCode:state.stationCode,route:state.morningRoutes[0]?.route,parkingNotes:state.parkingNotes,messageQueueTemplate:state.messageQueueTemplate};
     globalThis.__persistentRoster={date:state.rosteringDate,hasPlan:Boolean(state.rosteringPlans['2026-07-16'])};
   `, context);
   const dailyFields = [
     'organizationName', 'stationCode', 'morningRoutes', 'scheduleEntries', 'rosteringDate',
+    'fleetImport', 'fleetSourceUploads', 'fleetExpectedCount', 'fleetLastRefresh',
+    'equipmentImport', 'deviceCustomRows', 'removedDeviceVehicleIds',
+    'vanParking', 'vanParkingUpdated', 'chargingStationChecked', 'vanParkingBatteries', 'parkingChargerStatus', 'parkingNotes',
     'scheduleBackupRecords', 'scheduleStayHome', 'scheduleReductions',
     'scheduleHelpers', 'openingPicklistTopics', 'openingPicklistNotes', 'whiparoundInspections'
   ];
   const persistentFields = [
-    'organizationName', 'stationCode', 'fleetImport', 'fleetIssues', 'vanParking', 'parkingNotes',
-    'equipmentImport', 'driverContacts', 'driverNameAliases', 'scheduleStayHomeHistory', 'rosteringPlans',
+    'organizationName', 'stationCode', 'fleetIssues', 'vanParkingLayout',
+    'driverContacts', 'driverNameAliases', 'scheduleStayHomeHistory', 'rosteringPlans',
     'whiparoundComplianceHistory', 'messageQueueTemplate', 'coachingQueue', 'coachingTemplate', 'morningSheetsEndpoint'
   ];
   for (const field of dailyFields) assert(Object.prototype.hasOwnProperty.call(context.__daily, field), `Shared workspace snapshot lost ${field}`);
   for (const field of persistentFields) assert(Object.prototype.hasOwnProperty.call(context.__persistent, field), `Persistent workspace snapshot lost ${field}`);
-  for (const field of ['fleetImport','fleetIssues','vanParking','parkingNotes','equipmentImport','driverContacts','driverNameAliases','scheduleStayHomeHistory','rosteringPlans','whiparoundComplianceHistory','messageQueueTemplate','coachingQueue','coachingTemplate','morningSheetsEndpoint']) {
+  for (const field of ['fleetIssues','vanParkingLayout','driverContacts','driverNameAliases','scheduleStayHomeHistory','rosteringPlans','whiparoundComplianceHistory','messageQueueTemplate','coachingQueue','coachingTemplate','morningSheetsEndpoint']) {
     assert(!Object.prototype.hasOwnProperty.call(context.__daily, field), `Daily operations snapshot still duplicates station field ${field}`);
   }
   assert(context.__applied.organizationName === 'Shared DSP' && context.__applied.stationCode === 'DJT6' && context.__applied.route === 'CX777' && context.__applied.parkingNotes === 'Shared note', 'Remote shared state did not apply across organization, Morning Sheet, and Van Parking');

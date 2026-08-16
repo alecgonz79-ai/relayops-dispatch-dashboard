@@ -35,7 +35,7 @@ const client={
   },
   rpc:async(name,args)=>{
     if(name==='relayops_admin_status')return{data:false,error:null};
-    if(name!=='save_workspace_snapshot_v3')return{data:null,error:null};
+    if(name!=='save_workspace_snapshot_v4')return{data:null,error:null};
     rpcLog.push({name,args:clone(args)});
     const row=snapshots[args.target_date];
     row.revision+=1;row.payload=clone(args.new_payload);row.updated_at='2026-07-28T12:05:00Z';

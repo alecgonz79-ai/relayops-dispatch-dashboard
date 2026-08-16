@@ -245,6 +245,24 @@ function normalizeVanParkingLayout(slots=[]) {
   moveBefore('east-19','east-20');
   return rows;
 }
+function parkingLayoutSnapshot(slots=[]) {
+  return normalizeVanParkingLayout(slots).map(slot=>({
+    ...slot,
+    // "X" marks a structurally unavailable space. Every other value is a
+    // day-specific vehicle assignment and belongs in the dated workspace.
+    value:/^x$/i.test(String(slot?.value||'').trim())?'X':''
+  }));
+}
+function mergeParkingLayout(layout=[],dailySlots=[]) {
+  const daily=normalizeVanParkingLayout(dailySlots),dailyById=new Map(daily.filter(slot=>slot?.id).map(slot=>[slot.id,slot]));
+  const merged=parkingLayoutSnapshot(layout).map(slot=>{
+    const current=dailyById.get(slot.id);
+    return current?{...slot,value:current.value??''}:slot;
+  });
+  const layoutIds=new Set(merged.map(slot=>slot.id));
+  daily.forEach(slot=>{if(slot?.id&&!layoutIds.has(slot.id))merged.push(slot);});
+  return normalizeVanParkingLayout(merged);
+}
 function migrateLowerParkingChargerRows(status={},reports=[],plan=[]) {
   const nextStatus=status&&typeof status==='object'?{...status}:{};
   plan.forEach(({side,from:fromRow,to:toRow})=>{
@@ -4787,6 +4805,26 @@ function resetSharedDailyOperationsState(date=defaultOperationDate()) {
   const targetDate=/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))?String(date):defaultOperationDate();
   state.morningOperationDate=targetDate;
   state.rosteringDate=targetDate;
+  // File-derived launch data belongs to one operation date. Keeping these
+  // values in the dated workspace lets every dispatcher use the same imports
+  // during the shift without carrying stale uploads into the next day.
+  state.fleetImport=null;
+  state.fleetSourceUploads={};
+  state.fleetExpectedCount=0;
+  state.fleetLastRefresh='Not refreshed yet';
+  state.fleetUpdateSummary=null;
+  state.fleetChangedVins={};
+  state.fleetRefreshPreview=null;
+  rivianFleet.splice(0,rivianFleet.length,...demoRivianFleet.map(vehicle=>normalizeFleetVehicle(vehicle)));
+  state.equipmentImport=null;
+  state.deviceCustomRows={ev:[],gas:[],helper:[]};
+  state.removedDeviceVehicleIds=[];
+  state.vanParking=parkingLayoutSnapshot(state.vanParking);
+  state.vanParkingUpdated='';
+  state.chargingStationChecked='';
+  state.vanParkingBatteries={};
+  state.parkingChargerStatus={};
+  state.parkingNotes='';
   state.routes=[];
   state.morningRoutes=[];
   state.lastImportExcluded=0;
@@ -4837,6 +4875,12 @@ function resetDailyOperationsState(date=defaultOperationDate()) {
   // leave them alone while a remote daily snapshot is being hydrated.
   state.morningFilters={wave:'all',staging:'all',pad:'all'};
   state.lastItineraryRts={};
+  state.importedFile=null;
+  state.importPurpose='morning';
+  state.equipmentText='';
+  state.fleetPasteText='';
+  state.fleetImportSourceHint='';
+  state.vanParkingPasteText='';
   state.morningSheetsLastPush='';
   state.morningSheetsLastError='';
   state.morningSheetsLastReceipt=null;
@@ -4873,7 +4917,7 @@ function rolloverOperationDateIfNeeded(trigger='timer',now=new Date()) {
   lastObservedOperationDate=today;
   if(operationDateRolloverInFlight||operationDatePinned||state.morningOperationDate!==previousObserved)return false;
   operationDateRolloverInFlight=true;
-  try{return loadSharedOperationDate(today,'A new operating day started · yesterday remains available from its dated link',{automatic:true,pin:false});}
+  try{return loadSharedOperationDate(today,'A new operating day started · daily imports were cleared for the new shift',{automatic:true,pin:false});}
   finally{operationDateRolloverInFlight=false;}
 }
 function scheduleDailyOperationRollover() {
@@ -6137,7 +6181,7 @@ function parkingImportValuesFromText(text='') {
   return String(text||'').split(/\r?\n|,|\t/).map(v=>v.trim()).filter(Boolean).filter(v=>!/(spot|parking|location|vehicle|van list)/i.test(v)).map(v=>v.toUpperCase());
 }
 
-function applyParkingText(text='') {
+function applyParkingText(text='',options={}) {
   const plan=parkingImportPlanFromText(text),spotMap=parkingSpotSlotMap(),assignments=plan.assignments.filter(item=>spotMap.has(item.spot)&&item.value);
   if(assignments.length) {
     if(assignments.length>=20)clearParkingSlotValues();
@@ -6152,7 +6196,7 @@ function applyParkingText(text='') {
       count+=1;
     });
     state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
-    persist();
+    if(!options.silent)persist();
     return count;
   }
   const values=parkingImportValuesFromText(text);
@@ -6160,7 +6204,7 @@ function applyParkingText(text='') {
   const editable=(state.vanParking||[]).filter(slot=>!['street'].includes(slot.kind)||String(slot.value||'').trim());
   editable.forEach((slot,i)=>{if(values[i]!==undefined)slot.value=values[i];});
   state.vanParkingUpdated=new Intl.DateTimeFormat('en-US',{month:'numeric',day:'numeric'}).format(new Date());
-  persist();
+  if(!options.silent)persist();
   return Math.min(values.length,editable.length);
 }
 
@@ -7764,7 +7808,7 @@ async function readFiles(files) {
     }
     if(state.importPurpose==='parking') {
       const text=parsed.map(f=>[f.text,rowsToText(f.rows||[])].filter(Boolean).join('\n')).filter(Boolean).join('\n');
-      const count=applyParkingText(text);
+      const count=applyParkingText(text,{silent:true});
       state.vanParkingPasteText=text;
       state.importPurpose='fleet';
       persist();render();
@@ -7785,7 +7829,7 @@ async function readFiles(files) {
       const vehicles=parsed.flatMap(f=>fleetDetailsFromRows(f.rows||[],forcedSource||f.name));
       if(!vehicles.length) throw new Error('no fleet rows');
       const combinedVehicles=rememberFleetSourceUpload(vehicles,forcedSource||parsed.map(f=>f.name).join(' + '),new Date().toISOString());
-      const total=applyFleetVehicles(combinedVehicles);
+      const total=applyFleetVehicles(combinedVehicles,{silent:true});
       state.modal=null; state.page='fleet';state.fleetImportSourceHint='';
       persist(); render();
       const groundedCount=vehicles.filter(vehicle=>normalizeOperational(vehicle.operational)==='Grounded').length,operationalCount=vehicles.filter(vehicle=>normalizeOperational(vehicle.operational)==='Operational').length;
@@ -8280,7 +8324,7 @@ function parseFleetPasteAction() {
   const vehicles=fleetDetailsFromRows(rows,'Pasted Amazon/FleetOS fleet table');
   if(!vehicles.length) return toast('No VIN rows found. Paste the header row plus vehicle rows from FleetOS or Amazon.','error');
   const combinedVehicles=rememberFleetSourceUpload(vehicles,'Pasted Amazon/FleetOS fleet table',new Date().toISOString());
-  const total=applyFleetVehicles(combinedVehicles);
+  const total=applyFleetVehicles(combinedVehicles,{silent:true});
   state.modal=null; state.page='fleet';
   persist(); render();
   toast(`${vehicles.length} pasted fleet rows read · ${state.fleetUpdateSummary.updated} changed · ${total} EV cards tracked`);
@@ -10326,8 +10370,17 @@ function sharedWorkspaceState() {
   // Six reversible changes are enough for dispatcher recovery without making
   // every mobile edit upload dozens of complete Morning Sheets.
   const sharedSheetHistory={past:(state.sheetHistory?.past||[]).slice(-6),future:(state.sheetHistory?.future||[]).slice(-6)};
+  // Source uploads already contain every fleet row. Store only the combined
+  // import receipt when those rows exist, then rebuild the combined view on
+  // hydration. This avoids uploading the same Amazon/FleetOS rows twice.
+  const fleetSourceRows=Object.values(state.fleetSourceUploads||{}).some(upload=>Array.isArray(upload?.vehicles)&&upload.vehicles.length);
+  const sharedFleetImport=fleetSourceRows?{name:state.fleetImport?.name||'Latest fleet source uploads',uploadedAt:state.fleetImport?.uploadedAt||'',derivedFromSourceUploads:true}:state.fleetImport;
   return {
     schemaVersion:2,dspCode:state.dspCode,organizationName:state.organizationName,stationCode:state.stationCode,routes:state.routes,morningRoutes:state.morningRoutes,
+    fleetImport:sharedFleetImport,fleetSourceUploads:state.fleetSourceUploads,fleetExpectedCount:state.fleetExpectedCount,fleetLastRefresh:state.fleetLastRefresh,
+    equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,removedDeviceVehicleIds:state.removedDeviceVehicleIds,
+    vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,chargingStationChecked:state.chargingStationChecked,
+    vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,
     lastImportExcluded:state.lastImportExcluded,rosterPublished:state.rosterPublished,
     morningIssueAcknowledgements:state.morningIssueAcknowledgements,
     messageQueueStatus:state.messageQueueStatus,
@@ -10338,11 +10391,8 @@ function sharedWorkspaceState() {
 function persistentWorkspaceState() {
   return {
     schemaVersion:2,organizationName:state.organizationName,stationCode:state.stationCode,dspCode:state.dspCode,
-    fleetImport:state.fleetImport,fleetSourceUploads:state.fleetSourceUploads,fleetExpectedCount:state.fleetExpectedCount,
     fleetNameOverrides:state.fleetNameOverrides,fleetIssues:state.fleetIssues,equipmentIssues:state.equipmentIssues,
-    vanParking:state.vanParking,vanParkingUpdated:state.vanParkingUpdated,chargingStationChecked:state.chargingStationChecked,
-    vanParkingBatteries:state.vanParkingBatteries,parkingChargerStatus:state.parkingChargerStatus,parkingNotes:state.parkingNotes,
-    equipmentImport:state.equipmentImport,deviceCustomRows:state.deviceCustomRows,removedDeviceVehicleIds:state.removedDeviceVehicleIds,
+    vanParkingLayout:parkingLayoutSnapshot(state.vanParking),
     driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),scheduleStayHomeHistory:state.scheduleStayHomeHistory,rosteringPlans:state.rosteringPlans,rosteringHelperPool:state.rosteringHelperPool,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,
     whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundReminderTemplates:state.whiparoundReminderTemplates,messageQueueTemplate:state.messageQueueTemplate,
     inventoryItems:state.inventoryItems,inventoryLog:state.inventoryLog,coachingQueue:normalizeCoachingQueue(state.coachingQueue),coachingTemplate:state.coachingTemplate,
@@ -10351,8 +10401,12 @@ function persistentWorkspaceState() {
 }
 function applySharedWorkspaceState(payload={}) {
   const parkingChargerMovePlan=lowerParkingChargerMovePlan(payload.vanParking);
-  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','lastImportExcluded','rosterPublished','morningIssueAcknowledgements','messageQueueStatus','scheduleEntries','scheduleImportName','rosteringDate','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','morningSectionPadOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','fitMorningRows','fitOpeningPicklistRows','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','picklistSwapAudit','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundImportName','whiparoundSelectedDate'];
+  const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetLastRefresh','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','lastImportExcluded','rosterPublished','morningIssueAcknowledgements','messageQueueStatus','scheduleEntries','scheduleImportName','rosteringDate','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','morningSectionPadOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','fitMorningRows','fitOpeningPicklistRows','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','picklistSwapAudit','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundImportName','whiparoundSelectedDate'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
+  state.fleetSourceUploads=state.fleetSourceUploads&&typeof state.fleetSourceUploads==='object'?state.fleetSourceUploads:{};
+  state.fleetExpectedCount=Math.max(0,Number(state.fleetExpectedCount)||0);
+  state.fleetLastRefresh=String(state.fleetLastRefresh||'Not refreshed yet');
+  state.deviceCustomRows=state.deviceCustomRows&&typeof state.deviceCustomRows==='object'?{ev:Array.isArray(state.deviceCustomRows.ev)?state.deviceCustomRows.ev:[],gas:Array.isArray(state.deviceCustomRows.gas)?state.deviceCustomRows.gas:[],helper:Array.isArray(state.deviceCustomRows.helper)?state.deviceCustomRows.helper:[]}:{ev:[],gas:[],helper:[]};
   state.vanParking=normalizeVanParkingLayout(state.vanParking);
   if(parkingChargerMovePlan.length){const migrated=migrateLowerParkingChargerRows(state.parkingChargerStatus,state.chargerReports,parkingChargerMovePlan);state.parkingChargerStatus=migrated.status;state.chargerReports=migrated.reports;}
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
@@ -10389,14 +10443,18 @@ function applySharedWorkspaceState(payload={}) {
   state.openingPicklistLabels=state.openingPicklistLabels&&typeof state.openingPicklistLabels==='object'?state.openingPicklistLabels:{};
   state.picklistSwapAudit=Array.isArray(state.picklistSwapAudit)?state.picklistSwapAudit.slice(-160):[];
   state.inventoryItems=normalizeInventoryItems(state.inventoryItems);state.inventoryLog=normalizeInventoryLog(state.inventoryLog);
+  if(Object.values(state.fleetSourceUploads||{}).some(upload=>Array.isArray(upload?.vehicles)&&upload.vehicles.length))state.fleetImport=fleetImportFromSourceUploads();
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
+  else if(Object.prototype.hasOwnProperty.call(payload,'fleetImport'))rivianFleet.splice(0,rivianFleet.length,...demoRivianFleet.map(vehicle=>normalizeFleetVehicle(vehicle)));
   invalidateDriverDirectoryCaches();
 }
 function applyPersistentWorkspaceState(payload={}) {
-  const parkingChargerMovePlan=lowerParkingChargerMovePlan(payload.vanParking);
-  const allowed=['organizationName','stationCode','dspCode','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetNameOverrides','fleetIssues','equipmentIssues','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','whiparoundComplianceHistory','whiparoundReminderTemplates','messageQueueTemplate','inventoryItems','inventoryLog','coachingQueue','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
+  const persistedParkingLayout=payload.vanParkingLayout||payload.vanParking;
+  const parkingChargerMovePlan=lowerParkingChargerMovePlan(persistedParkingLayout);
+  const allowed=['organizationName','stationCode','dspCode','fleetNameOverrides','fleetIssues','equipmentIssues','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','whiparoundComplianceHistory','whiparoundReminderTemplates','messageQueueTemplate','inventoryItems','inventoryLog','coachingQueue','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
-  state.vanParking=normalizeVanParkingLayout(state.vanParking);
+  if(Array.isArray(persistedParkingLayout))state.vanParking=mergeParkingLayout(persistedParkingLayout,state.vanParking);
+  else state.vanParking=normalizeVanParkingLayout(state.vanParking);
   if(parkingChargerMovePlan.length){const migrated=migrateLowerParkingChargerRows(state.parkingChargerStatus,state.chargerReports,parkingChargerMovePlan);state.parkingChargerStatus=migrated.status;state.chargerReports=migrated.reports;}
   state.fleetIssues=normalizeFleetIssuesStore(state.fleetIssues||{});
   state.equipmentIssues=normalizeEquipmentIssuesStore(state.equipmentIssues||{});
@@ -10416,7 +10474,7 @@ function applyPersistentWorkspaceState(payload={}) {
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   invalidateDriverDirectoryCaches();
 }
-window.RelayOpsApp={sharedState:sharedWorkspaceState,persistentState:persistentWorkspaceState,applySharedState:applySharedWorkspaceState,applyPersistentState:applyPersistentWorkspaceState,resetDailyState:resetDailyOperationsState,resetSharedDailyState:resetSharedDailyOperationsState,rolloverOperationDateIfNeeded,operationDate:()=>state.morningOperationDate,morningSheetsPayload:()=>morningSheetsConnectorPayload(),__test:{defaultOperationDate,resetDailyOperationsState,resetSharedDailyOperationsState,rolloverOperationDateIfNeeded}};
+window.RelayOpsApp={sharedState:sharedWorkspaceState,persistentState:persistentWorkspaceState,applySharedState:applySharedWorkspaceState,applyPersistentState:applyPersistentWorkspaceState,resetDailyState:resetDailyOperationsState,resetSharedDailyState:resetSharedDailyOperationsState,rolloverOperationDateIfNeeded,operationDate:()=>state.morningOperationDate,operationDateIsWritable:(date=state.morningOperationDate)=>/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))&&String(date)>=defaultOperationDate(),morningSheetsPayload:()=>morningSheetsConnectorPayload(),__test:{defaultOperationDate,resetDailyOperationsState,resetSharedDailyOperationsState,rolloverOperationDateIfNeeded}};
 if(window.addEventListener){
   window.addEventListener('focus',()=>rolloverOperationDateIfNeeded('focus',new Date()));
   window.addEventListener('online',()=>rolloverOperationDateIfNeeded('online',new Date()));
@@ -10437,6 +10495,7 @@ window.RelayOpsCloud?.on?.(event=>{
   if(event.type==='ready'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;refreshCloudStatusUi();}
   if(event.type==='saved'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;refreshCloudStatusUi();}
   if(event.type==='save-delayed'){clearCloudConnectingWatchdog();state.cloudStatus='connecting';state.cloudAccessError='Cloud save delayed; edits are safe on this device and will retry automatically.';refreshCloudStatusUi();cloudToastOnce('Cloud is busy. Your edit is safe on this device and will retry automatically.','error',20000);}
+  if(event.type==='expired-date')cloudToastOnce('That operating day is closed. Daily edits were not saved; open today’s dashboard to make changes.','error',20000);
   if(event.type==='remote-update'){clearCloudConnectingWatchdog();state.cloudStatus='synced';renderFromCloudEvent();toast('Another dispatcher updated today’s workspace');}
   if(event.type==='conflict')toast('A newer dispatcher update was loaded before saving','error');
   if(event.type==='error'){clearCloudConnectingWatchdog();state.cloudStatus='error';if(!completeInitialCloudHydration())refreshCloudStatusUi();cloudToastOnce(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}

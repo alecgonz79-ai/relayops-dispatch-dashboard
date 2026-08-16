@@ -45,6 +45,7 @@ function freshDailyState(date) {
 
 function createCloudHarness({
   date = '2026-08-04',
+  today = date,
   snapshots = {},
   dailyState = { morningOperationDate: date, morningRoutes: [] },
   persistentState = {},
@@ -53,6 +54,7 @@ function createCloudHarness({
   rpcHook = null
 } = {}) {
   let activeDate = date;
+  let currentToday = today;
   let currentDaily = clone(dailyState);
   let currentPersistent = clone(persistentState);
   let onRead = readHook;
@@ -101,7 +103,7 @@ function createCloudHarness({
     },
     rpc: async (name, args) => {
       if (name === 'relayops_admin_status') return { data: false, error: null };
-      if (name !== 'save_workspace_snapshot_v3') return { data: null, error: null };
+      if (name !== 'save_workspace_snapshot_v4') return { data: null, error: null };
       rpcLog.push(clone(args));
       if (onRpc) {
         const intercepted = onRpc(name, clone(args));
@@ -142,6 +144,7 @@ function createCloudHarness({
       supabase: { createClient: () => client },
       RelayOpsApp: {
         operationDate: () => activeDate,
+        operationDateIsWritable: targetDate => String(targetDate || '') >= currentToday,
         sharedState: () => clone(currentDaily),
         persistentState: () => clone(currentPersistent),
         resetDailyState(nextDate) {
@@ -172,6 +175,7 @@ function createCloudHarness({
     daily: () => clone(currentDaily),
     persistent: () => clone(currentPersistent),
     setDate(nextDate, nextDaily = freshDailyState(nextDate)) { activeDate = nextDate; currentDaily = clone(nextDaily); },
+    setToday(nextDate) { currentToday = nextDate; },
     setDaily(next) { currentDaily = clone(next); },
     setPersistent(next) { currentPersistent = clone(next); },
     setReadHook(next) { onRead = next; },
@@ -432,6 +436,61 @@ async function testMemoryQueuePreservesPriorDateWhenStorageUnavailable() {
   );
 }
 
+async function testExpiredQueueCarriesPermanentDeltaThenRetires() {
+  const oldDate = '2026-08-04';
+  const newDate = '2026-08-05';
+  const snapshots = {
+    [oldDate]: snapshot(oldDate, 3, { morningRoutes: [{ route: 'CX-OLD' }] }),
+    [newDate]: snapshot(newDate, 1, freshDailyState(newDate)),
+    '2000-01-01': snapshot('2000-01-01', 4, { driverContacts: [{ name: 'Original Driver' }] })
+  };
+  const harness = createCloudHarness({ date: oldDate, snapshots });
+  await harness.init();
+  harness.setDaily({ morningOperationDate: oldDate, fleetImport: { name: 'Large expired import', vehicles: [{ vin: 'VIN-OLD' }] } });
+  harness.setPersistent({ driverContacts: [{ name: 'Updated Driver' }] });
+  harness.cloud.schedule('test.expired-queue');
+  const oldQueueKey = `relayops_cloud_queue:station:${oldDate}`;
+  assert(harness.storage.has(oldQueueKey), 'Control: the expired-date queue was not created');
+
+  harness.setToday(newDate);
+  harness.setDate(newDate);
+  await harness.cloud.load();
+  await wait(40);
+
+  const permanentWrite = harness.rpcLog.findLast(call => call.target_date === '2000-01-01');
+  assert.deepStrictEqual(permanentWrite?.new_payload?.driverContacts, [{ name: 'Updated Driver' }], 'Permanent edits in the expired queue were not carried forward safely');
+  assert(!harness.storage.has(oldQueueKey), 'Expired daily imports remained in localStorage after their permanent edits were acknowledged');
+  assert(!harness.rpcLog.some(call => call.target_date === oldDate), 'An expired daily queue was written back to its deleted operation date');
+}
+
+async function testAlreadyCommittedExpiredQueueRetiresWithoutRewrite() {
+  const oldDate = '2026-08-04';
+  const newDate = '2026-08-05';
+  const committedPersistent = { driverContacts: [{ name: 'Already Committed Driver' }] };
+  const snapshots = {
+    [newDate]: snapshot(newDate, 1, freshDailyState(newDate)),
+    '2000-01-01': snapshot('2000-01-01', 5, committedPersistent)
+  };
+  const harness = createCloudHarness({ date: newDate, today: newDate, snapshots });
+  const oldQueueKey = `relayops_cloud_queue:station:${oldDate}`;
+  harness.storage.setItem(oldQueueKey, JSON.stringify({
+    payload: { fleetImport: { name: 'Expired import after timeout', vehicles: [{ vin: 'VIN-OLD' }] } },
+    basePayload: {},
+    persistentPayload: committedPersistent,
+    basePersistentPayload: { driverContacts: [{ name: 'Original Driver' }] },
+    shared: true,
+    userId: 'dispatcher-1',
+    queuedAt: '2026-08-04T23:59:00.000Z',
+    updatedAt: '2026-08-04T23:59:30.000Z'
+  }));
+
+  await harness.init();
+  await wait(20);
+
+  assert(!harness.storage.has(oldQueueKey), 'An expired queue survived even though its permanent edit was already present remotely');
+  assert(!harness.rpcLog.some(call => call.target_date === '2000-01-01'), 'An already-committed permanent edit caused a redundant rewrite');
+}
+
 async function testLegacyDailyPersistentFieldsMigrateWhenMissing() {
   const date = '2026-08-04';
   const legacyRecord = { id: 'legacy-coach-1', driver: 'Driver One', status: 'open', createdAt: '2026-08-01T12:00:00.000Z' };
@@ -485,6 +544,8 @@ async function runCase(name, fn, failures) {
   await runCase('failed save preserves the newest queued same-day edit', testFailedSavePreservesNewerQueuedEdit, failures);
   await runCase('prior-date pending edits stay date scoped', testPriorDatePendingEditIsDateScoped, failures);
   await runCase('memory fallback preserves prior-date pending edits across rollover', testMemoryQueuePreservesPriorDateWhenStorageUnavailable, failures);
+  await runCase('expired queues carry permanent edits then retire daily imports', testExpiredQueueCarriesPermanentDeltaThenRetires, failures);
+  await runCase('already-committed expired queues retire without rewrite', testAlreadyCommittedExpiredQueueRetiresWithoutRewrite, failures);
   await runCase('legacy daily fields migrate when persistent fields are absent', testLegacyDailyPersistentFieldsMigrateWhenMissing, failures);
   await runCase('explicit persistent legacy fields win over daily fallbacks', testExplicitPersistentLegacyFieldsWin, failures);
   if (failures.length) {
