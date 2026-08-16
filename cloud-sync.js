@@ -557,7 +557,7 @@
       let daily=null,persistent=null;
       if(dailyChanged){
         enforcePayloadBudget(payload,'Daily operations data',CLOUD_DAILY_PAYLOAD_LIMIT);
-        daily=await withCloudTimeout(client.rpc('save_workspace_snapshot_v2',{target_station:config.stationId,target_date:saveDate,expected_revision:saveRevision,new_payload:payload,action_name:action}),'Daily operations save',CLOUD_SAVE_TIMEOUT_MS);
+        daily=await withCloudTimeout(client.rpc('save_workspace_snapshot_v3',{target_station:config.stationId,target_date:saveDate,expected_revision:saveRevision,new_payload:payload,action_name:action}),'Daily operations save',CLOUD_SAVE_TIMEOUT_MS);
         if(daily.error){
           if(String(daily.error.message||'').includes('revision_conflict')){
             notify({type:'conflict',operationDate:saveDate});
@@ -570,7 +570,7 @@
       }
       if(persistentChanged){
         enforcePayloadBudget(persistentPayload,'Permanent station data',CLOUD_PERSISTENT_PAYLOAD_LIMIT);
-        persistent=await withCloudTimeout(client.rpc('save_workspace_snapshot_v2',{target_station:config.stationId,target_date:PERSISTENT_DATE,expected_revision:savePersistentRevision,new_payload:persistentPayload,action_name:`${action}.persistent` }),'Station settings save',CLOUD_SAVE_TIMEOUT_MS);
+        persistent=await withCloudTimeout(client.rpc('save_workspace_snapshot_v3',{target_station:config.stationId,target_date:PERSISTENT_DATE,expected_revision:savePersistentRevision,new_payload:persistentPayload,action_name:`${action}.persistent` }),'Station settings save',CLOUD_SAVE_TIMEOUT_MS);
         if(persistent.error){
           if(String(persistent.error.message||'').includes('revision_conflict')){
             notify({type:'conflict',operationDate:saveDate});

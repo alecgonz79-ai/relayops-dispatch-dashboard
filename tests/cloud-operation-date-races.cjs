@@ -101,7 +101,7 @@ function createCloudHarness({
     },
     rpc: async (name, args) => {
       if (name === 'relayops_admin_status') return { data: false, error: null };
-      if (name !== 'save_workspace_snapshot_v2') return { data: null, error: null };
+      if (name !== 'save_workspace_snapshot_v3') return { data: null, error: null };
       rpcLog.push(clone(args));
       if (onRpc) {
         const intercepted = onRpc(name, clone(args));

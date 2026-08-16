@@ -7,7 +7,7 @@ if(!source.includes("select('revision,updated_at,updated_by,operation_date')")||
 if(!source.includes('dailyChanged=!sameStoredPayload')||!source.includes('persistentChanged=!sameStoredPayload'))throw new Error('Cloud saves must skip unchanged daily or persistent snapshots');
 if(!source.includes("window.addEventListener('focus'")||!source.includes("document.addEventListener('visibilitychange'"))throw new Error('Returning dispatchers must receive an immediate shared refresh');
 if(source.includes(".on('postgres_changes'")||source.includes(".on('presence'"))throw new Error('Nano compute must not reopen CPU-heavy Realtime replication or presence channels');
-if(!source.includes("rpc('save_workspace_snapshot_v2'")||!source.includes('saveInFlight'))throw new Error('Cloud writes must use the versioned single-flight writer');
+if(!source.includes("rpc('save_workspace_snapshot_v3'")||!source.includes('saveInFlight'))throw new Error('Cloud writes must use the current versioned single-flight writer');
 if(!source.includes("if(!membership){notify({type:'reconnecting',reason:'membership-pending'});return;}"))throw new Error('Startup must not fan out writes before station membership loads');
 if(!source.includes("pending.shared")||!source.includes("pending.userId!==session.user.id"))throw new Error('Device-local stale queues must not merge into another dispatcher session');
 if(!source.includes("from('station_memberships')"))throw new Error('Dispatcher station access must be checked before loading shared snapshots');

@@ -388,7 +388,7 @@ async function testCloudResetsBeforeMissingDayInitialization() {
     },
     rpc: async (name, args) => {
       if (name === 'relayops_admin_status') return { data: false, error: null };
-      if (name === 'save_workspace_snapshot_v2') {
+      if (name === 'save_workspace_snapshot_v3') {
         order.push(`write:${args.target_date}`); rpcCalls.push(clone(args));
         return { data: { revision: 1, updated_at: '2026-08-05T07:00:01Z' }, error: null };
       }

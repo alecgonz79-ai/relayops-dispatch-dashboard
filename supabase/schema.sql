@@ -118,7 +118,7 @@ end; $$;
 -- pool while still allowing them to recover after one refresh.
 revoke execute on function public.save_workspace_snapshot(uuid,date,bigint,jsonb,text) from public, anon, authenticated;
 
-create or replace function public.save_workspace_snapshot_v2(target_station uuid,target_date date,expected_revision bigint,new_payload jsonb,action_name text default 'workspace.save')
+create or replace function public.save_workspace_snapshot_v3(target_station uuid,target_date date,expected_revision bigint,new_payload jsonb,action_name text default 'workspace.save')
 returns workspace_snapshots language plpgsql security invoker as $$
 declare current_row workspace_snapshots; target_org uuid;
 begin
@@ -135,7 +135,7 @@ begin
   return current_row;
 end; $$;
 
-grant execute on function public.save_workspace_snapshot_v2(uuid,date,bigint,jsonb,text) to authenticated;
+grant execute on function public.save_workspace_snapshot_v3(uuid,date,bigint,jsonb,text) to authenticated;
 
 -- RelayOps performs lightweight, visibility-aware polling. Publishing the
 -- large JSON snapshots to Realtime exhausts nano compute even with few tabs.
