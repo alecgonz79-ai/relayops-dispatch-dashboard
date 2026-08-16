@@ -6759,7 +6759,7 @@ async function cloudSignIn() {
   }
 }
 async function cloudSignOut() {
-  try{await window.RelayOpsCloud.signOut();state.modal=null;state.cloudStatus='signed-out';state.cloudUser='';state.role='viewer';localStorage.setItem('relayops_role','viewer');render();toast('Signed out · local cache remains on this device');}
+  try{await window.RelayOpsCloud.signOut();clearCloudConnectingWatchdog();clearCloudAutoRetryTimer();state.modal=null;state.cloudStatus='signed-out';state.cloudUser='';state.role='viewer';localStorage.setItem('relayops_role','viewer');render();toast('Signed out · local cache remains on this device');}
   catch(error){toast(`Could not sign out: ${error.message||'try again'}`,'error');}
 }
 async function unlockAdminAccess() {
@@ -6778,30 +6778,44 @@ async function lockAdminAccess() {
   try{await window.RelayOpsCloud?.lockAdmin?.();}catch(error){console.warn('Could not clear the server Admin session',error);}
   toast('Admin controls locked');
 }
-let cloudRetryInFlight=false,cloudAutoRetryAttempts=0,cloudConnectingWatchdog=null,lastCloudNotice='',lastCloudNoticeAt=0;
-function cloudDatabaseBusy(error=state.cloudAccessError){return /PGRST003|connection pool|database.*busy|timed out|timeout/i.test(String(error?.message||error||''));}
-function clearCloudConnectingWatchdog(){clearTimeout(cloudConnectingWatchdog);cloudConnectingWatchdog=null;}
+let cloudRetryInFlight=false,cloudAutoRetryAttempts=0,cloudAutoRetryTimer=null,cloudConnectingWatchdog=null,cloudReconnectAttempts=0,lastCloudNotice='',lastCloudNoticeAt=0;
+function cloudDatabaseBusy(error=state.cloudAccessError){return /PGRST003|connection pool|database.*busy|timed out|timeout|load failed|failed to fetch|network|temporarily unavailable|upstream|bad gateway|service unavailable/i.test(String(error?.message||error||''));}
+function clearCloudConnectingWatchdog(resetAttempts=true){clearTimeout(cloudConnectingWatchdog);cloudConnectingWatchdog=null;if(resetAttempts)cloudReconnectAttempts=0;}
+function clearCloudAutoRetryTimer(){clearTimeout(cloudAutoRetryTimer);cloudAutoRetryTimer=null;}
 function cloudToastOnce(message,type='error',windowMs=12000) {
   const now=Date.now();
   if(message===lastCloudNotice&&now-lastCloudNoticeAt<windowMs)return;
   lastCloudNotice=message;lastCloudNoticeAt=now;toast(message,type);
 }
 function armCloudConnectingWatchdog(){
-  clearCloudConnectingWatchdog();
+  if(cloudConnectingWatchdog)return;
+  const steps=[45000,60000,90000,120000],base=steps[Math.min(cloudReconnectAttempts,steps.length-1)],delay=Math.round(base*(0.85+Math.random()*0.3));
   cloudConnectingWatchdog=setTimeout(()=>{
+    cloudConnectingWatchdog=null;cloudReconnectAttempts++;
     if(state.cloudStatus!=='connecting')return;
     retryCloudLinkAccess(true);
-  },45000);
+  },delay);
   cloudConnectingWatchdog?.unref?.();
 }
 async function retryCloudLinkAccess(silent=false) {
   if(cloudRetryInFlight)return;
+  if(!silent){clearCloudConnectingWatchdog(false);clearCloudAutoRetryTimer();}
   cloudRetryInFlight=true;state.cloudStatus='connecting';armCloudConnectingWatchdog();render();
   try{
     const result=await window.RelayOpsCloud?.retryLinkAccess?.();
+    if(result?.cancelled)return result;
+    if(result?.deferred){
+      state.cloudStatus='connecting';state.cloudAccessError='Shared cloud is busy; the last verified workspace remains available.';armCloudConnectingWatchdog();refreshCloudStatusUi();
+      if(!silent)cloudToastOnce('Shared cloud is busy. Your last synced dashboard is still available and will reconnect automatically.','success',20000);
+      return result;
+    }
     if(!result?.session)throw result?.error||new Error('Shared session was not created');
     if(!silent)toast('Shared cloud reconnected');
-  }catch(error){state.cloudStatus='error';state.cloudAccessError=error?.message||'Shared cloud retry failed';render();if(!silent)toast(`Could not reconnect: ${state.cloudAccessError}`,'error');}
+  }catch(error){
+    state.cloudAccessError=error?.message||'Shared cloud retry failed';
+    if(cloudDatabaseBusy(error)){state.cloudStatus='connecting';armCloudConnectingWatchdog();refreshCloudStatusUi();if(!silent)cloudToastOnce('Shared cloud is busy. Your last synced dashboard is still available and will reconnect automatically.','success',20000);}
+    else {state.cloudStatus='error';render();if(!silent)toast(`Could not reconnect: ${state.cloudAccessError}`,'error');}
+  }
   finally{cloudRetryInFlight=false;}
 }
 async function refreshCloudMembers() {
@@ -10482,23 +10496,31 @@ if(window.addEventListener){
 if(document.addEventListener)document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')rolloverOperationDateIfNeeded('visibilitychange',new Date());});
 scheduleDailyOperationRollover();
 window.RelayOpsCloud?.on?.(event=>{
-  if(event.type==='offline'){clearCloudConnectingWatchdog();state.cloudStatus='offline';if(!completeInitialCloudHydration())refreshCloudStatusUi();}
+  if(event.type==='offline'){clearCloudConnectingWatchdog();clearCloudAutoRetryTimer();state.cloudStatus='offline';if(!completeInitialCloudHydration())refreshCloudStatusUi();}
   if(event.type==='reconnecting'){state.cloudStatus='connecting';armCloudConnectingWatchdog();refreshCloudStatusUi();}
   if(event.type==='auth'){state.cloudStatus='connecting';armCloudConnectingWatchdog();state.cloudUser=event.session?.user?.is_anonymous?'Shared link':event.session?.user?.email||'Shared link';state.cloudAccessError='';state.cloudSigninError='';state.cloudSigninCooldownUntil=0;localStorage.removeItem('relayops_cloud_signin_cooldown_until');if(!event.session)state.role='viewer';refreshCloudStatusUi();}
   if(event.type==='admin-status'){state.adminPinUnlocked=Boolean(event.unlocked);if(state.page==='admin')renderFromCloudEvent();else refreshCloudStatusUi();}
   if(event.type==='access-granted'){state.cloudAccessError='';state.role=['fleet_lead','viewer'].includes(event.membership?.role)?event.membership.role:'dispatcher';refreshCloudStatusUi();}
-  if(event.type==='access-denied'){clearCloudConnectingWatchdog();state.cloudStatus='access-denied';state.cloudAccessError='Automatic shared-link access has not been provisioned for this browser.';if(!completeInitialCloudHydration())renderFromCloudEvent();toast('Shared link access needs repair in Supabase','error');}
-  if(event.type==='link-access-error'){clearCloudConnectingWatchdog();state.cloudStatus='error';state.cloudAccessError=event.error?.message||'Automatic shared access failed';if(!completeInitialCloudHydration())renderFromCloudEvent();toast(`Shared access failed: ${state.cloudAccessError}`,'error');if(!cloudDatabaseBusy(event.error)&&cloudAutoRetryAttempts<2){cloudAutoRetryAttempts++;setTimeout(()=>retryCloudLinkAccess(true),750*cloudAutoRetryAttempts);}}
+  if(event.type==='access-denied'){clearCloudConnectingWatchdog();clearCloudAutoRetryTimer();state.cloudStatus='access-denied';state.cloudAccessError='Automatic shared-link access has not been provisioned for this browser.';if(!completeInitialCloudHydration())renderFromCloudEvent();toast('Shared link access needs repair in Supabase','error');}
+  if(event.type==='reconnect-delayed'){state.cloudStatus='connecting';state.cloudAccessError='Shared cloud is busy; the last verified workspace remains available.';armCloudConnectingWatchdog();refreshCloudStatusUi();}
+  if(event.type==='link-access-error'){
+    state.cloudAccessError=event.error?.message||'Automatic shared access failed';
+    if(cloudDatabaseBusy(event.error)){state.cloudStatus='connecting';armCloudConnectingWatchdog();if(!completeInitialCloudHydration())refreshCloudStatusUi();}
+    else {clearCloudConnectingWatchdog();state.cloudStatus='error';if(!completeInitialCloudHydration())renderFromCloudEvent();toast(`Shared access failed: ${state.cloudAccessError}`,'error');if(!cloudDatabaseBusy(event.error)&&cloudAutoRetryAttempts<2&&!cloudAutoRetryTimer){cloudAutoRetryAttempts++;cloudAutoRetryTimer=setTimeout(()=>{cloudAutoRetryTimer=null;retryCloudLinkAccess(true);},750*cloudAutoRetryAttempts);}}
+  }
   if(event.type==='workspace-empty'){clearCloudConnectingWatchdog();state.cloudStatus='workspace-empty';state.cloudAccessError='The shared day has not been started by an owner yet.';if(!completeInitialCloudHydration())renderFromCloudEvent();toast('Shared workspace is not initialized for this day yet','error');}
   if(event.type==='presence'){state.cloudPresence=event.users||[];refreshCloudStatusUi();}
-  if(event.type==='loaded'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;if(!completeInitialCloudHydration())renderFromCloudEvent();}
-  if(event.type==='ready'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;refreshCloudStatusUi();}
-  if(event.type==='saved'){clearCloudConnectingWatchdog();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;refreshCloudStatusUi();}
+  if(event.type==='loaded'){clearCloudConnectingWatchdog();clearCloudAutoRetryTimer();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;if(!completeInitialCloudHydration())renderFromCloudEvent();}
+  if(event.type==='ready'){clearCloudConnectingWatchdog();clearCloudAutoRetryTimer();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;refreshCloudStatusUi();}
+  if(event.type==='saved'){clearCloudConnectingWatchdog();clearCloudAutoRetryTimer();state.cloudStatus='synced';state.cloudAccessError='';cloudAutoRetryAttempts=0;lastCloudNotice='';lastCloudNoticeAt=0;refreshCloudStatusUi();}
   if(event.type==='save-delayed'){clearCloudConnectingWatchdog();state.cloudStatus='connecting';state.cloudAccessError='Cloud save delayed; edits are safe on this device and will retry automatically.';refreshCloudStatusUi();cloudToastOnce('Cloud is busy. Your edit is safe on this device and will retry automatically.','error',20000);}
   if(event.type==='expired-date')cloudToastOnce('That operating day is closed. Daily edits were not saved; open today’s dashboard to make changes.','error',20000);
   if(event.type==='remote-update'){clearCloudConnectingWatchdog();state.cloudStatus='synced';renderFromCloudEvent();toast('Another dispatcher updated today’s workspace');}
   if(event.type==='conflict')toast('A newer dispatcher update was loaded before saving','error');
-  if(event.type==='error'){clearCloudConnectingWatchdog();state.cloudStatus='error';if(!completeInitialCloudHydration())refreshCloudStatusUi();cloudToastOnce(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
+  if(event.type==='error'){
+    if(cloudDatabaseBusy(event.error)){state.cloudStatus='connecting';state.cloudAccessError=event.error?.message||'Shared cloud is busy';armCloudConnectingWatchdog();if(!completeInitialCloudHydration())refreshCloudStatusUi();}
+    else {clearCloudConnectingWatchdog();state.cloudStatus='error';if(!completeInitialCloudHydration())refreshCloudStatusUi();cloudToastOnce(`Cloud sync error: ${event.error?.message||'retrying locally'}`,'error');}
+  }
 });
 if(bootOperationDateReset)persistWithoutCloud();
 renderInitialShell();

@@ -8,6 +8,8 @@ window.RELAYOPS_CLOUD_CONFIG = {
   // Conservative shared-workspace limits. The sync client treats these as
   // upper bounds, so dispatchers keep collaborating without creating a hot
   // polling, retry, or oversized-payload loop in Supabase.
+  requestTimeoutMs: 20000,
+  membershipCacheMs: 300000,
   pollIntervalMs: 60000,
   idlePollIntervalMs: 300000,
   persistentPollIntervalMs: 600000,

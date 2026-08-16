@@ -60,7 +60,7 @@ vm.runInNewContext(source,context,{filename:'cloud-sync.js'});
   assert(migration.includes('extensions.crypt(candidate_pin,access_row.admin_pin_hash)')&&migration.includes('next_failures>=5'),'Admin PIN must be hashed and rate-limited by Supabase');
   assert(!app.includes('"6969"')&&!app.includes("'6969'"),'Public app code must not contain the Admin PIN');
   assert(!app.includes('Dispatcher sign in'),'Retired dispatcher sign-in control returned to the UI');
-  assert(source.includes('retryLinkAccess')&&source.includes('if(!membership)await replaceWithAnonymousLinkSession()'),'Stale shared-link sessions must recover without email sign-in');
+  assert(source.includes('retryLinkAccess')&&source.includes('if(!membership)await replaceWithAnonymousLinkSession({expectedSignOutGeneration:initSignOutGeneration})'),'Stale shared-link sessions must recover without email sign-in without overriding an explicit sign-out');
   assert(source.includes('withCloudTimeout')&&source.includes('initializingSince'),'A stalled initialization must time out and become retryable');
   assert(app.includes('Sync issue · retry')&&app.includes("name==='retry-cloud-link'"),'Cloud failures need a visible one-click recovery path');
   assert(source.includes('reclaimStorageForSharedSession')&&source.includes("key.startsWith('relayops_cloud_queue:')"),'Storage-quota recovery must preserve the current cloud queue in memory and clear redundant caches');

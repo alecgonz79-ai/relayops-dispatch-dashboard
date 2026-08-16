@@ -5,13 +5,14 @@
   const SYNC_META='__relayopsSync';
   const DAILY_IMPORT_FIELDS=['fleetImport','fleetSourceUploads','fleetExpectedCount','fleetLastRefresh','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes'];
   const PERSISTENT_STATION_FIELDS=new Set(['fleetNameOverrides','fleetIssues','equipmentIssues','vanParkingLayout','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','whiparoundComplianceHistory','whiparoundReminderTemplates','messageQueueTemplate','coachingQueue','inventoryItems','inventoryLog','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports']);
-  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,pollTimer=null,polling=false,saveTimer=null,saveInFlight=null,pendingSaveAction='',saveRetryTimer=null,saveRetryAttempts=0,applying=false,initializing=false,initializingSince=0,basePayload={},basePersistentPayload={},lastPersistentPollAt=0,lastActivityAt=Date.now(),loadGeneration=0;
+  let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,pollTimer=null,polling=false,saveTimer=null,saveInFlight=null,pendingSaveAction='',saveRetryTimer=null,saveRetryAttempts=0,applying=false,initializing=false,initializingSince=0,basePayload={},basePersistentPayload={},lastPersistentPollAt=0,lastActivityAt=Date.now(),loadGeneration=0,membershipCheckInFlight=null,membershipCheckUserId='',membershipCheckedAt=0,loadInFlight=null,loadInFlightDate='',retryInFlight=null,authGeneration=0,explicitSignOutGeneration=0;
   const memoryPendingByKey=new Map();
-  const CLOUD_TIMEOUT_MS=Math.max(4000,Math.min(30000,Number(config.requestTimeoutMs)||10000));
+  const CLOUD_TIMEOUT_MS=Math.max(4000,Math.min(30000,Number(config.requestTimeoutMs)||20000));
   const CLOUD_SAVE_TIMEOUT_MS=Math.max(CLOUD_TIMEOUT_MS,Math.min(60000,Number(config.saveTimeoutMs)||30000));
   const CLOUD_POLL_MS=Math.max(30000,Math.min(120000,Number(config.pollIntervalMs)||60000));
   const CLOUD_IDLE_POLL_MS=Math.max(CLOUD_POLL_MS,Math.min(600000,Number(config.idlePollIntervalMs)||300000));
   const CLOUD_PERSISTENT_POLL_MS=Math.max(120000,Math.min(1800000,Number(config.persistentPollIntervalMs)||600000));
+  const CLOUD_MEMBERSHIP_CACHE_MS=Math.max(30000,Math.min(600000,Number(config.membershipCacheMs)||300000));
   const CLOUD_ACTIVE_WINDOW_MS=Math.max(60000,Math.min(600000,Number(config.activeWindowMs)||120000));
   const CLOUD_SAVE_DEBOUNCE_MS=Math.max(1800,Math.min(15000,Number(config.saveDebounceMs)||5000));
   const CLOUD_MAX_AUTOMATIC_RETRIES=Math.max(1,Math.min(8,Number(config.maxAutomaticSaveRetries)||5));
@@ -347,6 +348,10 @@
     ]).finally(()=>clearTimeout(timer));
   }
   function transientPoolError(error){return /PGRST003|connection pool|timed out acquiring connection|database.*busy/i.test(String(error?.code||'')+' '+String(error?.message||error||''));}
+  function transientCloudError(error){
+    const code=String(error?.code||''),status=Number(error?.status||0),message=String(error?.message||error||'');
+    return error?.code==='cloud_timeout'||transientPoolError(error)||/^5\d\d$/.test(code)||status>=500||['57014','53300','57P03'].includes(code)||/load failed|failed to fetch|fetch failed|network request failed|networkerror|network error|timed out|timeout|canceling statement|upstream|bad gateway|service temporarily unavailable|temporarily unavailable/i.test(message);
+  }
   async function cloudRequest(factory,label){
     const result=await withCloudTimeout(factory(),label);
     // Retrying PGRST003 immediately creates another waiter in PostgREST's
@@ -356,6 +361,16 @@
     return result;
   }
   function isAuthSessionError(error){return /jwt|refresh.?token|invalid.?token|session.*(missing|expired|invalid)|unauthorized|not authenticated/i.test(String(error?.message||error||''));}
+  function invalidateVerifiedAccess(){
+    membership=null;membershipCheckedAt=0;membershipCheckUserId='';
+    membershipCheckInFlight=null;loadInFlight=null;loadInFlightDate='';retryInFlight=null;loadGeneration++;
+  }
+  function adoptSession(next,{forceGeneration=false}={}){
+    const previousUserId=session?.user?.id||'',nextUserId=next?.user?.id||'';
+    session=next||null;
+    if(forceGeneration||previousUserId!==nextUserId){authGeneration++;invalidateVerifiedAccess();}
+    return {previousUserId,nextUserId};
+  }
   function isStorageQuotaError(error){return /quota|storage.*full|exceeded/i.test(String(error?.message||error||''));}
   function reclaimStorageForSharedSession(){
     const target=storage();if(!target)return 0;
@@ -398,69 +413,124 @@
     }
     throw readableAuthError(lastError||new Error('Automatic shared access failed'));
   }
-  async function replaceWithAnonymousLinkSession(){
+  async function refreshAdminStatus(){
+    // The server intentionally permits any active station member to unlock
+    // the shared Admin PIN, so every verified role must restore its live
+    // eight-hour unlock status after a reload or successful reconnect.
+    const statusAuthGeneration=authGeneration,statusSignOutGeneration=explicitSignOutGeneration,statusUserId=session?.user?.id||'';
+    const unlocked=membership?await adminStatus().catch(()=>false):false;
+    const current=statusAuthGeneration===authGeneration&&statusSignOutGeneration===explicitSignOutGeneration&&statusUserId===(session?.user?.id||'');
+    if(current)notify({type:'admin-status',unlocked});return {current,unlocked};
+  }
+  async function replaceWithAnonymousLinkSession({expectedSignOutGeneration=explicitSignOutGeneration}={}){
     if(session)await withCloudTimeout(client.auth.signOut({scope:'local'}),'Old shared session cleanup',5000).catch(()=>{});
-    session=null;membership=null;
-    session=await createAnonymousLinkSession();
+    if(expectedSignOutGeneration!==explicitSignOutGeneration)return null;
+    adoptSession(null,{forceGeneration:true});
+    const replacement=await createAnonymousLinkSession();
+    if(expectedSignOutGeneration!==explicitSignOutGeneration){
+      await withCloudTimeout(client.auth.signOut({scope:'local'}),'Cancelled shared session cleanup',5000).catch(()=>{});
+      adoptSession(null,{forceGeneration:true});return null;
+    }
+    adoptSession(replacement);
     notify({type:'auth',session});
     await load();
     if(!membership)throw new Error('The shared station membership could not be created');
-    notify({type:'admin-status',unlocked:await adminStatus().catch(()=>false)});
+    const adminState=await refreshAdminStatus();
+    if(!adminState.current||expectedSignOutGeneration!==explicitSignOutGeneration)return null;
     notify({type:'ready',revision,persistentRevision});
     return session;
   }
   async function init(){
     client=createClient();
     if(!client){notify({type:'offline',reason:'not-configured'});return {configured:false};}
+    const initSignOutGeneration=explicitSignOutGeneration;
     initializing=true;initializingSince=Date.now();
     try{
-      const result=await withCloudTimeout(client.auth.getSession(),'Saved shared session check');if(result?.error)throw result.error;session=result?.data?.session||null;
-      client.auth.onAuthStateChange((_event,next)=>{
-        session=next;if(!session)membership=null;
+      const result=await withCloudTimeout(client.auth.getSession(),'Saved shared session check');if(result?.error)throw result.error;adoptSession(result?.data?.session||null);
+      if(initSignOutGeneration!==explicitSignOutGeneration){adoptSession(null,{forceGeneration:true});return {configured:true,session,cancelled:true};}
+      client.auth.onAuthStateChange((event,next)=>{
+        const {previousUserId,nextUserId}=adoptSession(next);
         // init()/retryLinkAccess() own the first load. A delayed SIGNED_IN
         // callback must not change a fully loaded workspace back to
         // "Connecting" or start a duplicate snapshot request.
         if(initializing)return;
+        // Supabase can repeat SIGNED_IN and TOKEN_REFRESHED for the same user
+        // on refocus. That does not change access or workspace contents, and
+        // reloading here multiplied reads across every dispatcher tab.
+        if(session&&previousUserId===nextUserId&&membership)return;
         notify({type:'auth',session});
         if(session)load().catch(error=>notify({type:'error',error}));
       });
-      if(!session)session=await createAnonymousLinkSession();
+      if(!session){
+        const replacement=await createAnonymousLinkSession();
+        if(initSignOutGeneration!==explicitSignOutGeneration){await withCloudTimeout(client.auth.signOut({scope:'local'}),'Cancelled shared session cleanup',5000).catch(()=>{});adoptSession(null,{forceGeneration:true});return {configured:true,session,cancelled:true};}
+        adoptSession(replacement);
+      }
       if(session){
         notify({type:'auth',session});
         try{await load();}
-        catch(error){if(!isAuthSessionError(error))throw error;await replaceWithAnonymousLinkSession();}
+        catch(error){if(!isAuthSessionError(error))throw error;await replaceWithAnonymousLinkSession({expectedSignOutGeneration:initSignOutGeneration});}
+        if(initSignOutGeneration!==explicitSignOutGeneration)return {configured:true,session,cancelled:true};
         // Replace any stale browser session that lacks station access, including
         // anonymous sessions created before the link-access trigger existed.
-        if(!membership)await replaceWithAnonymousLinkSession();
+        if(!membership)await replaceWithAnonymousLinkSession({expectedSignOutGeneration:initSignOutGeneration});
+        if(initSignOutGeneration!==explicitSignOutGeneration)return {configured:true,session,cancelled:true};
         if(membership){
-          notify({type:'admin-status',unlocked:await adminStatus().catch(()=>false)});
+          const adminState=await refreshAdminStatus();
+          if(!adminState.current||initSignOutGeneration!==explicitSignOutGeneration)return {configured:true,session,cancelled:true};
           notify({type:'ready',revision,persistentRevision});
         }
       }else notify({type:'link-access-error',error:new Error('Automatic shared access is unavailable')});
       return {configured:true,session};
-    }catch(error){notify({type:'link-access-error',error});return {configured:true,session,error};}
+    }catch(error){if(initSignOutGeneration!==explicitSignOutGeneration)return {configured:true,session,cancelled:true};notify({type:'link-access-error',error});return {configured:true,session,error};}
     finally{initializing=false;initializingSince=0;}
   }
-  async function retryLinkAccess(){
+  async function performRetryLinkAccess(){
     if(initializing){
       notify({type:'reconnecting'});
-      const deadline=(initializingSince||Date.now())+CLOUD_TIMEOUT_MS+1500;
-      while(initializing&&Date.now()<deadline)await pause(150);
-      if(initializing)throw new Error('The previous shared-cloud connection stalled. Reload once to start the repaired session.');
-      if(session&&membership){notify({type:'ready',revision,persistentRevision});return {configured:true,session};}
+      // Initialization can legitimately span several sequential reads on the
+      // smallest compute tier. Leave that one request chain in charge instead
+      // of starting a competing reconnect or declaring it stalled.
+      return {configured:true,session,deferred:true,initializing:true};
     }
     if(!client)client=createClient();
     if(!client)throw new Error('Shared cloud is not configured');
+    const retryAuthGeneration=authGeneration,retryUserId=session?.user?.id||'',retrySignOutGeneration=explicitSignOutGeneration;
+    const retrySessionChanged=()=>authGeneration!==retryAuthGeneration||(session?.user?.id||'')!==retryUserId||explicitSignOutGeneration!==retrySignOutGeneration;
     initializing=true;initializingSince=Date.now();notify({type:'reconnecting'});
     try{
       if(session){
-        await load();
-        if(membership){notify({type:'admin-status',unlocked:await adminStatus().catch(()=>false)});notify({type:'ready',revision,persistentRevision});return {configured:true,session};}
+        const hadVerifiedAccess=Boolean(membership);
+        if(hadVerifiedAccess){
+          try{await currentMembership({refresh:true,force:true});}
+          catch(error){
+            if(retrySessionChanged())return {configured:true,session,cancelled:true};
+            // A slow access recheck is not a revocation. Keep the previously
+            // verified session and workspace, then let the guarded watchdog
+            // try again later without fanning out snapshot downloads.
+            if(transientCloudError(error)&&membership){notify({type:'reconnect-delayed',error});return {configured:true,session,deferred:true,error};}
+            throw error;
+          }
+        }
+        if(retrySessionChanged())return {configured:true,session,cancelled:true};
+        // A completed access check that returned no membership is a real
+        // denial; do not immediately repeat it through load().
+        if(!hadVerifiedAccess||membership)await load();
+        if(retrySessionChanged())return {configured:true,session,cancelled:true};
+        if(membership){const adminState=await refreshAdminStatus();if(!adminState.current||retrySessionChanged())return {configured:true,session,cancelled:true};notify({type:'ready',revision,persistentRevision});return {configured:true,session};}
       }
-      await replaceWithAnonymousLinkSession();
+      if(retrySessionChanged())return {configured:true,session,cancelled:true};
+      const replaced=await replaceWithAnonymousLinkSession({expectedSignOutGeneration:retrySignOutGeneration});
+      if(!replaced)return {configured:true,session,cancelled:true};
       return {configured:true,session};
-    }catch(error){notify({type:'link-access-error',error});throw error;}
+    }catch(error){if(retrySessionChanged())return {configured:true,session,cancelled:true};notify({type:'link-access-error',error});throw error;}
     finally{initializing=false;initializingSince=0;}
+  }
+  function retryLinkAccess(){
+    if(retryInFlight)return retryInFlight;
+    const request=performRetryLinkAccess();retryInFlight=request;
+    request.then(()=>{if(retryInFlight===request)retryInFlight=null;},()=>{if(retryInFlight===request)retryInFlight=null;});
+    return request;
   }
   function operationDate(){return window.RelayOpsApp?.operationDate?.()||new Date().toISOString().slice(0,10);}
   async function signIn(email){
@@ -470,39 +540,56 @@
       notify({type:'magic-link-sent',email});
     }catch(error){throw readableAuthError(error);}
   }
-  async function signOut(){if(client)await client.auth.signOut();}
+  async function signOut(){explicitSignOutGeneration++;if(client)await client.auth.signOut();adoptSession(null,{forceGeneration:true});}
   async function accessToken(){
     if(!client)throw new Error('Cloud is not configured');
     const {data,error}=await client.auth.getSession();
     if(error)throw error;
-    session=data.session;
+    adoptSession(data.session);
     return session?.access_token||'';
   }
   function workspaceContext(){return {organizationId:config.organizationId||'',stationId:config.stationId||''};}
-  async function currentMembership({refresh=false}={}){
+  async function currentMembership({refresh=false,force=false}={}){
     if(!client||!session)return null;
-    if(membership&&!refresh)return membership;
-    const {data,error}=await cloudRequest(()=>client.from('memberships').select('user_id,role,display_name,active').eq('organization_id',config.organizationId).eq('user_id',session.user.id).eq('active',true).maybeSingle(),'Shared station access check');
-    if(error)throw error;
-    membership=data||null;
-    if(membership&&!['owner','ops_manager'].includes(membership.role)){
-      const station=await cloudRequest(()=>client.from('station_memberships').select('station_id').eq('station_id',config.stationId).eq('user_id',session.user.id).maybeSingle(),'Station membership check');
-      if(station.error)throw station.error;
-      if(!station.data)membership=null;
-    }
-    if(!membership)notify({type:'access-denied',email:session.user.email||''});
-    else notify({type:'access-granted',membership});
-    return membership;
+    const userId=session.user.id;
+    if(membershipCheckUserId&&membershipCheckUserId!==userId)invalidateVerifiedAccess();
+    if(membership&&(!refresh||(!force&&Date.now()-membershipCheckedAt<CLOUD_MEMBERSHIP_CACHE_MS)))return membership;
+    if(membershipCheckInFlight&&membershipCheckUserId===userId)return membershipCheckInFlight;
+    const previouslyVerified=membership&&membershipCheckUserId===userId?membership:null;
+    const request=(async()=>{
+      try{
+        const {data,error}=await cloudRequest(()=>client.from('memberships').select('user_id,role,display_name,active').eq('organization_id',config.organizationId).eq('user_id',userId).eq('active',true).maybeSingle(),'Shared station access check');
+        if(error)throw error;
+        let verified=data||null;
+        if(verified&&!['owner','ops_manager'].includes(verified.role)){
+          const station=await cloudRequest(()=>client.from('station_memberships').select('station_id').eq('station_id',config.stationId).eq('user_id',userId).maybeSingle(),'Station membership check');
+          if(station.error)throw station.error;
+          if(!station.data)verified=null;
+        }
+        if(session?.user?.id!==userId)return membership;
+        membership=verified;membershipCheckUserId=userId;membershipCheckedAt=Date.now();
+        if(!membership)notify({type:'access-denied',email:session.user.email||''});
+        else notify({type:'access-granted',membership});
+        return membership;
+      }catch(error){
+        if(session?.user?.id===userId&&previouslyVerified&&transientCloudError(error)){
+          membership=previouslyVerified;membershipCheckUserId=userId;
+        }else if(!transientCloudError(error)&&session?.user?.id===userId){
+          membership=null;membershipCheckedAt=0;
+        }
+        throw error;
+      }
+    })();
+    membershipCheckUserId=userId;membershipCheckInFlight=request;
+    request.then(()=>{if(membershipCheckInFlight===request)membershipCheckInFlight=null;},()=>{if(membershipCheckInFlight===request)membershipCheckInFlight=null;});
+    return request;
   }
   function canWrite(){return Boolean(membership&&membership.active&&membership.role!=='viewer');}
   function operationDateIsWritable(date=operationDate()){return window.RelayOpsApp?.operationDateIsWritable?.(date)!==false;}
   function canInitialize(){return canWrite()&&operationDateIsWritable(operationDate());}
   function currentOperationRequest(date,generation){return date===operationDate()&&generation===loadGeneration;}
-  async function load(){
-    if(!client||!session)return null;
-    clearTimeout(saveTimer);saveTimer=null;
-    const date=operationDate(),generation=++loadGeneration;
-    const access=await currentMembership({refresh:true});
+  async function performLoad(date,generation,{refreshAccess=false}={}){
+    const access=await currentMembership({refresh:refreshAccess});
     if(!access||!currentOperationRequest(date,generation))return null;
     const query=targetDate=>cloudRequest(()=>client.from('workspace_snapshots').select('payload,revision,updated_at,updated_by').eq('station_id',config.stationId).eq('operation_date',targetDate).maybeSingle(),targetDate===PERSISTENT_DATE?'Shared station settings download':'Shared daily operations download');
     // Run the two small snapshot reads in sequence. On Supabase's nano compute,
@@ -561,6 +648,16 @@
     }
     subscribe(date);subscribePresence(date);return data;
   }
+  function load(options={}){
+    if(!client||!session)return Promise.resolve(null);
+    const date=operationDate();
+    if(loadInFlight&&loadInFlightDate===date&&!options.force)return loadInFlight;
+    clearTimeout(saveTimer);saveTimer=null;
+    const generation=++loadGeneration,request=performLoad(date,generation,options);
+    loadInFlight=request;loadInFlightDate=date;
+    request.then(()=>{if(loadInFlight===request){loadInFlight=null;loadInFlightDate='';}},()=>{if(loadInFlight===request){loadInFlight=null;loadInFlightDate='';}});
+    return request;
+  }
   async function performSave(action='workspace.save'){
     const currentPayload=window.RelayOpsApp?.sharedState?.();if(!currentPayload)return null;
     const currentPersistentPayload=window.RelayOpsApp?.persistentState?.()||{};
@@ -588,7 +685,7 @@
         if(daily.error){
           if(String(daily.error.message||'').includes('revision_conflict')){
             notify({type:'conflict',operationDate:saveDate});
-            if(saveDate===operationDate())await load();
+            if(saveDate===operationDate())await load({force:true});
             return {conflict:true,action,operationDate:saveDate};
           }
           throw daily.error;
@@ -601,7 +698,7 @@
         if(persistent.error){
           if(String(persistent.error.message||'').includes('revision_conflict')){
             notify({type:'conflict',operationDate:saveDate});
-            await load();return {conflict:true,action,operationDate:saveDate};
+            await load({force:true});return {conflict:true,action,operationDate:saveDate};
           }
           throw persistent.error;
         }
@@ -726,7 +823,9 @@
   }
   function scheduleNextPoll(date){
     clearTimeout(pollTimer);
-    const delay=Date.now()-lastActivityAt<CLOUD_ACTIVE_WINDOW_MS?CLOUD_POLL_MS:CLOUD_IDLE_POLL_MS;
+    const baseDelay=Date.now()-lastActivityAt<CLOUD_ACTIVE_WINDOW_MS?CLOUD_POLL_MS:CLOUD_IDLE_POLL_MS;
+    // Keep multiple dispatchers from landing on the same database millisecond.
+    const delay=Math.max(30000,Math.round(baseDelay*(0.85+Math.random()*0.3)));
     pollTimer=setTimeout(async()=>{await pollForUpdates(date);if(session&&date===operationDate())scheduleNextPoll(date);},delay);
     if(typeof pollTimer?.unref==='function')pollTimer.unref();
   }
