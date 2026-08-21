@@ -1,4 +1,4 @@
-const CACHE='relayops-two-dispatchers-v106';
+const CACHE='relayops-cpu-safe-v107';
 const CORE=[
   './',
   './index.html',
@@ -6,9 +6,9 @@ const CORE=[
   './macos-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260726-fleet-warning-r1',
-  './app.js?v=20260816-two-dispatchers-r1',
-  './cloud-sync.js?v=20260816-two-dispatchers-r1',
-  './supabase/config.js?v=20260816-two-dispatchers-r1',
+  './app.js?v=20260821-cpu-safe-r1',
+  './cloud-sync.js?v=20260821-cpu-safe-r1',
+  './supabase/config.js?v=20260821-cpu-safe-r1',
   './vendor/jszip.min.js',
   './assets/rivian-prime-van.png'
 ];

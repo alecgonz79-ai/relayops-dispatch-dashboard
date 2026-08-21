@@ -7,7 +7,7 @@ if(!source.includes("select('revision,updated_at,updated_by,operation_date')")||
 if(!source.includes('dailyDirty=!sameStoredPayload')||!source.includes('dailyChanged=dailyWritable&&dailyDirty')||!source.includes('persistentChanged=!sameStoredPayload'))throw new Error('Cloud saves must skip unchanged or expired daily snapshots and unchanged persistent snapshots');
 if(!source.includes("window.addEventListener('focus'")||!source.includes("document.addEventListener('visibilitychange'"))throw new Error('Returning dispatchers must receive an immediate shared refresh');
 if(source.includes(".on('postgres_changes'")||source.includes(".on('presence'"))throw new Error('Nano compute must not reopen CPU-heavy Realtime replication or presence channels');
-if(!source.includes("rpc('save_workspace_snapshot_v4'")||!source.includes('saveInFlight'))throw new Error('Cloud writes must use the current versioned single-flight writer');
+if(!source.includes("rpc('save_workspace_snapshot_v5'")||!source.includes('saveInFlight'))throw new Error('Cloud writes must use the current CPU-safe versioned single-flight writer');
 if(!source.includes("if(!membership){notify({type:'reconnecting',reason:'membership-pending'});return;}"))throw new Error('Startup must not fan out writes before station membership loads');
 if(!source.includes("pending.shared")||!source.includes("pending.userId!==session.user.id"))throw new Error('Device-local stale queues must not merge into another dispatcher session');
 if(!source.includes("from('station_memberships')"))throw new Error('Dispatcher station access must be checked before loading shared snapshots');
@@ -18,7 +18,7 @@ if(!source.includes('if(initializing)return;')||!source.includes("notify({type:'
 const app=fs.readFileSync('app.js','utf8');
 if(!app.includes('morningOperationDate: requestedOperationDate()'))throw new Error('A stale device-local date can still choose the workspace');
 if(!app.includes("url.searchParams.set('date',state.morningOperationDate)"))throw new Error('Changing operation dates must keep the dated shared URL in sync');
-if(!app.includes('everyone opens the same shared day automatically'))throw new Error('Share link must explain that the dated workspace opens automatically for everyone with the link');
+if(!app.includes('Live dashboard link copied — it opens the current operating day automatically'))throw new Error('Share link must explain that the undated live workspace follows the current operating day');
 if(!app.includes("if(event.type==='ready')")||!app.includes('Still connecting? Tap to restart shared sync.'))throw new Error('The dashboard must accept the cloud terminal-ready event and let dispatchers retry a slow connection');
 
 console.log('Cloud shared-workspace access/date/polling guard tests passed');

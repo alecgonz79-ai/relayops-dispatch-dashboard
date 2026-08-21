@@ -14,7 +14,7 @@ assert(/target_date\s*<>\s*date '2000-01-01'[\s\S]*target_date\s*<\s*current_ope
 assert(migration.indexOf('pg_advisory_xact_lock(7269120250816)') < migration.indexOf("cutoff_date := (clock_timestamp() at time zone 'America/Los_Angeles')::date"), 'Midnight cleanup must take its exclusive transaction lock before calculating the cutoff');
 assert(migration.indexOf('pg_advisory_xact_lock_shared(7269120250816)') < migration.indexOf("current_operation_date := (clock_timestamp() at time zone 'America/Los_Angeles')::date"), 'Writer v4 must take the shared cleanup lock before evaluating the live LA date');
 assert(/expected_revision\s*<>\s*0[\s\S]*on conflict\(station_id,operation_date\) do nothing[\s\S]*revision_conflict/.test(migration), 'The first writer for a new day must use conflict-safe optimistic initialization');
-assert(cloud.includes("rpc('save_workspace_snapshot_v4'"), 'Browser client is not using writer v4');
+assert(cloud.includes("rpc('save_workspace_snapshot_v5'"), 'Browser client is not using the CPU-safe writer v5');
 assert(cloud.includes('operationDateIsWritable(saveDate)'), 'Browser client must suppress expired-date daily saves before calling Supabase');
 assert(cloud.includes('if(!operationDateIsWritable(date)){clearPending(date);return;}'), 'Expired local queues must retire after permanent edits are acknowledged');
 assert(revoke.includes('save_workspace_snapshot_v3') && revoke.includes('revoke execute'), 'Post-publish migration must revoke the stale v3 writer');

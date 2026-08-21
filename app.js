@@ -122,7 +122,11 @@ let operationDateRolloverTimer=null;
 let cloudScheduleSuppressionDepth=0;
 function sharedDashboardUrl(view='') {
   const url=new URL(DISPATCHER_SHARE_URL);
-  url.searchParams.set('date',state?.morningOperationDate||requestedOperationDate());
+  const selectedDate=state?.morningOperationDate||requestedOperationDate();
+  // Today's shared link deliberately floats with the Los Angeles operating
+  // day. Future planning links stay pinned, but a copied daily link can no
+  // longer strand dispatchers on an expired workspace after midnight.
+  if(selectedDate&&selectedDate!==defaultOperationDate())url.searchParams.set('date',selectedDate);
   if(view)url.searchParams.set('view',view);
   return url.href;
 }
@@ -6726,7 +6730,7 @@ function handleSheetPaste(e,el) {
 
 async function shareDispatcherLink() {
   const url=sharedDashboardUrl(),ok=await writeClipboardText(`LLOL Dispatch Opening Operations\n${url}`);
-  toast(ok?`Clickable link for ${state.morningOperationDate} copied — everyone opens the same shared day automatically`:'Clipboard access was blocked — copy the full https:// link from Admin',ok?'':'error');
+  toast(ok?(state.morningOperationDate===defaultOperationDate()?'Live dashboard link copied — it opens the current operating day automatically':`Planning link for ${state.morningOperationDate} copied`):'Clipboard access was blocked — copy the full https:// link from Admin',ok?'':'error');
   return ok;
 }
 async function shareFleetParkingLink() {
