@@ -208,6 +208,104 @@ vm.runInContext(`
     pool:automaticFleetVehiclePool({electricOnly:true,requireDevice:true}).map(item=>item.key)
   };
 
+  // A FleetOS row proves only VIN, battery, and range. Merging it over a
+  // carried/demo card must not turn the demo card's Active / Operational text
+  // into verified Amazon status. Even with a Device, both actions are no-ops.
+  const fleetosOnlyVin='7FCEHEB25RN017610';
+  const carriedDemo=normalizeFleetVehicle({
+    name:'EV53',vin:fleetosOnlyVin,active:'Active',operational:'Operational',
+    source:'Demo data',hasName:false,hasPlate:false,hasActive:false,
+    hasOperational:false,hasBattery:false,hasMiles:false
+  });
+  rivianFleet.splice(0,rivianFleet.length,carriedDemo);
+  const fleetosOnlyRow=normalizeFleetVehicle({
+    name:fleetosOnlyVin,vin:fleetosOnlyVin,battery:96,miles:151,
+    source:'FleetOS tracker',hasName:false,hasPlate:false,hasActive:false,
+    hasOperational:false,hasBattery:true,hasMiles:true
+  });
+  const fleetosOnlyMerged=mergeFleetVehicles([fleetosOnlyRow]);
+  rivianFleet.splice(0,rivianFleet.length,...fleetosOnlyMerged);
+  state.fleetImport={name:'FleetOS-only daily row',vehicles:[JSON.parse(JSON.stringify(fleetosOnlyRow))]};
+  state.fleetSourceUploads={fleetos:{name:'Vehicle_List.csv',vehicles:[JSON.parse(JSON.stringify(fleetosOnlyRow))],uploadedAt:new Date().toISOString()}};
+  state.equipmentImport={name:'FleetOS-only Device row',details:{'53':{device:'153',portable:'-'}}};
+  state.equipmentIssues={};state.morningFilters={wave:'all',staging:'all',pad:'all'};
+  const fleetosOnlyEligibility=fleetVehicleAssignmentEligibility(rivianFleet[0]);
+  const fleetosOnlyPools={
+    safe:automaticFleetVehiclePool({electricOnly:true,requireDevice:false}).map(item=>item.key),
+    prepped:automaticFleetVehiclePool({electricOnly:true,requireDevice:true}).map(item=>item.key)
+  };
+  state.morningRoutes=[assignedRoute()];globalThis.__persistedEquipment=[];globalThis.__toasts=[];
+  assignOperationalVehicles();
+  const fleetosOnlySafe={...guardResult(),persistCount:globalThis.__persistedEquipment.length};
+  state.morningRoutes=[assignedRoute()];globalThis.__persistedEquipment=[];globalThis.__toasts=[];
+  assignBagReadyVehicles();
+  const fleetosOnlyPrepped={...guardResult(),persistCount:globalThis.__persistedEquipment.length};
+  globalThis.__reviewResults.fleetosOnlyCarried={
+    vehicle:JSON.parse(JSON.stringify(rivianFleet[0])),
+    eligibility:JSON.parse(JSON.stringify(fleetosOnlyEligibility)),
+    pools:fleetosOnlyPools,safe:fleetosOnlySafe,prepped:fleetosOnlyPrepped
+  };
+
+  // Parking order is also fail-closed. A parked Device-ready van that fails
+  // Fleet Health must leave the current Morning assignment and shared state
+  // untouched rather than clearing the row before discovering an empty pool.
+  parkingSlots=zone=>zone==='west'?[{value:'EV53'}]:[];
+  state.morningRoutes=[assignedRoute()];globalThis.__persistedEquipment=[];globalThis.__toasts=[];
+  assignVansByParking();
+  globalThis.__reviewResults.noSafeParking={
+    ...guardResult(),persistCount:globalThis.__persistedEquipment.length
+  };
+
+  // The guided gas picker revalidates its selections at apply time. If its
+  // saved selection has become inactive, it must not erase the selected DA's
+  // existing EV/Device/Portable assignment or persist a partial update.
+  const unsafeGas=normalizeFleetVehicle({
+    name:'F33',vin:'1FTYR3XM1PKA00033',active:'Inactive',operational:'Operational',
+    source:'Amazon fleet list',hasName:true,hasActive:true,hasOperational:true,
+    hasBattery:false,hasMiles:false
+  });
+  rivianFleet.splice(0,rivianFleet.length,unsafeGas);
+  state.equipmentImport={name:'Gas Device row',details:{F33:{device:'33',portable:'-'}}};
+  state.morningRoutes=[assignedRoute()];
+  state.gasAssignmentRoutes=['CX999'];state.gasAssignmentVans=['F33'];
+  globalThis.__persistedEquipment=[];globalThis.__toasts=[];
+  applyGasVehicleAssignment();
+  globalThis.__reviewResults.noSafeSelectedGas={
+    ...guardResult(),persistCount:globalThis.__persistedEquipment.length,
+    modal:state.modal,routes:[...(state.gasAssignmentRoutes||[])],vans:[...(state.gasAssignmentVans||[])]
+  };
+
+  // "with Helper" describes a legitimate CX service, not a helper-only row.
+  // Every assignment method must include that CX while leaving the explicit
+  // HELPER row (and its helper bag assignment) unchanged.
+  const helperFleet=[ev(1)];
+  rivianFleet.splice(0,rivianFleet.length,...helperFleet);
+  state.fleetImport={name:'Helper classification Fleet Health',vehicles:JSON.parse(JSON.stringify(helperFleet))};
+  state.fleetSourceUploads={
+    amazon:{name:'VehiclesData.xlsx',vehicles:JSON.parse(JSON.stringify(helperFleet)),uploadedAt:new Date().toISOString()},
+    fleetos:{name:'Vehicle_List.csv',vehicles:JSON.parse(JSON.stringify(helperFleet)),uploadedAt:new Date().toISOString()}
+  };
+  state.equipmentImport={name:'Helper classification Device rows',details:{'1':{device:'23',portable:'92'}}};
+  state.equipmentIssues={};state.morningFilters={wave:'all',staging:'all',pad:'all'};
+  const cxWithHelper=()=>({...route('cx-with-helper','CX With Helper Driver','CX410','11:15 AM'),service:'Standard Parcel Electric - Rivian MEDIUM with Helper'});
+  const explicitHelper=()=>({...route('explicit-helper','Helper Associate','HELPER1','HELPER'),service:'Helper Associate',ev:'77',deviceName:'177',portable:'277',deviceReady:true,portableReady:true});
+  const helperClassification={
+    cx:isExplicitHelperMorningRoute(cxWithHelper()),
+    explicit:isExplicitHelperMorningRoute(explicitHelper())
+  };
+  const helperRun=actionFn=>{
+    state.morningRoutes=[cxWithHelper(),explicitHelper()];globalThis.__toasts=[];
+    actionFn();
+    return JSON.parse(JSON.stringify(state.morningRoutes));
+  };
+  const helperSafe=helperRun(assignOperationalVehicles);
+  const helperPrepped=helperRun(assignBagReadyVehicles);
+  parkingSlots=zone=>zone==='west'?[{value:'EV1'}]:[];
+  const helperParking=helperRun(assignVansByParking);
+  globalThis.__reviewResults.helperClassification={
+    classification:helperClassification,safe:helperSafe,prepped:helperPrepped,parking:helperParking
+  };
+
   // Opening Add devices is non-destructive. Pasting a valid, nonempty table
   // merges with the retained rows and immediately persists the shared daily
   // equipment data, even before the dispatcher presses Fill cells.
@@ -314,6 +412,48 @@ assert.strictEqual(reviewResults.issueBlocked.route.ev, '5', 'Prepped Vans assig
 assert.strictEqual(reviewResults.issueBlocked.route.deviceName, '55', 'Prepped Vans did not fall through to the safe issue-free Device');
 assert.strictEqual(reviewResults.issueBlocked.pool.join(','), '5', 'High and critical Device issues remained in the Prepped Vans pool');
 
+const fleetosOnly = reviewResults.fleetosOnlyCarried;
+assert.strictEqual(fleetosOnly.vehicle.name, 'EV53', 'The fixed EV53 VIN identity was lost during the FleetOS-only merge');
+assert.strictEqual(fleetosOnly.vehicle.battery, 96, 'The verified FleetOS battery was not retained');
+assert.strictEqual(fleetosOnly.vehicle.active, 'Active', 'The fixture no longer proves carried Active text');
+assert.strictEqual(fleetosOnly.vehicle.operational, 'Operational', 'The fixture no longer proves carried Operational text');
+assert(!/amazon fleet list/i.test(fleetosOnly.vehicle.source), 'The FleetOS-only fixture accidentally gained Amazon provenance');
+assert.strictEqual(fleetosOnly.vehicle.hasActive, false, 'The FleetOS-only fixture accidentally marked Active as source-verified');
+assert.strictEqual(fleetosOnly.vehicle.hasOperational, false, 'The FleetOS-only fixture accidentally marked Operational as source-verified');
+assert.strictEqual(fleetosOnly.eligibility.eligible, false, 'FleetOS VIN+battery plus carried/demo statuses became dispatch eligible');
+assert(/amazon.*(?:status|active|operational).*unverified/i.test(fleetosOnly.eligibility.reason || ''), `FleetOS-only rejection did not identify missing Amazon status proof: ${fleetosOnly.eligibility.reason || '(none)'}`);
+assert.deepStrictEqual(fleetosOnly.pools.safe, [], 'Assign safe vans included a FleetOS-only carried-status row');
+assert.deepStrictEqual(fleetosOnly.pools.prepped, [], 'Prepped Vans included a FleetOS-only carried-status row with a Device');
+provePreservedGuard(fleetosOnly.safe, /no .*safe|unverified/i, 'FleetOS-only Assign safe vans');
+provePreservedGuard(fleetosOnly.prepped, /no .*safe|unverified/i, 'FleetOS-only Prepped Vans');
+assert.strictEqual(fleetosOnly.safe.persistCount, 0, 'FleetOS-only Assign safe vans persisted a mutation');
+assert.strictEqual(fleetosOnly.prepped.persistCount, 0, 'FleetOS-only Prepped Vans persisted a mutation');
+
+provePreservedGuard(reviewResults.noSafeParking, /parking|prepped vans/i, 'No-safe Parking order');
+assert.strictEqual(reviewResults.noSafeParking.persistCount, 0, 'No-safe Parking order persisted a mutation');
+provePreservedGuard(reviewResults.noSafeSelectedGas, /gas vans.*(?:safe|verified)|no assignments changed/i, 'No-safe selected gas vans');
+assert.strictEqual(reviewResults.noSafeSelectedGas.persistCount, 0, 'No-safe selected gas vans persisted a mutation');
+
+const helperQualification = reviewResults.helperClassification;
+assert.strictEqual(helperQualification.classification.cx, false, "A legitimate CX service containing 'with Helper' was misclassified as a helper-only row");
+assert.strictEqual(helperQualification.classification.explicit, true, 'An explicit HELPER row was not classified as helper-only');
+for (const [label, rows] of Object.entries({
+  'Assign safe vans': helperQualification.safe,
+  'Prepped Vans': helperQualification.prepped,
+  'Parking order': helperQualification.parking
+})) {
+  assert.deepStrictEqual(
+    {ev:rows[0].ev,device:rows[0].deviceName,portable:rows[0].portable},
+    {ev:'1',device:'23',portable:'92'},
+    `${label} excluded a legitimate CX route merely because its service contains 'with Helper'`
+  );
+  assert.deepStrictEqual(
+    {ev:rows[1].ev,device:rows[1].deviceName,portable:rows[1].portable},
+    {ev:'77',device:'177',portable:'277'},
+    `${label} changed an explicit HELPER row`
+  );
+}
+
 assert.deepStrictEqual(
   reviewResults.deviceCollision.after,
   reviewResults.deviceCollision.before,
@@ -326,4 +466,4 @@ assert(/device 23/i.test(reviewResults.deviceCollision.toast.message || ''), `Du
 const equipmentActionBranch = appSource.match(/if \(name==='equipment-import'\) \{([^}]*)\}/)?.[1] || '';
 assert(!/equipmentImport\s*=\s*null/.test(equipmentActionBranch), 'The Add devices action must never clear equipmentImport');
 
-console.log("Morning van qualification passed: Fleet/Device rules, reserved filters, issue blocks, duplicate rejection, and non-destructive persisted imports are protected");
+console.log("Morning van qualification passed: source provenance, Fleet/Device rules, helper targeting, fail-closed pools, duplicate rejection, and non-destructive persisted imports are protected");

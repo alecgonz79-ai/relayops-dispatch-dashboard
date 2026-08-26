@@ -3067,6 +3067,8 @@ function isDispatchBatteryBlocked(vehicle={}) {
 function fleetVehicleAssignmentEligibility(vehicleOrId='') {
   const vehicle=typeof vehicleOrId==='object'&&vehicleOrId?vehicleOrId:fleetVehicleForEquipmentId(vehicleOrId);
   if(!vehicle)return {eligible:false,primary:false,reason:'vehicle missing from Fleet Health',vehicle:null};
+  const electric=isElectricFleetVehicle(vehicle),sourceKeys=new Set(fleetSourceKeys(vehicle.source));
+  if(electric&&(!sourceKeys.has('amazon')||!vehicle.hasActive||!vehicle.hasOperational))return {eligible:false,primary:false,reason:'Amazon active/operational status unverified',vehicle};
   const active=normalizeActive(vehicle.active||vehicle.status,'Unknown');
   const operational=normalizeOperational(vehicle.operational||vehicle.status,'Unknown');
   if(active!=='Active')return {eligible:false,primary:false,reason:active==='Inactive'?'inactive':'active status unverified',vehicle};
@@ -3074,7 +3076,7 @@ function fleetVehicleAssignmentEligibility(vehicleOrId='') {
   const issue=fleetIssueForVehicle(vehicle);
   const blockingIssue=issue?.active?.find(record=>['critical','high'].includes(String(record.severity||'').toLowerCase()));
   if(blockingIssue)return {eligible:false,primary:false,reason:`${blockingIssue.severity} fleet issue`,vehicle,issue:blockingIssue};
-  if(isElectricFleetVehicle(vehicle)){
+  if(electric){
     const source=String(vehicle.source||'').toLowerCase(),battery=knownBatteryPercent(vehicle.battery);
     const fleetosVerified=Boolean(vehicle.hasBattery&&battery!==null&&(source.includes('fleetos tracker')||source.includes('rivian')));
     if(!fleetosVerified)return {eligible:false,primary:false,reason:'FleetOS battery unverified',vehicle};
@@ -8014,8 +8016,15 @@ function fleetDetailsFromRows(rows=[],sourceName='Fleet export') {
     const rawName=firstExisting(row,headers,['vehicle','vehicle name','vehiclename','name','asset','asset name','assetname','asset id','assetid','fleet id','fleetid','van','ev','display name','displayname','vehicle display name','vehicledisplayname','unit','unit name','unitname','unit number','unitnumber']);
     const name=rawName||vin;
     const plate=firstExisting(row,headers,['license plate','licenseplate','license plate #','license plate number','licenseplatenumber','licenseplateid','plate','plate #','plate id','plateid','plate number','platenumber','registration','registration number','registrationnumber','license','tag']);
-    const active=firstExisting(row,headers,['active','activity status','activitystatus','lifecycle status','lifecyclestatus','lifecycle state','lifecyclestate','vehicle status','vehiclestatus','availability','availability status','availabilitystatus','assignment status','assignmentstatus','status']);
-    const operational=firstExisting(row,headers,['operational','operation status','operationstatus','operational state','operationalstate','operational status','operationalstatus','grounded','grounding status','groundingstatus','state','vehicle state','vehiclestate','service status','servicestatus','maintenance status','maintenancestatus','status']);
+    const explicitActive=firstExisting(row,headers,['active','activity status','activitystatus','lifecycle status','lifecyclestatus','lifecycle state','lifecyclestate','vehicle status','vehiclestatus','availability','availability status','availabilitystatus','assignment status','assignmentstatus']);
+    const explicitOperational=firstExisting(row,headers,['operational','operation status','operationstatus','operational state','operationalstate','operational status','operationalstatus','grounded','grounding status','groundingstatus','state','vehicle state','vehiclestate','service status','servicestatus','maintenance status','maintenancestatus']);
+    const genericStatus=firstExisting(row,headers,['status']),sourceKeys=fleetSourceKeys(source),amazonOnly=sourceKeys.length===1&&sourceKeys[0]==='amazon';
+    // Amazon's VehiclesData export uses a generic Status column for the
+    // Active/Inactive lifecycle value. FleetOS also has a generic Status, but
+    // it describes charging/connection state and must never prove that a van
+    // is active or operational for dispatch.
+    const active=explicitActive||(amazonOnly?genericStatus:'');
+    const operational=explicitOperational;
     const serviceType=firstExisting(row,headers,['service type','servicetype','vehicle type','vehicletype','vehicle class','vehicleclass','asset type','assettype']);
     const battery=firstExisting(row,headers,['battery','battery %','battery percent','batterypercentage','battery percentage','soc','soc %','socpercent','state of charge','stateofcharge','state of charge %','stateofchargepercent','charge','charge %','charge percent','chargepercent']);
     const miles=firstExisting(row,headers,['range','range mi','rangemi','range miles','rangemiles','distance to empty','distancetoempty','estimated range','estimatedrange','estimated range mi','estimatedrangemi','estimated range miles','estimatedrangemiles','estimated range (mi)','remaining range','remainingrange','remaining range mi','remainingrangemi','remaining range miles','remainingrangemiles','remaining miles','remainingmiles','miles remaining','milesremaining']);
@@ -8606,14 +8615,14 @@ function assignElectricVehicles(mode='low') {
   assignAutomaticVehiclePool(targets,pool,mode==='random'?'safe EVs randomly':'safe EVs lowest to highest');
 }
 function assignOperationalVehicles() {
-  const targets=morningAssignmentTargets().filter(route=>!/helper/i.test(String(route.service||'')));if(!targets.length)return toast('No visible driver rows to assign','error');
+  const targets=morningAssignmentTargets().filter(route=>!isExplicitHelperMorningRoute(route));if(!targets.length)return toast('No visible driver rows to assign','error');
   if(!dailyFleetHealthLoaded())return openMissingDailyFleetHealth();
   const pool=automaticFleetVehiclePool({electricOnly:true,requireDevice:false});
   if(!pool.length)return noVerifiedSafeFleetToast();
   assignAutomaticVehiclePool(targets,pool,'verified safe EVs');
 }
 function assignBagReadyVehicles() {
-  const targets=morningAssignmentTargets().filter(route=>!/helper/i.test(String(route.service||'')));if(!targets.length)return toast('No visible driver rows to assign','error');
+  const targets=morningAssignmentTargets().filter(route=>!isExplicitHelperMorningRoute(route));if(!targets.length)return toast('No visible driver rows to assign','error');
   if(!dailyFleetHealthLoaded())return openMissingDailyFleetHealth();
   const safePool=automaticFleetVehiclePool({electricOnly:true,requireDevice:false});
   if(!safePool.length)return noVerifiedSafeFleetToast();
@@ -8622,7 +8631,7 @@ function assignBagReadyVehicles() {
   assignAutomaticVehiclePool(targets,pool,'Prepped Vans');
 }
 function clearMorningVehicleAssignments() {
-  const targets=morningAssignmentTargets().filter(route=>!/helper/i.test(String(route.service||'')));if(!targets.length)return toast('No Morning Sheet vehicle assignments to clear','error');
+  const targets=morningAssignmentTargets().filter(route=>!isExplicitHelperMorningRoute(route));if(!targets.length)return toast('No Morning Sheet vehicle assignments to clear','error');
   pushSheetHistory('Clear visible Morning Sheet EVs','morning');targets.forEach(route=>{route.ev='';route.deviceName='';route.portable='';route.deviceReady=false;route.portableReady=false;});persist();render();toast(`${targets.length} visible Morning Sheet EV assignments cleared · helper bags kept`);
 }
 function parkedVanId(slot={}) {
@@ -8634,10 +8643,11 @@ function groundedParkingIds() {
   return new Set(rivianFleet.filter(v=>String(v.operational||'').toLowerCase().includes('ground')).map(v=>{const text=`${v.name||''} ${v.vehicleName||''}`,ev=text.match(/\bEV\s*(\d{1,2})\b/i);return ev?String(Number(ev[1])):normalizeEquipmentId(fleetDisplayName(v));}).filter(Boolean));
 }
 function assignVansByParking() {
-  const targets=state.morningRoutes.filter(route=>route.dsp===state.dspCode&&route.route&&!String(route.route).startsWith('__blank_')).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||routeCompare(a.route,b.route));
+  const targets=state.morningRoutes.filter(route=>route.dsp===state.dspCode&&route.route&&!String(route.route).startsWith('__blank_')&&!isExplicitHelperMorningRoute(route)).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||routeCompare(a.route,b.route));
   if(!targets.length)return toast('No Morning Sheet drivers to assign','error');
   const grounded=groundedParkingIds(),values=(zones,reverse=false)=>[...new Set(zones.flatMap(zone=>{const slots=parkingSlots(zone);return reverse?[...slots].reverse():slots;}).map(parkedVanId).filter(id=>id&&!grounded.has(id)&&fleetVehicleAssignmentEligibility(id).eligible&&preppedEquipmentAssignmentFor(id)))];
   const west=values(['west']),east=values(['east'],true),remainingHealthy=values(['northRight','northLeft','street','streetLower','west','east','gas']),allHealthy=[...new Set([...west,...east,...remainingHealthy])];
+  if(!allHealthy.length)return toast('No verified prepped vans are available in Van Parking · existing Morning Sheet assignments were kept.','error');
   const used=new Set(),cursors=new Map(),take=pool=>{let index=cursors.get(pool)||0,id='';while(index<pool.length&&!id){const candidate=pool[index++];if(!used.has(candidate))id=candidate;}cursors.set(pool,index);if(id)used.add(id);return id;};
   targets.forEach(clearEquipmentForRoute);
   const assigned=[],preferredRoutes=new Set();
@@ -8678,6 +8688,8 @@ function applyGasVehicleAssignment() {
   if(!routeIds.length||!vans.length)return toast('Choose at least one driver and one gas van','error');
   const targets=morningAssignmentTargets().filter(route=>routeIds.includes(route.route));
   const safeVans=vans.filter(van=>equipmentAssignmentFor(van)&&fleetVehicleAssignmentEligibility(van).eligible&&isGasFleetVehicle(fleetVehicleForEquipmentId(van)||{}));
+  if(!targets.length)return toast('The selected drivers are no longer visible · no assignments changed.','error');
+  if(!safeVans.length)return toast('The selected gas vans are no longer verified safe · no assignments changed.','error');
   targets.forEach(clearEquipmentForRoute);
   const count=Math.min(targets.length,safeVans.length);
   targets.slice(0,count).forEach((route,i)=>{route.ev=safeVans[i];fillEquipmentForRoute(route);});
