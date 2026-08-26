@@ -1735,7 +1735,7 @@ function morningSheetPage() {
     <div class="morning-workflow-head"><div><span class="eyebrow">${esc(state.dspCode)} OPENING OPERATIONS</span><h2>Build today’s morning sheet</h2><p>Press the buttons from left to right. RelayOps matches every CX and keeps the earliest waves first.</p></div><label class="operation-date-picker"><span>Day of operation</span><input type="date" data-operation-date value="${esc(state.morningOperationDate)}"><small>Google tab: ${esc(operationDateTabNames(state.morningOperationDate).join(' or '))}</small></label><span class="morning-connector-pill ${connected?'ready':'needs-setup'}"><i></i>${esc(connectorStatus)}</span></div>
     <div class="morning-workflow-section"><div class="morning-workflow-label"><b>Morning setup</b><span>Complete these four steps before stand-up.</span></div><div class="morning-workflow-grid">
       <button class="morning-step primary-step" data-action="import"><b>1</b><span>${ICONS.upload}<strong>Upload day files</strong><small>DAYOFOPSPLAN + ROUTE_DJT6</small></span></button>
-      <button class="morning-step" data-action="assign-operational-vans"><b>2</b><span>${ICONS.van}<strong>Assign safe vans</strong><small>Active + operational only</small></span></button>
+      <button class="morning-step" data-action="assign-operational-vans"><b>2</b><span>${ICONS.van}<strong>Assign safe vans</strong><small>Verified status + battery</small></span></button>
       <button class="morning-step" data-action="equipment-import"><b>3</b><span>${ICONS.phone}<strong>Add devices</strong><small>Device and Portable Import</small></span></button>
       <button class="morning-step send-step" data-action="sync-filtered-morning-to-sheets"><b>4</b><span>${ICONS.link}<strong>Send Morning Sheet</strong><small>${connected?'To today’s Google tab':'Connect Google Sheet first'}</small></span></button>
     </div></div>
@@ -5795,7 +5795,7 @@ function bind() {
   if (search) search.addEventListener('input',e=>{state.search=e.target.value;updateGlobalSearchResults();});
   bindUploadDropZone(document);
   const equipmentText=document.getElementById('equipment-paste-text');
-  if(equipmentText) equipmentText.addEventListener('input',e=>{state.equipmentText=e.target.value;state.equipmentImport=null;});
+  if(equipmentText) equipmentText.addEventListener('input',e=>{state.equipmentText=e.target.value;});
   const fleetPaste=document.getElementById('fleet-paste-text');
   if(fleetPaste) fleetPaste.addEventListener('input',e=>{state.fleetPasteText=e.target.value;});
   const parkingPaste=document.getElementById('parking-paste-text');
@@ -5835,6 +5835,15 @@ function mergeEquipmentImport(name='',details={},text='') {
   if(text.trim())state.equipmentText=[state.equipmentText,text].filter(Boolean).join('\n');
   return Object.keys(state.equipmentImport.details).length;
 }
+function equipmentImportMergeConflicts(details={}) {
+  return equipmentAssignmentConflicts({...(state.equipmentImport?.details||{}),...details});
+}
+function rejectConflictingEquipmentMerge(details={}) {
+  const conflicts=equipmentImportMergeConflicts(details);
+  if(!conflicts.length)return false;
+  toast(`Fix duplicate equipment first: ${conflicts.join(', ')} · saved assignments were kept`,'error');
+  return true;
+}
 
 async function importEquipmentFromClipboard() {
   try {
@@ -5843,6 +5852,7 @@ async function importEquipmentFromClipboard() {
     const rows=rowsFromPastedTable(text),details={...equipmentDetailsFromText(text),...equipmentDetailsFromRows(rows)};
     const count=Object.keys(details).length;
     if(!count)return toast('No VAN / DEVICE / PORTABLE rows found — include the header row when copying','error');
+    if(rejectConflictingEquipmentMerge(details))return;
     mergeEquipmentImport('Copied Google Sheet',details,text);
     persist();
     return applyEquipmentImport();
@@ -6242,15 +6252,20 @@ function resetVanParking() {
 
 function handleEquipmentPaste(e) {
   if(state.modal!=='equipment')return;
+  if(e.__relayOpsEquipmentPasteHandled)return;
+  e.__relayOpsEquipmentPasteHandled=true;
   const files=[...(e.clipboardData?.files||[])];
   if(files.length){e.preventDefault();return readEquipmentFiles(files);}
   const text=e.clipboardData?.getData('text/plain')||'';
   if(text&&document.activeElement?.id!=='equipment-paste-text') {
     e.preventDefault();
     const details=equipmentDetailsFromText(text);
+    const incomingCount=Object.keys(details).length;
+    if(!incomingCount)return toast('No VAN / DEVICE / PORTABLE rows found — your saved assignments were kept','error');
+    if(rejectConflictingEquipmentMerge(details))return;
     const total=mergeEquipmentImport('Pasted VAN/DEV/PORT text',details,text);
-    render();
-    toast(`${total} EV/VAN assignments ready across all uploads`);
+    persist();render();
+    toast(`${incomingCount} EV/VAN assignment${incomingCount===1?'':'s'} read · ${total} saved for today and queued for dispatcher sync`);
   }
 }
 
@@ -6988,7 +7003,7 @@ function action(name,el) {
   if (name==='planned-rts-import'||name==='itineraries-rts-import') { state.importSource='computer'; state.importPurpose='itinerary-rts'; state.importedFile=null; return openLightweightModal('import'); }
   if (name==='send-rts-to-sheets') return sendRtsTimesToGoogleSheets(el);
   if (name==='send-whiparound-to-sheets') return sendWhiparoundChecksToGoogleSheets(el);
-  if (name==='equipment-import') { state.modal='equipment'; state.importPurpose='equipment'; state.equipmentImport=null; return render(); }
+  if (name==='equipment-import') { state.modal='equipment'; state.importPurpose='equipment'; return render(); }
   if (name==='fleet-import') { state.modal='fleet-import'; state.importPurpose='fleet'; state.fleetImportSourceHint=''; return render(); }
   if (name==='fleet-import-amazon') { state.importPurpose='fleet';state.fleetImportSourceHint='amazon';fileInput.accept='.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';return fileInput.click(); }
   if (name==='fleet-import-fleetos') { state.importPurpose='fleet';state.fleetImportSourceHint='fleetos';fileInput.accept='.csv,text/csv';return fileInput.click(); }
@@ -7837,10 +7852,14 @@ async function readFiles(files) {
       const details=textParts.reduce((all,text)=>({...all,...equipmentDetailsFromText(text)}),{});
       const rowDetails=parsed.reduce((all,f)=>({...all,...equipmentDetailsFromRows(f.rows||[])}),{});
       const batchText=textParts.join('\n').trim();
-      mergeEquipmentImport(parsed.map(f=>f.name).join(' + '),{...details,...rowDetails},batchText);
-      const count=Object.keys(state.equipmentImport.details).length;
-      state.modal='equipment';render();
-      return toast(count?`${count} EV/VAN assignments ready to match`:'Screenshot OCR could not find VAN / DEVICE / PORTABLE rows — use the full-size image or upload the Sheet as XLSX/CSV','error');
+      const incomingDetails={...details,...rowDetails},incomingCount=Object.keys(incomingDetails).length;
+      state.modal='equipment';
+      if(!incomingCount){render();return toast('Screenshot OCR could not find VAN / DEVICE / PORTABLE rows — your saved assignments were kept. Use the full-size image or upload the Sheet as XLSX/CSV','error');}
+      if(rejectConflictingEquipmentMerge(incomingDetails)){render();return;}
+      mergeEquipmentImport(parsed.map(f=>f.name).join(' + '),incomingDetails,batchText);
+      const total=Object.keys(state.equipmentImport.details).length;
+      persist();render();
+      return toast(`${incomingCount} EV/VAN assignment${incomingCount===1?'':'s'} read · ${total} saved for today and queued for dispatcher sync`);
     }
     if(state.importPurpose==='fleet') {
       const forcedSource=state.fleetImportSourceHint==='amazon'?'Amazon fleet list':state.fleetImportSourceHint==='fleetos'?'FleetOS tracker':'';
@@ -8331,9 +8350,12 @@ function parseEquipmentTextAction() {
   const el=document.getElementById('equipment-paste-text');
   state.equipmentText=el?el.value:state.equipmentText;
   const details=equipmentDetailsFromText(state.equipmentText);
-  state.equipmentImport={name:'Pasted EV/device list',details};
-  render();
-  toast(`${Object.keys(details).length} EV/VAN assignments found`);
+  const count=Object.keys(details).length;
+  if(!count)return toast('No EV/VAN assignments found — your saved Device and Portable rows were kept','error');
+  if(rejectConflictingEquipmentMerge(details))return;
+  mergeEquipmentImport('Pasted EV/device list',details);
+  persist();render();
+  toast(`${count} EV/VAN assignment${count===1?'':'s'} found · saved for today and queued for dispatcher sync`);
 }
 function parseFleetPasteAction() {
   const el=document.getElementById('fleet-paste-text');
@@ -8480,7 +8502,12 @@ function fillEquipmentForRoute(route) {
 }
 function equipmentAssignmentFor(value='') {
   const item=state.equipmentImport?.details?.[normalizeEquipmentId(value)];
-  return usableDeviceAssignment(item?.device)?item:null;
+  if(!usableDeviceAssignment(item?.device))return null;
+  const deviceKey=normalizeEquipmentIssueId('device',item.device);
+  const deviceOwners=Object.values(state.equipmentImport?.details||{}).filter(other=>normalizeEquipmentIssueId('device',other?.device)===deviceKey);
+  if(deviceOwners.length>1)return null;
+  const issue=equipmentIssueFor('device',item.device);
+  return issue?.active?.some(record=>['high','critical'].includes(String(record.severity||'').toLowerCase()))?null:item;
 }
 function preppedEquipmentAssignmentFor(value='') {
   // A van is ready for dispatch once its assigned Device is present. A
@@ -8491,13 +8518,31 @@ function preppedEquipmentAssignmentFor(value='') {
 function clearEquipmentForRoute(route={}) {
   route.ev='';route.deviceName='';route.portable='';route.deviceReady=false;route.portableReady=false;
 }
-function automaticFleetVehiclePool({electricOnly=false,random=false}={}) {
+function dailyFleetHealthLoaded() {
+  const savedRows=Boolean(state.fleetImport?.vehicles?.length||Object.values(state.fleetSourceUploads||{}).some(upload=>Array.isArray(upload?.vehicles)&&upload.vehicles.length));
+  if(savedRows)return true;
+  // A dispatcher may already have a verified daily fleet board in memory
+  // while its first shared save is still queued. Treat those explicit source
+  // fields as valid proof, but never treat the built-in Demo EDV rows as live.
+  return rivianFleet.some(vehicle=>{
+    const source=String(vehicle?.source||'').toLowerCase();
+    return /amazon fleet list|fleetos tracker|rivian/.test(source)&&Boolean(vehicle?.hasBattery||vehicle?.hasActive||vehicle?.hasOperational);
+  });
+}
+function openMissingDailyFleetHealth() {
+  state.modal='fleet-import';state.importPurpose='fleet';state.fleetImportSourceHint='';render();
+  return toast("Today's Fleet Health is not loaded · upload Amazon + FleetOS first. No assignments changed.",'error');
+}
+function noVerifiedSafeFleetToast() {
+  return toast('No verified safe EVs found · review inactive, grounded, high-issue, battery under 40%, or unverified Fleet Health rows. No assignments changed.','error');
+}
+function automaticFleetVehiclePool({electricOnly=false,random=false,requireDevice=true}={}) {
   const seen=new Set(),rows=[];
   rivianFleet.forEach(vehicle=>{
     if(electricOnly&&!isElectricFleetVehicle(vehicle))return;
     const safety=fleetVehicleAssignmentEligibility(vehicle),identity=fleetEquipmentIdentity(vehicle),key=normalizeEquipmentId(identity?.label||'');
-    const equipment=equipmentAssignmentFor(key);
-    if(!safety.eligible||!key||seen.has(key)||!equipment)return;
+    const equipment=requireDevice?equipmentAssignmentFor(key):null;
+    if(!safety.eligible||!key||seen.has(key)||(requireDevice&&!equipment))return;
     seen.add(key);rows.push({vehicle,label:identity.label,key,safety});
   });
   rows.sort((a,b)=>routeCompare(a.label,b.label));
@@ -8526,7 +8571,6 @@ function automaticVehicleAssignmentPlan(targets=[],pool=[]) {
   return assigned;
 }
 function assignAutomaticVehiclePool(targets=[],pool=[],successLabel='safe vans') {
-  pushSheetHistory(`Assign ${successLabel}`,'morning');
   // A wave/staging/pad filter can limit the assignment target set. Reserve
   // every EV already used outside that set so a filtered assignment can never
   // duplicate a van that remains on another wave (or on a helper/Ad Hoc row).
@@ -8534,6 +8578,8 @@ function assignAutomaticVehiclePool(targets=[],pool=[],successLabel='safe vans')
   const isTarget=route=>targetRefs.has(route)||(route?.routeUid&&targetUids.has(route.routeUid));
   const reservedVehicleKeys=new Set((state.morningRoutes||[]).filter(route=>!isTarget(route)).map(route=>normalizeEquipmentId(route?.ev)).filter(Boolean));
   const availablePool=pool.filter(item=>!reservedVehicleKeys.has(item.key));
+  if(!availablePool.length)return toast(`No ${successLabel} available for the visible rows · every verified choice is already assigned outside this filter. No assignments changed.`,'error');
+  pushSheetHistory(`Assign ${successLabel}`,'morning');
   targets.forEach(clearEquipmentForRoute);
   const assignments=automaticVehicleAssignmentPlan(targets,availablePool),count=assignments.size;
   let preferenceCount=0;
@@ -8552,20 +8598,27 @@ function assignAutomaticVehiclePool(targets=[],pool=[],successLabel='safe vans')
 function assignElectricVehicles(mode='low') {
   const targets=morningAssignmentTargets();
   if(!targets.length)return toast('No visible driver rows to assign','error');
-  const pool=automaticFleetVehiclePool({electricOnly:true,random:mode==='random'});
-  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No assignment-ready EVs available · each safe EV needs a Device entered (Portable may be blank)','error');}
+  if(!dailyFleetHealthLoaded())return openMissingDailyFleetHealth();
+  const safePool=automaticFleetVehiclePool({electricOnly:true,requireDevice:false});
+  if(!safePool.length)return noVerifiedSafeFleetToast();
+  const pool=automaticFleetVehiclePool({electricOnly:true,random:mode==='random',requireDevice:true});
+  if(!pool.length)return toast(`${safePool.length} verified safe EV${safePool.length===1?'':'s'} found, but none has a Device in today's Device & Portable Sheet. No assignments changed.`,'error');
   assignAutomaticVehiclePool(targets,pool,mode==='random'?'safe EVs randomly':'safe EVs lowest to highest');
 }
 function assignOperationalVehicles() {
   const targets=morningAssignmentTargets().filter(route=>!/helper/i.test(String(route.service||'')));if(!targets.length)return toast('No visible driver rows to assign','error');
-  const pool=automaticFleetVehiclePool({electricOnly:true});
-  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No assignment-ready EVs available · each safe EV needs a Device entered (Portable may be blank)','error');}
+  if(!dailyFleetHealthLoaded())return openMissingDailyFleetHealth();
+  const pool=automaticFleetVehiclePool({electricOnly:true,requireDevice:false});
+  if(!pool.length)return noVerifiedSafeFleetToast();
   assignAutomaticVehiclePool(targets,pool,'verified safe EVs');
 }
 function assignBagReadyVehicles() {
   const targets=morningAssignmentTargets().filter(route=>!/helper/i.test(String(route.service||'')));if(!targets.length)return toast('No visible driver rows to assign','error');
-  const pool=automaticFleetVehiclePool({electricOnly:true});
-  if(!pool.length){targets.forEach(clearEquipmentForRoute);persist();render();return toast('No Prepped Vans found · each safe EV needs a Device entered (Portable may be blank or -)','error');}
+  if(!dailyFleetHealthLoaded())return openMissingDailyFleetHealth();
+  const safePool=automaticFleetVehiclePool({electricOnly:true,requireDevice:false});
+  if(!safePool.length)return noVerifiedSafeFleetToast();
+  const pool=automaticFleetVehiclePool({electricOnly:true,requireDevice:true});
+  if(!pool.length)return toast(`No Prepped Vans ready · ${safePool.length} verified safe EV${safePool.length===1?'':'s'} found, but none has a usable unique Device in today's Device & Portable Sheet. Fix duplicate/blocked Devices; Portable may be blank or -. No assignments changed.`,'error');
   assignAutomaticVehiclePool(targets,pool,'Prepped Vans');
 }
 function clearMorningVehicleAssignments() {
