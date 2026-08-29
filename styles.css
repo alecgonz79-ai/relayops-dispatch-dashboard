@@ -1999,7 +1999,10 @@ tbody tr:last-child td { border-bottom:0; }
 .drop-zone { border:2px dashed #b9c5bb; border-radius:15px; background:#fafcf8; min-height:190px; display:grid; place-items:center; text-align:center; padding:22px; transition:.2s; }
 .drop-zone.drag { border-color:#8fb438; background:#f7ffe5; }
 .drop-zone.has-file { border-style:solid; border-color:#a9d6b6; background:#f2faf4; }
+.drop-zone.reading { border-style:solid; border-color:#78a9c8; background:linear-gradient(135deg,#f7fbff,#eaf5fb); }
 .drop-zone .drop-icon { width:44px; height:44px; margin:0 auto 10px; border-radius:13px; display:grid; place-items:center; background:var(--lime); }
+.drop-zone.reading .drop-icon { background:#b9dded; color:#173b50; font-weight:800; letter-spacing:2px; animation:import-reading-pulse 1.1s ease-in-out infinite alternate; }
+@keyframes import-reading-pulse { from { opacity:.58; transform:scale(.96); } to { opacity:1; transform:scale(1.03); } }
 .drop-zone .drop-icon svg { width:18px; }
 .drop-zone strong { display:block; font-size:14px; }
 .drop-zone span { display:block; max-width:440px; color:var(--muted); font-size:10px; line-height:1.5; margin:7px auto 15px; }

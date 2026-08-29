@@ -1,12 +1,13 @@
-const CACHE='relayops-morning-van-ready-v109';
+const CACHE='relayops-morning-upload-safe-v110';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=20260812-fleet-recovery-r1',
+  './styles.css?v=20260829-morning-upload-safe-r1',
   './macos-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260726-fleet-warning-r1',
-  './app.js?v=20260826-morning-van-ready-r2',
+  './app.js?v=20260829-morning-upload-safe-r1',
+  './morning-import-worker.js?v=20260829-morning-upload-safe-r1',
   './cloud-sync.js?v=20260821-cpu-safe-r1',
   './supabase/config.js?v=20260821-cpu-safe-r1',
   './vendor/jszip.min.js',

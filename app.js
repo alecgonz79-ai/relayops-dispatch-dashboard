@@ -483,6 +483,7 @@ let state = {
   fitOpeningPicklistRows: localStorage.getItem('relayops_fit_picklist_rows') === 'true',
   importSource: 'computer',
   importPurpose: 'morning',
+  importReadingFiles: [],
   rosterPublished: localStorage.getItem('relayops_published') === 'true',
   search: '',
   modal: null,
@@ -3815,9 +3816,9 @@ function modal() {
   }
   if (state.modal === 'morning-diagnostics') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal diagnostics-modal" role="dialog" aria-modal="true" aria-labelledby="diagnostics-title"><div class="modal-head"><div><span class="eyebrow">MORNING SHEET</span><h2 id="diagnostics-title">Setup & diagnostics</h2><p>Use only when imports or Google Sheets are not working.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body morning-advanced-content">${morningConnectorGuide()}${morningHandoffReadinessHtml()}${morningImportTemplateProofHtml()}${morningSheetsHandoffProofHtml()}${morningSheetStructureProofHtml()}${morningCopyFallbackProofHtml()}</div></div></div>`;
   if (state.modal === 'import') {
-    const proof=importPreflight(), isRts=['rts','itinerary-rts'].includes(state.importPurpose);
-    const source=state.importSource==='slack'&&!isRts?`<div class="slack-panel"><div class="slack-brand"><div class="slack-logo">S</div><div><strong>Slack Import</strong><span>#morning-operations · demo connection</span></div><span class="demo-tag">DEMO</span></div><button class="slack-file" data-action="load-slack-demo"><span class="file-type">CSV</span><span><strong>Today’s operations file</strong><small>Shared by Operations Bot · ready to use</small></span><span class="btn small">Choose this file</span></button><div class="import-note">For this demo, RelayOps will keep only ${state.dspCode} routes from the Slack file.</div></div>`:`<div class="drop-zone ${state.importedFile?'has-file':''}" id="drop-zone"><div><div class="drop-icon">${state.importedFile?ICONS.check:ICONS.upload}</div><strong>${state.importedFile?`Great! ${esc(state.importedFile.name)} is ready.`:isRts?'Choose Itineraries_DJT6 XLSX':'Choose DAYOFOPSPLAN and ROUTE_DJT6'}</strong><span>${state.importedFile?`${state.importedFile.rows.length} rows found${state.importedFile.routeDetailsCount?` · ${state.importedFile.routeDetailsCount} CX rows matched`:''}.`:isRts?'Only Route code and Planned return to station are read. All other Morning Sheet data stays unchanged.':'Select both files at the same time. Excel (.xlsx) and CSV are supported.'}</span><button class="btn primary upload-choice" data-action="choose-file">${state.importedFile?'Choose different file':isRts?'Choose Itineraries_DJT6 file':'Choose Amazon files'}</button></div></div>`;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title"><div class="modal-head"><div><span class="eyebrow">${isRts?'PLANNED RTS':'EASY UPLOAD'}</span><h2 id="import-title">${isRts?'Upload Planned RTS times':'Make my morning sheet'}</h2><p>${isRts?'Drop the Routes_DJT6 export. Only the Planned Departure Time column is used.':'Choose the plan and route files. RelayOps joins them by CX route.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="upload-progress"><div class="upload-progress-step active"><b>1</b><span>Choose files</span></div><i></i><div class="upload-progress-step ${state.importedFile?'active':''}"><b>${state.importedFile?'✓':'2'}</b><span>${isRts?'Find planned time':'Match CX routes'}</span></div><i></i><div class="upload-progress-step"><b>3</b><span>${isRts?'Fill purple cells':'Make sheet'}</span></div></div>${!isRts?`<div class="source-tabs import-choice-grid"><button class="source-tab import-choice-card ${state.importSource==='slack'?'active':''}" data-action="set-import-source" data-source="slack"><strong>Slack Import</strong><small>Daily file from the operations channel</small></button><button class="source-tab import-choice-card ${state.importSource==='computer'?'active':''}" data-action="set-import-source" data-source="computer"><strong>Cortex Import</strong><small>Amazon DAYOFOPSPLAN + ROUTE_DJT6 exports</small></button></div>`:''}${source}${state.importedFile?`${importPreflightHtml()}<div class="auto-match"><strong>RelayOps will do these things:</strong><div><span>✓ Earliest wave first</span><span>✓ CX route matching</span><span>${isRts?'✓ Planned RTS purple cells':'✓ First driver name only'}</span></div></div>`:''}<div class="modal-actions easy-actions"><button class="btn sample-button" data-action="template-csv">Need an example file?</button><button class="btn primary create-sheet-button" data-action="apply-import" ${state.importedFile&&proof?.ready?'':'disabled'}>${state.importedFile?(isRts?'Fill Planned RTS →':'Create my operations sheet →'):'Choose files first'}</button></div><p class="upload-help">Nothing is sent to Amazon. RelayOps reads the files in this browser and keeps the originals unchanged.</p></div></div></div>`;
+    const proof=importPreflight(), isRts=['rts','itinerary-rts'].includes(state.importPurpose),readingFiles=Array.isArray(state.importReadingFiles)?state.importReadingFiles:[],isReading=readingFiles.length>0;
+    const source=state.importSource==='slack'&&!isRts?`<div class="slack-panel"><div class="slack-brand"><div class="slack-logo">S</div><div><strong>Slack Import</strong><span>#morning-operations · demo connection</span></div><span class="demo-tag">DEMO</span></div><button class="slack-file" data-action="load-slack-demo"><span class="file-type">CSV</span><span><strong>Today’s operations file</strong><small>Shared by Operations Bot · ready to use</small></span><span class="btn small">Choose this file</span></button><div class="import-note">For this demo, RelayOps will keep only ${state.dspCode} routes from the Slack file.</div></div>`:`<div class="drop-zone ${isReading?'reading':state.importedFile?'has-file':''}" id="drop-zone" ${isReading?'aria-live="polite" aria-busy="true"':''}><div><div class="drop-icon">${isReading?'<span aria-hidden="true">···</span>':state.importedFile?ICONS.check:ICONS.upload}</div><strong>${isReading?`Reading ${readingFiles.length} Amazon file${readingFiles.length===1?'':'s'}…`:state.importedFile?`Great! ${esc(state.importedFile.name)} is ready.`:isRts?'Choose Itineraries_DJT6 XLSX':'Choose DAYOFOPSPLAN and ROUTE_DJT6'}</strong><span>${isReading?`RelayOps is opening ${esc(readingFiles.join(' + '))} in the background. This page will stay responsive.`:state.importedFile?`${state.importedFile.rows.length} rows found${state.importedFile.routeDetailsCount?` · ${state.importedFile.routeDetailsCount} CX rows matched`:''}.`:isRts?'Only Route code and Planned return to station are read. All other Morning Sheet data stays unchanged.':'Choose both together or one at a time. RelayOps keeps the first file while you add the second. Excel (.xlsx) and CSV are supported.'}</span><button class="btn primary upload-choice" data-action="choose-file" ${isReading?'disabled':''}>${isReading?'Reading files…':state.importedFile?'Add or replace Amazon file':isRts?'Choose Itineraries_DJT6 file':'Choose Amazon files'}</button></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title"><div class="modal-head"><div><span class="eyebrow">${isRts?'PLANNED RTS':'EASY UPLOAD'}</span><h2 id="import-title">${isRts?'Upload Planned RTS times':'Make my morning sheet'}</h2><p>${isRts?'Drop the Routes_DJT6 export. Only the Planned Departure Time column is used.':'Choose the plan and route files. RelayOps joins them by CX route.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="upload-progress"><div class="upload-progress-step active"><b>1</b><span>Choose files</span></div><i></i><div class="upload-progress-step ${state.importedFile||isReading?'active':''}"><b>${state.importedFile?'✓':'2'}</b><span>${isReading?'Reading files':isRts?'Find planned time':'Match CX routes'}</span></div><i></i><div class="upload-progress-step"><b>3</b><span>${isRts?'Fill purple cells':'Make sheet'}</span></div></div>${!isRts?`<div class="source-tabs import-choice-grid"><button class="source-tab import-choice-card ${state.importSource==='slack'?'active':''}" data-action="set-import-source" data-source="slack" ${isReading?'disabled':''}><strong>Slack Import</strong><small>Daily file from the operations channel</small></button><button class="source-tab import-choice-card ${state.importSource==='computer'?'active':''}" data-action="set-import-source" data-source="computer" ${isReading?'disabled':''}><strong>Cortex Import</strong><small>Amazon DAYOFOPSPLAN + ROUTE_DJT6 exports</small></button></div>`:''}${source}${state.importedFile&&!isReading?`${importPreflightHtml()}<div class="auto-match"><strong>RelayOps will do these things:</strong><div><span>✓ Earliest wave first</span><span>✓ CX route matching</span><span>${isRts?'✓ Planned RTS purple cells':'✓ First driver name only'}</span></div></div>`:''}<div class="modal-actions easy-actions"><button class="btn sample-button" data-action="template-csv" ${isReading?'disabled':''}>Need an example file?</button><button class="btn primary create-sheet-button" data-action="apply-import" ${!isReading&&state.importedFile&&proof?.ready?'':'disabled'}>${isReading?'Reading files…':state.importedFile?(isRts?'Fill Planned RTS →':'Create my operations sheet →'):'Choose files first'}</button></div><p class="upload-help">${isReading?'The Excel work is isolated from the dashboard, so dispatchers can keep this page open.':'Nothing is sent to Amazon. RelayOps reads the files in this browser and keeps the originals unchanged.'}</p></div></div></div>`;
   }
   if (state.modal === 'add-driver') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal add-driver-modal" role="dialog" aria-modal="true" aria-labelledby="add-driver-title"><div class="modal-head"><div><span class="eyebrow">DRIVERS & TEAM</span><h2 id="add-driver-title">Add Delivery Associate</h2><p>Add one associate without re-importing the full Amazon file.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="add-driver-fields"><label><span>Full name *</span><input id="manual-driver-name" autocomplete="name" placeholder="First and last name"></label><label><span>Personal phone *</span><input id="manual-driver-phone" inputmode="tel" autocomplete="tel" placeholder="(951) 555-0123"></label><label><span>Position</span><select id="manual-driver-role"><option>Delivery Associate</option><option>Helper, Driver</option><option>Lead DA</option><option>Helper</option></select></label><label><span>Transporter ID</span><input id="manual-driver-id" autocomplete="off" placeholder="Optional Amazon ID"></label></div><div class="private-contact-note"><b>Protected station contact</b><span>Signed-in dispatchers share this contact through Supabase. It is never published in the public GitHub Pages files.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="save-manual-driver">Add Delivery Associate</button></div></div></div></div>`;
   if (state.modal === 'remove-driver' && state.pendingDriverRemoval) return `<div class="modal-backdrop" data-action="close-modal"><div class="modal remove-driver-modal" role="alertdialog" aria-modal="true" aria-labelledby="remove-driver-title"><div class="modal-head"><div><span class="eyebrow">CONFIRM REMOVAL</span><h2 id="remove-driver-title">Remove ${esc(state.pendingDriverRemoval.name)}?</h2><p>This Delivery Associate will be removed from the shared Drivers & Team workspace for authorized dispatchers.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="remove-driver-warning">${ICONS.alert}<div><b>Are you sure?</b><span>You can add the associate again later by re-importing the roster or using Add Delivery Associate.</span></div></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn danger" data-action="confirm-driver-removal">${ICONS.trash} Remove DA</button></div></div></div></div>`;
@@ -5148,6 +5149,7 @@ function renderLightweightModal() {
 function openLightweightModal(name='') { state.modal=name;return renderLightweightModal(); }
 function closeLightweightModal() {
   const wasOpen=modalWasOpen;
+  if(state.modal==='import'){resetMorningImportBatch();state.importedFile=null;}
   if(['picklist-screenshot-review','screenshot'].includes(state.modal)){state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};}
   if(state.modal==='vto-route-swap')state.pendingVtoRouteSwap=null;
   if(state.modal==='roster-destination')state.pendingRosterDestination=null;
@@ -6999,10 +7001,10 @@ function action(name,el) {
   if (name==='inventory-log') return openInventoryLog();
   if (name==='route') { state.pendingRouteCode=el.dataset.route||'';state.modal='route-details';return render(); }
   if (name==='copy-route-summary') return copyRouteSummary(el.dataset.route||'');
-  if (name==='import') { state.importSource='computer'; state.importPurpose='morning'; state.importedFile=null; return openLightweightModal('import'); }
+  if (name==='import') { resetMorningImportBatch();state.importSource='computer'; state.importPurpose='morning'; state.importedFile=null; return openLightweightModal('import'); }
   if (name==='slack-import') return toast('Slack Import is locked until the secure connector is ready','error');
   if (name==='open-morning-diagnostics') { state.modal='morning-diagnostics';return render(); }
-  if (name==='planned-rts-import'||name==='itineraries-rts-import') { state.importSource='computer'; state.importPurpose='itinerary-rts'; state.importedFile=null; return openLightweightModal('import'); }
+  if (name==='planned-rts-import'||name==='itineraries-rts-import') { resetMorningImportBatch();state.importSource='computer'; state.importPurpose='itinerary-rts'; state.importedFile=null; return openLightweightModal('import'); }
   if (name==='send-rts-to-sheets') return sendRtsTimesToGoogleSheets(el);
   if (name==='send-whiparound-to-sheets') return sendWhiparoundChecksToGoogleSheets(el);
   if (name==='equipment-import') { state.modal='equipment'; state.importPurpose='equipment'; return render(); }
@@ -7041,7 +7043,7 @@ function action(name,el) {
   if (name==='report-charging-station') return openChargerReport(el.dataset.chargerKey||'');
   if (name==='copy-charger-report') return copyChargerReportOnly();
   if (name==='copy-open-charger-slack') return copyChargerReportAndOpenSlack();
-  if (name==='set-import-source') { state.importSource=el.dataset.source; state.importedFile=null; return renderLightweightModal(); }
+  if (name==='set-import-source') { resetMorningImportBatch();state.importSource=el.dataset.source; state.importedFile=null; return renderLightweightModal(); }
   if (name==='load-slack-demo') return loadSlackDemo();
   if (name==='close-modal'&&['picklist-screenshot-review','screenshot','vto-route-swap','roster-destination','roster-swap','route-trainer','route-vto-swap','duplicate-driver-name','adhoc-route-swap','helper-match','preferred-vehicle-drivers','early-calloff-reminder','import'].includes(state.modal)) return closeLightweightModal();
   if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingRouteTrainer=null;state.pendingRouteVtoSwap=null;state.pendingDuplicateDriverName=null;state.pendingAdhocRouteSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingPreferredVehicleId='';state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};state.fleetRefreshPreview=null;return render(); }
@@ -7402,12 +7404,148 @@ function itineraryRtsDetailsFromRows(rows=[]) {
   const details={};Object.entries(selected).forEach(([route,candidate])=>{if(candidate.plannedRts)details[route]=candidate;});
   return details;
 }
-async function parseUploadedFile(file) {
+const MORNING_IMPORT_WORKER_TIMEOUT_MS=45000;
+const MORNING_IMPORT_MAX_FILE_BYTES=50*1024*1024;
+const MORNING_IMPORT_MAX_ROWS=20000;
+const MORNING_IMPORT_MAX_CELLS=250000;
+let morningImportWorker=null,morningImportWorkerRequest=0,morningImportReadToken=0,pendingMorningImportFiles=[];
+const morningImportWorkerPending=new Map();
+function morningImportRawFileRole(file={}) {
+  const key=headerKey(file.name||'');
+  if(key.includes('dayofopsplan'))return 'plan';
+  if(/routes?djt6/.test(key))return 'routes';
+  return `file:${key}`;
+}
+function mergePendingMorningImportFiles(files=[]) {
+  const next=[...pendingMorningImportFiles];
+  files.forEach(file=>{
+    const role=morningImportRawFileRole(file);
+    for(let index=next.length-1;index>=0;index--) {
+      const currentRole=morningImportRawFileRole(next[index]);
+      if(currentRole===role||(role.startsWith('file:')&&headerKey(next[index]?.name||'')===headerKey(file?.name||'')))next.splice(index,1);
+    }
+    next.push(file);
+  });
+  pendingMorningImportFiles=next;
+  return [...pendingMorningImportFiles];
+}
+function resetMorningImportBatch() {
+  pendingMorningImportFiles=[];
+  state.importReadingFiles=[];
+  morningImportReadToken++;
+  if(morningImportWorkerPending.size)stopMorningImportWorker('The Morning import was closed or replaced.');
+}
+function morningParsedFileRole(file={}) {
+  const key=headerKey(file.name||''),rows=Array.isArray(file.rows)?file.rows:[];
+  if(key.includes('dayofopsplan'))return 'plan';
+  if(/routes?djt6/.test(key))return 'routes';
+  const planHeader=morningPlanHeaderIndex(rows);
+  if(planHeader>=0) {
+    const headers=(rows[planHeader]||[]).map(headerKey);
+    if(headers.some(value=>['dsp','dspcode','company'].includes(value))&&headers.some(value=>['staging','staginglocation'].includes(value)))return 'plan';
+  }
+  if(Object.keys(routeDetailsFromRows(rows)).length)return 'routes';
+  return planHeader>=0?'plan':'unknown';
+}
+function morningImportFailureMessage(error) {
+  const message=String(error?.message||'');
+  if(/too long|larger than|too large|safe (?:browser )?import|expands beyond/i.test(message))return message;
+  return 'These files could not be read. Choose DAYOFOPSPLAN and Routes_DJT6 as CSV or XLSX, then try again.';
+}
+function validateMorningImportRows(rows=[],fileName='Amazon file') {
+  if(!Array.isArray(rows))throw new Error(`${fileName} did not contain readable rows.`);
+  let cells=0;
+  for(const row of rows) {
+    cells+=Array.isArray(row)?row.length:0;
+    if(cells>MORNING_IMPORT_MAX_CELLS)throw new Error(`${fileName} has too many cells for a safe browser import. Split the export and retry.`);
+  }
+  if(rows.length>MORNING_IMPORT_MAX_ROWS)throw new Error(`${fileName} has too many rows for a safe browser import. Split the export and retry.`);
+  return rows;
+}
+function yieldMorningImportPaint() {
+  return new Promise(resolve=>{
+    let settled=false,timer=null;
+    const finish=()=>{if(settled)return;settled=true;if(timer!==null)clearTimeout(timer);resolve();};
+    // Background tabs can pause requestAnimationFrame for many seconds. Give
+    // the visible reading state one frame, but never let tab throttling block
+    // the actual import.
+    timer=setTimeout(finish,80);
+    if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>setTimeout(finish,0));
+    else setTimeout(finish,0);
+  });
+}
+function stopMorningImportWorker(message='The Excel reader stopped before it finished') {
+  const error=new Error(message);
+  morningImportWorkerPending.forEach(entry=>{clearTimeout(entry.timer);entry.reject(error);});
+  morningImportWorkerPending.clear();
+  morningImportWorker?.terminate?.();
+  morningImportWorker=null;
+}
+function getMorningImportWorker() {
+  if(morningImportWorker)return morningImportWorker;
+  if(typeof Worker==='undefined'||typeof URL==='undefined'||!window?.location?.href)return null;
+  try {
+    const worker=new Worker(new URL('./morning-import-worker.js?v=20260829-morning-upload-safe-r1',window.location.href),{name:'relayops-morning-import'});
+    worker.addEventListener('message',event=>{
+      const message=event.data||{},entry=morningImportWorkerPending.get(message.id);if(!entry)return;
+      morningImportWorkerPending.delete(message.id);clearTimeout(entry.timer);
+      if(message.type==='result') {
+        try { entry.resolve(validateMorningImportRows(Array.isArray(message.rows)?message.rows:[],entry.fileName)); }
+        catch(error) { entry.reject(error); }
+      }
+      else entry.reject(new Error(message.message||'The Excel file could not be read'));
+    });
+    worker.addEventListener('error',event=>stopMorningImportWorker(event?.message||'The background Excel reader could not start'));
+    morningImportWorker=worker;
+    return worker;
+  } catch {
+    morningImportWorker=null;
+    return null;
+  }
+}
+async function parseMorningFileInWorker(buffer,fileName='',type='parse-xlsx') {
+  const worker=getMorningImportWorker();
+  if(!worker) {
+    // Older browsers still get the existing parser, but paint the visible
+    // reading state before the compatibility path starts doing any work.
+    await yieldMorningImportPaint();
+    const rows=type==='parse-csv'?parseCSV(new TextDecoder('utf-8').decode(buffer)):await parseXlsxArrayBuffer(buffer,fileName,'morning');
+    return validateMorningImportRows(rows,fileName);
+  }
+  const id=++morningImportWorkerRequest;
+  return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>{
+      if(!morningImportWorkerPending.has(id))return;
+      stopMorningImportWorker('This Excel file took too long to read. Export it again or use CSV, then retry.');
+    },MORNING_IMPORT_WORKER_TIMEOUT_MS);
+    morningImportWorkerPending.set(id,{resolve,reject,timer,fileName});
+    try { worker.postMessage({type,id,fileName,buffer},[buffer]); }
+    catch(error) { morningImportWorkerPending.delete(id);clearTimeout(timer);reject(error); }
+  });
+}
+async function parseMorningXlsxInWorker(buffer,fileName='') { return parseMorningFileInWorker(buffer,fileName,'parse-xlsx'); }
+async function parseMorningCsvInWorker(buffer,fileName='') { return parseMorningFileInWorker(buffer,fileName,'parse-csv'); }
+async function parseUploadedFile(file,purpose=state.importPurpose,shouldContinue=null) {
   const name=file.name.toLowerCase(); let rows;
   if(/^image\//.test(file.type)||/\.(png|jpe?g|webp)$/i.test(name)) { const image=await readImageContent(file);return {name:file.name,rows:image.rows||[],text:image.text||'',kind:'image'}; }
   if(file.type==='application/pdf'||name.endsWith('.pdf')) return {name:file.name,rows:[],text:await readPdfText(await file.arrayBuffer()),kind:'pdf'};
-  if(name.endsWith('.csv')) rows=parseCSV(await file.text());
-  else if(name.endsWith('.xlsx')) rows=await parseXlsxArrayBuffer(await file.arrayBuffer());
+  if(name.endsWith('.csv')&&purpose==='morning') {
+    const size=Number(file.size)||0;
+    if(size>MORNING_IMPORT_MAX_FILE_BYTES)throw new Error(`${file.name} is larger than 50 MB. Split the plan and route files, then retry.`);
+    const buffer=await file.arrayBuffer();
+    if(buffer.byteLength>MORNING_IMPORT_MAX_FILE_BYTES)throw new Error(`${file.name} is larger than 50 MB. Split the plan and route files, then retry.`);
+    if(typeof shouldContinue==='function'&&!shouldContinue())throw new Error('This import was closed or replaced.');
+    rows=await parseMorningCsvInWorker(buffer,file.name);
+  }
+  else if(name.endsWith('.csv')) rows=parseCSV(await file.text());
+  else if(name.endsWith('.xlsx')) {
+    const size=Number(file.size)||0;
+    if(purpose==='morning'&&size>MORNING_IMPORT_MAX_FILE_BYTES)throw new Error(`${file.name} is larger than 50 MB. Export it as CSV or split the plan and route files, then retry.`);
+    const buffer=await file.arrayBuffer();
+    if(purpose==='morning'&&buffer.byteLength>MORNING_IMPORT_MAX_FILE_BYTES)throw new Error(`${file.name} is larger than 50 MB. Export it as CSV or split the plan and route files, then retry.`);
+    if(typeof shouldContinue==='function'&&!shouldContinue())throw new Error('This import was closed or replaced.');
+    rows=purpose==='morning'?await parseMorningXlsxInWorker(buffer,file.name):await parseXlsxArrayBuffer(buffer,file.name,purpose);
+  }
   else if(name.endsWith('.xls')) {
     const buffer=await file.arrayBuffer(),text=new TextDecoder('utf-8').decode(buffer);
     if(/<table\b/i.test(text)) {
@@ -7415,14 +7553,14 @@ async function parseUploadedFile(file) {
       if(rows.length<2)throw new Error('empty Paycom HTML workbook');
       return {name:file.name,rows,text:rowsToText(rows),kind:'paycom-html-xls'};
     }
-    rows=await parseXlsxArrayBuffer(buffer);
+    rows=await parseXlsxArrayBuffer(buffer,file.name,purpose);
   }
   else {
     const text=await file.text().catch(()=>''),clean=text.replace(/^\uFEFF/,'');
     // Amazon AssociateData exports are sometimes downloaded without a .csv
     // suffix. Only enable content sniffing for the driver-import workflow;
     // fleet and RTS filename gates remain strict.
-    if(state.importPurpose==='drivers') {
+    if(purpose==='drivers') {
       const csvRows=parseCSV(clean);
       if(csvRows.length>1&&driverContactsFromRows(csvRows).length) return {name:file.name,rows:csvRows,text:clean,kind:'csv-content'};
     }
@@ -7800,16 +7938,39 @@ function currentScheduleEntries() {
   return scheduleEntriesForDate(state.morningOperationDate);
 }
 async function readFiles(files) {
+  const incomingFiles=[...files],purposeAtStart=state.importPurpose,isMorningRead=purposeAtStart==='morning';
+  const previousMorningFiles=isMorningRead?[...pendingMorningImportFiles]:[];
+  const selectedFiles=isMorningRead?mergePendingMorningImportFiles(incomingFiles):incomingFiles,readToken=++morningImportReadToken;
+  if(!isMorningRead){pendingMorningImportFiles=[];state.importReadingFiles=[];}
+  // A new picker result supersedes any older background workbook job.
+  if(morningImportWorkerPending.size)stopMorningImportWorker('A newer file selection replaced this import.');
+  if(isMorningRead) {
+    state.importReadingFiles=selectedFiles.map(file=>String(file.name||'Amazon file'));
+    if(state.modal==='import')renderLightweightModal();
+    // Let Chrome paint the reading state before arrayBuffer/ZIP work starts.
+    await yieldMorningImportPaint();
+  }
   try {
     if(state.importPurpose==='fleet'&&state.fleetImportSourceHint==='amazon') {
-      const invalid=[...files].find(file=>!/^VehiclesData.*\.xlsx$/i.test(String(file.name||'')));
+      const invalid=selectedFiles.find(file=>!/^VehiclesData.*\.xlsx$/i.test(String(file.name||'')));
       if(invalid)throw new Error('Amazon Fleet Import only accepts VehiclesData… .xlsx files');
     }
     if(state.importPurpose==='fleet'&&state.fleetImportSourceHint==='fleetos') {
-      const invalid=[...files].find(file=>!/^Vehicle_List.*\.csv$/i.test(String(file.name||'')));
+      const invalid=selectedFiles.find(file=>!/^Vehicle_List.*\.csv$/i.test(String(file.name||'')));
       if(invalid)throw new Error('FleetOS Import only accepts Vehicle_List… .csv files');
     }
-    const parsed=await Promise.all(files.map(parseUploadedFile));
+    let parsed;
+    if(isMorningRead) {
+      // Amazon plan/route workbooks are intentionally processed one at a time
+      // to cap memory use on dispatcher laptops.
+      parsed=[];
+      for(const file of selectedFiles) {
+        if(readToken!==morningImportReadToken||state.importPurpose!==purposeAtStart)return;
+        parsed.push(await parseUploadedFile(file,purposeAtStart,()=>readToken===morningImportReadToken&&state.importPurpose===purposeAtStart));
+      }
+      if(readToken!==morningImportReadToken||state.importPurpose!==purposeAtStart)return;
+      state.importReadingFiles=[];
+    } else parsed=await Promise.all(selectedFiles.map(file=>parseUploadedFile(file,purposeAtStart)));
     if(state.importPurpose==='whiparound') {
       const records=parsed.flatMap(file=>inspectionRecordsFromRows(file.rows||[]));
       if(!records.length)throw new Error('No Pre-Trip or Post-Trip EDV Inspection (DVIR) rows found');
@@ -7900,8 +8061,9 @@ async function readFiles(files) {
       state.modal=null;state.page='morning';state.importPurpose='morning';persist();render();
       return toast(`${matched} Planned return to station times filled automatically${flagged?` · ${flagged} flagged for review`:''}`);
     }
-    const plan=parsed.find(f=>/day\s*of\s*ops\s*plan/i.test(f.name)||morningPlanHeaderIndex(f.rows)>=0);
-    const routeFile=parsed.find(f=>/route[_\s-]*djt6/i.test(f.name))||parsed.find(f=>f!==plan&&Object.keys(routeDetailsFromRows(f.rows)).length);
+    const newestFirst=[...parsed].reverse();
+    const plan=newestFirst.find(file=>morningParsedFileRole(file)==='plan');
+    const routeFile=newestFirst.find(file=>file!==plan&&morningParsedFileRole(file)==='routes');
     const details=routeFile?routeDetailsFromRows(routeFile.rows):{};
     const primary=plan||routeFile;
     if(!primary)throw new Error('unrecognized');
@@ -7911,7 +8073,17 @@ async function readFiles(files) {
     if(state.modal==='import')renderLightweightModal();else render();
     toast(`${parsed.length} file${parsed.length===1?'':'s'} ready · CX routes will be matched automatically`);
   } catch(error) {
-    console.error(error);if(state.importPurpose==='itinerary-rts')return toast(error?.message||'Choose an Itineraries_DJT6 XLSX containing Route code and Planned return to station','error');toast(state.importPurpose==='rostering-screenshot'?(error?.message||'Could not read Amazon confirmed services or associate rows. Upload a clear full-size roster screenshot.'):state.importPurpose==='whiparound'?(error?.message||'Could not find the five required Whiparound columns. Choose a CSV or XLSX inspection report.'):state.importPurpose==='schedule'?'Could not find scheduled names, times, and shift labels. Upload the Paycom PDF, screenshot, CSV, Excel, or text export.':state.importPurpose==='fleet'?(error?.message||'Could not find VIN rows in the selected fleet file.'):state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV, XLSX, or text-based PDF with Name and Personal Phone information.':'These files could not be read. Choose DAYOFOPSPLAN and ROUTE_DJT6 as CSV or XLSX.','error');
+    if(isMorningRead) {
+      if(readToken!==morningImportReadToken)return;
+      // Do not let a corrupt or unrelated selection poison the next retry.
+      // Keep only the previously parsed Morning batch until this selection
+      // has completed successfully.
+      pendingMorningImportFiles=previousMorningFiles;
+      state.importReadingFiles=[];
+      if(state.importPurpose!==purposeAtStart)return;
+      if(state.modal==='import')renderLightweightModal();
+    }
+    console.error(error);if(state.importPurpose==='itinerary-rts')return toast(error?.message||'Choose an Itineraries_DJT6 XLSX containing Route code and Planned return to station','error');toast(state.importPurpose==='rostering-screenshot'?(error?.message||'Could not read Amazon confirmed services or associate rows. Upload a clear full-size roster screenshot.'):state.importPurpose==='whiparound'?(error?.message||'Could not find the five required Whiparound columns. Choose a CSV or XLSX inspection report.'):state.importPurpose==='schedule'?'Could not find scheduled names, times, and shift labels. Upload the Paycom PDF, screenshot, CSV, Excel, or text export.':state.importPurpose==='fleet'?(error?.message||'Could not find VIN rows in the selected fleet file.'):state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV, XLSX, or text-based PDF with Name and Personal Phone information.':purposeAtStart==='morning'?morningImportFailureMessage(error):'The selected files could not be read.','error');
   }
 }
 async function readFile(file) { return readFiles([file]); }
@@ -8260,8 +8432,11 @@ function textNodes(xml='') {
   while((m=re.exec(xml))) values.push(decodeXml(m[1]));
   return values.join('');
 }
+const XLSX_IMPORT_MAX_COLUMNS=512;
+const XLSX_IMPORT_MAX_XML_ENTRY_BYTES=48*1024*1024;
+const XLSX_IMPORT_MAX_XML_TOTAL_BYTES=128*1024*1024;
 function parseWorksheetXml(xml,sharedStrings) {
-  const rows=[]; const rowRe=/<(?:\w+:)?row\b[^>]*>([\s\S]*?)<\/(?:\w+:)?row>/gi; let rowMatch;
+  const rows=[];let importedCells=0; const rowRe=/<(?:\w+:)?row\b[^>]*>([\s\S]*?)<\/(?:\w+:)?row>/gi; let rowMatch;
   while((rowMatch=rowRe.exec(xml))) {
     const row=[]; const cellRe=/<(?:\w+:)?c\b([^>]*)>([\s\S]*?)<\/(?:\w+:)?c>/gi; let cell;
     while((cell=cellRe.exec(rowMatch[1]))) {
@@ -8273,15 +8448,34 @@ function parseWorksheetXml(xml,sharedStrings) {
       else if(type==='b') value=raw==='1'?'TRUE':'FALSE';
       else if(type==='str'||type==='e') value=decodeXml(raw??'');
       else if(raw!==undefined) value=Number.isFinite(Number(raw))?Number(raw):decodeXml(raw);
-      row[columnIndex(ref)]=value;
+      // Styled blank cells can be serialized at XFD and would otherwise turn
+      // every small import row into a 16,384-cell array on the main thread.
+      if(value===''||value===undefined)continue;
+      const index=columnIndex(ref);if(index<0||index>=XLSX_IMPORT_MAX_COLUMNS)continue;
+      row[index]=value;
     }
-    if(row.some(v=>v!==''&&v!==undefined)) rows.push(Array.from({length:row.length},(_,i)=>row[i]??''));
+    if(row.some(v=>v!==''&&v!==undefined)) {
+      importedCells+=row.length;
+      if(rows.length>=MORNING_IMPORT_MAX_ROWS||importedCells>MORNING_IMPORT_MAX_CELLS)throw new Error('This workbook has too many rows or cells for a safe browser import. Split the export and retry.');
+      rows.push(Array.from({length:row.length},(_,i)=>row[i]??''));
+    }
   }
   return rows;
 }
-async function parseXlsxArrayBuffer(buffer) {
+async function parseXlsxArrayBuffer(buffer,fileName='',purpose=state.importPurpose) {
   if(typeof JSZip==='undefined') throw new Error('Excel reader is unavailable');
-  const zip=await JSZip.loadAsync(buffer), read=async path=>zip.file(path)?zip.file(path).async('string'):'';
+  const zip=await JSZip.loadAsync(buffer);let expandedBytes=0;
+  const read=async path=>{
+    const entry=zip.file(path);if(!entry)return '';
+    const declared=Number(entry?._data?.uncompressedSize)||0;
+    if(declared>XLSX_IMPORT_MAX_XML_ENTRY_BYTES)throw new Error('This workbook sheet is too large for a safe browser import. Export it as CSV and retry.');
+    expandedBytes+=declared;
+    if(expandedBytes>XLSX_IMPORT_MAX_XML_TOTAL_BYTES)throw new Error('This workbook expands beyond the safe import limit. Export it as CSV and retry.');
+    const value=await entry.async('string');
+    if(value.length>XLSX_IMPORT_MAX_XML_ENTRY_BYTES)throw new Error('This workbook sheet is too large for a safe browser import. Export it as CSV and retry.');
+    if(!declared){expandedBytes+=value.length;if(expandedBytes>XLSX_IMPORT_MAX_XML_TOTAL_BYTES)throw new Error('This workbook expands beyond the safe import limit. Export it as CSV and retry.');}
+    return value;
+  };
   const sharedXml=await read('xl/sharedStrings.xml'), shared=[]; const siRe=/<(?:\w+:)?si\b[^>]*>([\s\S]*?)<\/(?:\w+:)?si>/gi; let si;
   while((si=siRe.exec(sharedXml))) shared.push(textNodes(si[1]));
   const workbook=await read('xl/workbook.xml'), rels=await read('xl/_rels/workbook.xml.rels'), relationMap={};
@@ -8293,6 +8487,13 @@ async function parseXlsxArrayBuffer(buffer) {
   let fallback=[], bestVinSheet=null, bestDriverSheet=null, bestWhiparoundSheet=null;
   for(const path of paths) {
     const rows=parseWorksheetXml(await read(path),shared); if(!rows.length)continue; if(!fallback.length)fallback=rows;
+    if(purpose==='morning'&&/day[_\s-]*of[_\s-]*ops[_\s-]*plan/i.test(fileName)) {
+      const planHeader=morningPlanHeaderIndex(rows);if(planHeader>=0)return rows.slice(planHeader);
+    }
+    if(purpose==='morning'&&/routes?[_\s-]*djt6/i.test(fileName)) {
+      const routeHeader=findImportHeader(rows,[['route','routecode','routeid','cx','cxnumber','cxroute','blockid'],['driver','drivername','transportername','employeename','daname','associatename','name','deliveryassociate','stops','stopcount','plannedstops','numstops','planneddeparturetime']]);
+      if(routeHeader>=0)return rows.slice(routeHeader);
+    }
     const driverHeader=findImportHeader(rows,[['name','nameandid','preferredname','fullname','driver','drivername','employeename','associate','associatename','deliveryassociate'],['phone','phonenumber','personalphone','personalphonenumber','primaryphone','mobile','mobilephone','cell','cellphone','telephone']]);
     if(driverHeader>=0) {
       const keys=rows[driverHeader].map(headerKey), driverFields=['name','nameandid','deliveryassociate','personalphone','personalphonenumber','position','status','transporterid'];
@@ -8302,7 +8503,7 @@ async function parseXlsxArrayBuffer(buffer) {
     const whiparoundHeader=findImportHeader(rows,[['form'],['dateinspectionoccurred'],['assetname'],['driverfirstname'],['driverlastname']]);
     if(whiparoundHeader>=0){const score=(rows.length-whiparoundHeader)*10;if(!bestWhiparoundSheet||score>bestWhiparoundSheet.score)bestWhiparoundSheet={score,rows:rows.slice(whiparoundHeader)};}
     const header=rows.findIndex(row=>{const cells=row.map(v=>String(v).toLowerCase().replace(/[^a-z0-9]/g,''));return cells.includes('dsp')&&cells.includes('routecode')&&cells.includes('wave')&&cells.includes('staginglocation');});
-    if(header>=0&&state.importPurpose!=='drivers') return rows.slice(header);
+    if(header>=0&&purpose!=='drivers') return rows.slice(header);
     const vinHeader=rows.findIndex(row=>row.map(headerKey).some(h=>['vin','vinnumber','vehiclevin','vehicleidentificationnumber'].includes(h)));
     if(vinHeader>=0) {
       const keys=rows[vinHeader].map(headerKey);
@@ -8311,8 +8512,8 @@ async function parseXlsxArrayBuffer(buffer) {
       if(!bestVinSheet||score>bestVinSheet.score) bestVinSheet={score,rows:rows.slice(vinHeader)};
     }
   }
-  if(state.importPurpose==='drivers'&&bestDriverSheet) return bestDriverSheet.rows;
-  if(state.importPurpose==='whiparound'&&bestWhiparoundSheet) return bestWhiparoundSheet.rows;
+  if(purpose==='drivers'&&bestDriverSheet) return bestDriverSheet.rows;
+  if(purpose==='whiparound'&&bestWhiparoundSheet) return bestWhiparoundSheet.rows;
   return bestVinSheet?.rows||bestDriverSheet?.rows||bestWhiparoundSheet?.rows||fallback;
 }
 
@@ -8327,7 +8528,7 @@ function applyImport() {
   if(f.kind==='details'||f.kind==='rts') {
     let matched=0, flagged=0;
     state.morningRoutes.forEach(route=>{const detail=f.routeDetails?.[String(route.route).toUpperCase()];if(!detail)return;matched++;if(f.kind==='details'){if(detail.driver)route.driver=firstDriverName(detail.driver);if(detail.stops!==null)route.stops=detail.stops;}if(detail.plannedRts){route.plannedRts=detail.plannedRts;route.plannedRtsIssue=isIrregularPlannedRts(detail.plannedRts,route.wave,route.duration);if(route.plannedRtsIssue)flagged++;}});
-    state.modal=null;state.page='morning';state.editMode=false;persist();render();return toast(f.kind==='rts'?`${matched} Planned RTS times filled · ${flagged} flagged for review`:`${matched} CX routes updated with driver names and stop counts`);
+    resetMorningImportBatch();state.modal=null;state.page='morning';state.editMode=false;persist();render();return toast(f.kind==='rts'?`${matched} Planned RTS times filled · ${flagged} flagged for review`:`${matched} CX routes updated with driver names and stop counts`);
   }
   const norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
   const index=(...names)=>{const n=names.map(norm);return f.headers.findIndex(h=>n.includes(norm(h)));};
@@ -8349,10 +8550,10 @@ function applyImport() {
     }).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||routeCompare(a.route,b.route)||a.staging.localeCompare(b.staging,undefined,{numeric:true}));
     state.routes=state.morningRoutes.map((r,i)=>({route:r.route,driver:r.driver,id:`DA-${1100+i}`,wave:r.wave,staging:r.staging,van:'Unassigned',device:'Unassigned',stops:r.stops,packages:r.packages,progress:0,delta:0,status:r.driver==='Unassigned driver'?'Needs review':'Assigned',rescue:'—'}));
     const importedWaves=[...new Set(state.morningRoutes.filter(row=>!isExplicitAdhocMorningRoute(row)&&!isExplicitHelperMorningRoute(row)).map(row=>row.wave).filter(Boolean))];state.openingPicklistWaveSlots=Math.min(MORNING_CORE_WAVE_COUNT,importedWaves.length);state.openingPicklistShowAdhoc=true;
-    state.lastImportExcluded=excluded;state.lastMorningImportFingerprint=`${state.morningOperationDate}|${Date.now()}|${String(f.name||'morning-files').slice(0,120)}`;state.modal=null;state.page='morning';state.morningFilters={wave:'all',staging:'all',pad:'all'};state.rosterPublished=false;persist();render();return toast(`${state.morningRoutes.length} ${state.dspCode} routes loaded across every Service Type · ${excluded} other-DSP or non-route rows skipped`);
+    state.lastImportExcluded=excluded;state.lastMorningImportFingerprint=`${state.morningOperationDate}|${Date.now()}|${String(f.name||'morning-files').slice(0,120)}`;resetMorningImportBatch();state.modal=null;state.page='morning';state.morningFilters={wave:'all',staging:'all',pad:'all'};state.rosterPublished=false;persist();render();return toast(`${state.morningRoutes.length} ${state.dspCode} routes loaded across every Service Type · ${excluded} other-DSP or non-route rows skipped`);
   }
   state.routes=f.rows.map((r,i)=>({route:r[ix.route]||`IMP-${i+1}`,driver:firstDriverName(r[ix.driver]||'Unassigned driver'),id:`DA-${1100+i}`,wave:r[ix.wave]||'Wave pending',staging:r[ix.staging]||'—',van:r[ix.van]||'Unassigned',device:r[ix.device]||'Unassigned',stops:Number(r[ix.stops])||0,packages:Number(r[ix.packages])||0,progress:0,delta:0,status:(r[ix.driver]&&r[ix.van])?'Assigned':'Needs review',rescue:'—'}));
-  state.modal=null;state.page='roster';state.rosterPublished=false;persist();render();toast(`${state.routes.length} routes imported — review before publishing`);
+  resetMorningImportBatch();state.modal=null;state.page='roster';state.rosterPublished=false;persist();render();toast(`${state.routes.length} routes imported — review before publishing`);
 }
 
 function parseEquipmentTextAction() {

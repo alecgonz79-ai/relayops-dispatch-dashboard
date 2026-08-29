@@ -28,7 +28,8 @@ assert(source.includes('let teamDriverRowsCache=null')&&source.includes('if(team
 assert(source.includes('const driverIdentityLookupCache=new Map()')&&source.includes('const morningContactLookupCache=new Map()'),'Repeated roster identity and contact matches must be cached during a render');
 assert(source.includes('openingPicklistRightHtml(backups,calloffs)'),'Opening Picklist must reuse its already-calculated backup and call-off lists');
 assert(source.includes("if(card.querySelector('.driver-text-button'))return"),'Driver text controls must not be rebuilt once per card after navigation');
-assert(source.includes("if (name==='import') { state.importSource='computer'; state.importPurpose='morning'; state.importedFile=null; return openLightweightModal('import'); }"),'Upload day files must open without rebuilding the large Morning Sheet');
+const morningImportAction=source.match(/if \(name==='import'\) \{([^}]+)\}/)?.[1]||'';
+assert(morningImportAction.includes('resetMorningImportBatch()')&&morningImportAction.includes("state.importSource='computer'")&&morningImportAction.includes("state.importPurpose='morning'")&&morningImportAction.includes('state.importedFile=null')&&morningImportAction.includes("return openLightweightModal('import')")&&!morningImportAction.includes('render()'),'Upload day files must reset the pending file batch and open without rebuilding the large Morning Sheet');
 assert(source.includes("['picklist-screenshot-review','screenshot','vto-route-swap'")&&source.includes("'early-calloff-reminder','import'].includes(state.modal)"),'Operational popups, including upload and screenshot review, must close without rebuilding the active page');
 assert(source.includes('bindUploadDropZone(backdrop);'),'The lightweight upload modal must preserve drag-and-drop file support');
 const savedHandler=source.match(/if\(event\.type==='saved'\)\{([^}]+)\}/)?.[1]||'';
