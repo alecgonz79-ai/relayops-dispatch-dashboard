@@ -38,7 +38,7 @@ assert(app.includes('if(value===original)return morningRouteByUid')&&app.include
 assert(app.includes('focusOperationalGridEditor(next);next.select?.()'), 'Enter-to-next-row Device entry must use the guarded shared focus path');
 
 assert(app.includes("state.modal='picklist-screenshot-review'") && app.includes('Confirm pads and Cortex swaps') && app.includes('continue-picklist-screenshot'), 'Waves + Adhocs screenshot must open the combined pad and Cortex review first');
-assert(app.includes('data-screenshot-review-pad=') && app.includes('function saveScreenshotReviewPad(input,commit=false)') && app.includes('row.padOverride=value'), 'Pad letters must be directly editable from the pre-screenshot review and update shared Morning Sheet rows');
+assert(app.includes('data-screenshot-review-pad=') && app.includes('function saveScreenshotReviewPad(input,commit=false)') && app.includes("setMorningPadForSection('',wave,value)") && app.includes('morningSectionPadOverrides'), 'Pad letters must be directly editable from the pre-screenshot review and update shared Morning Sheet rows');
 assert(app.includes("matches?.('[data-device-sheet-field]") && app.includes('[data-screenshot-review-pad]'), 'Cloud updates must not replace an active pad-review editor');
 assert(app.includes("state.modal=null;state.page='morning'") && !app.includes("state.modal='pad-check-reminder';state.page='morning'"), 'Day-file import must no longer force the pad reminder');
 assert(app.includes('recordPicklistRosterChange({from:outgoing,to:incoming') && app.includes("from:'Unassigned Adhoc'"), 'Route swaps and Adhoc additions must be recorded for the Cortex review');

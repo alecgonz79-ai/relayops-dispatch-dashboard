@@ -39,7 +39,7 @@ const checks = `
   state.morningRoutes = morningSeed.map(row => ({...row}));
   const expectedWaves = ['11:15 AM','11:20 AM','11:25 AM','11:40 AM','11:45 AM'];
   if (JSON.stringify(morningWaveList()) !== JSON.stringify(expectedWaves)) throw new Error('Wave sort failed');
-  if (expectedWaves.map(padForWave).join(',') !== 'A,B,C,A,B') throw new Error('Pad assignment failed');
+  if (expectedWaves.some(padForWave)) throw new Error('Morning pads must stay blank until a dispatcher enters them');
   state.importedFile = {
     name: 'day.csv',
     headers: ['DSP','Route Code','Wave','Staging Location','Num Zones','Num Packages'],

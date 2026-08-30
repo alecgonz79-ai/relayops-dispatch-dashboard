@@ -72,7 +72,9 @@ const MORNING_TEMPLATE_SHEET_CANDIDATES = [MORNING_TEMPLATE_SHEET_NAME];
 const MORNING_APPS_SCRIPT_URL = 'google-sheets/relayops-morning-connector.gs';
 const MORNING_CORE_WAVE_COUNT = 6;
 const MORNING_CORE_WAVE_TIMES = Object.freeze(['11:15 AM','11:20 AM','11:25 AM','11:40 AM','11:45 AM','12:05 PM']);
-const MORNING_CORE_WAVE_PADS = Object.freeze(['A','B','C','A','B','C']);
+// Pad letters are a dispatcher decision for the current station day. Keep all
+// wave pads empty until someone enters them on the Morning Sheet or Picklist.
+const MORNING_CORE_WAVE_PADS = Object.freeze(['','','','','','']);
 // Exact route capacities in the current 142-row OPS LOG 2026 master.
 // Every core Wave has the same 15-driver ceiling so a busy Wave never spills
 // into its time/footer row or the following black divider.
@@ -1219,16 +1221,16 @@ function openingPicklistSections() {
   const waveNames=[...new Set(eligible.filter(row=>!isExplicitAdhocMorningRoute(row)).map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b));
   const waveSlots=Math.max(0,Math.min(MORNING_CORE_WAVE_COUNT,Number(state.openingPicklistWaveSlots??MORNING_CORE_WAVE_COUNT)));
   const waves=Array.from({length:waveSlots},(_,index)=>{
-    const key=`wave-${index+1}`,wave=waveNames[index]||'',rows=wave?eligible.filter(row=>row.wave===wave):[];
+    const key=`wave-${index+1}`,label=`WAVE ${index+1}`,wave=waveNames[index]||'',rows=wave?eligible.filter(row=>row.wave===wave):[];
     const capacity=state.fitOpeningPicklistRows?Math.max(1,rows.length):MORNING_CORE_WAVE_CAPACITIES[index];
-    return {key,label:state.openingPicklistLabels?.[key]||`WAVE ${index+1}`,wave,rows,capacity,hasTime:true,pad:rows[0]?.padOverride||rows[0]?.pad||padForWave(wave)};
+    return {key,label:state.openingPicklistLabels?.[key]||label,wave,rows,capacity,hasTime:true,pad:morningCanonicalPad(label,rows[0]?.padOverride||'')};
   });
   const used=new Set(waves.flatMap(section=>section.rows.map(row=>row.route)));
   const adhoc=eligible.filter(row=>!used.has(row.route)&&isExplicitAdhocMorningRoute(row));
   // Adhocs intentionally keep their full worksheet block. The Picklist
   // compact control applies only to the six core Waves so late additions still have a
   // visible place to be entered.
-  if(state.openingPicklistShowAdhoc)waves.push({key:'adhoc',label:state.openingPicklistLabels?.adhoc||"ADHOC'S",wave:'Ad hoc',rows:adhoc,capacity:15,hasTime:false,pad:String(adhoc[0]?.padOverride||morningSectionPadOverride('ADHOCS')||'').trim().toUpperCase()});
+  if(state.openingPicklistShowAdhoc)waves.push({key:'adhoc',label:state.openingPicklistLabels?.adhoc||"ADHOC'S",wave:'Ad hoc',rows:adhoc,capacity:15,hasTime:false,pad:morningCanonicalPad('ADHOCS',adhoc[0]?.padOverride||'')});
   return waves;
 }
 function openingPicklistTime(section={}) { return morningWaveTimeText({...section,label:coreMorningWaveLabel(section.key,section.label)}); }
@@ -1659,25 +1661,57 @@ function stagingArea(value='') { const m=String(value).toUpperCase().match(/^STG
 function ensureMorningRouteUids() { (state.morningRoutes||[]).forEach((row,index)=>{if(!row.routeUid)row.routeUid=`MR-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2,7)}`;}); }
 function morningRouteByUid(uid='') { return uid?(state.morningRoutes||[]).find(row=>row.routeUid===uid):null; }
 function morningWaveList() { return [...new Set(state.morningRoutes.filter(r=>r.dsp===state.dspCode).map(r=>r.wave))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)); }
-function padForWave(wave) { const pads=['A','B','C','A','B','C']; const i=morningWaveList().indexOf(wave); return pads[Math.max(0,i)%pads.length]; }
+function morningCorePadSectionLabelForWave(wave='') {
+  const waves=[...new Set((state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&!isExplicitHelperMorningRoute(row)&&!isExplicitAdhocMorningRoute(row)).map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b));
+  const index=waves.indexOf(wave);return index>=0&&index<MORNING_CORE_WAVE_COUNT?`WAVE ${index+1}`:'';
+}
+function padForWave(wave) { const label=morningCorePadSectionLabelForWave(wave);return label?morningSectionPadOverride(label):''; }
 function morningSectionPadOverrideKey(label='') { return `${state.morningOperationDate}|${morningFixedSectionKey(label)}`; }
 function morningSectionPadOverride(label='') { return String(state.morningSectionPadOverrides?.[morningSectionPadOverrideKey(label)]||'').trim().toUpperCase(); }
+function hasMorningSectionPadOverride(label='') { return Object.prototype.hasOwnProperty.call(state.morningSectionPadOverrides||{},morningSectionPadOverrideKey(label)); }
+function morningCanonicalPad(label='',legacyValue='') { return String(hasMorningSectionPadOverride(label)?morningSectionPadOverride(label):legacyValue||'').trim().toUpperCase(); }
 function setMorningSectionPadOverride(label='',value='') {
   const key=morningSectionPadOverrideKey(label),next=String(value||'').trim().toUpperCase();
   state.morningSectionPadOverrides=state.morningSectionPadOverrides&&typeof state.morningSectionPadOverrides==='object'?state.morningSectionPadOverrides:{};
-  if(next)state.morningSectionPadOverrides[key]=next;else delete state.morningSectionPadOverrides[key];
+  // Keep an explicit empty value so a pad cleared by one dispatcher can sync
+  // as an intentional clear instead of looking like a stale missing field.
+  state.morningSectionPadOverrides[key]=next;
   return next;
+}
+function morningPadSectionLabel(label='',wave='') {
+  const key=morningFixedSectionKey(label);
+  if(key==='ADHOCS')return 'ADHOCS';
+  const match=key.match(/^WAVE([1-6])$/);if(match)return `WAVE ${match[1]}`;
+  return morningCorePadSectionLabelForWave(wave);
+}
+function setMorningPadForSection(label='',wave='',value='') {
+  const sectionLabel=morningPadSectionLabel(label,wave),next=String(value||'').trim().toUpperCase();
+  if(sectionLabel)setMorningSectionPadOverride(sectionLabel,next);
+  const adhoc=sectionLabel==='ADHOCS';
+  state.morningRoutes.filter(row=>row.dsp===state.dspCode&&(adhoc?isExplicitAdhocMorningRoute(row):row.wave===wave)).forEach(row=>{row.padOverride=next;row.pad=next;});
+  return next;
+}
+function rememberManualMorningPads() {
+  const rows=(state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&!row._waveAnchor&&!isExplicitHelperMorningRoute(row)&&!isExplicitAdhocMorningRoute(row));
+  const waves=[...new Set(rows.map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).slice(0,MORNING_CORE_WAVE_COUNT);
+  waves.forEach((wave,index)=>{const label=`WAVE ${index+1}`;if(hasMorningSectionPadOverride(label))return;const value=rows.find(row=>row.wave===wave&&String(row.padOverride||'').trim())?.padOverride;if(value)setMorningSectionPadOverride(label,value);});
+  const adhoc=(state.morningRoutes||[]).find(row=>row.dsp===state.dspCode&&isExplicitAdhocMorningRoute(row)&&String(row.padOverride||'').trim())?.padOverride;
+  if(adhoc&&!hasMorningSectionPadOverride('ADHOCS'))setMorningSectionPadOverride('ADHOCS',adhoc);
 }
 function morningEffectivePad(row={}) {
   // Ad Hoc pad letters are a station-day decision. Never derive one from the
   // wave order; only a dispatcher-entered override may populate this cell.
-  if(isExplicitAdhocMorningRoute(row))return String(row.padOverride||morningSectionPadOverride('ADHOCS')||'').trim().toUpperCase();
-  return String(row.padOverride||row.pad||padForWave(row.wave)||'').trim().toUpperCase();
+  if(isExplicitAdhocMorningRoute(row))return morningCanonicalPad('ADHOCS',row.padOverride||'');
+  // Old cleared-sheet anchors may contain the former A/B/C defaults. Ignore
+  // those legacy values unless a dispatcher saved a current-day override.
+  if(row._waveAnchor)return String(padForWave(row.wave)||'').trim().toUpperCase();
+  const label=morningCorePadSectionLabelForWave(row.wave);return label?morningCanonicalPad(label,row.padOverride||''):'';
 }
 function morningSectionPad(section={}) {
   const first=section.rows?.[0]||{};
-  if(morningFixedSectionKey(section.label)==='ADHOCS')return String(first.padOverride||morningSectionPadOverride('ADHOCS')||section.pad||'').trim().toUpperCase();
-  return String(first.padOverride||first.pad||section.pad||'').trim().toUpperCase();
+  if(morningFixedSectionKey(section.label)==='ADHOCS')return morningCanonicalPad('ADHOCS',first.padOverride||section.pad||'');
+  if(first._waveAnchor)return morningCanonicalPad(section.label,section.pad||'');
+  return morningCanonicalPad(section.label,first.padOverride||section.pad||'');
 }
 function allMorningRows() {
   ensureMorningRouteUids();
@@ -1787,7 +1821,7 @@ function morningBlankWaveAnchors() {
   const existing=morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-6]$/i.test(section.label)).slice(0,MORNING_CORE_WAVE_COUNT);
   return Array.from({length:MORNING_CORE_WAVE_COUNT},(_,index)=>{
     const label=`WAVE ${index+1}`,section=existing[index]||{},override=morningWaveTimeOverride({label}),wave=override?.time||section.wave||MORNING_CORE_WAVE_TIMES[index];
-    const pad=section.rows?.[0]?.padOverride||section.rows?.[0]?.pad||MORNING_CORE_WAVE_PADS[index];
+    const pad=morningSectionPad({...section,label});
     return {routeUid:`WAVE-ANCHOR-${state.morningOperationDate}-${index+1}`,dsp:state.dspCode,driver:'',route:`__blank_wave_${index+1}`,service:'Morning Sheet wave anchor',wave,staging:'',pad,padOverride:pad,ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true,_waveAnchor:true};
   });
 }
@@ -1802,11 +1836,11 @@ function morningSections(rows) {
     const wave=candidates.find(value=>!usedWaves.has(value))||override?.time||MORNING_CORE_WAVE_TIMES[index]||`Wave ${index+1}`;
     sectionWaves.push(wave);usedWaves.add(wave);
   }
-  const sections=sectionWaves.map((wave,i)=>({label:`WAVE ${i+1}`,wave,rows:regular.filter(r=>r.wave===wave),pad:MORNING_CORE_WAVE_PADS[i],routeCapacity:MORNING_CORE_WAVE_CAPACITIES[i],hasTime:true,separatorRows:1}));
+  const sections=sectionWaves.map((wave,i)=>{const label=`WAVE ${i+1}`;return {label,wave,rows:regular.filter(r=>r.wave===wave),pad:morningSectionPadOverride(label)||MORNING_CORE_WAVE_PADS[i],routeCapacity:MORNING_CORE_WAVE_CAPACITIES[i],hasTime:true,separatorRows:1};});
   const used=new Set(sections.flatMap(s=>s.rows.map(r=>r.route)));
   const adHoc=rows.filter(r=>!used.has(r.route)&&isExplicitAdhocMorningRoute(r));
   const helpers=rows.filter(r=>!used.has(r.route)&&isExplicitHelperMorningRoute(r)&&!adHoc.some(x=>x.route===r.route));
-  sections.push({label:"ADHOC's",wave:'',rows:adHoc,pad:String(adHoc[0]?.padOverride||morningSectionPadOverride('ADHOCS')||'').trim().toUpperCase(),routeCapacity:15,hasTime:false,separatorRows:1});
+  sections.push({label:"ADHOC's",wave:'',rows:adHoc,pad:morningCanonicalPad('ADHOCS',adHoc[0]?.padOverride||''),routeCapacity:15,hasTime:false,separatorRows:1});
   sections.push({label:'HELPERS',wave:'',rows:helpers,routeCapacity:15,hasTime:false,separatorRows:1});
   sections.push({label:'DSP',wave:'',rows:[],routeCapacity:6,hasTime:false,separatorRows:0,dsp:true});
   if(state.fitMorningRows) return sections.filter(s=>s.hasTime||s.rows.length||s.dsp);
@@ -1814,7 +1848,7 @@ function morningSections(rows) {
 }
 
 function blankMorningRow(section,index) {
-  const pad=morningFixedSectionKey(section.label)==='ADHOCS'?String(section.rows[0]?.padOverride||section.pad||'').trim().toUpperCase():String(section.rows[0]?.padOverride||section.rows[0]?.pad||section.pad||'').trim().toUpperCase();
+  const pad=morningSectionPad(section);
   return {dsp:state.dspCode,driver:'',route:`__blank_${section.label}_${index}`,service:'',wave:section.wave,staging:'',pad,padOverride:pad,ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true};
 }
 
@@ -3675,11 +3709,11 @@ function modal() {
   }
   if (state.modal === 'pad-check-reminder') {
     const rows=morningPadCheckRows();
-    return `<div class="modal-backdrop required-reminder-backdrop pad-reminder-backdrop"><div class="modal operational-reminder-modal pad-check-modal" role="alertdialog" aria-modal="true" aria-labelledby="pad-check-reminder-title"><div class="operational-reminder-icon">PAD</div><div class="modal-head"><div><span class="eyebrow">MORNING FILES IMPORTED</span><h2 id="pad-check-reminder-title">Double check pads</h2><p>Verify each pad letter against today’s station plan before assigning vans or sending the Morning Sheet.</p></div></div><div class="modal-body"><div class="pad-check-grid">${rows.map(row=>`<article><span>${esc(row.label)}</span><strong>${esc(row.pad)}</strong><small>${esc(row.wave)} · ${row.count} driver${row.count===1?'':'s'}</small></article>`).join('')}</div><div class="required-reminder-note"><b>Light-pink cells need a human check</b><span>If a letter is wrong, acknowledge this reminder and edit the Pad cell directly on the Morning Sheet.</span></div><div class="modal-actions"><button class="btn primary acknowledge-reminder-button" data-action="acknowledge-pad-check-reminder">I checked every pad</button></div></div></div></div>`;
+    return `<div class="modal-backdrop required-reminder-backdrop pad-reminder-backdrop"><div class="modal operational-reminder-modal pad-check-modal" role="alertdialog" aria-modal="true" aria-labelledby="pad-check-reminder-title"><div class="operational-reminder-icon">PAD</div><div class="modal-head"><div><span class="eyebrow">MORNING FILES IMPORTED</span><h2 id="pad-check-reminder-title">Enter today’s pads</h2><p>Pad cells start blank. Enter each pad from today’s station plan before sending the Morning Sheet.</p></div></div><div class="modal-body"><div class="pad-check-grid">${rows.map(row=>`<article><span>${esc(row.label)}</span><strong>${esc(row.pad==='—'?'Not entered':row.pad)}</strong><small>${esc(row.wave)} · ${row.count} driver${row.count===1?'':'s'}</small></article>`).join('')}</div><div class="required-reminder-note"><b>PAD values are always manual</b><span>Edit each Pad cell directly on the Morning Sheet. RelayOps will not guess or import a letter.</span></div><div class="modal-actions"><button class="btn primary acknowledge-reminder-button" data-action="acknowledge-pad-check-reminder">I entered and checked the pads</button></div></div></div></div>`;
   }
   if (state.modal === 'picklist-screenshot-review') {
     const pads=morningPadCheckRows(),changes=currentPicklistRosterChanges(),review=state.screenshotReview||{pads:false,cortex:false},ready=review.pads&&review.cortex;
-    return `<div class="modal-backdrop required-reminder-backdrop picklist-review-backdrop"><div class="modal picklist-screenshot-review-modal" role="alertdialog" aria-modal="true" aria-labelledby="picklist-screenshot-review-title"><div class="modal-head"><div><span class="eyebrow">FINAL CHECK BEFORE SCREENSHOT</span><h2 id="picklist-screenshot-review-title">Confirm pads and Cortex swaps</h2><p>Complete both checks before RelayOps creates the Waves + Adhocs JPEG.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="picklist-review-grid"><section class="picklist-review-panel pad-panel ${review.pads?'confirmed':''}"><header><span>1</span><div><strong>Double check pads</strong><small>Tap any pad letter to correct it here. Changes update the Morning Sheet and Picklist immediately.</small></div></header><div class="pad-check-grid compact">${pads.length?pads.map(row=>`<article><span>${esc(row.label)}</span><input class="screenshot-review-pad-input" data-screenshot-review-pad="${esc(row.wave)}" value="${esc(row.pad==='—'?'':row.pad)}" maxlength="4" autocomplete="off" aria-label="Edit ${esc(row.label)} pad" title="Tap to edit this pad"><small>${esc(row.wave)} · ${row.count}<b>Tap to edit</b></small></article>`).join(''):'<div class="review-empty">No Wave 1–6 pad rows are loaded.</div>'}</div><button class="btn ${review.pads?'lime':'pad-confirm-button'}" data-action="acknowledge-screenshot-review" data-review-check="pads">${review.pads?'✓ Pads confirmed':'I checked every pad'}</button></section><section class="picklist-review-panel cortex-panel ${review.cortex?'confirmed':''}"><header><span>2</span><div><strong>Confirm swaps in Cortex</strong><small>Make sure every new route or Adhoc name below also changed in Cortex.</small></div></header><div class="cortex-swap-review-list">${changes.length?changes.map(change=>`<article><div><strong>${esc(driverDisplayName(change.from)||change.from)}</strong><b aria-hidden="true">→</b><strong>${esc(driverDisplayName(change.to)||change.to)}</strong></div><small>${esc(change.route)}${change.wave?` · ${esc(change.wave)}`:''} · ${change.kind==='adhoc'?'Added to Adhocs':'Driver change'}</small></article>`).join(''):'<div class="review-empty"><strong>No recorded swaps or Adhoc additions</strong><span>Confirm Cortex has no other manual driver changes.</span></div>'}</div><button class="btn ${review.cortex?'lime':'cortex-confirm-button'}" data-action="acknowledge-screenshot-review" data-review-check="cortex">${review.cortex?'✓ Cortex changes confirmed':'I confirmed Cortex swaps'}</button></section></div><div class="modal-actions picklist-review-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="continue-picklist-screenshot" ${ready?'':'disabled'}>Preview Waves + Adhocs JPEG</button></div></div></div></div>`;
+    return `<div class="modal-backdrop required-reminder-backdrop picklist-review-backdrop"><div class="modal picklist-screenshot-review-modal" role="alertdialog" aria-modal="true" aria-labelledby="picklist-screenshot-review-title"><div class="modal-head"><div><span class="eyebrow">FINAL CHECK BEFORE SCREENSHOT</span><h2 id="picklist-screenshot-review-title">Confirm pads and Cortex swaps</h2><p>Complete both checks before RelayOps creates the Waves + Adhocs JPEG.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="picklist-review-grid"><section class="picklist-review-panel pad-panel ${review.pads?'confirmed':''}"><header><span>1</span><div><strong>Enter and check pads</strong><small>Pad fields start blank. Enter each one here; changes update the Morning Sheet and Picklist immediately.</small></div></header><div class="pad-check-grid compact">${pads.length?pads.map(row=>`<article><span>${esc(row.label)}</span><input class="screenshot-review-pad-input" data-screenshot-review-pad="${esc(row.wave)}" value="${esc(row.pad==='—'?'':row.pad)}" maxlength="4" autocomplete="off" aria-label="Edit ${esc(row.label)} pad" title="Tap to enter this pad"><small>${esc(row.wave)} · ${row.count}<b>Tap to enter</b></small></article>`).join(''):'<div class="review-empty">No Wave 1–6 pad rows are loaded.</div>'}</div><button class="btn ${review.pads?'lime':'pad-confirm-button'}" data-action="acknowledge-screenshot-review" data-review-check="pads">${review.pads?'✓ Pads confirmed':'I entered and checked every pad'}</button></section><section class="picklist-review-panel cortex-panel ${review.cortex?'confirmed':''}"><header><span>2</span><div><strong>Confirm swaps in Cortex</strong><small>Make sure every new route or Adhoc name below also changed in Cortex.</small></div></header><div class="cortex-swap-review-list">${changes.length?changes.map(change=>`<article><div><strong>${esc(driverDisplayName(change.from)||change.from)}</strong><b aria-hidden="true">→</b><strong>${esc(driverDisplayName(change.to)||change.to)}</strong></div><small>${esc(change.route)}${change.wave?` · ${esc(change.wave)}`:''} · ${change.kind==='adhoc'?'Added to Adhocs':'Driver change'}</small></article>`).join(''):'<div class="review-empty"><strong>No recorded swaps or Adhoc additions</strong><span>Confirm Cortex has no other manual driver changes.</span></div>'}</div><button class="btn ${review.cortex?'lime':'cortex-confirm-button'}" data-action="acknowledge-screenshot-review" data-review-check="cortex">${review.cortex?'✓ Cortex changes confirmed':'I confirmed Cortex swaps'}</button></section></div><div class="modal-actions picklist-review-actions"><button class="btn" data-action="close-modal">Go back</button><button class="btn primary" data-action="continue-picklist-screenshot" ${ready?'':'disabled'}>Preview Waves + Adhocs JPEG</button></div></div></div></div>`;
   }
   if (state.modal === 'rostering-driver-swap' && state.pendingRosteringSwap) {
     const pending=state.pendingRosteringSwap,assignments=currentRosteringPlan().assignments.filter(row=>String(row.associate||'').trim());
@@ -4126,13 +4160,13 @@ function acknowledgeEarlyCalloffReminder() {
   rows.forEach(row=>{state.earlyCalloffAcknowledgements[earlyCalloffAcknowledgementKey(row.name)]={name:canonicalDriverName(row.name)||row.name,date:state.morningOperationDate,acknowledgedAt:now};});state.modal=null;persist();render();toast(`${rows.length} early call-off reminder${rows.length===1?'':'s'} acknowledged`);
 }
 function morningPadCheckRows() {
-  return morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-6]$/i.test(section.label)).slice(0,MORNING_CORE_WAVE_COUNT).map(section=>({label:section.label,wave:section.wave||'',pad:section.rows?.[0]?.padOverride||section.rows?.[0]?.pad||section.pad||'—',count:section.rows?.filter(row=>!row._blank&&isCxMorningRoute(row)).length||0}));
+  return morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-6]$/i.test(section.label)).slice(0,MORNING_CORE_WAVE_COUNT).map(section=>({label:section.label,wave:section.wave||'',pad:morningSectionPad(section)||'—',count:section.rows?.filter(row=>!row._blank&&isCxMorningRoute(row)).length||0}));
 }
 function saveScreenshotReviewPad(input,commit=false) {
   const wave=String(input?.dataset?.screenshotReviewPad||''),value=String(input?.value||'').trim().toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,4);
   if(!wave||!input)return false;
   if(input.value!==value)input.value=value;
-  state.morningRoutes.filter(row=>row.dsp===state.dspCode&&row.wave===wave).forEach(row=>{row.padOverride=value;});
+  setMorningPadForSection('',wave,value);
   state.screenshotReview={...(state.screenshotReview||{pads:false,cortex:false}),pads:false};
   const panel=input.closest?.('.pad-panel'),button=panel?.querySelector?.('[data-review-check="pads"]'),continueButton=document.querySelector?.('[data-action="continue-picklist-screenshot"]');
   panel?.classList.remove('confirmed');
@@ -4721,10 +4755,15 @@ function flushOperationalSheetClear(scope='morning') {
 }
 function confirmClearOperationalSheet() {
   const scope=state.pendingSheetClear||'morning',datePrefix=`${state.morningOperationDate}|`,waveAnchors=scope==='morning'?morningBlankWaveAnchors():[];ensureMorningRouteUids();pushSheetHistory(scope==='picklist'?'Clear Opening Picklist':'Clear Morning Sheet',scope);
-  delete state.morningSectionPadOverrides?.[morningSectionPadOverrideKey('ADHOCS')];
+  setMorningSectionPadOverride('ADHOCS','');
   if(scope==='picklist'){
+    Array.from({length:MORNING_CORE_WAVE_COUNT},(_,index)=>`WAVE ${index+1}`).forEach(label=>setMorningSectionPadOverride(label,''));
     const visibleRouteUids=new Set(openingPicklistSections().flatMap(section=>section.rows).map(route=>route.routeUid).filter(Boolean));state.morningRoutes=(state.morningRoutes||[]).filter(route=>!visibleRouteUids.has(route.routeUid));
   } else {
+    Object.keys(state.morningSectionPadOverrides||{}).filter(key=>key.startsWith(datePrefix)).forEach(key=>delete state.morningSectionPadOverrides[key]);
+    Array.from({length:MORNING_CORE_WAVE_COUNT},(_,index)=>`WAVE ${index+1}`).forEach(label=>setMorningSectionPadOverride(label,''));
+    setMorningSectionPadOverride('ADHOCS','');
+    waveAnchors.forEach(anchor=>{anchor.pad='';anchor.padOverride='';});
     state.morningRoutes=[...(state.morningRoutes||[]).filter(route=>route.dsp!==state.dspCode),...waveAnchors];
     state.morningFilters={wave:'all',staging:'all',pad:'all'};
     state.fitMorningRows=false;
@@ -4759,8 +4798,7 @@ function saveOpeningPicklistCell(el) {
   if(field==='padOverride'){
     const adhoc=sectionKey==='adhoc',next=value.toUpperCase();
     pushSheetHistory(`Edit ${adhoc?'Ad Hoc':wave} pad`,'both');
-    if(adhoc)setMorningSectionPadOverride('ADHOCS',next);
-    state.morningRoutes.filter(row=>row.dsp===state.dspCode&&(adhoc?isExplicitAdhocMorningRoute(row):row.wave===wave)).forEach(row=>{row.padOverride=next;});
+    setMorningPadForSection(adhoc?'ADHOCS':coreMorningWaveLabel(sectionKey,sectionKey),wave,next);
     persist();return;
   }
   if(field==='waveTime'){
@@ -6305,8 +6343,7 @@ function saveMorningEditCell(el) {
   if(field==='padOverride') {
     const sectionKey=morningFixedSectionKey(el.dataset.editSection||''),wave=el.dataset.editWave||'',next=value.toUpperCase();
     pushSheetHistory(`Edit ${sectionKey==='ADHOCS'?'Ad Hoc':wave||'section'} pad`,'morning');
-    if(sectionKey==='ADHOCS')setMorningSectionPadOverride('ADHOCS',next);
-    state.morningRoutes.filter(r=>r.dsp===state.dspCode&&(sectionKey==='ADHOCS'?isExplicitAdhocMorningRoute(r):r.wave===wave)).forEach(r=>r[field]=next);
+    setMorningPadForSection(el.dataset.editSection||'',wave,next);
     persist(); return null;
   }
   let route=morningRouteByUid(el.dataset.editUid)||state.morningRoutes.find(r=>r.route===el.dataset.editRoute);
@@ -7498,7 +7535,7 @@ function getMorningImportWorker() {
   if(morningImportWorker)return morningImportWorker;
   if(typeof Worker==='undefined'||typeof URL==='undefined'||!window?.location?.href)return null;
   try {
-    const worker=new Worker(new URL('./morning-import-worker.js?v=20260829-morning-reader-recovery-r3',window.location.href),{name:'relayops-morning-import'});
+    const worker=new Worker(new URL('./morning-import-worker.js?v=20260830-manual-morning-pads-r4',window.location.href),{name:'relayops-morning-import'});
     worker.addEventListener('message',event=>{
       const message=event.data||{},entry=morningImportWorkerPending.get(message.id);if(!entry)return;
       morningImportWorkerPending.delete(message.id);clearTimeout(entry.timer);
@@ -8667,6 +8704,10 @@ function applyImport() {
   if(ix.wave>=0) {
     const candidates=morningImportCandidates(f);
     const excluded=f.rows.length-candidates.length;
+    // A same-day re-import may replace every route row. Preserve only pad
+    // values that a dispatcher explicitly entered; automatic defaults remain
+    // blank in the rebuilt sheet.
+    rememberManualMorningPads();
     // A complete day-file import is authoritative for today's launch times.
     // Remove stale manual footer overrides so the visible Wave rows, footer
     // labels, screenshot, and Google connector all use the same six times.
@@ -10815,6 +10856,13 @@ function persistentWorkspaceState() {
   };
 }
 function applySharedWorkspaceState(payload={}) {
+  // Older or stale tabs may send valid route/equipment changes without the
+  // newer section-level pad fields. Preserve this dispatcher's explicit pads
+  // unless the incoming snapshot contains that exact key (including an
+  // explicit empty value, which represents a manual clear).
+  rememberManualMorningPads();
+  const localPadOverrides={...(state.morningSectionPadOverrides||{})};
+  const incomingPadOverrides=Object.prototype.hasOwnProperty.call(payload,'morningSectionPadOverrides')&&payload.morningSectionPadOverrides&&typeof payload.morningSectionPadOverrides==='object'?payload.morningSectionPadOverrides:null;
   const parkingChargerMovePlan=lowerParkingChargerMovePlan(payload.vanParking);
   const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetLastRefresh','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','lastImportExcluded','rosterPublished','morningIssueAcknowledgements','messageQueueStatus','scheduleEntries','scheduleImportName','rosteringDate','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','morningSectionPadOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','fitMorningRows','fitOpeningPicklistRows','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','picklistSwapAudit','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundImportName','whiparoundSelectedDate'];
   allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
@@ -10843,6 +10891,7 @@ function applySharedWorkspaceState(payload={}) {
   state.callOffReasons=state.callOffReasons||{};
   state.morningWaveTimeOverrides=state.morningWaveTimeOverrides&&typeof state.morningWaveTimeOverrides==='object'?state.morningWaveTimeOverrides:{};
   state.morningSectionPadOverrides=state.morningSectionPadOverrides&&typeof state.morningSectionPadOverrides==='object'?state.morningSectionPadOverrides:{};
+  if(incomingPadOverrides){const prefix=`${state.morningOperationDate}|`;Object.entries(localPadOverrides).forEach(([key,value])=>{if(key.startsWith(prefix)&&!Object.prototype.hasOwnProperty.call(incomingPadOverrides,key))state.morningSectionPadOverrides[key]=value;});}
   state.earlyCalloffAcknowledgements=state.earlyCalloffAcknowledgements&&typeof state.earlyCalloffAcknowledgements==='object'?state.earlyCalloffAcknowledgements:{};
   state.padCheckAcknowledgements=state.padCheckAcknowledgements&&typeof state.padCheckAcknowledgements==='object'?state.padCheckAcknowledgements:{};state.lastMorningImportFingerprint=String(state.lastMorningImportFingerprint||'');
   state.openingPicklistTopics=Array.isArray(state.openingPicklistTopics)?state.openingPicklistTopics:['','','',''];
