@@ -1,4 +1,4 @@
-const CACHE='relayops-morning-sparse-xlsx-v111';
+const CACHE='relayops-morning-reader-recovery-v112';
 const CORE=[
   './',
   './index.html',
@@ -6,8 +6,8 @@ const CORE=[
   './macos-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260726-fleet-warning-r1',
-  './app.js?v=20260829-morning-sparse-xlsx-r2',
-  './morning-import-worker.js?v=20260829-morning-sparse-xlsx-r2',
+  './app.js?v=20260829-morning-reader-recovery-r3',
+  './morning-import-worker.js?v=20260829-morning-reader-recovery-r3',
   './cloud-sync.js?v=20260821-cpu-safe-r1',
   './supabase/config.js?v=20260821-cpu-safe-r1',
   './vendor/jszip.min.js',
@@ -34,7 +34,10 @@ self.addEventListener('fetch',event=>{
   if(event.request.mode==='navigate'||/\.(?:js|css)$/.test(url.pathname)){
     const fallback=event.request.mode==='navigate'?'./index.html':event.request;
     const freshRequest=new Request(event.request,{cache:'reload'});
-    event.respondWith(fetch(freshRequest).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response;}).catch(()=>caches.match(fallback,{ignoreSearch:true})));
+    event.respondWith(fetch(freshRequest).then(response=>{
+      if(!response.ok)throw new Error(`Asset request failed (${response.status})`);
+      const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response;
+    }).catch(()=>caches.match(fallback,{ignoreSearch:event.request.mode==='navigate'})));
     return;
   }
   event.respondWith(caches.match(event.request,{ignoreSearch:true}).then(cached=>cached||fetch(event.request).then(response=>{if(response.ok){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));}return response;})));

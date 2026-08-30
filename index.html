@@ -22,7 +22,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase/config.js?v=20260821-cpu-safe-r1"></script>
     <script src="cloud-sync.js?v=20260821-cpu-safe-r1"></script>
-    <script src="app.js?v=20260829-morning-sparse-xlsx-r2"></script>
+    <script src="app.js?v=20260829-morning-reader-recovery-r3"></script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -33,7 +33,7 @@
             window.location.reload();
           });
           navigator.serviceWorker
-            .register('./service-worker.js?v=20260829-morning-sparse-xlsx-r2', { updateViaCache: 'none' })
+            .register('./service-worker.js?v=20260829-morning-reader-recovery-r3', { updateViaCache: 'none' })
             .then(registration => registration.update())
             .catch(() => {});
         });

@@ -7433,7 +7433,7 @@ function resetMorningImportBatch() {
   pendingMorningImportFiles=[];
   state.importReadingFiles=[];
   morningImportReadToken++;
-  if(morningImportWorkerPending.size)stopMorningImportWorker('The Morning import was closed or replaced.');
+  if(morningImportWorkerPending.size)stopMorningImportWorker('The Morning import was closed or replaced.','worker-cancelled');
 }
 function morningParsedFileRole(file={}) {
   const key=headerKey(file.name||''),rows=Array.isArray(file.rows)?file.rows:[];
@@ -7447,10 +7447,22 @@ function morningParsedFileRole(file={}) {
   if(Object.keys(routeDetailsFromRows(rows)).length)return 'routes';
   return planHeader>=0?'plan':'unknown';
 }
-function morningImportFailureMessage(error) {
-  const message=String(error?.message||'');
+function morningImportFailureMessage(error,files=[]) {
+  const message=String(error?.message||'').replace(/\s+/g,' ').trim();
   if(/too long|larger than|too large|safe (?:browser )?import|expands beyond/i.test(message))return message;
-  return 'These files could not be read. Choose DAYOFOPSPLAN and Routes_DJT6 as CSV or XLSX, then try again.';
+  const names=[...new Set((files||[]).map(file=>String(file?.name||'').trim()).filter(Boolean))].join(' + '),label=names||'The selected Morning files';
+  if(/^empty$/i.test(message))return `${label} did not contain readable spreadsheet rows. Download the original CSV or XLSX again, then retry. No sheet data was changed.`;
+  if(/^unrecognized$/i.test(message))return `${label} does not look like DAYOFOPSPLAN or Routes_DJT6. Check the filenames and export columns, then retry. No sheet data was changed.`;
+  if(message)return `${label} could not be read. Reader detail: ${message.slice(0,220)}. No sheet data was changed.`;
+  return `${label} could not be read. Refresh the dashboard once and retry. No sheet data was changed.`;
+}
+function morningWorkerFallbackAllowed(error) {
+  const message=String(error?.message||'');
+  if(/closed or replaced|newer file selection|took too long|larger than|too large|expands beyond|too many rows|too many cells|too many columns|row is too large|incomplete worksheet row/i.test(message))return false;
+  if(error?.code==='worker-infrastructure')return true;
+  if(error?.code==='worker-cancelled'||error?.code==='worker-timeout')return false;
+  if(error?.code==='worker-parser')return /background.*reader.*fail|referenceerror|typeerror|syntaxerror|unexpected token|script error|not defined/i.test(message);
+  return /background.*reader|worker|failed to load|networkerror|importscripts|referenceerror|typeerror|syntaxerror|unexpected token|script error|not defined/i.test(message);
 }
 function validateMorningImportRows(rows=[],fileName='Amazon file') {
   if(!Array.isArray(rows))throw new Error(`${fileName} did not contain readable rows.`);
@@ -7474,8 +7486,9 @@ function yieldMorningImportPaint() {
     else setTimeout(finish,0);
   });
 }
-function stopMorningImportWorker(message='The Excel reader stopped before it finished') {
-  const error=new Error(message);
+function morningWorkerError(message,code='worker-infrastructure') { const error=new Error(message);error.code=code;return error; }
+function stopMorningImportWorker(message='The Excel reader stopped before it finished',code='worker-infrastructure') {
+  const error=morningWorkerError(message,code);
   morningImportWorkerPending.forEach(entry=>{clearTimeout(entry.timer);entry.reject(error);});
   morningImportWorkerPending.clear();
   morningImportWorker?.terminate?.();
@@ -7485,7 +7498,7 @@ function getMorningImportWorker() {
   if(morningImportWorker)return morningImportWorker;
   if(typeof Worker==='undefined'||typeof URL==='undefined'||!window?.location?.href)return null;
   try {
-    const worker=new Worker(new URL('./morning-import-worker.js?v=20260829-morning-sparse-xlsx-r2',window.location.href),{name:'relayops-morning-import'});
+    const worker=new Worker(new URL('./morning-import-worker.js?v=20260829-morning-reader-recovery-r3',window.location.href),{name:'relayops-morning-import'});
     worker.addEventListener('message',event=>{
       const message=event.data||{},entry=morningImportWorkerPending.get(message.id);if(!entry)return;
       morningImportWorkerPending.delete(message.id);clearTimeout(entry.timer);
@@ -7493,9 +7506,9 @@ function getMorningImportWorker() {
         try { entry.resolve(validateMorningImportRows(Array.isArray(message.rows)?message.rows:[],entry.fileName)); }
         catch(error) { entry.reject(error); }
       }
-      else entry.reject(new Error(message.message||'The Excel file could not be read'));
+      else entry.reject(morningWorkerError(message.message||'The Excel file could not be read','worker-parser'));
     });
-    worker.addEventListener('error',event=>stopMorningImportWorker(event?.message||'The background Excel reader could not start'));
+    worker.addEventListener('error',event=>stopMorningImportWorker(event?.message||'The background Excel reader could not start','worker-infrastructure'));
     morningImportWorker=worker;
     return worker;
   } catch {
@@ -7516,15 +7529,35 @@ async function parseMorningFileInWorker(buffer,fileName='',type='parse-xlsx') {
   return new Promise((resolve,reject)=>{
     const timer=setTimeout(()=>{
       if(!morningImportWorkerPending.has(id))return;
-      stopMorningImportWorker('This Excel file took too long to read. Export it again or use CSV, then retry.');
+      stopMorningImportWorker('This Excel file took too long to read. Export it again or use CSV, then retry.','worker-timeout');
     },MORNING_IMPORT_WORKER_TIMEOUT_MS);
     morningImportWorkerPending.set(id,{resolve,reject,timer,fileName});
     try { worker.postMessage({type,id,fileName,buffer},[buffer]); }
-    catch(error) { morningImportWorkerPending.delete(id);clearTimeout(timer);reject(error); }
+    catch(error) { morningImportWorkerPending.delete(id);clearTimeout(timer);reject(morningWorkerError(error?.message||'The background Excel reader could not receive this file','worker-infrastructure')); }
   });
 }
 async function parseMorningXlsxInWorker(buffer,fileName='') { return parseMorningFileInWorker(buffer,fileName,'parse-xlsx'); }
 async function parseMorningCsvInWorker(buffer,fileName='') { return parseMorningFileInWorker(buffer,fileName,'parse-csv'); }
+async function parseMorningXlsxWithFallback(file,buffer,shouldContinue=null) {
+  try { return await parseMorningXlsxInWorker(buffer,file.name); }
+  catch(workerError) {
+    if(!morningWorkerFallbackAllowed(workerError)||typeof shouldContinue==='function'&&!shouldContinue())throw workerError;
+    // A worker script can be blocked by an older browser cache or stop while
+    // loading. Re-read the small compressed File because the first ArrayBuffer
+    // was transferred (and therefore detached), then use the same bounded
+    // streaming parser directly. This is one compatibility attempt only.
+    try {
+      const retryBuffer=await file.arrayBuffer();
+      if(retryBuffer.byteLength>MORNING_IMPORT_MAX_FILE_BYTES)throw new Error(`${file.name} is larger than 50 MB. Export it as CSV or split the plan and route files, then retry.`);
+      if(typeof shouldContinue==='function'&&!shouldContinue())throw workerError;
+      await yieldMorningImportPaint();
+      return await parseXlsxArrayBuffer(retryBuffer,file.name,'morning');
+    } catch(fallbackError) {
+      const workerMessage=String(workerError?.message||'background reader unavailable').replace(/\s+/g,' ').trim(),fallbackMessage=String(fallbackError?.message||'compatibility reader failed').replace(/\s+/g,' ').trim();
+      throw new Error(`Background reader: ${workerMessage}. Compatibility reader: ${fallbackMessage}`);
+    }
+  }
+}
 async function parseUploadedFile(file,purpose=state.importPurpose,shouldContinue=null) {
   const name=file.name.toLowerCase(); let rows;
   if(/^image\//.test(file.type)||/\.(png|jpe?g|webp)$/i.test(name)) { const image=await readImageContent(file);return {name:file.name,rows:image.rows||[],text:image.text||'',kind:'image'}; }
@@ -7544,7 +7577,7 @@ async function parseUploadedFile(file,purpose=state.importPurpose,shouldContinue
     const buffer=await file.arrayBuffer();
     if(purpose==='morning'&&buffer.byteLength>MORNING_IMPORT_MAX_FILE_BYTES)throw new Error(`${file.name} is larger than 50 MB. Export it as CSV or split the plan and route files, then retry.`);
     if(typeof shouldContinue==='function'&&!shouldContinue())throw new Error('This import was closed or replaced.');
-    rows=purpose==='morning'?await parseMorningXlsxInWorker(buffer,file.name):await parseXlsxArrayBuffer(buffer,file.name,purpose);
+    rows=purpose==='morning'?await parseMorningXlsxWithFallback(file,buffer,shouldContinue):await parseXlsxArrayBuffer(buffer,file.name,purpose);
   }
   else if(name.endsWith('.xls')) {
     const buffer=await file.arrayBuffer(),text=new TextDecoder('utf-8').decode(buffer);
@@ -7943,7 +7976,7 @@ async function readFiles(files) {
   const selectedFiles=isMorningRead?mergePendingMorningImportFiles(incomingFiles):incomingFiles,readToken=++morningImportReadToken;
   if(!isMorningRead){pendingMorningImportFiles=[];state.importReadingFiles=[];}
   // A new picker result supersedes any older background workbook job.
-  if(morningImportWorkerPending.size)stopMorningImportWorker('A newer file selection replaced this import.');
+  if(morningImportWorkerPending.size)stopMorningImportWorker('A newer file selection replaced this import.','worker-cancelled');
   if(isMorningRead) {
     state.importReadingFiles=selectedFiles.map(file=>String(file.name||'Amazon file'));
     if(state.modal==='import')renderLightweightModal();
@@ -8083,7 +8116,7 @@ async function readFiles(files) {
       if(state.importPurpose!==purposeAtStart)return;
       if(state.modal==='import')renderLightweightModal();
     }
-    console.error(error);if(state.importPurpose==='itinerary-rts')return toast(error?.message||'Choose an Itineraries_DJT6 XLSX containing Route code and Planned return to station','error');toast(state.importPurpose==='rostering-screenshot'?(error?.message||'Could not read Amazon confirmed services or associate rows. Upload a clear full-size roster screenshot.'):state.importPurpose==='whiparound'?(error?.message||'Could not find the five required Whiparound columns. Choose a CSV or XLSX inspection report.'):state.importPurpose==='schedule'?'Could not find scheduled names, times, and shift labels. Upload the Paycom PDF, screenshot, CSV, Excel, or text export.':state.importPurpose==='fleet'?(error?.message||'Could not find VIN rows in the selected fleet file.'):state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV, XLSX, or text-based PDF with Name and Personal Phone information.':purposeAtStart==='morning'?morningImportFailureMessage(error):'The selected files could not be read.','error');
+    console.error(error);if(state.importPurpose==='itinerary-rts')return toast(error?.message||'Choose an Itineraries_DJT6 XLSX containing Route code and Planned return to station','error');toast(state.importPurpose==='rostering-screenshot'?(error?.message||'Could not read Amazon confirmed services or associate rows. Upload a clear full-size roster screenshot.'):state.importPurpose==='whiparound'?(error?.message||'Could not find the five required Whiparound columns. Choose a CSV or XLSX inspection report.'):state.importPurpose==='schedule'?'Could not find scheduled names, times, and shift labels. Upload the Paycom PDF, screenshot, CSV, Excel, or text export.':state.importPurpose==='fleet'?(error?.message||'Could not find VIN rows in the selected fleet file.'):state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV, XLSX, or text-based PDF with Name and Personal Phone information.':purposeAtStart==='morning'?morningImportFailureMessage(error,selectedFiles):'The selected files could not be read.','error');
   }
 }
 async function readFile(file) { return readFiles([file]); }
