@@ -7485,7 +7485,7 @@ function getMorningImportWorker() {
   if(morningImportWorker)return morningImportWorker;
   if(typeof Worker==='undefined'||typeof URL==='undefined'||!window?.location?.href)return null;
   try {
-    const worker=new Worker(new URL('./morning-import-worker.js?v=20260829-morning-upload-safe-r1',window.location.href),{name:'relayops-morning-import'});
+    const worker=new Worker(new URL('./morning-import-worker.js?v=20260829-morning-sparse-xlsx-r2',window.location.href),{name:'relayops-morning-import'});
     worker.addEventListener('message',event=>{
       const message=event.data||{},entry=morningImportWorkerPending.get(message.id);if(!entry)return;
       morningImportWorkerPending.delete(message.id);clearTimeout(entry.timer);
@@ -8434,12 +8434,18 @@ function textNodes(xml='') {
 }
 const XLSX_IMPORT_MAX_COLUMNS=512;
 const XLSX_IMPORT_MAX_XML_ENTRY_BYTES=48*1024*1024;
+const XLSX_IMPORT_MAX_WORKSHEET_BYTES=64*1024*1024;
 const XLSX_IMPORT_MAX_XML_TOTAL_BYTES=128*1024*1024;
+const XLSX_IMPORT_MAX_ROW_XML_BYTES=2*1024*1024;
 function parseWorksheetXml(xml,sharedStrings) {
-  const rows=[];let importedCells=0; const rowRe=/<(?:\w+:)?row\b[^>]*>([\s\S]*?)<\/(?:\w+:)?row>/gi; let rowMatch;
+  const rows=[];let importedCells=0; const rowRe=/<(?:\w+:)?row\b[^>]*?(?:\s*\/>|>([\s\S]*?)<\/(?:\w+:)?row\s*>)/gi; let rowMatch;
   while((rowMatch=rowRe.exec(xml))) {
+    // A saved Excel selection can serialize more than a million empty,
+    // self-closing rows. Consume those tags in one pass without treating them
+    // as data or searching the remainder of the XML for a closing row tag.
+    if(rowMatch[1]===undefined)continue;
     const row=[]; const cellRe=/<(?:\w+:)?c\b([^>]*)>([\s\S]*?)<\/(?:\w+:)?c>/gi; let cell;
-    while((cell=cellRe.exec(rowMatch[1]))) {
+    while((cell=cellRe.exec(rowMatch[1]||''))) {
       const attrs=cell[1], body=cell[2], ref=(attrs.match(/\br="([^"]+)"/i)||[])[1]||`A${rows.length+1}`, type=(attrs.match(/\bt="([^"]+)"/i)||[])[1]||'';
       const raw=(body.match(/<(?:\w+:)?v\b[^>]*>([\s\S]*?)<\/(?:\w+:)?v>/i)||[])[1];
       let value='';
@@ -8462,18 +8468,110 @@ function parseWorksheetXml(xml,sharedStrings) {
   }
   return rows;
 }
+async function parseWorksheetEntry(entry,sharedStrings,expandedBudget={bytes:0}) {
+  if(!entry)return [];
+  const declared=Number(entry?._data?.uncompressedSize)||0;
+  if(declared>XLSX_IMPORT_MAX_WORKSHEET_BYTES)throw new Error('This workbook sheet is too large for a safe browser import. Export it as CSV and retry.');
+  if(declared) {
+    expandedBudget.bytes+=declared;
+    if(expandedBudget.bytes>XLSX_IMPORT_MAX_XML_TOTAL_BYTES)throw new Error('This workbook expands beyond the safe import limit. Export it as CSV and retry.');
+  }
+  if(typeof entry.internalStream!=='function')throw new Error('This browser cannot safely stream this workbook. Export it as CSV and retry.');
+  const rows=[];let importedCells=0,actualChars=0,carry='',stream=null;
+  const addRows=parsedRows=>{
+    parsedRows.forEach(row=>{
+      importedCells+=row.length;
+      if(rows.length>=MORNING_IMPORT_MAX_ROWS||importedCells>MORNING_IMPORT_MAX_CELLS)throw new Error('This workbook has too many rows or cells for a safe browser import. Split the export and retry.');
+      rows.push(row);
+    });
+  };
+  const consumeCarry=final=>{
+    // Compact complete empty row tags a chunk at a time. This avoids a
+    // JavaScript callback/substring cycle for every unused Excel row while
+    // still retaining a partial tag in `carry` for the next stream chunk.
+    carry=carry.replace(/<(?:\w+:)?row\b[^>]*\/\s*>/gi,'');
+    while(carry) {
+      const start=carry.search(/<(?:\w+:)?row\b/i);
+      if(start<0) {
+        carry=final?'':carry.slice(-64);
+        return;
+      }
+      if(start>0)carry=carry.slice(start);
+      const openEnd=carry.indexOf('>');
+      if(openEnd<0) {
+        if(carry.length>XLSX_IMPORT_MAX_ROW_XML_BYTES)throw new Error('This workbook row is too large for a safe browser import. Export it as CSV and retry.');
+        if(final)throw new Error('This workbook contains an incomplete worksheet row. Export it again and retry.');
+        return;
+      }
+      if(openEnd+1>XLSX_IMPORT_MAX_ROW_XML_BYTES)throw new Error('This workbook row is too large for a safe browser import. Export it as CSV and retry.');
+      if(/\/\s*>$/.test(carry.slice(0,openEnd+1))) {
+        carry=carry.slice(openEnd+1);
+        continue;
+      }
+      const remainder=carry.slice(openEnd+1),closeOffset=remainder.search(/<\/(?:\w+:)?row\s*>/i);
+      if(closeOffset<0) {
+        if(carry.length>XLSX_IMPORT_MAX_ROW_XML_BYTES)throw new Error('This workbook row is too large for a safe browser import. Export it as CSV and retry.');
+        if(final)throw new Error('This workbook contains an incomplete worksheet row. Export it again and retry.');
+        return;
+      }
+      const closeStart=openEnd+1+closeOffset,closeEnd=carry.indexOf('>',closeStart);
+      if(closeEnd<0) {
+        if(final)throw new Error('This workbook contains an incomplete worksheet row. Export it again and retry.');
+        return;
+      }
+      if(closeEnd+1>XLSX_IMPORT_MAX_ROW_XML_BYTES)throw new Error('This workbook row is too large for a safe browser import. Export it as CSV and retry.');
+      addRows(parseWorksheetXml(carry.slice(0,closeEnd+1),sharedStrings));
+      carry=carry.slice(closeEnd+1);
+    }
+  };
+  return new Promise((resolve,reject)=>{
+    let settled=false;
+    const fail=error=>{
+      if(settled)return;
+      settled=true;
+      try { stream?.pause?.(); } catch {}
+      reject(error instanceof Error?error:new Error(String(error||'The Excel file could not be read')));
+    };
+    try { stream=entry.internalStream('string'); }
+    catch(error) { fail(error);return; }
+    stream.on('data',chunk=>{
+      if(settled)return;
+      try {
+        actualChars+=chunk.length;
+        if(actualChars>XLSX_IMPORT_MAX_WORKSHEET_BYTES)throw new Error('This workbook sheet is too large for a safe browser import. Export it as CSV and retry.');
+        if(!declared&&expandedBudget.bytes+actualChars>XLSX_IMPORT_MAX_XML_TOTAL_BYTES)throw new Error('This workbook expands beyond the safe import limit. Export it as CSV and retry.');
+        carry+=chunk;
+        consumeCarry(false);
+      } catch(error) { fail(error); }
+    });
+    stream.on('error',fail);
+    stream.on('end',()=>{
+      if(settled)return;
+      try {
+        consumeCarry(true);
+        if(actualChars>declared) {
+          expandedBudget.bytes+=actualChars-declared;
+          if(expandedBudget.bytes>XLSX_IMPORT_MAX_XML_TOTAL_BYTES)throw new Error('This workbook expands beyond the safe import limit. Export it as CSV and retry.');
+        }
+        settled=true;
+        resolve(rows);
+      } catch(error) { fail(error); }
+    });
+    try { stream.resume(); } catch(error) { fail(error); }
+  });
+}
 async function parseXlsxArrayBuffer(buffer,fileName='',purpose=state.importPurpose) {
   if(typeof JSZip==='undefined') throw new Error('Excel reader is unavailable');
-  const zip=await JSZip.loadAsync(buffer);let expandedBytes=0;
+  const zip=await JSZip.loadAsync(buffer),expandedBudget={bytes:0};
   const read=async path=>{
     const entry=zip.file(path);if(!entry)return '';
     const declared=Number(entry?._data?.uncompressedSize)||0;
     if(declared>XLSX_IMPORT_MAX_XML_ENTRY_BYTES)throw new Error('This workbook sheet is too large for a safe browser import. Export it as CSV and retry.');
-    expandedBytes+=declared;
-    if(expandedBytes>XLSX_IMPORT_MAX_XML_TOTAL_BYTES)throw new Error('This workbook expands beyond the safe import limit. Export it as CSV and retry.');
+    expandedBudget.bytes+=declared;
+    if(expandedBudget.bytes>XLSX_IMPORT_MAX_XML_TOTAL_BYTES)throw new Error('This workbook expands beyond the safe import limit. Export it as CSV and retry.');
     const value=await entry.async('string');
     if(value.length>XLSX_IMPORT_MAX_XML_ENTRY_BYTES)throw new Error('This workbook sheet is too large for a safe browser import. Export it as CSV and retry.');
-    if(!declared){expandedBytes+=value.length;if(expandedBytes>XLSX_IMPORT_MAX_XML_TOTAL_BYTES)throw new Error('This workbook expands beyond the safe import limit. Export it as CSV and retry.');}
+    if(value.length>declared){expandedBudget.bytes+=value.length-declared;if(expandedBudget.bytes>XLSX_IMPORT_MAX_XML_TOTAL_BYTES)throw new Error('This workbook expands beyond the safe import limit. Export it as CSV and retry.');}
     return value;
   };
   const sharedXml=await read('xl/sharedStrings.xml'), shared=[]; const siRe=/<(?:\w+:)?si\b[^>]*>([\s\S]*?)<\/(?:\w+:)?si>/gi; let si;
@@ -8486,7 +8584,7 @@ async function parseXlsxArrayBuffer(buffer,fileName='',purpose=state.importPurpo
   if(!paths.length) paths.push(...Object.keys(zip.files).filter(p=>/^xl\/worksheets\/sheet\d+\.xml$/i.test(p)).sort());
   let fallback=[], bestVinSheet=null, bestDriverSheet=null, bestWhiparoundSheet=null;
   for(const path of paths) {
-    const rows=parseWorksheetXml(await read(path),shared); if(!rows.length)continue; if(!fallback.length)fallback=rows;
+    const rows=await parseWorksheetEntry(zip.file(path),shared,expandedBudget); if(!rows.length)continue; if(!fallback.length)fallback=rows;
     if(purpose==='morning'&&/day[_\s-]*of[_\s-]*ops[_\s-]*plan/i.test(fileName)) {
       const planHeader=morningPlanHeaderIndex(rows);if(planHeader>=0)return rows.slice(planHeader);
     }
