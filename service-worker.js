@@ -1,4 +1,4 @@
-const CACHE='relayops-manual-morning-pads-v113';
+const CACHE='relayops-rostering-ridealong-v114';
 const CORE=[
   './',
   './index.html',
@@ -6,8 +6,8 @@ const CORE=[
   './macos-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260726-fleet-warning-r1',
-  './app.js?v=20260830-manual-morning-pads-r4',
-  './morning-import-worker.js?v=20260830-manual-morning-pads-r4',
+  './app.js?v=20260906-rostering-ridealong-r1',
+  './morning-import-worker.js?v=20260906-rostering-ridealong-r1',
   './cloud-sync.js?v=20260821-cpu-safe-r1',
   './supabase/config.js?v=20260821-cpu-safe-r1',
   './vendor/jszip.min.js',

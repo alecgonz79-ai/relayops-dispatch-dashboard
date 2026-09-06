@@ -375,7 +375,7 @@ async function dispatchServiceWorkerAsset(context, url) {
 }
 
 async function verifyServiceWorkerAssetHardening() {
-  const appAsset = 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/app.js?v=20260830-manual-morning-pads-r4';
+  const appAsset = 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/app.js?v=20260906-rostering-ridealong-r1';
   const cssAsset = 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/styles.css?v=20260816-storage-recovery-r1';
 
   for (const [label, url, status] of [['JavaScript', appAsset, 503], ['CSS', cssAsset, 404]]) {
@@ -403,16 +403,16 @@ async function verifyServiceWorkerAssetHardening() {
   assert(healthyContext.__stats.puts[0].url === appAsset && healthyContext.__stats.puts[0].status === 200,
     'The service worker must cache the exact versioned URL only after response.ok');
 
-  const version = '20260830-manual-morning-pads-r4';
+  const version = '20260906-rostering-ridealong-r1';
   assert(new RegExp(`morning-import-worker\\.js\\?v=${version}`).test(appSource),
-    'app.js must start the r4 Morning import worker');
+    'app.js must start the Ride Along release Morning import worker');
   assert(new RegExp(`app\\.js\\?v=${version}`).test(indexSource)
     && new RegExp(`service-worker\\.js\\?v=${version}`).test(indexSource),
-  'index.html must load the r4 app and register the r4 service worker together');
-  assert(/const CACHE='relayops-manual-morning-pads-v113'/.test(serviceWorkerSource)
+  'index.html must load the Ride Along app and register its service worker together');
+  assert(/const CACHE='relayops-rostering-ridealong-v114'/.test(serviceWorkerSource)
     && new RegExp(`app\\.js\\?v=${version}`).test(serviceWorkerSource)
     && new RegExp(`morning-import-worker\\.js\\?v=${version}`).test(serviceWorkerSource),
-  'cache v113 must precache the matching r4 app and Morning worker assets');
+  'cache v114 must precache the matching Ride Along app and Morning worker assets');
 }
 
 (async () => {
@@ -430,7 +430,7 @@ async function verifyServiceWorkerAssetHardening() {
   assert(/internalStream\(['"]string['"]\)/.test(appSource),
     'The main-thread fallback must stream worksheet XML instead of inflating the sparse sheet into one giant string');
 
-  console.log('Morning worker recovery regression passed (exact 43/43 preview; bounded fallback; terminal guards; zero writes; precise diagnostic; r4/v113 cache hardening)');
+  console.log('Morning worker recovery regression passed (exact 43/43 preview; bounded fallback; terminal guards; zero writes; precise diagnostic; ridealong v114 cache hardening)');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
