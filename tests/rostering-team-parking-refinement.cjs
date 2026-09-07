@@ -10,7 +10,7 @@ vm.createContext(context);
 vm.runInContext(fs.readFileSync(require.resolve('../app.js'),'utf8'),context,{filename:'app.js'});
 vm.runInContext(`
   toast=()=>{};render=()=>{};persist=()=>{};
-  state.rosteringDate='2026-07-18';state.rosteringPlans={};
+  state.rosteringDate='2026-07-18';state.rosteringPlans={[state.rosteringDate]:normalizeRosteringPlan({services:rosteringDefaultServices()})};
   state.scheduleEntries=[
     {date:'7/18/2026',name:'Actual Associate',role:'Delivery Associate',start:'11:15 AM'},
     {date:'7/18/2026',name:'Rescue Backup',role:'Rescue',start:'11:20 AM'},

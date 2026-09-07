@@ -375,7 +375,7 @@ async function dispatchServiceWorkerAsset(context, url) {
 }
 
 async function verifyServiceWorkerAssetHardening() {
-  const appAsset = 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/app.js?v=20260906-rostering-ridealong-r1';
+  const appAsset = 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/app.js?v=20260906-dispatch-actions-reset-r1';
   const cssAsset = 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/styles.css?v=20260816-storage-recovery-r1';
 
   for (const [label, url, status] of [['JavaScript', appAsset, 503], ['CSS', cssAsset, 404]]) {
@@ -403,13 +403,13 @@ async function verifyServiceWorkerAssetHardening() {
   assert(healthyContext.__stats.puts[0].url === appAsset && healthyContext.__stats.puts[0].status === 200,
     'The service worker must cache the exact versioned URL only after response.ok');
 
-  const version = '20260906-rostering-ridealong-r1';
+  const version = '20260906-dispatch-actions-reset-r1';
   assert(new RegExp(`morning-import-worker\\.js\\?v=${version}`).test(appSource),
     'app.js must start the Ride Along release Morning import worker');
   assert(new RegExp(`app\\.js\\?v=${version}`).test(indexSource)
     && new RegExp(`service-worker\\.js\\?v=${version}`).test(indexSource),
   'index.html must load the Ride Along app and register its service worker together');
-  assert(/const CACHE='relayops-rostering-ridealong-v114'/.test(serviceWorkerSource)
+  assert(/const CACHE='relayops-dispatch-actions-reset-v118'/.test(serviceWorkerSource)
     && new RegExp(`app\\.js\\?v=${version}`).test(serviceWorkerSource)
     && new RegExp(`morning-import-worker\\.js\\?v=${version}`).test(serviceWorkerSource),
   'cache v114 must precache the matching Ride Along app and Morning worker assets');

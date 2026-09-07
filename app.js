@@ -583,6 +583,7 @@ let state = {
   pendingRouteVtoSwap: null,
   pendingDuplicateDriverName: null,
   pendingAdhocRouteSwap: null,
+  pendingCxRouteSwap: null,
   removedDriverKeys: JSON.parse(localStorage.getItem('relayops_removed_driver_keys') || 'null') || [],
   pendingDriverRemoval: null,
   cloudStatus: window.RelayOpsCloud?.configured?'connecting':'setup-required',
@@ -629,6 +630,8 @@ if(bootCachedOperationDate&&bootCachedOperationDate!==state.morningOperationDate
   resetDailyOperationsState(state.morningOperationDate);
   bootOperationDateReset=true;
 }
+if(pruneExpiredRosteringState())bootOperationDateReset=true;
+if(pruneWhiparoundDailyState())bootOperationDateReset=true;
 
 const app = document.getElementById('app');
 const fileInput = document.getElementById('file-input');
@@ -856,10 +859,13 @@ function showDriverProfilePopover(source) {
   const rect=source.getBoundingClientRect?.()||{left:0,bottom:0,top:0,width:0},width=Math.min(320,Math.max(210,pop.offsetWidth||230)),left=Math.max(8,Math.min((window.innerWidth||1024)-width-8,rect.left+Math.min(rect.width||0,24))),top=Math.max(8,rect.bottom+8);pop.style.left=`${left}px`;pop.style.top=`${top}px`;
 }
 function handleDriverProfilePointerOver(event) {
+  const routeSource=driverRouteActionSource(event.target);
+  if(routeSource&&!routeSource.contains?.(event.relatedTarget)&&!state.modal&&!operationalDriverIsTyping())return openDriverRouteContextMenu(event,routeSource,{hover:true});
   const source=event.target?.closest?.('[data-driver-profile-name]');if(!source||source.contains?.(event.relatedTarget))return;
   showDriverProfilePopover(source);
 }
 function handleDriverProfilePointerOut(event) {
+  const routeSource=driverRouteActionSource(event.target);if(routeSource&&!routeSource.contains?.(event.relatedTarget))scheduleDriverRouteContextClose();
   const source=event.target?.closest?.('[data-driver-profile-name]');if(!source||source.contains?.(event.relatedTarget))return;
   closeDriverProfilePopover();
 }
@@ -870,9 +876,11 @@ function handleDriverProfileFocusOut(event) {
   const source=event.target?.closest?.('[data-driver-profile-name]');if(source&&!source.contains?.(event.relatedTarget))closeDriverProfilePopover();
 }
 function handleDriverRouteContextMenu(event) {
-  const source=event.target?.closest?.('.morning-template-sheet [data-view-field="driver"], .opening-picklist-main [data-picklist-field="driver"]');
+  const source=driverRouteActionSource(event.target);
   if(source)openDriverRouteContextMenu(event,source);
 }
+function driverRouteActionSource(target) { return target?.closest?.('.morning-template-sheet [data-view-field="driver"], .opening-picklist-main [data-picklist-field="driver"]'); }
+function operationalDriverIsTyping() { const active=document.activeElement;return Boolean(active&&(active.matches?.('input,textarea,select')||active.isContentEditable)); }
 function driverAliasRecord(name='') {
   const exact=String(name||'').trim(),key=nameKey(exact),profile=driverProfileEntry(exact)?.profile;if(profile)return {canonical:profile.canonical||exact,display:profile.nickname||profile.canonical||exact,aliases:profile.names||[]};
   const direct=state.driverNameAliases?.[key];
@@ -1254,7 +1262,8 @@ function warnDuplicateMorningEquipment(equipment='') {
 }
 function openingPicklistCellAttrs(section={},sectionIndex=0,row=null,rowIndex=0,field='') {
   const routeIndex=row?state.morningRoutes.indexOf(row):-1,key=`${section.key}:${rowIndex}:${field}`;
-  return `data-picklist-cell="${esc(key)}" data-picklist-view="true" data-picklist-field="${esc(field)}" data-picklist-route-index="${routeIndex}" data-picklist-route-uid="${esc(row?.routeUid||'')}" data-picklist-wave="${esc(section.wave||'')}" data-picklist-section-key="${esc(section.key||'')}" data-picklist-section-index="${sectionIndex}" data-picklist-row-index="${rowIndex}" title="${state.editMode?'Press Enter to save':'Double-click to edit'}" ${state.editMode?'contenteditable="true" tabindex="0" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" data-picklist-edit="true"':''}`;
+  const driverActions=field==='driver'&&row?.routeUid?`aria-keyshortcuts="Alt+ArrowDown Shift+F10" ${state.editMode?'':'tabindex="0"'}`:'';
+  return `data-picklist-cell="${esc(key)}" data-picklist-view="true" data-picklist-field="${esc(field)}" data-picklist-route-index="${routeIndex}" data-picklist-route-uid="${esc(row?.routeUid||'')}" data-picklist-wave="${esc(section.wave||'')}" data-picklist-section-key="${esc(section.key||'')}" data-picklist-section-index="${sectionIndex}" data-picklist-row-index="${rowIndex}" ${driverActions} title="${state.editMode?'Press Enter to save':'Double-click to edit'}" ${state.editMode?'contenteditable="true" tabindex="0" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" data-picklist-edit="true"':''}`;
 }
 function openingPicklistSectionHtml(section={},sectionIndex=0) {
   const rows=[...section.rows];while(rows.length<section.capacity)rows.push(null);
@@ -1273,9 +1282,9 @@ function picklistVtoDriverCell(group='',index=0,row=null,value='') {
   const name=String(value||'').trim(),label=group==='vto2'?'VTO 2':'VTO 4',role=row?.role||(group==='vto2'?'Rescue':'Delivery Associate');
   const input=`<input data-picklist-backup="${esc(group)}:${index}" data-driver-name-input="true" value="${esc(name)}" aria-label="${label} backup ${index+1}" placeholder="Driver">`;
   if(!name)return input;
-  const action=(target,text,tone='')=>`<button type="button" class="${esc(tone)}" data-action="picklist-vto-action" data-vto-target="${esc(target)}" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}">${esc(text)}</button>`;
+  const action=(target,text,tone='')=>`<button type="button" class="${esc(tone)}" data-action="picklist-vto-action" data-vto-target="${esc(target)}" data-operation-date="${esc(state.morningOperationDate)}" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}">${esc(text)}</button>`;
   const swap=`<button type="button" class="swap-route" data-action="open-vto-route-swap" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}" data-vto-label="${esc(label)}">Swap To Route</button>`;
-  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}" aria-haspopup="menu" aria-expanded="false">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('duplicate-name','Match with driver name on route','duplicate-name')}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('adhoc','Adhoc','adhoc')}${action('remove','Remove Driver','remove-driver')}</div></div></div>`;
+  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}" aria-haspopup="menu" aria-expanded="false">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('duplicate-name','Match with driver name on route','duplicate-name')}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('second-mid','2nd MID','adhoc')}${action('adhoc','Adhoc','adhoc')}${action('remove','Remove Driver','remove-driver')}</div></div></div>`;
 }
 function openingPicklistCallOffRows() {
   return Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([key,value])=>({key,name:value.name||'',reason:state.callOffReasons?.[key]||'',route:value.route||''})).sort((a,b)=>a.name.localeCompare(b.name));
@@ -1313,7 +1322,9 @@ function rosteringTimeBlueprint(service={},count=0) {
 }
 function rosteringPlanFromScreenshot(plan={}) { return plan?.source==='screenshot'||plan?.importKind==='screenshot'||(Array.isArray(plan?.assignments)&&plan.assignments.some(row=>row?.source==='screenshot')); }
 function normalizeRosteringPlan(plan={}) {
-  const services=(Array.isArray(plan.services)&&plan.services.length?plan.services:rosteringDefaultServices()).map((service,index)=>({id:String(service.id||`service-${index+1}`),name:String(service.name||`Custom service ${index+1}`),confirmed:Math.max(0,Math.trunc(Number(service.confirmed)||0)),kind:service.kind==='helper'?'helper':'driver',defaultTime:String(service.defaultTime||'11:15 AM')}));
+  // Only imported or manually added confirmed services belong to this date.
+  // An empty day (including a deliberately cleared plan) must stay empty.
+  const services=(Array.isArray(plan.services)?plan.services:[]).map((service,index)=>({id:String(service.id||`service-${index+1}`),name:String(service.name||`Custom service ${index+1}`),confirmed:Math.max(0,Math.trunc(Number(service.confirmed)||0)),kind:service.kind==='helper'?'helper':'driver',defaultTime:String(service.defaultTime||'11:15 AM')}));
   const serviceIds=new Set(services.map(service=>service.id)),assignments=(Array.isArray(plan.assignments)?plan.assignments:[]).filter(row=>row&&serviceIds.has(row.serviceId)).map(row=>({id:String(row.id||rosteringId()),serviceId:String(row.serviceId),start:String(row.start||'11:15 AM'),associate:String(row.associate||''),route:String(row.route||''),role:String(row.role||''),source:String(row.source||'manual')}));
   if(!assignments.length)services.forEach(service=>rosteringTimeBlueprint(service,service.confirmed).forEach(start=>assignments.push({id:rosteringId(),serviceId:service.id,start,associate:'',route:'',role:'',source:'template'})));
   return {services,assignments,updatedAt:String(plan.updatedAt||''),importName:String(plan.importName||''),importedAt:String(plan.importedAt||''),paycomImportName:String(plan.paycomImportName||''),paycomImportedAt:String(plan.paycomImportedAt||''),source:String(plan.source||''),importKind:String(plan.importKind||''),_normalized:true};
@@ -3409,7 +3420,7 @@ function currentWhiparoundRoster() {
 function whiparoundAvailableDates() {
   return [...new Set((state.whiparoundInspections||[]).map(row=>row.date).filter(Boolean))].sort().reverse();
 }
-function selectedWhiparoundDate() { return state.whiparoundSelectedDate||whiparoundAvailableDates()[0]||state.morningOperationDate||defaultOperationDate(); }
+function selectedWhiparoundDate() { return state.whiparoundSelectedDate||state.morningOperationDate||defaultOperationDate(); }
 function whiparoundExpectedForDate(date=selectedWhiparoundDate()) {
   const snapshot=state.whiparoundRosterSnapshots?.[date],rows=date===state.morningOperationDate?currentWhiparoundRoster():Array.isArray(snapshot)&&snapshot.length?snapshot:currentWhiparoundRoster();
   return rows.filter(row=>!state.whiparoundNotOnRoute?.[`${date}|${nameKey(row.name)}`]);
@@ -3814,9 +3825,10 @@ function modal() {
   }
   if (state.modal === 'roster-destination' && state.pendingRosterDestination) {
     const pending=state.pendingRosterDestination,destination=pending.destination||'',nonRosterable=isNonRosterableOtherShift(pending.role),helper=state.scheduleHelpers?.[scheduleHelperKey(pending.name)],button=(target,label,tone='')=>`<button class="btn roster-destination-action ${tone}" data-action="apply-roster-destination-action" data-roster-target="${esc(target)}">${esc(label)}</button>`,actions=[];
-    if(destination==='route')actions.push(button('calloff','Call off & replace','danger-soft'),button('swap','Swap off route'),button('reduction','Move to Reductions','reduction-button'));
+    if(destination==='route')actions.push(button('swap-cx','Swap to another CX','primary'),button('calloff','Call off & replace','danger-soft'),button('swap','Swap off route'),button('reduction','Move to Reductions','reduction-button'));
     if(destination==='helper')actions.push(button(helper?.matchedRoute?'helper-unmatch':'helper-match',helper?.matchedRoute?'Un-match from driver':'Match with driver','primary'));
     if(['vto2','vto4','backup'].includes(destination))actions.push(button('swap-to-route','Swap To Route','swap-route'));
+    if(!nonRosterable&&['vto2','vto4','backup'].includes(destination))actions.push(button('second-mid','2nd MID · Add to Adhocs'));
     if(destination==='reduction')actions.push(button('return','Restore original route','primary'));
     else if(destination==='called-off')actions.push(button('return','Return to scheduled drivers'));
     else if(destination==='stay-home')actions.push(button('return','Return to scheduled drivers'));
@@ -3845,6 +3857,10 @@ function modal() {
   if (state.modal === 'vto-route-swap' && state.pendingVtoRouteSwap) {
     const pending=state.pendingVtoRouteSwap,candidates=vtoRouteSwapCandidates(pending.name),size=Math.min(10,Math.max(4,candidates.length));
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal vto-route-swap-modal" role="dialog" aria-modal="true" aria-labelledby="vto-route-swap-title"><div class="modal-head"><div><span class="eyebrow">VTO ROUTE SWAP</span><h2 id="vto-route-swap-title">Swap ${esc(pending.name)} to a route</h2><p>${esc(pending.vtoLabel||scheduleBackupLabel(pending.role))} · choose the route driver who will move into this VTO spot.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="vto-route-search"><span>Search driver or CX route</span><input id="vto-route-swap-search" type="search" placeholder="Start typing a name or CX…" autocomplete="off" autofocus></label><label class="vto-route-picker"><span>Driver currently on route</span><select id="vto-route-swap-target" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.routeUid)}" data-vto-route-search="${esc(nameKey(`${row.driver} ${row.route} ${row.wave} ${waveNameForTime(row.wave)}`))}" ${index===0?'selected':''}>${esc(row.driver)} · ${esc(row.route)} · ${esc(waveNameForTime(row.wave))} ${esc(row.wave)}</option>`).join('')}</select><small id="vto-route-swap-count">${candidates.length} route${candidates.length===1?'':'s'} available</small></label>${candidates.length?'':`<div class="private-contact-note"><b>No eligible routes found</b><span>Fill the Morning Sheet with at least one assigned route before using this swap.</span></div>`}<div class="private-contact-note"><b>Safe one-step swap</b><span>${esc(pending.name)} takes the selected route. The current primary driver moves to VTO 2 or VTO 4 based on their scheduled PAYCOM role. Route, staging, pad, van, stop count, package count, Planned RTS, and any helper remain unchanged.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-vto-route-swap" ${candidates.length?'':'disabled'}>Confirm Swap To Route</button></div></div></div></div>`;
+  }
+  if (state.modal === 'cx-route-swap' && state.pendingCxRouteSwap) {
+    const pending=state.pendingCxRouteSwap,candidates=pending.candidates||[],size=Math.min(10,Math.max(4,candidates.length));
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal cx-route-swap-modal" role="dialog" aria-modal="true" aria-labelledby="cx-route-swap-title"><div class="modal-head"><div><span class="eyebrow">SWAP CX DRIVERS</span><h2 id="cx-route-swap-title">Move ${esc(driverDisplayName(pending.driverName))} from ${esc(pending.route)}</h2><p>Choose another CX. Its driver will take ${esc(pending.route)}.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="cx-route-swap-picker"><span>Destination CX and current driver</span><select id="cx-route-swap-target" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.routeUid)}" ${index===0?'selected':''}>${esc(row.route)} · ${esc(driverDisplayName(row.driver))} · ${esc(waveNameForTime(row.wave))} ${esc(row.wave)}</option>`).join('')}</select></label><div class="private-contact-note"><b>Both routes keep their setup</b><span>Helpers, trainers, vans, devices, portables, staging, pads, counts, and Planned RTS stay with their CX. Both changes appear in the Cortex swap tracker.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-cx-route-swap" ${candidates.length?'':'disabled'}>Swap drivers</button></div></div></div></div>`;
   }
   if (state.modal === 'adhoc-route-swap' && state.pendingAdhocRouteSwap) {
     const pending=state.pendingAdhocRouteSwap,candidates=adhocRouteSwapCandidates(pending.driverName),size=Math.min(10,Math.max(5,candidates.length));
@@ -4276,6 +4292,20 @@ function markPaycomAdhoc(name='',role='') {
   recordPicklistRosterChange({from:'Unassigned Adhoc',to:route.driver,route:'AX',wave:'Ad hoc',kind:'adhoc'});
   persist();render();toast(`${name} added to the Morning Sheet as Adhoc`);
 }
+function moveVtoDriverToSecondMid(name='',role='',operationDate=state.morningOperationDate) {
+  const exact=canonicalDriverName(name),identity=driverIdentityKey(exact);
+  if(!identity||operationDate!==state.morningOperationDate)return toast('The operation date changed. Open this driver’s actions again.','error');
+  const assigned=(state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&morningDriverNames(row.driver).some(person=>driverIdentityKey(person)===identity));
+  if(assigned.length===1&&isExplicitAdhocMorningRoute(assigned[0])&&assigned[0].secondMid)return toast(`${driverDisplayName(exact)} is already in Adhocs as 2nd MID`);
+  if(assigned.length)return toast('This driver is already assigned. Refresh the roster before moving them to 2nd MID.','error');
+  const backup=currentBackupDriverRows().find(row=>driverIdentityKey(row.name)===identity),manualBackup=Object.values(state.openingPicklistBackupOverrides||{}).some(value=>driverIdentityKey(value)===identity);
+  if((!backup&&!manualBackup)||rosterDriverUnavailable(exact)||scheduleRoleGroup(backup?.role||role)!=='driver')return toast('This driver is no longer an available VTO backup. Open their actions again.','error');
+  pushSheetHistory(`Move ${driverDisplayName(exact)} to 2nd MID`,'both');
+  reconcileDailyRosterFlags(exact,'adhoc');state.scheduleDriverMarks[scheduleDriverMarkKey(exact)]='adhoc';state.openingPicklistShowAdhoc=true;
+  const route=createManualMorningRoute({route:'AX',wave:'Ad hoc'});route.driver=exact;route.service='2nd MID';route.secondMid=true;route.adhocKey=adhocIdentityKey(exact);
+  recordPicklistRosterChange({from:'VTO backup',to:exact,route:'AX',wave:'Ad hoc',kind:'adhoc'});
+  persist();render();toast(`${driverDisplayName(exact)} added to Adhocs as 2nd MID`);return true;
+}
 function markPaycomStayHome(name='',role='') {
   const key=scheduleDriverMarkKey(name);
   reconcileDailyRosterFlags(name,'stay-home');const record=rosterRecord(contactForMorningDriver(name)?.name||name,role,{date:state.morningOperationDate});record.date=state.morningOperationDate;state.scheduleStayHome[key]=record;state.scheduleStayHomeHistory[key]={...(state.scheduleStayHomeHistory[key]||{}),...record,date:state.morningOperationDate};removeDriverAdhocRoute(name);persist();render();toast(`${name} moved to Told To Stay Home · ${driverStayHomeStats(name).count} time${driverStayHomeStats(name).count===1?'':'s'} in 14 days`);
@@ -4338,7 +4368,7 @@ function moveReductionToBackup(name='',role='') {
   const key=scheduleDriverMarkKey(name),record=state.scheduleReductions[key]||rosterRecord(name,role),resolvedRole=role||record.role||'Delivery Associate';if(isNonRosterableOtherShift(resolvedRole))return toast(`${record.name||name} has an Other role shift and cannot be moved to backups`,'error');reconcileDailyRosterFlags(name,'backup');state.scheduleDriverMarks[key]='backup';state.scheduleBackupRecords[key]={...record,role:resolvedRole};removeDriverAdhocRoute(name);persist();render();toast(`${record.name||name} moved to Backup drivers as ${scheduleBackupLabel(resolvedRole)}`);
 }
 function openRosterDestinationActions(name='',role='',destination='',route='',start='',automatic=false) {
-  state.pendingRosterDestination={name:contactForMorningDriver(name)?.name||name,role:role||'',destination:destination||'',route:route||'',start:start||'',automatic:automatic===true||automatic==='true'};
+  state.pendingRosterDestination={name:contactForMorningDriver(name)?.name||name,role:role||'',destination:destination||'',route:route||'',start:start||'',operationDate:state.morningOperationDate,automatic:automatic===true||automatic==='true'};
   return openLightweightModal('roster-destination');
 }
 function setRosterBackupState(name='',role='',label='') {
@@ -4356,6 +4386,8 @@ function restoreCalledOffToPaycom(name='') {
 function applyRosterDestinationAction(target='') {
   const pending=state.pendingRosterDestination;if(!pending)return false;
   state.pendingRosterDestination=null;state.modal=null;
+  if(target==='second-mid')return moveVtoDriverToSecondMid(pending.name,pending.role,pending.operationDate);
+  if(target==='swap-cx'){const route=morningRouteForDriver(pending.route,pending.name);return openCxRouteSwap(route?.routeUid||'',pending.name);}
   if(target==='swap-to-route')return openVtoRouteSwap(pending.name,pending.role,pending.destination);
   if(target==='vto2')return moveRosterDriverToVto(pending.name,pending.role,'VTO 2');
   if(target==='vto4')return moveRosterDriverToVto(pending.name,pending.role,'VTO 4');
@@ -4381,7 +4413,8 @@ function markRosterCalledOff(name='',role='') {
   reconcileDailyRosterFlags(exactName,'calloff');state.callOffDriverKeys[key]={...rosterRecord(exactName,role),name:exactName,route:'',at:new Date().toISOString()};state.callOffReasons[key]=state.callOffReasons[key]||'';
   persist();render();toast(`${exactName} moved to Called off today`);return true;
 }
-function applyPicklistVtoAction(name='',role='',target='') {
+function applyPicklistVtoAction(name='',role='',target='',operationDate=state.morningOperationDate) {
+  if(target==='second-mid')return moveVtoDriverToSecondMid(name,role,operationDate);
   if(target==='duplicate-name')return openDuplicateDriverNameMatch(name);
   const exactName=contactForMorningDriver(name)?.name||name;
   if(!exactName)return false;
@@ -4580,6 +4613,40 @@ function applyVtoRouteSwap() {
 function adhocRouteSwapCandidates(incomingName='') {
   return vtoRouteSwapCandidates(incomingName);
 }
+function cxRouteSwapCandidates(sourceUid='') {
+  ensureMorningRouteUids();
+  return (state.morningRoutes||[]).filter(route=>route.dsp===state.dspCode&&route.routeUid!==sourceUid&&isCxMorningRoute(route)&&!isExplicitAdhocMorningRoute(route)&&!isDedicatedHelperMorningRoute(route)&&!routeMissingPrimary(route))
+    .map(route=>({routeUid:route.routeUid,route:route.route,wave:route.wave||'',driver:canonicalDriverName(morningDriverNames(route.driver)[0]||'')})).filter(row=>row.driver&&row.driver!=='?')
+    .sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||a.route.localeCompare(b.route,undefined,{numeric:true}));
+}
+function openCxRouteSwap(routeUid='',driverName='') {
+  const source=morningRouteByUid(routeUid),driver=canonicalDriverName(driverName),primary=morningDriverNames(source?.driver)[0]||'';
+  if(!source||source.dsp!==state.dspCode||!isCxMorningRoute(source)||isExplicitAdhocMorningRoute(source)||routeMissingPrimary(source)||driverIdentityKey(primary)!==driverIdentityKey(driver))return toast('Choose the primary driver on an assigned CX route.','error');
+  const candidates=cxRouteSwapCandidates(routeUid).filter(row=>driverIdentityKey(row.driver)!==driverIdentityKey(driver));
+  if(!candidates.length)return toast('No other assigned CX routes are available to swap.','error');
+  state.pendingCxRouteSwap={routeUid,route:source.route,driverName:driver,operationDate:state.morningOperationDate,dsp:state.dspCode,candidates};closeDriverRouteContextMenu();return openLightweightModal('cx-route-swap');
+}
+function performCxRouteSwap(targetUid='') {
+  const pending=state.pendingCxRouteSwap,source=morningRouteByUid(pending?.routeUid||''),target=morningRouteByUid(targetUid),expected=(pending?.candidates||[]).find(row=>row.routeUid===targetUid);
+  const stale='A selected CX or driver assignment changed. Open the swap again to review the latest roster.';
+  if(!pending||pending.operationDate!==state.morningOperationDate||pending.dsp!==state.dspCode||!source||!target||source===target||!expected)return {ok:false,error:stale};
+  if([source,target].some(route=>route.dsp!==state.dspCode||!isCxMorningRoute(route)||routeMissingPrimary(route)||isExplicitAdhocMorningRoute(route)||isDedicatedHelperMorningRoute(route))||source.route!==pending.route||target.route!==expected.route)return {ok:false,error:stale};
+  const sourcePeople=morningDriverNames(source.driver),targetPeople=morningDriverNames(target.driver),outgoing=canonicalDriverName(sourcePeople[0]||''),incoming=canonicalDriverName(targetPeople[0]||''),outgoingKey=driverIdentityKey(outgoing),incomingKey=driverIdentityKey(incoming);
+  if(!outgoingKey||!incomingKey||outgoingKey===incomingKey||outgoingKey!==driverIdentityKey(pending.driverName)||incomingKey!==driverIdentityKey(expected.driver))return {ok:false,error:stale};
+  const assignments=(state.morningRoutes||[]).filter(route=>route.dsp===state.dspCode).flatMap(route=>morningDriverNames(route.driver)).map(driverIdentityKey);
+  if(assignments.filter(key=>key===outgoingKey).length!==1||assignments.filter(key=>key===incomingKey).length!==1)return {ok:false,error:'One of these drivers appears on more than one route. Resolve the duplicate before swapping.'};
+  pushSheetHistory(`Swap ${source.route} and ${target.route} drivers`,'both');
+  protectRouteOperationalData(source,()=>{sourcePeople[0]=incoming;source.driver=sourcePeople.join(' + ');});
+  protectRouteOperationalData(target,()=>{targetPeople[0]=outgoing;target.driver=targetPeople.join(' + ');});
+  [source,target].forEach(route=>{const helper=state.scheduleHelpers?.[route.helperAssignmentKey];if(helper)helper.matchedDriver=morningDriverNames(route.driver)[0]||'';});
+  recordPicklistRosterChange({from:outgoing,to:incoming,route:source.route,wave:source.wave,kind:'swap'});
+  recordPicklistRosterChange({from:incoming,to:outgoing,route:target.route,wave:target.wave,kind:'swap'});
+  return {ok:true,outgoing,incoming,source:source.route,target:target.route};
+}
+function applyCxRouteSwap() {
+  const result=performCxRouteSwap(document.getElementById('cx-route-swap-target')?.value||'');if(!result.ok)return toast(result.error,'error');
+  state.pendingCxRouteSwap=null;state.modal=null;persist();render();toast(`${driverDisplayName(result.outgoing)} → ${result.target} · ${driverDisplayName(result.incoming)} → ${result.source} · Undo available`);return true;
+}
 function openAdhocRouteSwap(routeUid='',driverName='') {
   const route=morningRouteByUid(routeUid),exact=canonicalDriverName(driverName);
   if(!route||!isExplicitAdhocMorningRoute(route))return toast('Choose a driver from the Adhoc wave','error');
@@ -4633,12 +4700,17 @@ function routeContextDriverRole(name='') {
   const team=teamDriverRows().find(entry=>driverIdentityKey(entry.name)===driverIdentityKey(name));
   return scheduled?.role||team?.role||'Delivery Associate';
 }
-function closeDriverRouteContextMenu() { document.getElementById?.('driver-route-context-menu')?.remove?.(); }
+let driverRouteContextCloseTimer=null;
+function closeDriverRouteContextMenu() { clearTimeout(driverRouteContextCloseTimer);driverRouteContextCloseTimer=null;document.getElementById?.('driver-route-context-menu')?.remove?.(); }
+function scheduleDriverRouteContextClose() { clearTimeout(driverRouteContextCloseTimer);driverRouteContextCloseTimer=setTimeout(()=>{const menu=document.getElementById?.('driver-route-context-menu');if(menu?.dataset?.hover==='true'&&!menu.contains?.(document.activeElement))closeDriverRouteContextMenu();},300); }
 function closeDriverRouteContextOnOutside(event) {
   const menu=document.getElementById?.('driver-route-context-menu');
   if(menu&&!menu.contains?.(event?.target))closeDriverRouteContextMenu();
 }
-function closeDriverRouteContextOnKey(event) { if(event?.key==='Escape')closeDriverRouteContextMenu(); }
+function closeDriverRouteContextOnKey(event) {
+  if(event?.key==='Escape')return closeDriverRouteContextMenu();
+  if(event?.key==='ContextMenu'||(event?.shiftKey&&event.key==='F10')||(event?.altKey&&event.key==='ArrowDown')){const source=driverRouteActionSource(event.target);if(source)openDriverRouteContextMenu(event,source);}
+}
 function closeDriverRouteContextOnScroll(event) {
   const menu=document.getElementById?.('driver-route-context-menu');
   if(menu&&!menu.contains?.(event?.target))closeDriverRouteContextMenu();
@@ -4649,19 +4721,30 @@ function driverRouteContextRoute(source) {
   const code=source?.dataset?.viewRoute||'';
   return (state.morningRoutes||[]).find(route=>route.route===code)||null;
 }
-function openDriverRouteContextMenu(event,source) {
+function openDriverRouteContextMenu(event,source,{hover=false}={}) {
   const route=driverRouteContextRoute(source),people=morningDriverNames(route?.driver).filter(name=>name&&name!=='?');
   if(!route||!route.routeUid||!people.length||route._blank||String(route.route||'').startsWith('__blank_'))return;
-  event?.preventDefault?.();event?.stopPropagation?.();closeDriverProfilePopover();closeDriverSuggestions();closeDriverRouteContextMenu();
+  if(!hover){event?.preventDefault?.();event?.stopPropagation?.();}closeDriverProfilePopover();closeDriverSuggestions();closeDriverRouteContextMenu();
   const menu=document.createElement('div');menu.id='driver-route-context-menu';menu.className='driver-route-context-menu';menu.setAttribute('role','menu');menu.setAttribute('aria-label',`Route actions for ${route.route}`);
+  menu.dataset.hover=String(hover);
   const personPicker=people.length>1?`<label><span>Choose name</span><select id="driver-route-context-person">${people.map(name=>`<option value="${esc(name)}">${esc(driverDisplayName(name))}</option>`).join('')}</select></label>`:`<input id="driver-route-context-person" type="hidden" value="${esc(people[0])}">`;
   const button=(target,label,tone='',detail='')=>`<button type="button" class="${esc(tone)}" data-action="driver-route-context-action" data-route-target="${esc(target)}" data-route-uid="${esc(route.routeUid)}"><b>${esc(label)}</b>${detail?`<small>${esc(detail)}</small>`:''}</button>`;
   const adhocSwap=isExplicitAdhocMorningRoute(route)?button('swap-route-da','Swap with DA on Route','swap-da','Exchange this Adhoc driver with a regular route DA'):'';
-  menu.innerHTML=`<header><div><span>DRIVER ACTIONS</span><strong>${esc(route.route)} · ${esc(waveNameForTime(route.wave))}</strong></div><button type="button" class="driver-route-context-close" aria-label="Close route actions">×</button></header>${personPicker}<div class="driver-route-context-actions">${adhocSwap}${button('calloff','Call off & swap','calloff','Choose a driver from the backup list')}${button('swap-vto','Put VTO driver on route','swap','One-step VTO swap')}${button('reduction','Move to Reductions','reduction','Leave route visibly unassigned')}${button('vto2','Move to VTO 2','vto2','Rescue backup')}${button('vto4','Move to VTO 4','vto4','Delivery Associate backup')}${button('stay-home','Told To Stay Home','stay-home','Remove from route')}${button('trainer','Add a trainer','trainer','Driver + Trainer')}</div><footer>Route, staging, pad, van, counts, and Planned RTS stay in place.</footer>`;
+  const cxSwap=isCxMorningRoute(route)&&!isExplicitAdhocMorningRoute(route)?button('swap-cx','Swap to another CX','swap-da','Exchange the primary drivers between two CX routes'):'';
+  const flags=driverFlagSummary(route.driver),notes=flags.length?`<div class="driver-route-context-notes">${flags.map(flag=>`<span>${esc(flag)}</span>`).join('')}</div>`:'';
+  menu.innerHTML=`<header><div><span>DRIVER ACTIONS</span><strong>${esc(route.route)} · ${esc(waveNameForTime(route.wave))}</strong></div><button type="button" class="driver-route-context-close" aria-label="Close route actions">×</button></header>${notes}${personPicker}<div class="driver-route-context-actions">${cxSwap}${adhocSwap}${button('calloff','Call off & swap','calloff','Choose a driver from the backup list')}${button('swap-vto','Put VTO driver on route','swap','One-step VTO swap')}${button('reduction','Move to Reductions','reduction','Leave route visibly unassigned')}${button('vto2','Move to VTO 2','vto2','Rescue backup')}${button('vto4','Move to VTO 4','vto4','Delivery Associate backup')}${button('stay-home','Told To Stay Home','stay-home','Remove from route')}${button('trainer','Add a trainer','trainer','Driver + Trainer')}</div><footer>Route, staging, pad, van, counts, and Planned RTS stay in place. Alt + ↓ opens these actions from a focused name.</footer>`;
   document.body?.appendChild?.(menu);menu.querySelector?.('.driver-route-context-close')?.addEventListener?.('click',closeDriverRouteContextMenu);bindActionControls(menu);
-  const viewportWidth=window.innerWidth||document.documentElement?.clientWidth||1024,viewportHeight=window.innerHeight||document.documentElement?.clientHeight||768,width=Math.min(360,Math.max(286,menu.offsetWidth||330)),height=Math.min(viewportHeight-16,menu.offsetHeight||430),x=Number(event?.clientX)||source.getBoundingClientRect?.().left||8,y=Number(event?.clientY)||source.getBoundingClientRect?.().bottom||8;
-  menu.style.left=`${Math.max(8,Math.min(viewportWidth-width-8,x))}px`;menu.style.top=`${Math.max(8,Math.min(viewportHeight-height-8,y))}px`;
-  menu.querySelector?.('select,button')?.focus?.({preventScroll:true});
+  menu.addEventListener?.('pointerenter',()=>clearTimeout(driverRouteContextCloseTimer));menu.addEventListener?.('pointerleave',scheduleDriverRouteContextClose);menu.addEventListener?.('focusout',event=>{if(!menu.contains?.(event.relatedTarget))scheduleDriverRouteContextClose();});
+  const viewportWidth=window.innerWidth||document.documentElement?.clientWidth||1024,viewportHeight=window.innerHeight||document.documentElement?.clientHeight||768,width=Math.min(360,Math.max(286,menu.offsetWidth||330)),height=Math.min(viewportHeight-16,menu.offsetHeight||430),rect=source.getBoundingClientRect?.()||{left:8,top:8,bottom:8};
+  let x=Number(event?.clientX)||rect.left||8,y=Number(event?.clientY)||rect.bottom||8;
+  if(hover){
+    // Keep the hovered name uncovered so a dispatcher can still double-click
+    // to type. Short viewports scroll the menu instead of covering the cell.
+    const below=viewportHeight-rect.bottom-12,above=(rect.top||0)-12,useBelow=below>=Math.min(220,height)||below>=above,available=Math.max(80,useBelow?below:above),visibleHeight=Math.min(height,available);
+    x=rect.left;y=useBelow?rect.bottom+4:Math.max(8,(rect.top||0)-visibleHeight-4);menu.style.maxHeight=`${visibleHeight}px`;menu.style.overflowY='auto';
+  }
+  menu.style.left=`${Math.max(8,Math.min(viewportWidth-width-8,x))}px`;menu.style.top=`${hover?Math.max(8,y):Math.max(8,Math.min(viewportHeight-height-8,y))}px`;
+  if(!hover)menu.querySelector?.('select,button')?.focus?.({preventScroll:true});
 }
 function routeTrainerCandidates(route={}) {
   const onRoute=new Set((state.morningRoutes||[]).filter(row=>row!==route).flatMap(row=>morningDriverNames(row.driver)).map(driverIdentityKey));
@@ -4709,6 +4792,7 @@ function applyRouteVtoSwap() {
 function applyDriverRouteContextAction(target='',el=null) {
   const menu=el?.closest?.('#driver-route-context-menu')||document.getElementById?.('driver-route-context-menu'),routeUid=el?.dataset?.routeUid||'',name=menu?.querySelector?.('#driver-route-context-person')?.value||'',route=morningRouteByUid(routeUid);closeDriverRouteContextMenu();if(!route||!name)return toast('That driver assignment is no longer available','error');
   const role=routeContextDriverRole(name);
+  if(target==='swap-cx')return openCxRouteSwap(routeUid,name);
   if(target==='swap-route-da')return openAdhocRouteSwap(routeUid,name);
   if(target==='calloff')return openRosterSwap(route.route,name,'calloff',driverDisplayName(name));
   if(target==='swap-vto')return openRouteVtoSwap(routeUid,name);
@@ -4728,9 +4812,10 @@ function startOpeningPicklistCellEdit(source) {
   focusOperationalGridEditor(target);
 }
 function operationalSheetSnapshot() {
-  return JSON.parse(JSON.stringify({morningRoutes:state.morningRoutes||[],morningOperationDate:state.morningOperationDate,morningWaveTimeOverrides:state.morningWaveTimeOverrides||{},morningSectionPadOverrides:state.morningSectionPadOverrides||{},fitMorningRows:state.fitMorningRows,fitOpeningPicklistRows:state.fitOpeningPicklistRows,callOffDriverKeys:state.callOffDriverKeys||{},callOffReasons:state.callOffReasons||{},scheduleDriverMarks:state.scheduleDriverMarks||{},scheduleBackupRecords:state.scheduleBackupRecords||{},openingPicklistTopics:state.openingPicklistTopics||[],openingPicklistNotes:state.openingPicklistNotes||'',openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts||[],openingPicklistBackupOverrides:state.openingPicklistBackupOverrides||{},openingPicklistLabels:state.openingPicklistLabels||{}}));
+  return JSON.parse(JSON.stringify({picklistSwapAudit:state.picklistSwapAudit||[],scheduleHelpers:state.scheduleHelpers||{},morningRoutes:state.morningRoutes||[],morningOperationDate:state.morningOperationDate,morningWaveTimeOverrides:state.morningWaveTimeOverrides||{},morningSectionPadOverrides:state.morningSectionPadOverrides||{},fitMorningRows:state.fitMorningRows,fitOpeningPicklistRows:state.fitOpeningPicklistRows,callOffDriverKeys:state.callOffDriverKeys||{},callOffReasons:state.callOffReasons||{},scheduleDriverMarks:state.scheduleDriverMarks||{},scheduleBackupRecords:state.scheduleBackupRecords||{},openingPicklistTopics:state.openingPicklistTopics||[],openingPicklistNotes:state.openingPicklistNotes||'',openingPicklistCalloffRows:state.openingPicklistCalloffRows,openingPicklistTopicRows:state.openingPicklistTopicRows,openingPicklistBackupRows:state.openingPicklistBackupRows,openingPicklistWaveSlots:state.openingPicklistWaveSlots,openingPicklistShowAdhoc:state.openingPicklistShowAdhoc,openingPicklistCalloffDrafts:state.openingPicklistCalloffDrafts||[],openingPicklistBackupOverrides:state.openingPicklistBackupOverrides||{},openingPicklistLabels:state.openingPicklistLabels||{}}));
 }
 function restoreOperationalSheetSnapshot(snapshot={}) {
+  ['picklistSwapAudit','scheduleHelpers'].forEach(key=>{if(Object.prototype.hasOwnProperty.call(snapshot,key))state[key]=JSON.parse(JSON.stringify(snapshot[key]));});
   ['morningRoutes','morningOperationDate','morningWaveTimeOverrides','morningSectionPadOverrides','fitMorningRows','fitOpeningPicklistRows','callOffDriverKeys','callOffReasons','scheduleDriverMarks','scheduleBackupRecords','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels'].forEach(key=>{if(Object.prototype.hasOwnProperty.call(snapshot,key))state[key]=JSON.parse(JSON.stringify(snapshot[key]));});ensureMorningRouteUids();recalculateEquipmentReadiness();
 }
 function pushSheetHistory(label='Sheet change',scope='both',snapshot=null) { state.sheetHistory=state.sheetHistory&&Array.isArray(state.sheetHistory.past)?state.sheetHistory:{past:[],future:[]};state.sheetHistory.past.push({id:`history-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,label,scope,at:new Date().toISOString(),by:state.cloudUser||'Dispatcher',snapshot:snapshot?JSON.parse(JSON.stringify(snapshot)):operationalSheetSnapshot()});state.sheetHistory.past=state.sheetHistory.past.slice(-12);state.sheetHistory.future=[]; }
@@ -4853,10 +4938,35 @@ function commitOpeningPicklistCalloffDraft(index) {
   state.callOffDriverKeys[key]={...rosterRecord(exactName,scheduled?.role||''),name:exactName,route:'',at:new Date().toISOString()};
   state.callOffReasons[key]=String(draft.reason||'').trim();state.openingPicklistCalloffDrafts.splice(index,1);persist();render();toast(`${exactName} moved to Called off today`);
 }
+function pruneExpiredRosteringState(date=state.morningOperationDate) {
+  // Opening a future date must not delete today's work. Historical links can
+  // still review their date; normal daily work expires dates before today.
+  const today=defaultOperationDate(),cutoff=/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))&&date<today?date:today;
+  let changed=false;
+  for(const field of ['rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining']) {
+    const source=state[field]&&typeof state[field]==='object'?state[field]:{},entries=Object.entries(source),retained=entries.filter(([key])=>/^\d{4}-\d{2}-\d{2}(?:\||$)/.test(key)&&key.slice(0,10)>=cutoff);
+    if(retained.length!==entries.length){state[field]=Object.fromEntries(retained);changed=true;}
+  }
+  if(!state.rosteringDate||state.rosteringDate<cutoff){state.rosteringDate=date||today;changed=true;}
+  return changed;
+}
+function pruneWhiparoundDailyState(date=state.morningOperationDate) {
+  const cutoff=String(date||defaultOperationDate());let changed=false;
+  const records=Array.isArray(state.whiparoundInspections)?state.whiparoundInspections:[],retained=records.filter(row=>String(row?.date||'')>=cutoff);
+  if(retained.length!==records.length){state.whiparoundInspections=retained;changed=true;}
+  for(const field of ['whiparoundRosterSnapshots','whiparoundNotOnRoute']) {
+    const entries=Object.entries(state[field]||{}),kept=entries.filter(([key])=>key.slice(0,10)>=cutoff);
+    if(kept.length!==entries.length){state[field]=Object.fromEntries(kept);changed=true;}
+  }
+  if(state.whiparoundSelectedDate&&state.whiparoundSelectedDate<cutoff){state.whiparoundSelectedDate=cutoff;changed=true;}
+  if(!retained.length&&state.whiparoundImportName){state.whiparoundImportName='';changed=true;}
+  return changed;
+}
 function resetSharedDailyOperationsState(date=defaultOperationDate()) {
   const targetDate=/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))?String(date):defaultOperationDate();
   state.morningOperationDate=targetDate;
   state.rosteringDate=targetDate;
+  pruneExpiredRosteringState(targetDate);
   // File-derived launch data belongs to one operation date. Keeping these
   // values in the dated workspace lets every dispatcher use the same imports
   // during the shift without carrying stale uploads into the next day.
@@ -4946,6 +5056,12 @@ function resetDailyOperationsState(date=defaultOperationDate()) {
   state.pendingRouteVtoSwap=null;
   state.pendingDuplicateDriverName=null;
   state.pendingAdhocRouteSwap=null;
+  state.pendingCxRouteSwap=null;
+  state.rosteringOpenServices={};
+  state.rosteringPaycomCategory='all';
+  state.pendingRosteringSwap=null;
+  state.pendingRosteringServiceDelete=null;
+  state.pendingRosteringTrainingAdd=null;
   state.screenshotPreview=null;
   state.screenshotKind='';
   state.screenshotReview={pads:false,cortex:false};
@@ -5203,6 +5319,7 @@ function closeLightweightModal() {
   if(state.modal==='route-vto-swap')state.pendingRouteVtoSwap=null;
   if(state.modal==='duplicate-driver-name')state.pendingDuplicateDriverName=null;
   if(state.modal==='adhoc-route-swap')state.pendingAdhocRouteSwap=null;
+  if(state.modal==='cx-route-swap')state.pendingCxRouteSwap=null;
   if(state.modal==='helper-match')state.pendingHelperMatch=null;
   if(state.modal==='preferred-vehicle-drivers')state.pendingPreferredVehicleId='';
   state.modal=null;document.querySelector?.('.modal-backdrop')?.remove?.();modalWasOpen=false;if(wasOpen)restoreModalFocus();return true;
@@ -5260,8 +5377,9 @@ function focusRosterSearchWithoutPageJump(input,event) {
   operationalScrollAnchor={memory,version,at:Date.now()};
   input.focus?.({preventScroll:true});
   const restore=()=>{
-    if(memory.page!==state.page||Date.now()>operationalInteractionUntil)return;
+    if(memory.page!==state.page||version!==operationalScrollAnchorVersion||Date.now()>operationalInteractionUntil)return;
     const current=input.isConnected?input:[...document.querySelectorAll('[data-roster-search]')].find(el=>(el.dataset.rosterSearch||'')===searchKey);
+    const active=document.activeElement;if(active&&active!==document.body&&active!==current)return;
     if(current&&document.activeElement!==current)current.focus?.({preventScroll:true});
     restoreUiScrollMemory(memory);
     operationalScrollAnchor={memory,version,at:Date.now()};
@@ -5292,7 +5410,8 @@ let deferredCloudRender=false;
 let operationalInteractionUntil=0;
 let operationalScrollAnchor=null;
 let operationalScrollAnchorVersion=0;
-const OPERATIONAL_INTERACTION_SELECTOR='[data-device-sheet-field],[data-device-custom-field],[data-picklist-view],[data-picklist-edit],.morning-template-sheet [data-view-field],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-roster-search],[data-screenshot-review-pad],[data-parking-id],[data-parking-battery],[data-parking-notes],[data-parking-date],[data-charging-check-date],[data-parking-kind],[data-fleet-search],[data-fleet-filter],[data-rivian-sort],[data-fleet-view],[data-fleet-expected]';
+const DASHBOARD_TEXT_EDITOR_SELECTOR='textarea,input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="file"]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),[contenteditable="true"]';
+const OPERATIONAL_INTERACTION_SELECTOR='[data-device-sheet-field],[data-device-custom-field],[data-picklist-view],[data-picklist-edit],.morning-template-sheet [data-view-field],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-roster-search],[data-screenshot-review-pad],[data-parking-id],[data-parking-battery],[data-parking-notes],[data-parking-date],[data-charging-check-date],[data-parking-kind],[data-fleet-search],[data-fleet-filter],[data-rivian-sort],[data-fleet-view],[data-fleet-expected],'+DASHBOARD_TEXT_EDITOR_SELECTOR;
 const OPERATIONAL_SCROLL_PANE_SELECTOR='.sheet-scroll,.opening-picklist-scroll,.picklist-sheet-scroll,.device-sheet-table-wrap,.device-sheet-scroll,.parking-lot';
 let operationalEditScrollLock=null;
 let operationalUserScrollUntil=0;
@@ -5326,9 +5445,21 @@ function recordNavigationTiming(page='',startedAt=Date.now(),cached=false,phases
   const metric={page,ms:Math.max(0,Date.now()-startedAt),cached,...phases,at:new Date().toISOString()},content=document.querySelector?.('.content');
   window.__relayOpsLastNavigation=metric;if(content){content.dataset.navigationMs=String(metric.ms);content.dataset.navigationCached=String(cached);content.dataset.navigationPhases=JSON.stringify(phases||{});}
 }
+function isDashboardTextEditor(el) {
+  return Boolean(el&&!el.disabled&&!el.readOnly&&el.getAttribute?.('aria-readonly')!=='true'&&el.getAttribute?.('aria-disabled')!=='true'&&!el.closest?.('[inert],fieldset[disabled]')&&el.matches?.(DASHBOARD_TEXT_EDITOR_SELECTOR));
+}
+function handleDashboardTextDoubleClick(event) {
+  if(event.target?.closest?.('button,a,select,[contenteditable="false"]'))return;
+  const editor=event.target?.closest?.(DASHBOARD_TEXT_EDITOR_SELECTOR);
+  if(!isDashboardTextEditor(editor))return;
+  // Native double-click selects a word. Keep that selection and the existing
+  // save handlers; only repair focus if the browser did not enter the control.
+  if(document.activeElement!==editor)editor.focus?.({preventScroll:true});
+  if(editor.matches?.(operationalGridEditorSelector))captureOperationalEditScrollLock(editor);
+}
 function activeOperationalEditor() {
   const el=document.activeElement;
-  return Boolean(el&&el!==document.body&&el.matches?.('[data-device-sheet-field],[data-device-custom-field],[data-picklist-edit],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-roster-search],[data-screenshot-review-pad],[data-parking-id],[data-parking-battery],[data-parking-notes],[data-parking-date],[data-charging-check-date],[data-parking-kind],[data-fleet-search],[data-fleet-filter],[data-rivian-sort],[data-fleet-view],[data-fleet-expected]'));
+  return Boolean(el&&el!==document.body&&(isDashboardTextEditor(el)||el.matches?.('[data-device-sheet-field],[data-device-custom-field],[data-picklist-edit],.morning-template-sheet [data-edit-field],[data-picklist-calloff-reason],[data-picklist-backup],[data-picklist-calloff-name],[data-picklist-calloff-draft],[data-picklist-topic],[data-picklist-notes],[data-roster-search],[data-screenshot-review-pad],[data-parking-id],[data-parking-battery],[data-parking-notes],[data-parking-date],[data-charging-check-date],[data-parking-kind],[data-fleet-search],[data-fleet-filter],[data-rivian-sort],[data-fleet-view],[data-fleet-expected]')));
 }
 function rememberOperationalScrollAnchor() {
   operationalScrollAnchor={memory:captureUiScrollMemory(),version:++operationalScrollAnchorVersion,at:Date.now()};
@@ -5428,7 +5559,7 @@ function renderFromCloudEvent() {
 }
 function refreshCloudStatusUi() {
   const currentTopbar=document.querySelector?.('.topbar');
-  if(currentTopbar){currentTopbar.outerHTML=topbar();bindNavigationTopbar(document.querySelector?.('.topbar'));}
+  if(currentTopbar&&!currentTopbar.contains?.(document.activeElement)){currentTopbar.outerHTML=topbar();bindNavigationTopbar(document.querySelector?.('.topbar'));}
   const synced=state.cloudStatus==='synced';
   const label=synced?'Shared workspace · everyone with the link sees these updates':state.cloudStatus==='access-denied'?'Shared link access needs repair':state.cloudStatus==='workspace-empty'?'Starting today’s shared workspace…':state.cloudStatus==='offline'?'Offline · edits saved and will sync automatically':state.cloudStatus==='connecting'?'Connecting shared workspace…':cloudDatabaseBusy()?'Database busy · edits saved locally':'Shared cloud setup required';
   document.querySelectorAll?.('.sync-state').forEach(el=>{el.classList.toggle('cloud-live',synced);el.innerHTML=`<i class="live-dot"></i>${esc(label)}`;});
@@ -5563,6 +5694,7 @@ function bindGlobalDocumentControls() {
   document.removeEventListener?.('focusout',handleDriverProfileFocusOut);
   document.removeEventListener?.('contextmenu',handleDriverRouteContextMenu);
   document.removeEventListener?.('keydown',handleOperationalGridArrowNavigation);
+  document.removeEventListener?.('dblclick',handleDashboardTextDoubleClick);
   document.removeEventListener?.('keydown',markOperationalInteraction,true);
   document.removeEventListener?.('pointerdown',markOperationalInteraction,true);
   document.removeEventListener?.('mousedown',markOperationalInteraction,true);
@@ -5587,6 +5719,7 @@ function bindGlobalDocumentControls() {
   document.addEventListener?.('focusout',handleDriverProfileFocusOut);
   document.addEventListener?.('contextmenu',handleDriverRouteContextMenu);
   document.addEventListener?.('keydown',handleOperationalGridArrowNavigation);
+  document.addEventListener?.('dblclick',handleDashboardTextDoubleClick);
   document.addEventListener?.('keydown',markOperationalInteraction,true);
   document.addEventListener?.('pointerdown',markOperationalInteraction,true);
   document.addEventListener?.('mousedown',markOperationalInteraction,true);
@@ -5689,11 +5822,12 @@ function bind() {
     const startEdit=event=>{
       if(event.target?.closest?.('button,a,input,select,textarea,[data-action]'))return;
       if(state.copyMode)return;
-      event.preventDefault();
       if(state.editMode&&el.isContentEditable){
+        if(document.activeElement===el)return;
+        event.preventDefault();
         focusOperationalGridEditor(el);
         if(el.dataset.picklistField==='driver')showDriverNameSuggestions(el);
-      } else if(!state.editMode)startOpeningPicklistCellEdit(el);
+      } else if(!state.editMode){event.preventDefault();startOpeningPicklistCellEdit(el);}
     };
     el.addEventListener('click',startEdit);
     el.addEventListener('dblclick',startEdit);
@@ -5702,6 +5836,8 @@ function bind() {
     el.dataset.picklistOriginal=picklistEditableCellValue(el);
     const focusFromPointer=event=>{
       if(event.button!==undefined&&event.button!==0)return;
+      if(event.target?.closest?.('button,a,input,select,textarea,[data-action]'))return;
+      if(document.activeElement===el)return;
       event.preventDefault();
       focusOperationalGridEditor(el);
       if(el.dataset.picklistField==='driver')showDriverNameSuggestions(el);
@@ -5732,7 +5868,7 @@ function bind() {
   document.querySelectorAll('[data-fleet-filter]').forEach(el=>{el.addEventListener('change',()=>{state.fleetFilter=el.value;persistFleetPresentation();render();});el.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation();openFleetControl(el);});});
   document.querySelectorAll('[data-inventory-filter]').forEach(el=>el.addEventListener('change',()=>{state.inventoryFilter=el.value;persist();render();}));
   document.querySelectorAll('[data-fleet-view]').forEach(el=>el.addEventListener('change',()=>{state.fleetView=el.value;persistFleetPresentation();render();}));
-  document.querySelectorAll('[data-fleet-search]').forEach(el=>{el.addEventListener('dblclick',event=>{event.preventDefault();event.stopPropagation();openFleetControl(el);});el.addEventListener('input',()=>{const pos=el.selectionStart??String(el.value||'').length;state.fleetSearch=el.value;updateFleetSearchSoon(el.value,pos);});el.addEventListener('change',()=>{state.fleetSearch=el.value;persistFleetPresentation();});});
+  document.querySelectorAll('[data-fleet-search]').forEach(el=>{el.addEventListener('input',()=>{const pos=el.selectionStart??String(el.value||'').length;state.fleetSearch=el.value;updateFleetSearchSoon(el.value,pos);});el.addEventListener('change',()=>{state.fleetSearch=el.value;persistFleetPresentation();});});
   document.querySelectorAll('[data-fleet-expected]').forEach(el=>{el.addEventListener('input',()=>{const pos=el.selectionStart??String(el.value||'').length;state.fleetExpectedCount=Math.max(0,Number(el.value)||0);updateFleetExpectedSoon(el.value,pos);});el.addEventListener('change',()=>{state.fleetExpectedCount=Math.max(0,Number(el.value)||0);persist();});});
   document.querySelectorAll('[data-parking-select]').forEach(el=>el.addEventListener('click',()=>{selectParkingSlot(el.dataset.parkingSelect,false);syncParkingSelectionVisual(el.dataset.parkingSelect);}));
   document.querySelectorAll('[data-parking-id]').forEach(el=>{
@@ -5766,6 +5902,7 @@ function bind() {
     el.dataset.deviceOriginal=el.value;
     const focusFromPointer=event=>{
       if(event.button!==undefined&&event.button!==0)return;
+      if(document.activeElement===el||!isDashboardTextEditor(el))return;
       event.preventDefault();
       focusOperationalGridEditor(el);
     };
@@ -5784,6 +5921,7 @@ function bind() {
     el.dataset.deviceOriginal=el.value;
     const focusFromPointer=event=>{
       if(event.button!==undefined&&event.button!==0)return;
+      if(document.activeElement===el||!isDashboardTextEditor(el))return;
       event.preventDefault();
       focusOperationalGridEditor(el);
     };
@@ -5816,11 +5954,12 @@ function bind() {
     const startEdit=e=>{
       if(e.target?.closest?.('button,a,input,select,textarea,[data-action]'))return;
       if(state.copyMode)return;
-      e.preventDefault();
       if(state.editMode&&el.isContentEditable){
+        if(document.activeElement===el)return;
+        e.preventDefault();
         focusSheetCell(el);
         if(el.dataset.editField==='driver')showDriverNameSuggestions(el);
-      } else if(!state.editMode)startMorningCellEdit(el);
+      } else if(!state.editMode){e.preventDefault();startMorningCellEdit(el);}
     };
     el.addEventListener('click',startEdit);
     el.addEventListener('dblclick',startEdit);
@@ -6494,7 +6633,10 @@ function selectSheetCell(el) {
   sheetSelection={anchor:el,focus:el,dragging:false};
 }
 function handleSheetMouseDown(e,el) {
+  if(e.button!==undefined&&e.button!==0)return;
+  if(e.target?.closest?.('button,a,input,select,textarea,[data-action]'))return;
   if(state.editMode&&el.isContentEditable&&!e.shiftKey) {
+    if(document.activeElement===el)return;
     e.preventDefault();
     sheetSelection={anchor:el,focus:el,dragging:false};
     applySheetSelection();
@@ -6564,20 +6706,23 @@ function focusSheetCell(el) {
   const version=++sheetFocusRequestVersion,pageX=window.scrollX||0,pageY=window.scrollY||0,pane=operationalScrollPaneFor(el),paneTop=pane?.scrollTop||0,paneLeft=pane?.scrollLeft||0;
   captureOperationalEditScrollLock(el,{pageX,pageY,paneTop,paneLeft});
   selectSheetCell(el);
+  let initial=true;
   const applyFocus=()=>{
     if(version!==sheetFocusRequestVersion||!el.isConnected)return;
     const active=document.activeElement;
-    if(active&&active!==document.body&&active!==el&&!active.closest?.('.morning-template-sheet'))return;
+    if(!initial&&active&&active!==document.body&&active!==el)return;
+    const refocusing=active!==el;
     el.focus({preventScroll:true});
-    if(el.isContentEditable){
+    if(refocusing&&el.isContentEditable){
       const range=document.createRange(),selection=window.getSelection();
-      range.selectNodeContents(el);range.collapse(false);selection.removeAllRanges();selection.addRange(range);
+      if(!el.contains?.(selection.anchorNode)){range.selectNodeContents(el);range.collapse(false);selection.removeAllRanges();selection.addRange(range);}
     }
     if(pane?.isConnected){pane.scrollTop=paneTop;pane.scrollLeft=paneLeft;}
     if(Math.abs((window.scrollX||0)-pageX)>1||Math.abs((window.scrollY||0)-pageY)>1)window.scrollTo(pageX,pageY);
     keepOperationalEditorVisible(el);
     captureOperationalEditScrollLock(el);
     if(Date.now()<operationalInteractionUntil)rememberOperationalScrollAnchor();
+    initial=false;
   };
   applyFocus();
   window.requestAnimationFrame?.(applyFocus);
@@ -6682,6 +6827,8 @@ function copyWaveByIndex(index=0,block='all') {
 }
 function handleSheetSelectionCopy(e) {
   if(state.page!=='morning'||(!state.editMode&&!state.copyMode))return;
+  const editor=document.activeElement,selection=window.getSelection?.();
+  if(!state.copyMode&&editor?.isContentEditable&&selection&&!selection.isCollapsed&&editor.contains?.(selection.anchorNode)&&editor.contains?.(selection.focusNode))return;
   const text=selectedSheetTsv();
   if(!text){toast('Nothing copied — drag to select cells first','error');return;}
   e.preventDefault();
@@ -6733,14 +6880,14 @@ function focusOperationalGridEditor(editor) {
   let initial=true;
   const applyFocus=()=>{
     if(version!==operationalGridFocusRequestVersion||editor.isConnected===false)return;
-    const active=document.activeElement,root=operationalGridRoot(editor);
-    if(!initial&&active&&active!==document.body&&active!==editor&&root?.contains&&!root.contains(active))return;
+    const active=document.activeElement;
+    if(!initial&&active&&active!==document.body&&active!==editor)return;
     const refocusing=active!==editor;
     editor.focus?.({preventScroll:true});
     if(editor.matches?.('input:not([type="date"]),textarea')){
-      if(initial||refocusing)editor.select?.();
-    } else if(editor.isContentEditable&&window.getSelection&&document.createRange){
-      const range=document.createRange(),selection=window.getSelection();range.selectNodeContents(editor);range.collapse(false);selection.removeAllRanges();selection.addRange(range);
+      if(refocusing)editor.select?.();
+    } else if(refocusing&&editor.isContentEditable&&window.getSelection&&document.createRange){
+      const range=document.createRange(),selection=window.getSelection();if(!editor.contains?.(selection.anchorNode)){range.selectNodeContents(editor);range.collapse(false);selection.removeAllRanges();selection.addRange(range);}
     }
     if(pane?.isConnected){pane.scrollTop=paneTop;pane.scrollLeft=paneLeft;}
     if(Math.abs((window.scrollX||0)-pageX)>1||Math.abs((window.scrollY||0)-pageY)>1)window.scrollTo(pageX,pageY);
@@ -7089,7 +7236,8 @@ function action(name,el) {
   if (name==='copy-open-charger-slack') return copyChargerReportAndOpenSlack();
   if (name==='set-import-source') { resetMorningImportBatch();state.importSource=el.dataset.source; state.importedFile=null; return renderLightweightModal(); }
   if (name==='load-slack-demo') return loadSlackDemo();
-  if (name==='close-modal'&&['picklist-screenshot-review','screenshot','vto-route-swap','roster-destination','roster-swap','route-trainer','route-vto-swap','duplicate-driver-name','adhoc-route-swap','helper-match','preferred-vehicle-drivers','early-calloff-reminder','import'].includes(state.modal)) return closeLightweightModal();
+  if (name==='close-modal')state.pendingCxRouteSwap=null;
+  if (name==='close-modal'&&['picklist-screenshot-review','screenshot','vto-route-swap','roster-destination','roster-swap','route-trainer','route-vto-swap','duplicate-driver-name','adhoc-route-swap','cx-route-swap','helper-match','preferred-vehicle-drivers','early-calloff-reminder','import'].includes(state.modal)) return closeLightweightModal();
   if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingRouteTrainer=null;state.pendingRouteVtoSwap=null;state.pendingDuplicateDriverName=null;state.pendingAdhocRouteSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingPreferredVehicleId='';state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};state.fleetRefreshPreview=null;return render(); }
   if (name==='choose-file') { fileInput.accept=importAcceptForPurpose(state.importPurpose);return fileInput.click(); }
   if (name==='schedule-import') { state.scheduleImportDestination=state.page==='rostering'?'rostering':'roster';state.importPurpose='schedule';fileInput.accept='.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf';return fileInput.click(); }
@@ -7128,8 +7276,9 @@ function action(name,el) {
   if (name==='apply-route-trainer') return applyRouteTrainer();
   if (name==='apply-route-vto-swap') return applyRouteVtoSwap();
   if (name==='apply-adhoc-route-swap') return applyAdhocRouteSwap();
+  if (name==='apply-cx-route-swap') return applyCxRouteSwap();
   if (name==='apply-roster-destination-action') return applyRosterDestinationAction(el.dataset.rosterTarget||'');
-  if (name==='picklist-vto-action') return applyPicklistVtoAction(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.vtoTarget||'');
+  if (name==='picklist-vto-action') return applyPicklistVtoAction(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.vtoTarget||'',el.dataset.operationDate||state.morningOperationDate);
   if (name==='apply-duplicate-driver-name') return applyDuplicateDriverNameMatch();
   if (name==='open-vto-route-swap') return openVtoRouteSwap(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.vtoLabel||'');
   if (name==='apply-vto-route-swap') return applyVtoRouteSwap();
@@ -7542,7 +7691,7 @@ function getMorningImportWorker() {
   if(morningImportWorker)return morningImportWorker;
   if(typeof Worker==='undefined'||typeof URL==='undefined'||!window?.location?.href)return null;
   try {
-    const worker=new Worker(new URL('./morning-import-worker.js?v=20260906-rostering-ridealong-r1',window.location.href),{name:'relayops-morning-import'});
+    const worker=new Worker(new URL('./morning-import-worker.js?v=20260906-dispatch-actions-reset-r1',window.location.href),{name:'relayops-morning-import'});
     worker.addEventListener('message',event=>{
       const message=event.data||{},entry=morningImportWorkerPending.get(message.id);if(!entry)return;
       morningImportWorkerPending.delete(message.id);clearTimeout(entry.timer);
@@ -8015,7 +8164,7 @@ function currentScheduleEntries() {
   return scheduleEntriesForDate(state.morningOperationDate);
 }
 async function readFiles(files) {
-  const incomingFiles=[...files],purposeAtStart=state.importPurpose,isMorningRead=purposeAtStart==='morning';
+  const incomingFiles=[...files],purposeAtStart=state.importPurpose,operationDateAtStart=state.morningOperationDate,isMorningRead=purposeAtStart==='morning';
   const previousMorningFiles=isMorningRead?[...pendingMorningImportFiles]:[];
   const selectedFiles=isMorningRead?mergePendingMorningImportFiles(incomingFiles):incomingFiles,readToken=++morningImportReadToken;
   if(!isMorningRead){pendingMorningImportFiles=[];state.importReadingFiles=[];}
@@ -8048,6 +8197,7 @@ async function readFiles(files) {
       if(readToken!==morningImportReadToken||state.importPurpose!==purposeAtStart)return;
       state.importReadingFiles=[];
     } else parsed=await Promise.all(selectedFiles.map(file=>parseUploadedFile(file,purposeAtStart)));
+    if(purposeAtStart==='whiparound'&&state.morningOperationDate!==operationDateAtStart)return toast('The operating day changed while this report was being read. Import the new day’s Whiparound report.','error');
     if(state.importPurpose==='whiparound') {
       const records=parsed.flatMap(file=>inspectionRecordsFromRows(file.rows||[]));
       if(!records.length)throw new Error('No Pre-Trip or Post-Trip EDV Inspection (DVIR) rows found');
@@ -10914,6 +11064,8 @@ function applySharedWorkspaceState(payload={}) {
   state.openingPicklistLabels=state.openingPicklistLabels&&typeof state.openingPicklistLabels==='object'?state.openingPicklistLabels:{};
   state.picklistSwapAudit=Array.isArray(state.picklistSwapAudit)?state.picklistSwapAudit.slice(-160):[];
   state.inventoryItems=normalizeInventoryItems(state.inventoryItems);state.inventoryLog=normalizeInventoryLog(state.inventoryLog);
+  pruneWhiparoundDailyState();
+  pruneExpiredRosteringState();
   if(Object.values(state.fleetSourceUploads||{}).some(upload=>Array.isArray(upload?.vehicles)&&upload.vehicles.length))state.fleetImport=fleetImportFromSourceUploads();
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   else if(Object.prototype.hasOwnProperty.call(payload,'fleetImport'))rivianFleet.splice(0,rivianFleet.length,...demoRivianFleet.map(vehicle=>normalizeFleetVehicle(vehicle)));
@@ -10941,6 +11093,7 @@ function applyPersistentWorkspaceState(payload={}) {
   state.scheduleStayHomeHistory=state.scheduleStayHomeHistory&&typeof state.scheduleStayHomeHistory==='object'?state.scheduleStayHomeHistory:{};
   state.rosteringPlans=state.rosteringPlans&&typeof state.rosteringPlans==='object'?state.rosteringPlans:{};
   state.rosteringHelperPool=state.rosteringHelperPool&&typeof state.rosteringHelperPool==='object'?state.rosteringHelperPool:{};
+  pruneExpiredRosteringState();
   state.inventoryItems=normalizeInventoryItems(state.inventoryItems);state.inventoryLog=normalizeInventoryLog(state.inventoryLog);
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   invalidateDriverDirectoryCaches();

@@ -10,7 +10,8 @@ const clone = value => JSON.parse(JSON.stringify(value));
 function appContext({
   href = 'https://relayops.example.test/?date=2026-08-04',
   now = '2026-08-04T19:00:00.000Z',
-  bootStoredDate = ''
+  bootStoredDate = '',
+  bootStorage = {}
 } = {}) {
   let nowMs = Date.parse(now);
   class FakeDate extends Date {
@@ -20,7 +21,7 @@ function appContext({
 
   const app = { innerHTML: '' };
   const fileInput = { accept: '', addEventListener() {}, click() {} };
-  const storage = new Map();
+  const storage = new Map(Object.entries(bootStorage));
   if (bootStoredDate) storage.set('relayops_morning_operation_date', bootStoredDate);
   const windowListeners = new Map();
   const documentListeners = new Map();
@@ -80,6 +81,7 @@ function appContext({
   context.__windowListeners = windowListeners;
   context.__documentListeners = documentListeners;
   context.__replacedUrls = replacedUrls;
+  context.__storage = storage;
   return context;
 }
 
@@ -437,12 +439,99 @@ async function testCloudResetsBeforeMissingDayInitialization() {
   assert.deepStrictEqual(persistentState, remotePersistentState, 'A missing-day reset failed to preserve or hydrate permanent driver, fleet-issue, parking-layout, and coaching data');
 }
 
+function testFreshRosterAndWhiparoundAcrossRolloverAndHydration() {
+  const context=appContext({href:'https://relayops.example.test/',now:'2026-08-04T23:00:00.000Z'});
+  vm.runInContext(`
+    const planFor=(driver)=>normalizeRosteringPlan({services:[{id:'confirmed',name:'Confirmed route',confirmed:1}],assignments:[{id:driver,serviceId:'confirmed',associate:driver,route:'CX123',source:'manual'}],updatedAt:'2026-08-04T20:00:00.000Z'});
+    state.rosteringPlans={'2026-08-04':planFor('Current Driver'),'2026-08-06':planFor('Future Driver')};
+    state.rosteringHelperPool={'2026-08-04':[{name:'Old Helper'}],'2026-08-06':[{name:'Future Helper'}]};
+    state.rosteringTrainingMatches={'2026-08-04|old':{trainer:'Old Trainer'},'2026-08-06|future':{trainer:'Future Trainer'}};
+    state.rosteringManualTraining={'2026-08-04|ridealong|old':{name:'Old Ridealong'},'2026-08-06|ridealong|future':{name:'Future Ridealong'}};
+    state.whiparoundInspections=[{id:'old-inspection',date:'2026-08-04',driver:'Current Driver',type:'pre'}];
+    state.whiparoundImportName='Yesterday inspections.csv';state.whiparoundSelectedDate='2026-08-04';
+    state.whiparoundRosterSnapshots={'2026-08-04':[{name:'Current Driver'}]};
+    state.whiparoundNotOnRoute={'2026-08-04|off-route':true};
+    state.whiparoundComplianceHistory={'2026-08-04|history':{name:'History Driver',missingPre:true}};
+    state.rosteringOpenServices={confirmed:true};state.rosteringPaycomCategory='training';
+    globalThis.__oldPersistent=JSON.parse(JSON.stringify(persistentWorkspaceState()));
+    resetSharedDailyOperationsState('2026-08-04');
+  `,context);
+  assert.strictEqual(vm.runInContext("state.rosteringPlans['2026-08-04'].assignments[0].associate",context),'Current Driver','Same-day cloud reset erased the active confirmed roster');
+  context.__setNow('2026-08-05T07:00:01.000Z');
+  vm.runInContext(`rolloverOperationDateIfNeeded('focus',new Date());applyPersistentWorkspaceState(globalThis.__oldPersistent);`,context);
+  const fresh=clone(vm.runInContext(`({date:state.rosteringDate,plan:currentRosteringPlan(),plans:state.rosteringPlans,helpers:state.rosteringHelperPool,training:state.rosteringTrainingMatches,manualTraining:state.rosteringManualTraining,whip:state.whiparoundInspections,whipName:state.whiparoundImportName,whipDate:selectedWhiparoundDate(),history:state.whiparoundComplianceHistory,open:state.rosteringOpenServices,category:state.rosteringPaycomCategory})`,context));
+  assert.strictEqual(fresh.date,'2026-08-05');
+  assert.deepStrictEqual(fresh.plan.services,[],'New-day Rostering regenerated old/default blocks');
+  assert.deepStrictEqual(fresh.plan.assignments,[],'New-day Rostering regenerated old/default shifts');
+  assert(!fresh.plans['2026-08-04'],'Persistent hydration restored an expired roster');
+  assert.strictEqual(fresh.plans['2026-08-06'].assignments[0].associate,'Future Driver','Overnight cleanup erased a deliberately prepared future roster');
+  assert.deepStrictEqual(Object.keys(fresh.helpers),['2026-08-06']);
+  assert.deepStrictEqual(Object.keys(fresh.training),['2026-08-06|future']);
+  assert.deepStrictEqual(Object.keys(fresh.manualTraining),['2026-08-06|ridealong|future']);
+  assert.deepStrictEqual(fresh.whip,[]);assert.strictEqual(fresh.whipName,'');assert.strictEqual(fresh.whipDate,'2026-08-05');
+  assert(fresh.history['2026-08-04|history'],'Daily cleanup erased permanent driver compliance history');
+  assert.deepStrictEqual(fresh.open,{});assert.strictEqual(fresh.category,'all');
+  vm.runInContext(`
+    applySharedWorkspaceState({whiparoundInspections:[{id:'old',date:'2026-08-04',driver:'Old Driver'},{id:'today',date:'2026-08-05',driver:'Current Driver'}],whiparoundSelectedDate:'2026-08-04',whiparoundImportName:'Shared inspections.csv',whiparoundRosterSnapshots:{'2026-08-04':[{name:'Old Driver'}],'2026-08-05':[{name:'Current Driver'}]},whiparoundNotOnRoute:{'2026-08-04|old':true,'2026-08-05|current':true}});
+    globalThis.__whipHydrated={records:state.whiparoundInspections,date:selectedWhiparoundDate(),snapshots:state.whiparoundRosterSnapshots,excluded:state.whiparoundNotOnRoute};
+    const prepared=planFor('Prepared Today Driver');applyPersistentWorkspaceState({rosteringPlans:{'2026-08-04':planFor('Expired'),'2026-08-05':prepared,'2026-08-06':planFor('Future Driver')}});
+    resetSharedDailyOperationsState('2026-08-05');
+    globalThis.__preparedToday=state.rosteringPlans['2026-08-05'];
+    resetSharedDailyOperationsState('2026-08-06');
+    globalThis.__todayAfterFutureNavigation=state.rosteringPlans['2026-08-05'];
+    globalThis.__emptyRenormalized=normalizeRosteringPlan(JSON.parse(JSON.stringify({services:[],assignments:[]})));
+  `,context);
+  const hydrated=clone(context.__whipHydrated);
+  assert.deepStrictEqual(hydrated.records.map(row=>row.id),['today'],'Daily hydration restored prior-day inspections or lost same-day inspections');
+  assert.strictEqual(hydrated.date,'2026-08-05','Whiparound fell back to yesterday after shared hydration');
+  assert.deepStrictEqual(Object.keys(hydrated.snapshots),['2026-08-05']);
+  assert.deepStrictEqual(Object.keys(hydrated.excluded),['2026-08-05|current']);
+  assert.strictEqual(context.__preparedToday.assignments[0].associate,'Prepared Today Driver','Hydration/reset erased an intentional current-day plan');
+  assert.strictEqual(context.__todayAfterFutureNavigation.assignments[0].associate,'Prepared Today Driver','Opening a future date erased the current-day plan');
+  assert.strictEqual(context.__emptyRenormalized.services.length,0,'Reloading an explicitly cleared roster recreated default blocks');
+}
+
+async function testWhiparoundImportCannotCrossMidnight() {
+  const context=appContext({href:'https://relayops.example.test/',now:'2026-08-04T23:00:00.000Z'});
+  const pendingImport=vm.runInContext(`
+    state.importPurpose='whiparound';
+    parseUploadedFile=()=>new Promise(resolve=>{globalThis.__finishWhiparoundRead=resolve;});
+    readFiles([{name:'Whiparound 8-4.csv'}]);
+  `,context);
+  context.__setNow('2026-08-05T07:00:01.000Z');
+  vm.runInContext(`
+    rolloverOperationDateIfNeeded('focus',new Date());
+    globalThis.__finishWhiparoundRead({name:'Whiparound 8-4.csv',rows:[['Form','Date inspected','Asset name','Driver first name','Driver last name'],['Pre-Trip EDV Inspection (DVIR)','8/4/2026','EV1','Old','Driver']]});
+  `,context);
+  await pendingImport;
+  const after=clone(vm.runInContext(`({date:state.morningOperationDate,whip:state.whiparoundInspections,importName:state.whiparoundImportName,purpose:state.importPurpose})`,context));
+  assert.strictEqual(after.date,'2026-08-05');assert.deepStrictEqual(after.whip,[]);assert.strictEqual(after.importName,'');
+  assert.strictEqual(after.purpose,'morning','Previous-day Whiparound upload disrupted the fresh import controls');
+}
+
+function testStaleDailyUiIsPrunedOnSameDateReload() {
+  const oldPlan={services:[{id:'old',name:'Old service',confirmed:1}],assignments:[{serviceId:'old',associate:'Old Driver'}]};
+  const context=appContext({href:'https://relayops.example.test/',now:'2026-08-05T19:00:00.000Z',bootStoredDate:'2026-08-05',bootStorage:{
+    relayops_rostering_date:'2026-08-04',relayops_rostering_plans:JSON.stringify({'2026-08-04':oldPlan}),
+    relayops_whiparound_inspections:JSON.stringify([{id:'old',date:'2026-08-04',driver:'Old Driver'}]),
+    relayops_whiparound_import_name:'Old inspections.csv',relayops_whiparound_selected_date:'2026-08-04'
+  }});
+  const reloaded=clone(vm.runInContext(`({rosterDate:state.rosteringDate,plan:currentRosteringPlan(),plans:state.rosteringPlans,whip:state.whiparoundInspections,whipDate:selectedWhiparoundDate(),whipName:state.whiparoundImportName})`,context));
+  assert.strictEqual(reloaded.rosterDate,'2026-08-05');assert.strictEqual(reloaded.plan.services.length,0);
+  assert(!reloaded.plans['2026-08-04'],'Old roster data returned from local storage');
+  assert.deepStrictEqual(reloaded.whip,[]);assert.strictEqual(reloaded.whipDate,'2026-08-05');assert.strictEqual(reloaded.whipName,'');
+  assert.deepStrictEqual(JSON.parse(context.__storage.get('relayops_whiparound_inspections')),[],'Expired Whiparound cache was not removed from browser storage');
+}
+
 async function run() {
   testLosAngelesDateBoundaries();
   testStaleSavedDateBootsIntoCurrentDay();
   testFreshDayResetAndPermanentPreservation();
   testSharedHydrationResetPreservesLocalDispatcherState();
   testRolloverPolicyAndIdempotence();
+  testFreshRosterAndWhiparoundAcrossRolloverAndHydration();
+  testStaleDailyUiIsPrunedOnSameDateReload();
+  await testWhiparoundImportCannotCrossMidnight();
   await testCloudResetsBeforeMissingDayInitialization();
   console.log('Daily operation rollover, reset, preservation, and missing-day initialization contracts passed');
 }

@@ -45,7 +45,7 @@ function run() {
   vm.runInContext(`
     state.rosteringDate='2026-09-06';
     state.morningOperationDate='2026-09-06';
-    state.rosteringPlans={};
+    state.rosteringPlans={[state.rosteringDate]:normalizeRosteringPlan({services:rosteringDefaultServices()})};
     state.rosteringHelperPool={};
     state.rosteringManualTraining={};
     state.scheduleStayHome={};
@@ -145,7 +145,7 @@ function run() {
   assert(occurrences(result.emailText,'Hayden Helper') === 1, 'The existing Helper email section must stay separate and duplicate-free');
 
   vm.runInContext(`
-    state.rosteringPlans={};state.rosteringHelperPool={};
+    state.rosteringPlans={[state.rosteringDate]:normalizeRosteringPlan({services:rosteringDefaultServices()})};state.rosteringHelperPool={};
     state.driverContacts=[{name:'Unavailable Canon',key:'unavailable canon',transporterId:'RID-UNAVAILABLE'}];
     state.driverProfiles={};ensureDriverProfile(state.driverContacts[0]);
     const unavailableProfile=driverProfileEntry('Unavailable Canon').profile;unavailableProfile.nickname='Unavailable Ridealong';unavailableProfile.names.push('Unavailable Ridealong');

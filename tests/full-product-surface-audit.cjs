@@ -210,9 +210,11 @@ function testSharedAndPersistentStateContracts() {
     state.messageQueueTemplate='standup';
     applySharedWorkspaceState({organizationName:'Shared DSP',stationCode:'DJT6',morningRoutes:[{route:'CX777'}],parkingNotes:'Shared note',messageQueueTemplate:'simple'});
     globalThis.__messageAfterDaily=state.messageQueueTemplate;
-    applyPersistentWorkspaceState({vanParkingLayout:[{id:'w1',zone:'west',label:'Left 1',value:'',kind:'spot'}],rosteringPlans:{'2026-07-16':{services:[],assignments:[]}},messageQueueTemplate:'route'});
+    const currentRosterDate=defaultOperationDate(),futureRosterDate=defaultOperationDate(new Date(Date.parse(currentRosterDate+'T12:00:00Z')+86400000));
+    const savedRoster=(driver)=>({services:[{id:'confirmed',name:'Confirmed service',confirmed:1}],assignments:[{id:driver,serviceId:'confirmed',associate:driver,route:'CX123',source:'manual'}]});
+    applyPersistentWorkspaceState({vanParkingLayout:[{id:'w1',zone:'west',label:'Left 1',value:'',kind:'spot'}],rosteringPlans:{[currentRosterDate]:savedRoster('Current Roster Driver'),[futureRosterDate]:savedRoster('Future Roster Driver'),'2001-01-01':savedRoster('Expired Roster Driver')},messageQueueTemplate:'route'});
     globalThis.__applied={organizationName:state.organizationName,stationCode:state.stationCode,route:state.morningRoutes[0]?.route,parkingNotes:state.parkingNotes,messageQueueTemplate:state.messageQueueTemplate};
-    globalThis.__persistentRoster={date:state.rosteringDate,hasPlan:Boolean(state.rosteringPlans['2026-07-16'])};
+    globalThis.__persistentRoster={date:state.rosteringDate,currentDriver:state.rosteringPlans[currentRosterDate]?.assignments[0]?.associate,futureDriver:state.rosteringPlans[futureRosterDate]?.assignments[0]?.associate,expiredPlan:state.rosteringPlans['2001-01-01']};
   `, context);
   const dailyFields = [
     'organizationName', 'stationCode', 'morningRoutes', 'scheduleEntries', 'rosteringDate',
@@ -234,7 +236,8 @@ function testSharedAndPersistentStateContracts() {
   }
   assert(context.__applied.organizationName === 'Shared DSP' && context.__applied.stationCode === 'DJT6' && context.__applied.route === 'CX777' && context.__applied.parkingNotes === 'Shared note', 'Remote shared state did not apply across organization, Morning Sheet, and Van Parking');
   assert(context.__messageAfterDaily === 'standup' && context.__applied.messageQueueTemplate === 'route', 'Reusable message template must ignore legacy daily payloads and hydrate from station-persistent state');
-  assert(context.__persistentRoster.hasPlan, 'Station-persistent Rostering plans did not restore');
+  assert(context.__persistentRoster.currentDriver === 'Current Roster Driver' && context.__persistentRoster.futureDriver === 'Future Roster Driver', 'Station-persistent current and future Rostering assignments did not restore');
+  assert(!context.__persistentRoster.expiredPlan, 'Station-persistent hydration restored an expired Rostering plan');
   console.log('Shared daily and station-persistent state contracts passed');
 }
 

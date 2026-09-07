@@ -65,6 +65,9 @@ function run() {
       '2026-07-14|nina patel':{name:'Nina Patel',date:'2026-07-14'},
       '2026-07-14|evan stone':{name:'Evan Stone',date:'2026-07-14'}
     };
+    const emptyPlan=currentRosteringPlan();
+    globalThis.__emptyDefaults={services:emptyPlan.services.length,assignments:emptyPlan.assignments.length};
+    state.rosteringPlans[state.rosteringDate]=normalizeRosteringPlan({services:rosteringDefaultServices()});
     const plan=currentRosteringPlan();
     globalThis.__defaults={services:plan.services.length,confirmed:plan.services.reduce((n,s)=>n+s.confirmed,0),assignments:plan.assignments.length};
     globalThis.__samePlan=currentRosteringPlan()===plan;
@@ -73,7 +76,7 @@ function run() {
     globalThis.__after={rostered:plan.assignments.filter(row=>row.associate).length,helpers:plan.assignments.filter(row=>row.associate==='John Helper').map(row=>plan.services.find(service=>service.id===row.serviceId)?.kind),mayaCount:rosteringStayHomeCount('Maya Collins'),ninaCount:rosteringStayHomeCount('Nina Patel'),evanCount:rosteringStayHomeCount('Evan Stone')};
     globalThis.__html=rosteringPage();
     globalThis.__pageInfoRostering=pageInfo.rostering;
-    state.rosteringPlans={};state.rosteringAutoMode='abc';const autoPlan=currentRosteringPlan();globalThis.__autoResult=autoRosterFromPaycom({silent:true});
+    state.rosteringPlans={[state.rosteringDate]:normalizeRosteringPlan({services:rosteringDefaultServices()})};state.rosteringAutoMode='abc';const autoPlan=currentRosteringPlan();globalThis.__autoResult=autoRosterFromPaycom({silent:true});
     globalThis.__autoRows=autoPlan.assignments.filter(row=>row.source==='auto-roster').map(row=>row.associate);
     globalThis.__autoHelpers=autoPlan.assignments.filter(row=>row.source==='auto-helper').map(row=>row.associate);
     globalThis.__donationAutoRows=autoPlan.assignments.filter(row=>row.serviceId==='xl-donations'&&row.associate).length;
@@ -133,8 +136,9 @@ function run() {
     const custom={id:'delete-me',name:'Delete confirmation service',confirmed:1,kind:'driver',defaultTime:'11:15 AM'};autoPlan.services.push(custom);autoPlan.assignments.push({id:'delete-row',serviceId:'delete-me',start:'11:15 AM',associate:'Maya Collins',route:'',role:'',source:'manual'});requestDeleteRosteringService('delete-me');globalThis.__deleteModal=modal();confirmDeleteRosteringService();globalThis.__deleted=!autoPlan.services.some(row=>row.id==='delete-me')&&!autoPlan.assignments.some(row=>row.serviceId==='delete-me');
   `, context);
 
-  assert(context.__defaults.services === 4, 'Rostering must start with the four confirmed Amazon-style service groups');
-  assert(context.__defaults.confirmed === 50 && context.__defaults.assignments === 50, 'Default confirmed counts and editable shift rows must stay aligned');
+  assert(context.__emptyDefaults.services === 0 && context.__emptyDefaults.assignments === 0, 'A new roster date must have no unconfirmed service blocks');
+  assert(context.__defaults.services === 4, 'Explicit confirmed-service templates must remain supported');
+  assert(context.__defaults.confirmed === 50 && context.__defaults.assignments === 50, 'Explicit confirmed counts and editable shift rows must stay aligned');
   assert(context.__samePlan, 'Repeated roster reads must preserve the same live plan while dispatchers edit');
   assert(context.__added === 3 && context.__duplicateAdded === 0 && context.__after.rostered === 3, 'PAYCOM fill must add Delivery Associates and only fairness-flagged Rescue drivers without duplicates');
   assert(context.__after.ninaCount === 3 && context.__after.mayaCount === 2 && context.__after.evanCount === 1, 'Fairness rotation must count one, two, and three distinct stay-home days in the rolling seven-day window');
