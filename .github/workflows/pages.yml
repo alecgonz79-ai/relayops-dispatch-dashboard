@@ -37,6 +37,7 @@ jobs:
         run: |
           set -e
           node --check app.js
+          node --check station-workspace.js
           node --check cloud-sync.js
           node --check live-connector/server.mjs
           for test_file in tests/*.cjs; do
@@ -52,11 +53,13 @@ jobs:
       - name: Build public site allowlist
         run: |
           mkdir -p _site/assets _site/vendor _site/supabase _site/google-sheets
-          cp index.html 404.html .nojekyll app.js cloud-sync.js service-worker.js styles.css macos-preview.css tahoe-preview.css tahoe-midnight-preview.css _site/
+          cp index.html 404.html .nojekyll app.js station-workspace.js cloud-sync.js morning-import-worker.js dur6-google-transfer.js service-worker.js styles.css macos-preview.css tahoe-preview.css tahoe-midnight-preview.css _site/
           cp assets/rivian-prime-van.png _site/assets/
           cp vendor/jszip.min.js _site/vendor/
           cp supabase/config.js _site/supabase/
           cp google-sheets/relayops-morning-connector.gs _site/google-sheets/
+          cp google-sheets/relayops-morning-connector-dur6.local.gs _site/google-sheets/
+          cp MULTI_STATION_LOCAL_PLAN.md _site/
 
       - name: Upload site files
         uses: actions/upload-pages-artifact@v3

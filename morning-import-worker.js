@@ -178,7 +178,7 @@ function preferredHeader(rows,fileName='') {
   const planGroups=[['route','routecode','cxnumber','cxroute','blockid'],['wave','wavetime','starttime','planneddeparturetime','planneddeparttime','departuretime']];
   const routeGroups=[['route','routecode','routeid','cx','cxnumber','cxroute','blockid'],['driver','drivername','transportername','employeename','daname','associatename','name','deliveryassociate','stops','stopcount','plannedstops','numstops','planneddeparturetime']];
   if(/day[_\s-]*of[_\s-]*ops[_\s-]*plan/i.test(fileName))return findImportHeader(rows,planGroups);
-  if(/routes?[_\s-]*djt6/i.test(fileName))return findImportHeader(rows,routeGroups);
+  if(/routes?[_\s-]*(?:djt6|dur6)/i.test(fileName))return findImportHeader(rows,routeGroups);
   const plan=findImportHeader(rows,planGroups);return plan>=0?plan:findImportHeader(rows,routeGroups);
 }
 async function parseXlsx(buffer,fileName='') {

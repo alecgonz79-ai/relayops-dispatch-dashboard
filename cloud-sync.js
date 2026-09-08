@@ -1,12 +1,19 @@
 (function(){
-  const config=window.RELAYOPS_CLOUD_CONFIG||{};
-  const configured=Boolean(config.supabaseUrl&&config.supabaseAnonKey&&config.organizationId&&config.stationId&&!config.supabaseUrl.includes('YOUR_PROJECT'));
+  const config=Object.freeze({...window.RELAYOPS_CLOUD_CONFIG||{}});
+  const stationRuntime=window.RelayOpsStation||null;
+  const localMultiStationPreview=Boolean(stationRuntime?.preview)||(()=>{try{const host=String(location.hostname||'').toLowerCase(),params=new URLSearchParams(location.search||'');return params.get('multiStationPreview')==='1'&&(location.protocol==='file:'||['localhost','127.0.0.1','::1','[::1]'].includes(host));}catch{return false;}})();
+  // The Phase 1 multi-station build is intentionally local-only. Disabling the
+  // client here (before it captures revisions, queues, or timers) guarantees a
+  // DUR6 prototype can never read or write the production DJT6 station row.
+  const configured=!localMultiStationPreview&&!stationRuntime?.error&&location.protocol!=='file:'&&(!config.multiStationEnabled||Boolean(stationRuntime?.enabled))&&Boolean(config.supabaseUrl&&config.supabaseAnonKey&&config.organizationId&&config.stationId&&!config.supabaseUrl.includes('YOUR_PROJECT'));
   const PERSISTENT_DATE='2000-01-01';
   const SYNC_META='__relayopsSync';
   const DAILY_IMPORT_FIELDS=['fleetImport','fleetSourceUploads','fleetExpectedCount','fleetLastRefresh','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes'];
   const PERSISTENT_STATION_FIELDS=new Set(['fleetNameOverrides','fleetIssues','equipmentIssues','vanParkingLayout','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','whiparoundComplianceHistory','whiparoundReminderTemplates','messageQueueTemplate','coachingQueue','inventoryItems','inventoryLog','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports']);
   let client=null,session=null,membership=null,revision=0,persistentRevision=0,channel=null,presenceChannel=null,pollTimer=null,polling=false,saveTimer=null,saveInFlight=null,pendingSaveAction='',saveRetryTimer=null,saveRetryAttempts=0,applying=false,initializing=false,initializingSince=0,basePayload={},basePersistentPayload={},lastPersistentPollAt=0,lastActivityAt=Date.now(),loadGeneration=0,membershipCheckInFlight=null,membershipCheckUserId='',membershipCheckedAt=0,loadInFlight=null,loadInFlightDate='',retryInFlight=null,authGeneration=0,explicitSignOutGeneration=0;
   const memoryPendingByKey=new Map();
+  const saveContinuationTimers=new Set();
+  let stationSwitchInFlight=null;
   const CLOUD_TIMEOUT_MS=Math.max(4000,Math.min(30000,Number(config.requestTimeoutMs)||20000));
   const CLOUD_SAVE_TIMEOUT_MS=Math.max(CLOUD_TIMEOUT_MS,Math.min(60000,Number(config.saveTimeoutMs)||30000));
   const CLOUD_POLL_MS=Math.max(30000,Math.min(120000,Number(config.pollIntervalMs)||60000));
@@ -50,6 +57,26 @@
     return result;
   }
   function clone(value){if(value===undefined)return undefined;try{return sanitizeCloudValue(JSON.parse(JSON.stringify(value)));}catch{return sanitizeCloudValue(value);}}
+  function assertStationPayload(payload={}){
+    if(stationRuntime?.error)throw new Error(stationRuntime.error);
+    if(stationRuntime?.enabled){
+      const records=[payload,...(Array.isArray(payload?.routes)?payload.routes:[]),...(Array.isArray(payload?.morningRoutes)?payload.morningRoutes:[]),payload?.equipmentImport,payload?.fleetImport,...Object.values(payload?.fleetSourceUploads||{})];
+      for(const record of records){
+        const incoming=String(record?.stationCode||'').trim().toUpperCase();
+        if(incoming&&incoming!==stationRuntime.code){const error=new Error(`Blocked ${incoming} data from entering ${stationRuntime.code}. No station data was changed.`);error.code='station_mismatch';throw error;}
+      }
+    }
+    window.RelayOpsApp?.assertWorkspaceStationIdentity?.(payload);
+  }
+  function assertStationSnapshot(row){
+    if(!row)return;
+    if(row.station_id&&String(row.station_id)!==config.stationId){const error=new Error('The shared database returned another station. No station data was changed.');error.code='station_mismatch';throw error;}
+    assertStationPayload(row.payload||{});
+  }
+  function assertStationQueue(record){
+    if(!record)return;
+    for(const key of ['payload','persistentPayload','basePayload','basePersistentPayload'])assertStationPayload(record[key]||{});
+  }
   function payloadByteLength(value){
     const text=JSON.stringify(value??{});let bytes=0;
     for(let index=0;index<text.length;index++){
@@ -234,11 +261,13 @@
     const result=mergeValue(remote||{},local||{},base||{},[],'','',remoteMeta,localMeta,baseMeta,resultMeta)||{};result[SYNC_META]=resultMeta;return result;
   }
   function writePending(record,date=operationDate()){
+    assertStationQueue(record);
     const key=queueKey(date);memoryPendingByKey.set(key,record);
     try{storage()?.setItem(key,JSON.stringify(record));memoryPendingByKey.delete(key);}catch{}
     return record;
   }
   function queueSnapshot(payload,action='workspace.offline',persistentPayload,date=operationDate(),baseOverrides={}){
+    assertStationPayload(payload||{});assertStationPayload(persistentPayload===undefined?(window.RelayOpsApp?.persistentState?.()||{}):persistentPayload);
     const existing=pendingSnapshot(date),now=new Date().toISOString(),dailyBase=existing?.basePayload||baseOverrides.daily||basePayload||{},persistentBase=existing?.basePersistentPayload||baseOverrides.persistent||basePersistentPayload||{};
     const prepared=preparePayload(payload||{},dailyBase,existing?.payload||null,now),preparedPersistent=preparePayload(persistentPayload===undefined?(window.RelayOpsApp?.persistentState?.()||{}):persistentPayload,persistentBase,existing?.persistentPayload||null,now);
     const record=writePending({payload:prepared,persistentPayload:preparedPersistent,basePayload:clone(dailyBase),basePersistentPayload:clone(persistentBase),action,shared:true,userId:session?.user?.id||'',queuedAt:existing?.queuedAt||now,updatedAt:now},date);
@@ -249,7 +278,7 @@
     try{
       for(let index=0;index<(target?.length||0);index++){
         const key=target.key(index);if(!key?.startsWith(prefix))continue;
-        try{const record=JSON.parse(target.getItem(key)||'null');if(record)records.set(key,record);}catch{}
+        try{const record=JSON.parse(target.getItem(key)||'null');if(record)records.set(key,record);else records.set(key,{invalid:true});}catch{records.set(key,{invalid:true});}
       }
     }catch{}
     memoryPendingByKey.forEach((record,key)=>{if(key.startsWith(prefix)&&record)records.set(key,record);});
@@ -320,6 +349,7 @@
       redirect.hash='';
       if(!configuredRedirect)redirect.search='';
       redirect.searchParams.set('date',operationDate());
+      if(stationRuntime?.enabled&&stationRuntime.code)redirect.searchParams.set('station',stationRuntime.code);
       const view=new URL(location.href,location.href).searchParams.get('view');
       if(view)redirect.searchParams.set('view',view);
       return redirect.href;
@@ -402,18 +432,17 @@
       'relayops_driver_contacts','relayops_schedule_entries','relayops_rostering_plans','relayops_whiparound_inspections',
       'relayops_whiparound_roster_snapshots','relayops_inventory_log','relayops_equipment_import'
     ]);
-    const entries=[];
-    try{for(let index=0;index<target.length;index++){const key=target.key(index);if(key)entries.push([key,target.getItem(key)||'']);}}catch{}
-    entries.forEach(([key,value])=>{
-      const cloudQueue=key.startsWith('relayops_cloud_queue:');
-      if(cloudQueue&&key===queueKey()&&!memoryPendingByKey.has(key)){try{memoryPendingByKey.set(key,JSON.parse(value||'null'));}catch{}}
-      // Keep queued edits for other operation dates intact. Only the active
-      // date's queue is moved into memory while Safari makes room for the
-      // Supabase session token.
-      if((cloudQueue&&key===queueKey())||discard.has(key)||redundantOnCloud.has(key)){
-        try{target.removeItem(key);freed+=key.length+value.length;}catch{}
-      }
+    const appStorage=stationRuntime?.storage||target;
+    [...discard,...redundantOnCloud].forEach(key=>{
+      try{const value=appStorage.getItem(key);if(value!==null){appStorage.removeItem(key);freed+=key.length+value.length;}}catch{}
     });
+    // Cloud queues already use immutable station UUID + operation date keys.
+    // Do not run them through the app facade or reclaim another station's data.
+    const key=queueKey();
+    try{
+      const value=target.getItem(key);
+      if(value!==null){if(!memoryPendingByKey.has(key))memoryPendingByKey.set(key,JSON.parse(value||'null'));target.removeItem(key);freed+=key.length+value.length;}
+    }catch{}
     return freed;
   }
   async function createAnonymousLinkSession(){
@@ -620,7 +649,10 @@
     const persistentResult=await query(PERSISTENT_DATE);
     if(!currentOperationRequest(date,generation))return null;
     if(persistentResult.error)throw persistentResult.error;
-    const data=dailyResult.data,persistent=persistentResult.data,legacyDaily=clone(data?.payload||{}),dailyBaseRemote=compactDailyPayload(legacyDaily),dailyRemote=clone(dailyBaseRemote),persistentBaseRemote=clone(persistent?.payload||{}),persistentRemote=clone(persistentBaseRemote);
+    const data=dailyResult.data,persistent=persistentResult.data;
+    assertStationSnapshot(data);assertStationSnapshot(persistent);
+    stationPendingRecords().forEach(({record})=>assertStationQueue(record));
+    const legacyDaily=clone(data?.payload||{}),dailyBaseRemote=compactDailyPayload(legacyDaily),dailyRemote=clone(dailyBaseRemote),persistentBaseRemote=clone(persistent?.payload||{}),persistentRemote=clone(persistentBaseRemote);
     let legacyPersistentMigration=false,legacyDailyImportMigration=false;
     for(const key of ['coachingQueue','messageQueueTemplate']){
       if(!Object.prototype.hasOwnProperty.call(persistentBaseRemote,key)&&Object.prototype.hasOwnProperty.call(legacyDaily,key)){
@@ -644,10 +676,11 @@
     // authoritative shared edits. Never merge one dispatcher's stale cache
     // into the station workspace after sign-in.
     if(pending&&(!pending.shared||pending.userId!==session.user.id)){clearPending(date);pending=null;}
-    revision=Number(data?.revision)||0;persistentRevision=Number(persistent?.revision)||0;
     const carriedPersistent=carriedPersistentPayload(persistentRemote,date,pending),hasPersistentPending=Boolean(pending?.persistentPayload)||carriedPersistent.carried;
     const dailyPayload=pending?.payload?reconcilePayload(dailyRemote,pending.payload,pending.basePayload||basePayload||{}):dailyRemote;
     const persistentPayload=carriedPersistent.payload;
+    assertStationPayload(dailyPayload);assertStationPayload(persistentPayload);
+    revision=Number(data?.revision)||0;persistentRevision=Number(persistent?.revision)||0;
     basePayload=clone(dailyBaseRemote);basePersistentPayload=clone(persistentBaseRemote);lastPersistentPollAt=Date.now();
     applying=true;
     try{
@@ -665,7 +698,7 @@
     if((!data||!persistent)&&!canInitialize())notify({type:'workspace-empty',operationDate:date,missingDaily:!data,missingPersistent:!persistent});
     if(!suppressAutoSave&&(((!data||!persistent)&&canInitialize())||pending?.payload||carriedPersistent.carried||legacyPersistentMigration||legacyDailyImportMigration)){
       const action=legacyDailyImportMigration?'workspace.daily-import-migration':legacyPersistentMigration?'workspace.legacy-station-migration':carriedPersistent.carried?'workspace.prior-date-station-reconcile':!data||!persistent?'workspace.initialize':'workspace.offline-reconcile';
-      setTimeout(()=>save(action).catch(error=>notify({type:'error',error})),0);
+      deferSave(action);
     }
     subscribe(date);subscribePresence(date);return data;
   }
@@ -791,9 +824,13 @@
       if(result?.delayed){schedulePendingSaveRetry(next||result.action||action);return null;}
       if(result?.conflict){schedulePendingSaveRetry(next||'workspace.conflict-retry');return result;}
       clearSaveRetry();
-      if(next&&session&&membership)setTimeout(()=>save(next).catch(error=>notify({type:'error',error})),0);
+      if(next&&session&&membership)deferSave(next);
       return result;
     },error=>{saveInFlight=null;pendingSaveAction='';throw error;});
+  }
+  function deferSave(action){
+    const timer=setTimeout(()=>{saveContinuationTimers.delete(timer);save(action).catch(error=>notify({type:'error',error}));},0);
+    saveContinuationTimers.add(timer);
   }
   function schedule(action='workspace.autosave'){
     if(applying)return;
@@ -817,23 +854,57 @@
     if(!operationDateIsWritable()||!pendingSnapshot()||!session||!membership||!canWrite())return Promise.resolve(null);
     clearSaveRetry();return save(action).catch(error=>{notify({type:'error',error});return null;});
   }
+  function canSafelySwitch(){
+    if(stationRuntime?.error)return false;
+    if(localMultiStationPreview)return true;
+    return !initializing&&!applying&&!loadInFlight&&!saveInFlight&&!saveTimer&&!saveRetryTimer&&!saveContinuationTimers.size&&!pendingSaveAction&&stationPendingRecords().length===0;
+  }
+  async function performStationSwitchPreparation(){
+    const blocked=message=>({ok:false,error:message||'This station still has unsaved changes. Stay here and retry after it shows Saved.'});
+    if(stationRuntime?.error)return blocked(stationRuntime.error);
+    if(localMultiStationPreview)return {ok:true};
+    const date=operationDate();
+    if(initializing||applying)return blocked('This station is still connecting. Wait until it finishes before switching stations.');
+    try{
+      if(loadInFlight)await loadInFlight;
+      if(saveInFlight){const result=await saveInFlight;if(result?.conflict||result?.delayed)return blocked();}
+      if(date!==operationDate())return blocked('The operation date changed while saving. Review the current day before switching stations.');
+      if(pendingSnapshot()||saveTimer||saveContinuationTimers.size||pendingSaveAction){
+        if(!client||!session||!membership||!canWrite())return blocked('Reconnect and save this station before switching. Your changes are still on this device.');
+        saveContinuationTimers.forEach(clearTimeout);saveContinuationTimers.clear();pendingSaveAction='';
+        // One explicit flush only. A conflict or busy database keeps the existing
+        // bounded backoff instead of adding a tight navigation retry loop.
+        const result=await save('workspace.station-switch');
+        if(result?.conflict||result?.delayed)return blocked();
+      }
+      return canSafelySwitch()?{ok:true}:blocked();
+    }catch(error){return blocked(`Could not save this station: ${String(error?.message||error)}. Your changes remain on this device.`);}
+  }
+  function prepareStationSwitch(){
+    if(stationSwitchInFlight)return stationSwitchInFlight;
+    stationSwitchInFlight=performStationSwitchPreparation().finally(()=>{stationSwitchInFlight=null;});
+    return stationSwitchInFlight;
+  }
   function applyRemoteSnapshot(row,date,generation=loadGeneration){
     if(!currentOperationRequest(date,generation))return false;
     const pending=pendingSnapshot(date);if(!row?.operation_date)return false;
+    assertStationSnapshot(row);assertStationQueue(pending);
     if(row.operation_date===PERSISTENT_DATE){
       if(Number(row.revision)<=persistentRevision)return false;
       const remote=row.payload||{},local=pending?.persistentPayload||null,next=local?reconcilePayload(remote,local,pending?.basePersistentPayload||basePersistentPayload||{}):remote;
+      assertStationPayload(next);
       persistentRevision=Number(row.revision);basePersistentPayload=clone(remote);
       if(pending)writePending({...pending,persistentPayload:next,basePersistentPayload:clone(remote),updatedAt:new Date().toISOString()},date);
-      applying=true;window.RelayOpsApp?.applyPersistentState?.(next);applying=false;notify({type:'remote-update',revision,persistentRevision,updatedAt:row.updated_at});
+      applying=true;try{window.RelayOpsApp?.applyPersistentState?.(next);}finally{applying=false;}notify({type:'remote-update',revision,persistentRevision,updatedAt:row.updated_at});
     }else{
       if(row.operation_date!==date||Number(row.revision)<=revision)return false;
       const remote=compactDailyPayload(row.payload||{}),next=pending?.payload?reconcilePayload(remote,pending.payload,pending?.basePayload||basePayload||{}):remote;
+      assertStationPayload(next);
       revision=Number(row.revision);basePayload=clone(remote);
       if(pending)writePending({...pending,payload:next,basePayload:clone(remote),updatedAt:new Date().toISOString()},date);
       applying=true;try{(window.RelayOpsApp?.resetSharedDailyState||window.RelayOpsApp?.resetDailyState)?.(date);window.RelayOpsApp?.applySharedState?.(next);}finally{applying=false;}notify({type:'remote-update',revision,persistentRevision,updatedAt:row.updated_at});
     }
-    if(pending?.payload)setTimeout(()=>save('workspace.poll-reconcile').catch(error=>notify({type:'error',error})),0);return true;
+    if(pending?.payload)deferSave('workspace.poll-reconcile');return true;
   }
   async function pollForUpdates(date=operationDate(),options={}){
     if(polling||!client||!session||date!==operationDate()||!operationDateIsWritable(date))return false;
@@ -850,6 +921,7 @@
       let daily=null,persistent=null;
       if(Number(dailySummary.data?.revision)>revision){daily=await full(date);if(daily.error)throw daily.error;if(!currentOperationRequest(date,generation))return false;}
       if(Number(persistentSummary?.data?.revision)>persistentRevision){persistent=await full(PERSISTENT_DATE);if(persistent.error)throw persistent.error;if(!currentOperationRequest(date,generation))return false;}
+      assertStationSnapshot(persistent?.data);assertStationSnapshot(daily?.data);assertStationQueue(pendingSnapshot(date));
       const changed=applyRemoteSnapshot(persistent?.data,date,generation)|applyRemoteSnapshot(daily?.data,date,generation);return Boolean(changed);
     }catch(error){notify({type:'offline',reason:'poll-failed',error});return false;}
     finally{polling=false;}
@@ -925,5 +997,5 @@
       flushPendingOnResume('workspace.visible').then(()=>pollForUpdates(operationDate())).catch(error=>notify({type:'offline',reason:'visibility-refresh-failed',error}));
     });
   }
-  window.RelayOpsCloud={configured,init,retryLinkAccess,reclaimStorageForSharedSession,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{sanitizeCloudString,sanitizeCloudValue,compactDailyPayload,preparePayload,reconcilePayload,semanticKey,canonical,sameStoredPayload,payloadByteLength,enforcePayloadBudget,reclaimStorageForSharedSession,withCloudTimeout,pollForUpdates,applyRemoteSnapshot}};
+  window.RelayOpsCloud={configured,init,retryLinkAccess,reclaimStorageForSharedSession,signIn,signOut,accessToken,workspaceContext,currentMembership,load,save,schedule,canSafelySwitch,prepareStationSwitch,members,inviteMember,updateMemberAccess,unlockAdminPin,adminStatus,lockAdmin,on(fn){listeners.add(fn);return()=>listeners.delete(fn);},get session(){return session;},get membership(){return membership;},get revision(){return revision;},get persistentRevision(){return persistentRevision;},__test:{sanitizeCloudString,sanitizeCloudValue,compactDailyPayload,preparePayload,reconcilePayload,semanticKey,canonical,sameStoredPayload,payloadByteLength,enforcePayloadBudget,reclaimStorageForSharedSession,withCloudTimeout,pollForUpdates,applyRemoteSnapshot}};
 })();

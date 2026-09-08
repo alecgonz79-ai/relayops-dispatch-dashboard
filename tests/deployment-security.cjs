@@ -25,6 +25,15 @@ const localStylesheets = [...index.matchAll(/<link[^>]+rel=["']stylesheet["'][^>
   .map(match => match[1])
   .filter(href => !/^https?:\/\//.test(href));
 assert(localStylesheets.every(file => new RegExp(`\\b${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(workflow)), 'Every local stylesheet referenced by index.html must be included in the GitHub Pages allowlist');
+assert(/cp [^\n]*\bmorning-import-worker\.js\b[^\n]* _site\//.test(workflow), 'Publish the background import worker so XLSX imports do not unnecessarily fall back to the browser main thread');
+assert(/cp [^\n]*\bdur6-google-transfer\.js\b[^\n]* _site\//.test(workflow), 'Publish the isolated DUR6 Google sign-in transport before exposing its transfer action');
+assert(/cp [^\n]*\bstation-workspace\.js\b[^\n]* _site\//.test(workflow), 'Publish the station resolver with the production app');
+assert(index.indexOf('supabase/config.js?') < index.indexOf('station-workspace.js?')
+  && index.indexOf('station-workspace.js?') < index.indexOf('cloud-sync.js?')
+  && index.indexOf('cloud-sync.js?') < index.indexOf('app.js?'),
+'Resolve and freeze station identity before cloud or app boot');
+assert(/cp google-sheets\/relayops-morning-connector-dur6\.local\.gs _site\/google-sheets\//.test(workflow), 'The DUR6 connector download must be included in the public allowlist');
+assert(/cp MULTI_STATION_LOCAL_PLAN\.md _site\//.test(workflow), 'The linked station setup handoff must not return 404 after publishing');
 
 assert(/CONNECTOR_TOKEN/.test(connector), 'The live fleet connector must require a server-side bearer token');
 assert(/req\.headers\.authorization\s*!==\s*`Bearer \$\{CONNECTOR_TOKEN\}`/.test(connector), 'The connector must reject requests without the configured bearer token');

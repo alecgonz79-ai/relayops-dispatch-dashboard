@@ -498,6 +498,10 @@ async function testWhiparoundImportCannotCrossMidnight() {
     parseUploadedFile=()=>new Promise(resolve=>{globalThis.__finishWhiparoundRead=resolve;});
     readFiles([{name:'Whiparound 8-4.csv'}]);
   `,context);
+  // The local station importer first waits for older OCR to stop. Let that
+  // cancellation step finish so midnight occurs during the file read itself.
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.strictEqual(typeof context.__finishWhiparoundRead,'function','Whiparound parsing did not start');
   context.__setNow('2026-08-05T07:00:01.000Z');
   vm.runInContext(`
     rolloverOperationDateIfNeeded('focus',new Date());

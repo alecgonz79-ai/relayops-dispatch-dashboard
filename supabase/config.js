@@ -5,6 +5,13 @@ window.RELAYOPS_CLOUD_CONFIG = {
   authRedirectUrl: 'https://alecgonz79-ai.github.io/relayops-dispatch-dashboard/',
   organizationId: 'c98e010b-b1a5-4757-92fa-8a8755b119bc',
   stationId: 'd70f25c4-be18-45be-b13d-49e3bcb9b124',
+  // Verified production workspaces. The boot resolver captures one station
+  // per page; switching stations safely flushes edits before navigation.
+  multiStationEnabled: true,
+  stations: {
+    DJT6: { stationId: 'd70f25c4-be18-45be-b13d-49e3bcb9b124' },
+    DUR6: { stationId: '4a35bc36-983e-4ac7-bcd1-6b0d718f7c4f' }
+  },
   // Conservative shared-workspace limits. The sync client treats these as
   // upper bounds, so dispatchers keep collaborating without creating a hot
   // polling, retry, or oversized-payload loop in Supabase.

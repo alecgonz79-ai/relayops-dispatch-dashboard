@@ -1,3 +1,9 @@
+// Runtime selects the immutable cloud station and its local cache namespace
+// before this script boots. Never replace the browser's global Storage object.
+const appStationBootError=window.RELAYOPS_CLOUD_CONFIG?.multiStationEnabled===true&&!window.RelayOpsStation?'Station selection could not load. Refresh the dashboard before editing; no station data has been opened.':String(window.RelayOpsStation?.error||'');
+const appStationStorage=appStationBootError?Object.freeze({getItem:()=>null,setItem(){},removeItem(){}}):(window.RelayOpsStation?.storage||window.localStorage||globalThis.localStorage);
+const localStorage=appStationStorage;
+
 const ICONS = {
   dashboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
   roster: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
@@ -37,6 +43,10 @@ function authenticatedCloudEmail() {
   return String(window.RelayOpsCloud?.session?.user?.email||state?.cloudUser||'').trim().toLowerCase();
 }
 function hasOwnerAdminAccess() {
+  // The multi-station workspace is an isolated localhost planning build: it
+  // has no Supabase client and cannot change live member access. Let its owner
+  // inspect local Admin settings without needing the production PIN.
+  try{if(MULTI_STATION_PREVIEW)return true;}catch{}
   return Boolean(state?.adminPinUnlocked);
 }
 
@@ -64,12 +74,16 @@ const FIXED_FLEET_NAMES = Object.freeze({
   '7FCEHEB25RN017610': 'EV53'
 });
 const MORNING_TEMPLATE_URL = 'https://docs.google.com/spreadsheets/d/1DqQxK7iHPEGnHgQRaZeDvxLMMi5GcZzdsilzew24ypQ/edit?gid=0#gid=0';
+const MORNING_SPREADSHEET_ID = MORNING_TEMPLATE_URL.match(/\/spreadsheets\/d\/([^/]+)/)[1];
+const DUR6_MORNING_TEMPLATE_URL = `https://docs.google.com/spreadsheets/d/${MORNING_SPREADSHEET_ID}/edit?gid=1876715045#gid=1876715045`;
 // Connector deployments are station-specific and must come from local/shared
 // configuration. Never ship a writable Apps Script endpoint in public code.
 const MORNING_SHEETS_DEFAULT_ENDPOINT = '';
 const MORNING_TEMPLATE_SHEET_NAME = 'OPS LOG 2026';
 const MORNING_TEMPLATE_SHEET_CANDIDATES = [MORNING_TEMPLATE_SHEET_NAME];
 const MORNING_APPS_SCRIPT_URL = 'google-sheets/relayops-morning-connector.gs';
+const DUR6_MORNING_APPS_SCRIPT_URL = 'google-sheets/relayops-morning-connector-dur6.local.gs';
+const MULTI_STATION_LOCAL_PLAN_URL = 'MULTI_STATION_LOCAL_PLAN.md';
 const MORNING_CORE_WAVE_COUNT = 6;
 const MORNING_CORE_WAVE_TIMES = Object.freeze(['11:15 AM','11:20 AM','11:25 AM','11:40 AM','11:45 AM','12:05 PM']);
 // Pad letters are a dispatcher decision for the current station day. Keep all
@@ -81,11 +95,59 @@ const MORNING_CORE_WAVE_PADS = Object.freeze(['','','','','','']);
 const MORNING_CORE_WAVE_CAPACITIES = Object.freeze([15,15,15,15,15,15]);
 const MORNING_FIXED_SECTION_CAPACITIES = Object.freeze({WAVE1:15,WAVE2:15,WAVE3:15,WAVE4:15,WAVE5:15,WAVE6:15,ADHOCS:15,HELPERS:15,DSP:6});
 const MORNING_CONNECTOR_BUILD = '2026-08-03-six-wave-142-row-layout';
+const OPENING_STATION_PROFILES = Object.freeze({
+  DJT6:Object.freeze({
+    code:'DJT6',location:'Home station',dspCode:'LLOL',coreWaveCount:6,
+    defaultWaveTimes:MORNING_CORE_WAVE_TIMES,capacities:MORNING_CORE_WAVE_CAPACITIES,
+    layoutId:'djt6-ops-log-2026',spreadsheetId:MORNING_SPREADSHEET_ID,templateUrl:MORNING_TEMPLATE_URL,
+    templateSheet:MORNING_TEMPLATE_SHEET_NAME,connectorBuild:MORNING_CONNECTOR_BUILD,
+    workbookKey:'DJT6_OPS_LOG',workbookLabel:'DJT6 Ops Log',
+    cloudReady:true,googleReady:true
+  }),
+  DUR6:Object.freeze({
+    code:'DUR6',location:'Temecula',dspCode:'LLOL',coreWaveCount:3,
+    // Do not invent Temecula launch times. The Amazon day file or a dispatcher
+    // supplies them when the DUR6 operation is started.
+    defaultWaveTimes:Object.freeze(['','','']),capacities:Object.freeze([15,15,15]),
+    layoutId:'dur6-ops-log-v1',spreadsheetId:MORNING_SPREADSHEET_ID,templateUrl:DUR6_MORNING_TEMPLATE_URL,templateSheet:'OPS LOG DUR6',
+    connectorBuild:'2026-09-07-dur6-google-editors-v2',
+    // workbookKey is a station namespace, not a separate physical file.
+    workbookKey:'DUR6_OPS_LOG',workbookLabel:'DUR6 Ops Log · shared Google spreadsheet',
+    cloudReady:false,googleReady:false
+  })
+});
 const PERFORMANCE_TRAINING_URL = 'https://cdfda-performance.pplx.app/#/';
 const AMAZON_SCHEDULING_URL = 'https://logistics.amazon.com/scheduling?serviceAreaId=f0c05ae0-b2c0-462c-8ee0-f72f5ab653ec';
 const LOW_BATTERY_SECTION_THRESHOLD = 80;
 const DISPATCH_BATTERY_BLOCK_THRESHOLD = 40;
 const initialUrlParams = (()=>{if(typeof URLSearchParams!=='function')return {get:()=>''};try{return new URLSearchParams(location.search||'');}catch{return new URLSearchParams('');}})();
+const MULTI_STATION_PREVIEW = (()=>{
+  const hostname=String(typeof location==='object'&&location?location.hostname||'':'').toLowerCase();
+  return initialUrlParams.get('multiStationPreview')==='1'&&(location.protocol==='file:'||['localhost','127.0.0.1','::1','[::1]'].includes(hostname));
+})();
+const MULTI_STATION_ENABLED=MULTI_STATION_PREVIEW||Boolean(window.RelayOpsStation?.enabled);
+let activeOpeningStationCode=MULTI_STATION_PREVIEW?(String(initialUrlParams.get('station')||'').toUpperCase()==='DUR6'?'DUR6':'DJT6'):(MULTI_STATION_ENABLED?window.RelayOpsStation.code:'DJT6');
+function activeOpeningStationProfile(){return OPENING_STATION_PROFILES[activeOpeningStationCode]||OPENING_STATION_PROFILES.DJT6;}
+function activeMorningWaveCount(){return activeOpeningStationProfile().coreWaveCount;}
+function activeMorningWaveTimes(){return activeOpeningStationProfile().defaultWaveTimes;}
+function activeMorningWaveCapacities(){return activeOpeningStationProfile().capacities;}
+function activeMorningStationCode(){return activeOpeningStationProfile().code;}
+function activeMorningTemplateUrl(){return activeOpeningStationProfile().templateUrl||'';}
+function activeMorningConnectorBuild(){return activeOpeningStationProfile().connectorBuild;}
+function displayedStationCode(){return MULTI_STATION_ENABLED?activeMorningStationCode():state.stationCode;}
+function openingStationFilePrefix(){return MULTI_STATION_ENABLED?`${state.dspCode}-${activeMorningStationCode()}`:state.dspCode;}
+function activeMorningRouteFileLabel(){return `ROUTE_${activeMorningStationCode()}`;}
+function activeMorningItineraryFileLabel(){return `Itineraries_${activeMorningStationCode()}`;}
+function explicitOpeningStationFromFilename(name='') {
+  const key=headerKey(name);
+  const matches=Object.keys(OPENING_STATION_PROFILES).filter(code=>key.includes(code.toLowerCase()));
+  return matches.length===1?matches[0]:matches.length>1?'MULTIPLE':'';
+}
+function assertOpeningStationFile(file={}) {
+  const fileStation=explicitOpeningStationFromFilename(file.name||''),active=activeMorningStationCode();
+  if(fileStation==='MULTIPLE')throw new Error(`${file.name||'This file'} names both DJT6 and DUR6. Rename or re-export it for one station before uploading; no sheet was changed.`);
+  if(fileStation&&fileStation!==active)throw new Error(`${file.name||'This file'} is for ${fileStation}. Switch to the ${fileStation} tab before uploading it; ${active} was not changed.`);
+}
 const FLEET_TEAM_VIEW_KEY = String(initialUrlParams.get('view')||initialUrlParams.get('tab')||'').toLowerCase();
 // Compatibility note: PARKING_ONLY_VIEW identifies the restricted Fleet Team
 // link. Fleet Health stays read-only, while Van Parking is a live shared editor
@@ -122,20 +184,26 @@ let lastObservedOperationDate=defaultOperationDate();
 let operationDateRolloverInFlight=false;
 let operationDateRolloverTimer=null;
 let cloudScheduleSuppressionDepth=0;
+function dashboardShareBaseUrl(){return MULTI_STATION_PREVIEW?new URL(location.pathname||'/',location.origin):new URL(DISPATCHER_SHARE_URL);}
 function sharedDashboardUrl(view='') {
-  const url=new URL(DISPATCHER_SHARE_URL);
+  const url=dashboardShareBaseUrl();
   const selectedDate=state?.morningOperationDate||requestedOperationDate();
   // Today's shared link deliberately floats with the Los Angeles operating
   // day. Future planning links stay pinned, but a copied daily link can no
   // longer strand dispatchers on an expired workspace after midnight.
   if(selectedDate&&selectedDate!==defaultOperationDate())url.searchParams.set('date',selectedDate);
+  if(MULTI_STATION_PREVIEW){url.searchParams.set('multiStationPreview','1');url.searchParams.set('station',activeMorningStationCode());}
+  else if(MULTI_STATION_ENABLED)url.searchParams.set('station',activeMorningStationCode());
   if(view)url.searchParams.set('view',view);
   return url.href;
 }
-function operationDateTabNames(value='') {
-  const parts=String(value||'').split('-').map(Number);
-  if(parts.length!==3||parts.some(n=>!n))return [];
-  const [year,month,day]=parts,shortYear=String(year).slice(-2);
+function operationDateTabNames(value='',stationCode=activeMorningStationCode()) {
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value)))return [];
+  const [year,month,day]=String(value).split('-').map(Number),date=new Date(`${value}T12:00:00Z`);
+  if(!Number.isFinite(date.getTime())||date.getUTCFullYear()!==year||date.getUTCMonth()+1!==month||date.getUTCDate()!==day)return [];
+  const shortYear=String(year).slice(-2);
+  // Never allow DUR6 to resolve to DJT6's existing unprefixed daily tabs.
+  if(stationCode==='DUR6')return [`DUR6 ${month}.${day}.${shortYear}`,`DUR6 ${month}/${day}/${shortYear}`];
   return [`${month}/${day}/${shortYear}`,`${month}.${day}.${shortYear}`];
 }
 
@@ -187,6 +255,8 @@ while (rivianFleet.length < 58) {
     status:grounded?'Needs charge':battery<40?'Charge watch':'Connected'
   });
 }
+// DJT6's historical fixture must never seed the new station's fleet.
+if(MULTI_STATION_ENABLED&&!MULTI_STATION_PREVIEW&&activeMorningStationCode()==='DUR6')rivianFleet.length=0;
 const demoRivianFleet = rivianFleet.map(v=>({...v}));
 
 const morningSeed = [
@@ -286,6 +356,7 @@ function migrateLowerParkingChargerRows(status={},reports=[],plan=[]) {
 
 let loadedParkingChargerMovePlan=[];
 function defaultVanParkingSlots() {
+  if(MULTI_STATION_ENABLED&&!MULTI_STATION_PREVIEW&&activeMorningStationCode()==='DUR6')return [];
   const west=['57','2','1','4','6','36','55','29','9','40','5','13','42','14','20','16','24','18','30','50','35','51'];
   const east=['38','58','52','15','33','43','31','23','11','28','26','34','53','48','22','21','45','49','44','19'];
   const topLeft=['X','X','X','X','X'], topRight=['47','27','56','54','53'];
@@ -407,7 +478,7 @@ const DEFAULT_INVENTORY_ITEMS = [
 ];
 function inventoryRecordId(prefix='inventory') { return globalThis.crypto?.randomUUID?.()||`${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`; }
 function normalizeInventoryItems(raw=null) {
-  const source=Array.isArray(raw)?raw:DEFAULT_INVENTORY_ITEMS;
+  const source=Array.isArray(raw)?raw:(MULTI_STATION_ENABLED&&!MULTI_STATION_PREVIEW&&activeMorningStationCode()==='DUR6'?[]:DEFAULT_INVENTORY_ITEMS);
   return source.filter(Boolean).map((item,index)=>{
     const total=Math.max(0,Math.trunc(Number(item.total)||0)),available=Math.max(0,Math.min(total,Math.trunc(Number(item.available)||0)));
     return {id:String(item.id||`item-${index+1}`),name:String(item.name||`Inventory item ${index+1}`).trim(),category:String(item.category||'Other').trim()||'Other',total,available,notes:String(item.notes||'').trim()};
@@ -424,14 +495,15 @@ function normalizeChargerReports(raw=[]) {
 }
 
 let state = {
-  page: PARKING_ONLY_VIEW ? FLEET_TEAM_START_PAGE : (localStorage.getItem('relayops_page') || 'dashboard'),
+  activeOpeningStation: activeOpeningStationCode,
+  page: PARKING_ONLY_VIEW ? FLEET_TEAM_START_PAGE : (NAV.flatMap(group=>group.items).some(([page])=>page===initialUrlParams.get('page'))?initialUrlParams.get('page'):(localStorage.getItem('relayops_page') || 'dashboard')),
   role: localStorage.getItem('relayops_role') || 'viewer',
   phase: Number(localStorage.getItem('relayops_phase') || 2),
   routes: JSON.parse(localStorage.getItem('relayops_routes') || 'null') || [],
   morningRoutes: JSON.parse(localStorage.getItem('relayops_morning') || 'null') || [],
   dspCode: localStorage.getItem('relayops_dsp') || 'LLOL',
   organizationName: localStorage.getItem('relayops_organization_name') || 'Legacy Logistics',
-  stationCode: localStorage.getItem('relayops_station_code') || 'DJT6',
+  stationCode: MULTI_STATION_ENABLED?activeMorningStationCode():(localStorage.getItem('relayops_station_code') || 'DJT6'),
   lastImportExcluded: Number(localStorage.getItem('relayops_excluded') || 0),
   morningFilters: {wave:'all',staging:'all',pad:'all'},
   fleetSort: localStorage.getItem('relayops_fleet_sort') || 'normal',
@@ -444,7 +516,7 @@ let state = {
   fleetSourceUploads: JSON.parse(localStorage.getItem('relayops_fleet_source_uploads') || 'null') || {},
   fleetExpectedCount: Number(localStorage.getItem('relayops_fleet_expected_count') || 0),
   fleetLiveEndpoint: localStorage.getItem('relayops_fleet_live_endpoint') || '',
-  morningSheetsEndpoint: localStorage.getItem('relayops_morning_sheets_endpoint') || MORNING_SHEETS_DEFAULT_ENDPOINT,
+  morningSheetsEndpoint: localStorage.getItem('relayops_morning_sheets_endpoint') || (activeMorningStationCode()==='DUR6'?'':MORNING_SHEETS_DEFAULT_ENDPOINT),
   morningSheetsLastPush: localStorage.getItem('relayops_morning_sheets_last_push') || '',
   morningSheetsLastError: localStorage.getItem('relayops_morning_sheets_last_error') || '',
   morningSheetsLastReceipt: JSON.parse(localStorage.getItem('relayops_morning_sheets_last_receipt') || 'null'),
@@ -549,7 +621,7 @@ let state = {
   openingPicklistCalloffRows: Math.max(1,Number(localStorage.getItem('relayops_opening_picklist_calloff_rows') || 6)),
   openingPicklistTopicRows: Math.max(1,Number(localStorage.getItem('relayops_opening_picklist_topic_rows') || 4)),
   openingPicklistBackupRows: Math.max(1,Number(localStorage.getItem('relayops_opening_picklist_backup_rows') || 21)),
-  openingPicklistWaveSlots: Math.max(0,Math.min(MORNING_CORE_WAVE_COUNT,Number(localStorage.getItem('relayops_opening_picklist_wave_slots') ?? MORNING_CORE_WAVE_COUNT))),
+  openingPicklistWaveSlots: Math.max(0,Math.min(activeMorningWaveCount(),Number(localStorage.getItem('relayops_opening_picklist_wave_slots') ?? activeMorningWaveCount()))),
   openingPicklistShowAdhoc: localStorage.getItem('relayops_opening_picklist_show_adhoc') !== 'false',
   openingPicklistCalloffDrafts: JSON.parse(localStorage.getItem('relayops_opening_picklist_calloff_drafts') || 'null') || [],
   openingPicklistBackupOverrides: JSON.parse(localStorage.getItem('relayops_opening_picklist_backup_overrides') || 'null') || {},
@@ -603,13 +675,156 @@ let state = {
   rating: Number(localStorage.getItem('relayops_rating') || 0)
 };
 
+if(MULTI_STATION_ENABLED&&!MULTI_STATION_PREVIEW)Object.defineProperty(state,'stationCode',{
+  enumerable:true,configurable:false,get:()=>activeMorningStationCode(),
+  set(value){if(String(value||'').trim().toUpperCase()!==activeMorningStationCode())throw new Error('The active station identity cannot change without reopening its workspace.');}
+});
+
+const MULTI_STATION_PREVIEW_STORAGE_KEY='relayops_multistation_preview_v1';
+let multiStationPreviewStore=null;
+let multiStationPreviewStorageErrorShown=false;
+function previewClone(value){return value===undefined?undefined:JSON.parse(JSON.stringify(value));}
+function newPreviewStationRecord(){return {connector:{endpoint:'',lastPush:'',lastError:'',lastReceipt:null,lastDryRun:''},fleetNameOverrides:{},equipmentIssues:{},fleetIssues:{},days:{}};}
+function normalizedMultiStationPreviewStore(raw={}) {
+  const source=raw&&typeof raw==='object'?raw:{};
+  const stations={};
+  Object.keys(OPENING_STATION_PROFILES).forEach(code=>{
+    const saved=source.stations?.[code],record=newPreviewStationRecord();
+    if(saved&&typeof saved==='object'){
+      record.connector={...record.connector,...(saved.connector&&typeof saved.connector==='object'?saved.connector:{})};
+      record.fleetNameOverrides=previewClone(Object.prototype.hasOwnProperty.call(saved,'fleetNameOverrides')&&saved.fleetNameOverrides&&typeof saved.fleetNameOverrides==='object'?saved.fleetNameOverrides:{});
+      record.equipmentIssues=normalizeEquipmentIssuesStore(Object.prototype.hasOwnProperty.call(saved,'equipmentIssues')?saved.equipmentIssues:{});
+      record.fleetIssues=normalizeFleetIssuesStore(Object.prototype.hasOwnProperty.call(saved,'fleetIssues')?saved.fleetIssues:{});
+      record.days=saved.days&&typeof saved.days==='object'?saved.days:{};
+    }
+    stations[code]=record;
+  });
+  return {version:1,activeStation:Object.prototype.hasOwnProperty.call(OPENING_STATION_PROFILES,source.activeStation)?source.activeStation:'DJT6',stations};
+}
+function readMultiStationPreviewStore(options={}){
+  try{
+    const raw=JSON.parse(window.localStorage?.getItem(MULTI_STATION_PREVIEW_STORAGE_KEY)||'null')||{},normalized=normalizedMultiStationPreviewStore(raw);
+    // One-time upgrade for previews created before station-persistent equipment
+    // stores existed. At initial boot, state still holds the legacy DJT6 data;
+    // never perform this inference during a later DUR6 write/reconciliation.
+    if(options.seedLegacyDjt6&&raw.stations?.DJT6){
+      if(!Object.prototype.hasOwnProperty.call(raw.stations.DJT6,'fleetNameOverrides'))normalized.stations.DJT6.fleetNameOverrides=previewClone(state.fleetNameOverrides||{});
+      if(!Object.prototype.hasOwnProperty.call(raw.stations.DJT6,'equipmentIssues'))normalized.stations.DJT6.equipmentIssues=previewClone(normalizeEquipmentIssuesStore(state.equipmentIssues||{}));
+      if(!Object.prototype.hasOwnProperty.call(raw.stations.DJT6,'fleetIssues'))normalized.stations.DJT6.fleetIssues=previewClone(normalizeFleetIssuesStore(state.fleetIssues||{}));
+    }
+    return normalized;
+  }
+  catch{return normalizedMultiStationPreviewStore({});}
+}
+function writeMultiStationPreviewStore(){
+  if(!MULTI_STATION_PREVIEW||!multiStationPreviewStore)return false;
+  try{
+    // Multiple local tabs may be testing different stations at once. Re-read
+    // the latest browser store and replace only this station/date so a DUR6
+    // save cannot overwrite a newer DJT6 record held by another tab (or vice
+    // versa). Same-station production concurrency is still handled later by
+    // the Supabase revision writer, not by this local planning store.
+    const latest=readMultiStationPreviewStore(),code=activeMorningStationCode(),date=String(state.morningOperationDate||defaultOperationDate());
+    Object.keys(OPENING_STATION_PROFILES).forEach(stationCode=>{
+      const local=multiStationPreviewStore.stations?.[stationCode],remote=latest.stations[stationCode]||(latest.stations[stationCode]=newPreviewStationRecord());
+      if(!local)return;
+      if(stationCode===code){
+        remote.connector=previewClone(local.connector||remote.connector);
+        remote.fleetNameOverrides=previewClone(local.fleetNameOverrides||{});
+        remote.equipmentIssues=previewClone(local.equipmentIssues||{});
+        remote.fleetIssues=previewClone(local.fleetIssues||{});
+        if(local.days?.[date])remote.days[date]=previewClone(local.days[date]);
+      } else if(!Object.keys(remote.days||{}).length&&Object.keys(local.days||{}).length) {
+        latest.stations[stationCode]=previewClone(local);
+      }
+    });
+    latest.activeStation=code;
+    window.localStorage?.setItem(MULTI_STATION_PREVIEW_STORAGE_KEY,JSON.stringify(latest));
+    multiStationPreviewStore=latest;multiStationPreviewStorageErrorShown=false;return true;
+  }
+  catch(error){
+    console.warn('Local multi-station preview could not be saved',error);
+    if(!multiStationPreviewStorageErrorShown){multiStationPreviewStorageErrorShown=true;toast('Local station preview storage is full or unavailable. Keep this tab open and export anything important before refreshing.','error');}
+    return false;
+  }
+}
+function captureOpeningStationPreviewDay() {
+  if(!MULTI_STATION_PREVIEW||!multiStationPreviewStore)return null;
+  const code=activeMorningStationCode(),date=state.morningOperationDate||defaultOperationDate(),daily=previewClone(sharedWorkspaceState());
+  // Station identity comes from the immutable local profile. A saved payload
+  // must never be able to turn a DUR6 tab into the DJT6 cloud workspace.
+  delete daily.organizationName;delete daily.stationCode;delete daily.dspCode;
+  const record=multiStationPreviewStore.stations[code]||(multiStationPreviewStore.stations[code]=newPreviewStationRecord());
+  record.connector={endpoint:String(state.morningSheetsEndpoint||''),lastPush:String(state.morningSheetsLastPush||''),lastError:String(state.morningSheetsLastError||''),lastReceipt:previewClone(state.morningSheetsLastReceipt||null),lastDryRun:String(state.morningSheetsLastDryRun||'')};
+  // Device/Portable and vehicle issue identities can repeat between stations
+  // (for example Device 23 or EV1). Keep their history with the station that
+  // owns the equipment instead of sharing one preview-wide issue store.
+  record.fleetNameOverrides=previewClone(state.fleetNameOverrides&&typeof state.fleetNameOverrides==='object'?state.fleetNameOverrides:{});
+  record.equipmentIssues=previewClone(normalizeEquipmentIssuesStore(state.equipmentIssues||{}));
+  record.fleetIssues=previewClone(normalizeFleetIssuesStore(state.fleetIssues||{}));
+  record.days[date]={daily,ui:{morningFilters:previewClone(state.morningFilters||{wave:'all',staging:'all',pad:'all'}),lastItineraryRts:previewClone(state.lastItineraryRts||{}),fitMorningRows:Boolean(state.fitMorningRows),fitOpeningPicklistRows:Boolean(state.fitOpeningPicklistRows)}};
+  multiStationPreviewStore.activeStation=code;
+  return record.days[date];
+}
+function restoreOpeningStationPreviewDay(code,date,snapshot=null) {
+  activeOpeningStationCode=OPENING_STATION_PROFILES[code]?code:'DJT6';
+  state.activeOpeningStation=activeOpeningStationCode;
+  const profile=activeOpeningStationProfile(),record=multiStationPreviewStore?.stations?.[activeOpeningStationCode]||newPreviewStationRecord();
+  resetDailyOperationsState(date);
+  if(snapshot?.daily)applySharedWorkspaceState(previewClone(snapshot.daily));
+  state.morningRoutes=(state.morningRoutes||[]).map(row=>({...row,stationCode:profile.code}));
+  state.routes=(state.routes||[]).map(row=>({...row,stationCode:profile.code}));
+  state.morningOperationDate=date;
+  state.rosteringDate=date;
+  state.stationCode=profile.code;
+  state.dspCode=profile.dspCode;
+  state.morningFilters=previewClone(snapshot?.ui?.morningFilters||{wave:'all',staging:'all',pad:'all'});
+  state.lastItineraryRts=previewClone(snapshot?.ui?.lastItineraryRts||{});
+  if(snapshot?.ui){state.fitMorningRows=Boolean(snapshot.ui.fitMorningRows);state.fitOpeningPicklistRows=Boolean(snapshot.ui.fitOpeningPicklistRows);}
+  state.openingPicklistWaveSlots=Math.max(0,Math.min(profile.coreWaveCount,Number(state.openingPicklistWaveSlots??profile.coreWaveCount)));
+  state.morningSheetsEndpoint=String(record.connector?.endpoint||'');
+  state.morningSheetsLastPush=String(record.connector?.lastPush||'');
+  state.morningSheetsLastError=String(record.connector?.lastError||'');
+  state.morningSheetsLastReceipt=previewClone(record.connector?.lastReceipt||null);
+  state.morningSheetsLastDryRun=String(record.connector?.lastDryRun||'');
+  state.fleetNameOverrides=previewClone(record.fleetNameOverrides||{});
+  state.equipmentIssues=normalizeEquipmentIssuesStore(previewClone(record.equipmentIssues||{}));
+  state.fleetIssues=normalizeFleetIssuesStore(previewClone(record.fleetIssues||{}));
+  recalculateEquipmentReadiness();
+  state.modal=null;state.importedFile=null;state.importReadingFiles=[];state.editMode=false;state.copyMode=false;
+  state.deviceClearConfirm=null;state.pendingEquipmentIssue=null;state.gasAssignmentRoutes=[];state.gasAssignmentVans=[];
+  invalidateOperationalAlertGroups?.();invalidateNavigationPageCache?.();
+}
+function initializeMultiStationPreview() {
+  if(!MULTI_STATION_PREVIEW)return;
+  const requestedCode=activeOpeningStationCode,date=state.morningOperationDate||defaultOperationDate();
+  multiStationPreviewStore=readMultiStationPreviewStore({seedLegacyDjt6:true});
+  // Preserve the existing production-compatible local state as the first DJT6
+  // preview seed. The preview never writes back to those legacy keys.
+  const djt6Record=multiStationPreviewStore.stations.DJT6;
+  if(!djt6Record.days[date]){
+    const originalCode=activeOpeningStationCode,originalSlots=state.openingPicklistWaveSlots;activeOpeningStationCode='DJT6';state.activeOpeningStation='DJT6';
+    state.openingPicklistWaveSlots=Math.max(0,Math.min(MORNING_CORE_WAVE_COUNT,Number(window.localStorage?.getItem('relayops_opening_picklist_wave_slots')??MORNING_CORE_WAVE_COUNT)));
+    captureOpeningStationPreviewDay();activeOpeningStationCode=originalCode;state.activeOpeningStation=originalCode;state.openingPicklistWaveSlots=originalSlots;
+  }
+  const targetRecord=multiStationPreviewStore.stations[requestedCode],saved=targetRecord.days[date]||null;
+  restoreOpeningStationPreviewDay(requestedCode,date,saved);
+  captureOpeningStationPreviewDay();writeMultiStationPreviewStore();
+  state.cloudStatus='local-preview';state.cloudAccessError='';
+}
+function persistMultiStationPreview() {
+  captureOpeningStationPreviewDay();writeMultiStationPreviewStore();
+}
+
 if(loadedParkingChargerMovePlan.length) {
   const migrated=migrateLowerParkingChargerRows(state.parkingChargerStatus,state.chargerReports,loadedParkingChargerMovePlan);
   state.parkingChargerStatus=migrated.status;
   state.chargerReports=migrated.reports;
-  localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking));
-  localStorage.setItem('relayops_parking_charger_status',JSON.stringify(state.parkingChargerStatus));
-  localStorage.setItem('relayops_charger_reports',JSON.stringify(state.chargerReports));
+  if(!MULTI_STATION_PREVIEW){
+    localStorage.setItem('relayops_van_parking',JSON.stringify(state.vanParking));
+    localStorage.setItem('relayops_parking_charger_status',JSON.stringify(state.parkingChargerStatus));
+    localStorage.setItem('relayops_charger_reports',JSON.stringify(state.chargerReports));
+  }
 }
 
 let driverProfileLookupCache=null;
@@ -626,7 +841,7 @@ state.sheetHistory=state.sheetHistory&&Array.isArray(state.sheetHistory.past)&&A
 if(Object.keys(state.fleetSourceUploads||{}).length) state.fleetImport=fleetImportFromSourceUploads();
 if(state.fleetImport?.vehicles?.length) applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
 let bootOperationDateReset=false;
-if(bootCachedOperationDate&&bootCachedOperationDate!==state.morningOperationDate){
+if(!MULTI_STATION_PREVIEW&&bootCachedOperationDate&&bootCachedOperationDate!==state.morningOperationDate){
   resetDailyOperationsState(state.morningOperationDate);
   bootOperationDateReset=true;
 }
@@ -1102,22 +1317,34 @@ function globalSearchHtml() {
   return `<div class="global-search-shell"><label class="search">${ICONS.search}<input id="global-search" autocomplete="off" aria-label="Search drivers, routes, and vehicles" placeholder="Search driver, route, van…" value="${esc(state.search)}" /></label><div id="global-search-results-anchor">${globalSearchResultsPanelHtml()}</div></div>`;
 }
 
+function sidebarStationSelectorHtml() {
+  if(!MULTI_STATION_ENABLED)return `<div class="station-pill"><div class="station-icon">${esc(displayedStationCode().slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(displayedStationCode().toUpperCase())} · Los Angeles</span></div>${ICONS.chevron}</div>`;
+  return `<div class="sidebar-stations" role="group" aria-label="Choose operation station">${Object.values(OPENING_STATION_PROFILES).map(profile=>{const selected=profile.code===activeMorningStationCode();return `<button type="button" class="station-pill sidebar-station station-${profile.code.toLowerCase()}" data-action="switch-opening-station" data-station="${profile.code}" aria-pressed="${selected}" aria-label="${profile.code} · ${esc(profile.location)}${selected?' · Selected station':''}"><span class="station-icon">${profile.code}</span><span class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${profile.code} · ${profile.code==='DJT6'?'Home station':esc(profile.location)}</span></span><span class="sidebar-station-indicator" aria-hidden="true">${selected?'●':'›'}</span></button>`;}).join('')}</div>`;
+}
 function sidebar() {
   if(PARKING_ONLY_VIEW){
     const lockedItems=NAV.flatMap(group=>group.items).filter(([id])=>!FLEET_TEAM_ALLOWED_PAGES.has(id));
     return `<aside class="sidebar fleet-parking-sidebar" id="sidebar">
       <div class="brand"><div class="brand-mark"></div><div class="brand-copy"><div class="brand-name">RelayOps</div><div class="brand-sub">Fleet workspace</div></div></div>
-      <div class="station-pill"><div class="station-icon">${esc(state.stationCode.slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(state.stationCode.toUpperCase())} · Fleet access</span></div>${ICONS.chevron}</div>
+      <div class="station-pill"><div class="station-icon">${esc(displayedStationCode().slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(displayedStationCode().toUpperCase())} · Fleet access</span></div>${ICONS.chevron}</div>
       <nav><div class="side-section"><div class="side-label">Fleet Access</div><button class="nav-item ${state.page==='fleet'?'active':''}" data-page="fleet" aria-label="Fleet Health">${ICONS.battery}<span>Fleet Health</span></button><button class="nav-item ${state.page==='parking'?'active':''}" data-page="parking" aria-label="Van Parking">${ICONS.parking}<span>Van Parking</span></button></div><div class="side-section fleet-locked-section"><div class="side-label">Locked Tabs</div>${lockedItems.map(([id,label,icon])=>`<button class="nav-item fleet-locked-nav" type="button" disabled aria-disabled="true" aria-label="${esc(label)} locked">${ICONS[icon]}<span>${esc(label)}</span><b class="nav-count">🔒</b></button>`).join('')}</div></nav>
       <div class="side-bottom"><div class="user-card"><div class="avatar">FT</div><div class="user-copy"><strong>Fleet workspace</strong><span>Health + live parking edits</span></div><div class="role-tag">FLEET</div></div></div>
     </aside>`;
   }
   return `<aside class="sidebar" id="sidebar">
     <div class="brand"><div class="brand-mark"></div><div class="brand-copy"><div class="brand-name">RelayOps</div><div class="brand-sub">Dispatch command</div></div></div>
-    <div class="station-pill"><div class="station-icon">${esc(state.stationCode.slice(0,3).toUpperCase())}</div><div class="station-copy"><strong>${esc(state.organizationName)}</strong><span>${esc(state.stationCode.toUpperCase())} · Los Angeles</span></div>${ICONS.chevron}</div>
+    ${sidebarStationSelectorHtml()}
     <nav>${NAV.map(group=>({...group,items:group.items})).filter(group=>group.items.length).map(group => `<div class="side-section"><div class="side-label">${group.section}</div>${group.items.map(([id,label,icon,count]) => `<button class="nav-item ${state.page===id?'active':''}" data-page="${id}" aria-label="${label}">${ICONS[icon]}<span>${label}</span>${id==='admin'&&!hasOwnerAdminAccess()?'<b class="nav-count">🔒</b>':count?`<b class="nav-count">${count}</b>`:''}</button>`).join('')}</div>`).join('')}</nav>
     <div class="side-bottom"><div class="user-card"><div class="avatar">RO</div><div class="user-copy"><strong>RelayOps team</strong><span>${hasOwnerAdminAccess()?'Admin PIN unlocked':'Shared link access'}</span></div><div class="role-tag">${hasOwnerAdminAccess()?'ADMIN':'LIVE'}</div></div></div>
   </aside>`;
+}
+
+function sidebarForCurrentMode() {
+  const html=sidebar();
+  if(!MULTI_STATION_PREVIEW)return html;
+  return html
+    .replace('Admin PIN unlocked','Local preview admin')
+    .replace('<div class="role-tag">ADMIN</div>','<div class="role-tag">LOCAL</div>');
 }
 
 const pageInfo = {
@@ -1171,6 +1398,7 @@ function topbarLegacy() {
 }
 
 function cloudStatusControl() {
+  if(MULTI_STATION_PREVIEW)return `<span class="btn cloud-status-button local-preview" title="Local multi-station planning mode"><i></i><span class="hide-mobile">Local preview · no sync</span></span>`;
   const synced=state.cloudStatus==='synced',connecting=state.cloudStatus==='connecting';
   const needsRetry=['error','access-denied','offline','signed-out'].includes(state.cloudStatus);
   const busy=cloudDatabaseBusy(),label=synced?'Shared & synced':connecting?'Connecting shared workspace…':busy?'Database busy · retry later':needsRetry?'Sync issue · retry':'Starting shared sync…';
@@ -1184,8 +1412,39 @@ function topbar() {
 }
 
 function contextBar(extra='') {
-  const synced=state.cloudStatus==='synced',label=synced?'Shared workspace · everyone with the link sees these updates':state.cloudStatus==='access-denied'?'Shared link access needs repair':state.cloudStatus==='workspace-empty'?'Starting today’s shared workspace…':state.cloudStatus==='offline'?'Offline · edits saved and will sync automatically':state.cloudStatus==='connecting'?'Connecting shared workspace…':cloudDatabaseBusy()?'Database busy · edits saved locally':'Shared cloud setup required';
+  const synced=state.cloudStatus==='synced',label=MULTI_STATION_PREVIEW?`${activeMorningStationCode()} local workspace · production sync is disabled`:synced?'Shared workspace · everyone with the link sees these updates':state.cloudStatus==='access-denied'?'Shared link access needs repair':state.cloudStatus==='workspace-empty'?'Starting today’s shared workspace…':state.cloudStatus==='offline'?'Offline · edits saved and will sync automatically':state.cloudStatus==='connecting'?'Connecting shared workspace…':cloudDatabaseBusy()?'Database busy · edits saved locally':'Shared cloud setup required';
   return `<div class="context-bar"><div class="date-nav"><div class="date-chip">${ICONS.calendar}${fmtDate()}</div>${extra}</div><div class="sync-state ${synced?'cloud-live':''}"><i class="live-dot"></i>${esc(label)}</div></div>`;
+}
+
+function openingStationPreviewStats(code='DJT6') {
+  const date=state.morningOperationDate||defaultOperationDate(),profile=OPENING_STATION_PROFILES[code]||OPENING_STATION_PROFILES.DJT6;
+  const daily=code===activeMorningStationCode()?sharedWorkspaceState():multiStationPreviewStore?.stations?.[code]?.days?.[date]?.daily;
+  const rows=(daily?.morningRoutes||[]).filter(row=>row&&!row._blank&&!String(row.route||'').startsWith('__blank_'));
+  const waves=new Set(rows.filter(row=>!isExplicitAdhocMorningRoute(row)&&!isExplicitHelperMorningRoute(row)).map(row=>row.wave).filter(Boolean)).size;
+  return {routes:rows.length,waves,summary:rows.length?`${rows.length} route${rows.length===1?'':'s'} · ${waves||profile.coreWaveCount} wave${(waves||profile.coreWaveCount)===1?'':'s'}`:`Not started · ${profile.coreWaveCount} wave slots`};
+}
+function stationEquipmentPreviewStats(code='DJT6') {
+  const date=state.morningOperationDate||defaultOperationDate(),record=multiStationPreviewStore?.stations?.[code],daily=code===activeMorningStationCode()?sharedWorkspaceState():record?.days?.[date]?.daily;
+  const details=daily?.equipmentImport?.details&&typeof daily.equipmentImport.details==='object'?daily.equipmentImport.details:{};
+  const filled=Object.values(details).filter(item=>String(item?.device||'').trim()||String(item?.portable||'').trim()).length;
+  const issueStore=code===activeMorningStationCode()?state.equipmentIssues:record?.equipmentIssues;
+  const issues=Object.values(issueStore||{}).reduce((total,item)=>total+(item?.active||[]).filter(issue=>issue?.status!=='fixed').length,0);
+  return {filled,issues,summary:filled||issues?`${filled} assignment${filled===1?'':'s'} · ${issues} issue${issues===1?'':'s'}`:'Separate sheet · empty today'};
+}
+function stationWorkspaceTabs(scope='opening') {
+  if(!MULTI_STATION_ENABLED)return '';
+  const equipmentScope=scope==='equipment',active=activeOpeningStationProfile(),date=openingPicklistDateText()||state.morningOperationDate;
+  const tabs=Object.values(OPENING_STATION_PROFILES).map(profile=>{
+    const selected=profile.code===active.code,stats=!MULTI_STATION_PREVIEW&&!selected?{summary:'Separate shared workspace'}:equipmentScope?stationEquipmentPreviewStats(profile.code):openingStationPreviewStats(profile.code);
+    return `<button id="station-tab-${profile.code.toLowerCase()}" class="station-tab station-${profile.code.toLowerCase()} ${selected?'active':''}" type="button" role="tab" aria-selected="${selected?'true':'false'}" aria-controls="station-workspace-panel" tabindex="${selected?'0':'-1'}" data-action="switch-opening-station" data-opening-station-tab="true" data-station="${profile.code}"><b>${profile.code}</b><span><strong>${esc(profile.location)}</strong><small>${esc(stats.summary)}</small></span></button>`;
+  }).join('');
+  const label=equipmentScope?'DEVICE & PORTABLE WORKSPACE':'STATION WORKSPACE',instruction=equipmentScope?'Choose the equipment station':'Choose where you’re dispatching';
+  const scopeDetail=equipmentScope?`${esc(date)} · Separate daily equipment sheet`:`${esc(date)} · ${esc(active.workbookLabel)} · ${MULTI_STATION_PREVIEW?(active.code==='DUR6'?'Google confirmation required · cloud sync off':'Google send is off locally'):'Separate station data · dispatcher updates sync here'}`;
+  return `<section class="station-workspace-bar" data-opening-station="${active.code.toLowerCase()}" data-workspace-scope="${equipmentScope?'equipment':'opening'}"><div class="station-workspace-label"><span>${label}</span><strong>${instruction}</strong></div><div class="station-tablist" role="tablist" aria-label="Station workspace" data-workspace-label="${equipmentScope?'Device and Portable station':'Opening station'}">${tabs}</div><p class="station-scope-note" role="status"><strong>Working in ${active.code} · ${esc(active.location)}</strong><span>${scopeDetail}</span></p></section>`;
+}
+function stationWorkspacePage(content='',scope='opening') {
+  if(!MULTI_STATION_ENABLED)return content;
+  return `${stationWorkspaceTabs(scope)}<section id="station-workspace-panel" class="station-workspace-panel" role="tabpanel" aria-labelledby="station-tab-${activeMorningStationCode().toLowerCase()}">${content}</section>`;
 }
 
 function kpiCard(label,value,meta,icon,tint='#eef2ed') { return `<article class="card kpi" style="--tint:${tint}"><div class="kpi-top"><span class="kpi-label">${label}</span><span class="kpi-icon">${ICONS[icon]}</span></div><div class="kpi-value">${value}</div><div class="kpi-meta">${meta}</div></article>`; }
@@ -1227,10 +1486,10 @@ function openingPicklistSections() {
   ensureMorningRouteUids();
   const eligible=(state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&!isExplicitHelperMorningRoute(row)&&!String(row.route||'').startsWith('__blank_'));
   const waveNames=[...new Set(eligible.filter(row=>!isExplicitAdhocMorningRoute(row)).map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b));
-  const waveSlots=Math.max(0,Math.min(MORNING_CORE_WAVE_COUNT,Number(state.openingPicklistWaveSlots??MORNING_CORE_WAVE_COUNT)));
+  const waveSlots=Math.max(0,Math.min(activeMorningWaveCount(),Number(state.openingPicklistWaveSlots??activeMorningWaveCount())));
   const waves=Array.from({length:waveSlots},(_,index)=>{
     const key=`wave-${index+1}`,label=`WAVE ${index+1}`,wave=waveNames[index]||'',rows=wave?eligible.filter(row=>row.wave===wave):[];
-    const capacity=state.fitOpeningPicklistRows?Math.max(1,rows.length):MORNING_CORE_WAVE_CAPACITIES[index];
+    const capacity=state.fitOpeningPicklistRows?Math.max(1,rows.length):activeMorningWaveCapacities()[index];
     return {key,label:state.openingPicklistLabels?.[key]||label,wave,rows,capacity,hasTime:true,pad:morningCanonicalPad(label,rows[0]?.padOverride||'')};
   });
   const used=new Set(waves.flatMap(section=>section.rows.map(row=>row.route)));
@@ -1306,11 +1565,11 @@ function openingPicklistDateText() { const [year,month,day]=String(state.morning
 function openingPicklistHtml() {
   const sections=openingPicklistSections(),routeCount=sections.reduce((total,section)=>total+section.rows.length,0),backups=openingPicklistBackupRows(),calloffs=openingPicklistCallOffRows();
   const tools=`<details class="card picklist-more-tools" open><summary><span><strong>More picklist tools</strong><small>Edit live Morning Sheet data, fit rows, assign helper bags, capture the driver view, or print one page</small></span><b>Tools</b></summary><div class="picklist-tool-actions"><button class="btn small ${state.editMode?'lime':''}" data-action="toggle-picklist-edit">${state.editMode?'✓ Finish editing':'✎ Edit picklist'}</button><button class="btn small" data-action="sheet-undo" ${state.sheetHistory?.past?.length?'':'disabled'}>↶ Undo</button><button class="btn small" data-action="sheet-redo" ${state.sheetHistory?.future?.length?'':'disabled'}>↷ Redo</button><button class="btn small" data-action="open-sheet-history">History</button><button class="btn small ${state.fitOpeningPicklistRows?'lime':''}" data-action="toggle-picklist-fit-rows">${state.fitOpeningPicklistRows?'✓ Wave rows fitted':'Remove blank wave rows'}</button><button class="btn small" data-action="assign-helper-bags">${ICONS.box} Assign Helper Bags</button><button class="btn small" data-action="preview-picklist-screenshot">${ICONS.download} Screenshot waves + Adhocs</button><button class="btn small danger-soft" data-action="clear-picklist">${ICONS.trash} Clear Picklist</button><button class="btn small primary print-picklist-button" data-action="print-opening-picklist">${ICONS.download} Print one-page Picklist</button></div></details>`;
-  return `${tools}<article class="card opening-picklist-print"><div class="opening-picklist-toolbar"><div><span class="eyebrow">UNIVERSAL OPENING VIEW</span><h2>Opening Picklist</h2><p>${routeCount} Morning Sheet routes · ${backups.length} backups · ${calloffs.length} call offs · Helpers and DSP excluded</p></div></div>${state.editMode?`<div class="picklist-edit-help">Editing is on. Click any worksheet cell and press Enter to save. Every route edit immediately updates the Morning Sheet.</div>`:''}<div class="opening-picklist-scroll"><div class="opening-picklist-sheet"><table class="opening-picklist-main"><colgroup><col class="pick-col-wave"><col class="pick-col-driver"><col class="pick-col-route"><col class="pick-col-staging"><col class="pick-col-pad"><col class="pick-col-ev"><col class="pick-col-device"><col class="pick-col-portable"></colgroup><thead><tr><th>WAVE</th><th>DRIVER</th><th>ROUTE</th><th>STAGING</th><th>PAD</th><th>EV</th><th>DEVICE</th><th>PORTABLE</th></tr></thead>${sections.map(openingPicklistSectionHtml).join('')}</table>${openingPicklistRightHtml(backups,calloffs)}<aside class="opening-picklist-swap-rail" aria-label="Cortex driver swap review">${openingPicklistSwapTrackerHtml()}</aside></div></div></article>`;
+  return `${tools}<article class="card opening-picklist-print"><div class="opening-picklist-toolbar"><div><span class="eyebrow">${activeMorningStationCode()} · UNIVERSAL OPENING VIEW</span><h2>${activeMorningStationCode()} Opening Picklist</h2><p>${routeCount} Morning Sheet routes · ${backups.length} backups · ${calloffs.length} call offs · Helpers and DSP excluded</p></div></div>${state.editMode?`<div class="picklist-edit-help">Editing is on. Click any worksheet cell and press Enter to save. Every route edit immediately updates the Morning Sheet.</div>`:''}<div class="opening-picklist-scroll"><div class="opening-picklist-sheet"><table class="opening-picklist-main"><colgroup><col class="pick-col-wave"><col class="pick-col-driver"><col class="pick-col-route"><col class="pick-col-staging"><col class="pick-col-pad"><col class="pick-col-ev"><col class="pick-col-device"><col class="pick-col-portable"></colgroup><thead><tr><th>WAVE</th><th>DRIVER</th><th>ROUTE</th><th>STAGING</th><th>PAD</th><th>EV</th><th>DEVICE</th><th>PORTABLE</th></tr></thead>${sections.map(openingPicklistSectionHtml).join('')}</table>${openingPicklistRightHtml(backups,calloffs)}<aside class="opening-picklist-swap-rail" aria-label="Cortex driver swap review">${openingPicklistSwapTrackerHtml()}</aside></div></div></article>`;
 }
 function rosterPage() {
   const controlsOpen=Boolean(state.openingRosterControlsOpen);
-  return `${contextBar(`<span class="status ${state.rosterPublished?'':'warn'}">${state.rosterPublished?'Published to team':'Draft · not sent'}</span>`)}${openingPicklistHtml()}<details class="card opening-roster-tools" data-opening-roster-controls ${controlsOpen?'open':''}><summary><span><strong>Opening roster controls</strong><small>PAYCOM schedule, route swaps, backups, call offs, stay-home, and reductions</small></span><b>${controlsOpen?'Close':'Open tools'}</b></summary><div class="opening-roster-controls-body" data-opening-roster-controls-body>${controlsOpen?openingRosterScheduleHtml():'<div class="opening-roster-controls-lazy"><strong>Open only when you need roster controls</strong><span>The Picklist stays fast while the large PAYCOM and status lists remain tucked away.</span></div>'}</div></details>`;
+  return stationWorkspacePage(`${contextBar(`<span class="status ${state.rosterPublished?'':'warn'}">${state.rosterPublished?'Published to team':'Draft · not sent'}</span>`)}${openingPicklistHtml()}<details class="card opening-roster-tools" data-opening-roster-controls ${controlsOpen?'open':''}><summary><span><strong>Opening roster controls</strong><small>PAYCOM schedule, route swaps, backups, call offs, stay-home, and reductions</small></span><b>${controlsOpen?'Close':'Open tools'}</b></summary><div class="opening-roster-controls-body" data-opening-roster-controls-body>${controlsOpen?openingRosterScheduleHtml():'<div class="opening-roster-controls-lazy"><strong>Open only when you need roster controls</strong><span>The Picklist stays fast while the large PAYCOM and status lists remain tucked away.</span></div>'}</div></details>`);
 }
 
 function rosteringId(prefix='slot') { return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`; }
@@ -1681,7 +1940,7 @@ function morningRouteByUid(uid='') { return uid?(state.morningRoutes||[]).find(r
 function morningWaveList() { return [...new Set(state.morningRoutes.filter(r=>r.dsp===state.dspCode).map(r=>r.wave))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)); }
 function morningCorePadSectionLabelForWave(wave='') {
   const waves=[...new Set((state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&!isExplicitHelperMorningRoute(row)&&!isExplicitAdhocMorningRoute(row)).map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b));
-  const index=waves.indexOf(wave);return index>=0&&index<MORNING_CORE_WAVE_COUNT?`WAVE ${index+1}`:'';
+  const index=waves.indexOf(wave);return index>=0&&index<activeMorningWaveCount()?`WAVE ${index+1}`:'';
 }
 function padForWave(wave) { const label=morningCorePadSectionLabelForWave(wave);return label?morningSectionPadOverride(label):''; }
 function morningSectionPadOverrideKey(label='') { return `${state.morningOperationDate}|${morningFixedSectionKey(label)}`; }
@@ -1711,7 +1970,7 @@ function setMorningPadForSection(label='',wave='',value='') {
 }
 function rememberManualMorningPads() {
   const rows=(state.morningRoutes||[]).filter(row=>row.dsp===state.dspCode&&!row._waveAnchor&&!isExplicitHelperMorningRoute(row)&&!isExplicitAdhocMorningRoute(row));
-  const waves=[...new Set(rows.map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).slice(0,MORNING_CORE_WAVE_COUNT);
+  const waves=[...new Set(rows.map(row=>row.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).slice(0,activeMorningWaveCount());
   waves.forEach((wave,index)=>{const label=`WAVE ${index+1}`;if(hasMorningSectionPadOverride(label))return;const value=rows.find(row=>row.wave===wave&&String(row.padOverride||'').trim())?.padOverride;if(value)setMorningSectionPadOverride(label,value);});
   const adhoc=(state.morningRoutes||[]).find(row=>row.dsp===state.dspCode&&isExplicitAdhocMorningRoute(row)&&String(row.padOverride||'').trim())?.padOverride;
   if(adhoc&&!hasMorningSectionPadOverride('ADHOCS'))setMorningSectionPadOverride('ADHOCS',adhoc);
@@ -1746,9 +2005,9 @@ function morningFiltersAreActive() {
   const filters=state.morningFilters||{};
   return ['wave','staging','pad'].some(key=>filters[key]&&filters[key]!=='all');
 }
-function fixedMorningSections(rows=filteredMorningRows()) {
+function fixedMorningSections(rows=filteredMorningRows(),options={}) {
   const visibleIds=new Set(rows.map(row=>row.routeUid||`${normalizeCxRoute(row.route)}|${nameKey(row.driver)}`));
-  return morningSections(allMorningRows()).map(section=>({...section,rows:section.rows.filter(row=>visibleIds.has(row.routeUid||`${normalizeCxRoute(row.route)}|${nameKey(row.driver)}`))})).filter(section=>!section.dsp&&(section.rows.length||!morningFiltersAreActive()));
+  return morningSections(allMorningRows(),{fixed:true,includeEmpty:Boolean(options.includeEmpty)}).map(section=>({...section,rows:section.rows.filter(row=>visibleIds.has(row.routeUid||`${normalizeCxRoute(row.route)}|${nameKey(row.driver)}`))})).filter(section=>!section.dsp&&(section.rows.length||options.includeEmpty||!morningFiltersAreActive()));
 }
 function morningFixedSectionByRoute() {
   const byRoute=new Map();
@@ -1767,35 +2026,38 @@ function morningFilterScopeText() {
 }
 
 function morningSheetsBridgeHtml(payload=morningSheetsConnectorPayload()) {
-  const rows=filteredMorningRows(), proof=morningSheetsHandoffProof(payload), connected=Boolean(state.morningSheetsEndpoint);
-  const routeCount=rows.filter(row=>!row._blank).length;
-  const waveCount=new Set(rows.map(row=>row.wave).filter(Boolean)).size;
+  const dur6Preview=MULTI_STATION_ENABLED&&activeMorningStationCode()==='DUR6';
+  const rows=dur6Preview?allMorningRows():filteredMorningRows(),routeRows=rows.filter(row=>!row._blank), proof=morningSheetsHandoffProof(payload), connected=Boolean(state.morningSheetsEndpoint);
+  const routeCount=routeRows.length;
+  const waveCount=new Set(routeRows.map(row=>row.wave).filter(Boolean)).size;
   const receipt=state.morningSheetsLastReceipt;
   const receiptText=receipt?`${receipt.status==='confirmed'?'Google confirmed':'Sent — verify'} ${receipt.writeRange||payload.writeRange}`:'Not sent yet';
-  return `<section class="morning-sheet-bridge card ${connected?'connected':'setup'}" aria-label="Google Sheets bridge"><div class="bridge-route"><span class="bridge-node source"><b>1</b><strong>Filtered waves</strong><small>${esc(morningFilterScopeText())}<br>${routeCount} routes · ${waveCount} wave${waveCount===1?'':'s'}</small></span><i>→</i><span class="bridge-node check"><b>2</b><strong>Fixed Ops Log check</strong><small>OPS LOG 2026 · ${payload.sections.length} sections<br>Dry run happens before every send</small></span><i>→</i><span class="bridge-node destination"><b>3</b><strong>Dated Ops Log</strong><small>${esc(payload.sheetName)} or ${esc(payload.sheetNameCandidates?.[1]||payload.sheetName)}<br>${esc(receiptText)}</small></span></div><div class="bridge-actions bridge-send-pair"><button class="btn primary bridge-send" data-action="sync-filtered-morning-to-sheets">${ICONS.link} Send filtered waves${connected?'':' · connect first'}</button><button class="btn rts-send-only" data-action="send-rts-to-sheets">${ICONS.calendar} Send RTS Times to Google Sheets</button><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open Google Sheet</a></div><p>${connected?'Both send buttons use the same Google connector and dated Ops Log. RTS send changes only Planned RTS and wave labels.':'Connect the Apps Script /exec URL once. After that, both send buttons use the same Google Sheet.'}</p></section>`;
+  const templateUrl=activeMorningTemplateUrl(),templateAction=templateUrl?`<a class="btn" href="${templateUrl}" target="_blank" rel="noopener">Open ${activeMorningStationCode()} Google Sheet</a>`:`<button class="btn" disabled>${activeMorningStationCode()} Google setup pending</button>`;
+  return `<section class="morning-sheet-bridge card ${connected?'connected':'setup'}" aria-label="Google Sheets bridge"><div class="bridge-route"><span class="bridge-node source"><b>1</b><strong>${dur6Preview?'All DUR6 waves':'Filtered waves'}</strong><small>${dur6Preview?'Full DUR6 morning sheet':esc(morningFilterScopeText())}<br>${routeCount} routes · ${waveCount} wave${waveCount===1?'':'s'}</small></span><i>→</i><span class="bridge-node check"><b>2</b><strong>${esc(activeOpeningStationProfile().templateSheet)} check</strong><small>${esc(activeOpeningStationProfile().layoutId)} · ${payload.sections.length} sections<br>Dry run happens before every send</small></span><i>→</i><span class="bridge-node destination"><b>3</b><strong>Dated Ops Log</strong><small>${esc(payload.sheetName)} or ${esc(payload.sheetNameCandidates?.[1]||payload.sheetName)}<br>${esc(receiptText)}</small></span></div><div class="bridge-actions bridge-send-pair"><button class="btn primary bridge-send" data-action="${dur6Preview?'dur6-google-send':'sync-filtered-morning-to-sheets'}" ${MULTI_STATION_PREVIEW&&!dur6Preview?'disabled':''}>${ICONS.link} ${dur6Preview?'Send DUR6 Morning Sheet · confirm in Google':`Send filtered waves${MULTI_STATION_PREVIEW?' · local preview':connected?'':' · connect first'}`}</button><button class="btn rts-send-only" data-action="send-rts-to-sheets" ${MULTI_STATION_PREVIEW||activeMorningStationCode()==='DUR6'?'disabled':''}>${ICONS.calendar} Send RTS Times to Google Sheets</button>${templateAction}</div><p>${dur6Preview?'DUR6 opens a Google confirmation window using your existing spreadsheet editing access. Review the date and all DUR6 waves before confirming. The connector must be validated and writes enabled first; RTS-only sends remain off for DUR6.':MULTI_STATION_PREVIEW?'DJT6 Google sends stay disabled in the local prototype. The published DJT6 workflow is unchanged.':connected?'Both send buttons use the same Google connector and dated Ops Log. RTS send changes only Planned RTS and wave labels.':'Connect the Apps Script /exec URL once. After that, both send buttons use the same Google Sheet.'}</p></section>`;
 }
 
 function morningSheetPage() {
-  const rows=filteredMorningRows(), waves=morningWaveList(), staging=[...new Set(state.morningRoutes.filter(r=>r.dsp===state.dspCode).map(r=>r.staging))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const rows=filteredMorningRows(),routeRows=rows.filter(row=>!row._blank),waves=morningWaveList(),staging=[...new Set(state.morningRoutes.filter(r=>r.dsp===state.dspCode).map(r=>r.staging).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
   const excluded=state.lastImportExcluded;
   const groups=morningSections(rows);
-  const irregular=rows.filter(r=>r.plannedRtsIssue).length;
+  const irregular=routeRows.filter(r=>r.plannedRtsIssue).length;
   const sheetMode=state.copyMode?'copy':'edit';
   const connected=Boolean(state.morningSheetsEndpoint),receipt=state.morningSheetsLastReceipt;
   const connectorStatus=connected?(receipt?.status==='confirmed'?'Google Sheet confirmed':'Google Sheet connected'):'Google Sheet needs setup';
-  return `${contextBar(`<span class="status blue">Earliest waves first</span>`)}
+  const stationCode=activeMorningStationCode(),templateUrl=activeMorningTemplateUrl(),templateLink=templateUrl?`<a class="btn morning-open-sheet" href="${templateUrl}" target="_blank" rel="noopener">Open ${stationCode} Google Sheet ↗</a>`:`<button class="btn morning-open-sheet" type="button" disabled>${stationCode} Google Sheet setup pending</button>`;
+  const pageBody=`${contextBar(`<span class="status blue">${stationCode} · Earliest waves first</span>`)}
   <section class="morning-workflow card" aria-label="Build today's morning sheet">
-    <div class="morning-workflow-head"><div><span class="eyebrow">${esc(state.dspCode)} OPENING OPERATIONS</span><h2>Build today’s morning sheet</h2><p>Press the buttons from left to right. RelayOps matches every CX and keeps the earliest waves first.</p></div><label class="operation-date-picker"><span>Day of operation</span><input type="date" data-operation-date value="${esc(state.morningOperationDate)}"><small>Google tab: ${esc(operationDateTabNames(state.morningOperationDate).join(' or '))}</small></label><span class="morning-connector-pill ${connected?'ready':'needs-setup'}"><i></i>${esc(connectorStatus)}</span></div>
+    <div class="morning-workflow-head"><div><span class="eyebrow">${esc(state.dspCode)} · ${stationCode} OPENING OPERATIONS</span><h2>Build today’s ${stationCode} morning sheet</h2><p>Press the buttons from left to right. RelayOps matches every CX and keeps the earliest waves first.</p></div><label class="operation-date-picker"><span>Day of operation</span><input type="date" data-operation-date value="${esc(state.morningOperationDate)}"><small>Google tab: ${esc(operationDateTabNames(state.morningOperationDate).join(' or '))}</small></label><span class="morning-connector-pill ${connected?'ready':'needs-setup'}"><i></i>${esc(MULTI_STATION_PREVIEW?(stationCode==='DUR6'?(connected?'DUR6 connector saved · confirm in Google':'Connect DUR6 Google Sheet'):'Local prototype · sends off'):connectorStatus)}</span></div>
     <div class="morning-workflow-section"><div class="morning-workflow-label"><b>Morning setup</b><span>Complete these four steps before stand-up.</span></div><div class="morning-workflow-grid">
-      <button class="morning-step primary-step" data-action="import"><b>1</b><span>${ICONS.upload}<strong>Upload day files</strong><small>DAYOFOPSPLAN + ROUTE_DJT6</small></span></button>
+      <button class="morning-step primary-step" data-action="import"><b>1</b><span>${ICONS.upload}<strong>Upload ${stationCode} day files</strong><small>DAYOFOPSPLAN + ROUTE_${stationCode}</small></span></button>
       <button class="morning-step" data-action="assign-operational-vans"><b>2</b><span>${ICONS.van}<strong>Assign safe vans</strong><small>Verified status + battery</small></span></button>
       <button class="morning-step" data-action="equipment-import"><b>3</b><span>${ICONS.phone}<strong>Add devices</strong><small>Device and Portable Import</small></span></button>
-      <button class="morning-step send-step" data-action="sync-filtered-morning-to-sheets"><b>4</b><span>${ICONS.link}<strong>Send Morning Sheet</strong><small>${connected?'To today’s Google tab':'Connect Google Sheet first'}</small></span></button>
+      <button class="morning-step send-step" data-action="${MULTI_STATION_ENABLED&&stationCode==='DUR6'?'dur6-google-send':'sync-filtered-morning-to-sheets'}" ${MULTI_STATION_PREVIEW&&stationCode!=='DUR6'?'disabled':''}><b>4</b><span>${ICONS.link}<strong>Send ${stationCode} Morning Sheet</strong><small>${MULTI_STATION_PREVIEW?(stationCode==='DUR6'?'OPS LOG DUR6 → '+esc(operationDateTabNames(state.morningOperationDate)[0]||'DUR6 date tab')+' · confirm in Google':'Disabled in local prototype'):connected?'To today’s Google tab':'Connect Google Sheet first'}</small></span></button>
     </div></div>
-    <div class="morning-later-row"><div class="morning-workflow-label"><b>Later: add RTS times</b><span>Use this after the Itineraries file is ready.</span></div><div class="morning-later-actions"><button class="btn" data-action="itineraries-rts-import"><b>5</b>${ICONS.calendar}<span>Import RTS times<small>Itineraries_DJT6</small></span></button><button class="btn rts-send-only" data-action="send-rts-to-sheets"><b>6</b>${ICONS.link}<span>Send RTS times<small>Updates Planned RTS only</small></span></button><a class="btn morning-open-sheet" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open Google Sheet ↗</a></div></div>
+    <div class="morning-later-row"><div class="morning-workflow-label"><b>Later: add RTS times</b><span>Use this after the Itineraries file is ready.</span></div><div class="morning-later-actions"><button class="btn" data-action="itineraries-rts-import"><b>5</b>${ICONS.calendar}<span>Import RTS times<small>Itineraries_${stationCode}</small></span></button><button class="btn rts-send-only" data-action="send-rts-to-sheets" ${MULTI_STATION_PREVIEW||activeMorningStationCode()==='DUR6'?'disabled':''}><b>6</b>${ICONS.link}<span>Send RTS times<small>${activeMorningStationCode()==='DUR6'?'Use full DUR6 transfer':MULTI_STATION_PREVIEW?'Disabled locally':'Updates Planned RTS only'}</small></span></button>${templateLink}</div></div>
   </section>
   <details class="morning-more-tools card" open><summary><span><strong>More morning tools</strong><small>Optional filters, editing, van choices, and recovery</small></span><b>Hide</b></summary><div class="morning-tools-body">
-    <section class="morning-tool-group filter-group"><div class="morning-tool-heading"><span><strong>Find routes</strong><small>Show only the part of the sheet you need.</small></span><div class="morning-kpi-pills"><i><b>${rows.length}</b> routes</i><i><b>${rows.reduce((n,r)=>n+r.packages,0).toLocaleString()}</b> packages</i><i><b>${rows.reduce((n,r)=>n+r.stops,0).toLocaleString()}</b> stops</i><i class="${irregular?'warning':''}"><b>${irregular}</b> RTS flags</i></div></div><div class="morning-filter-form"><label><span>Wave</span><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></label><label><span>Staging</span><select data-morning-filter="staging"><option value="all">All staging locations</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></label><label><span>Pad</span><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></label><button class="btn subtle" data-action="clear-morning-filters">Clear filters</button><span class="morning-sort-note">${ICONS.chevron} Earliest wave first</span></div></section>
+    <section class="morning-tool-group filter-group"><div class="morning-tool-heading"><span><strong>Find routes</strong><small>Show only the part of the sheet you need.</small></span><div class="morning-kpi-pills"><i><b>${routeRows.length}</b> routes</i><i><b>${routeRows.reduce((n,r)=>n+(Number(r.packages)||0),0).toLocaleString()}</b> packages</i><i><b>${routeRows.reduce((n,r)=>n+(Number(r.stops)||0),0).toLocaleString()}</b> stops</i><i class="${irregular?'warning':''}"><b>${irregular}</b> RTS flags</i></div></div><div class="morning-filter-form"><label><span>Wave</span><select data-morning-filter="wave"><option value="all">All waves</option>${waves.map(v=>`<option ${state.morningFilters.wave===v?'selected':''}>${v}</option>`).join('')}</select></label><label><span>Staging</span><select data-morning-filter="staging"><option value="all">All staging locations</option>${staging.map(v=>`<option ${state.morningFilters.staging===v?'selected':''}>${v}</option>`).join('')}</select></label><label><span>Pad</span><select data-morning-filter="pad"><option value="all">All pads</option>${['A','B','C'].map(v=>`<option ${state.morningFilters.pad===v?'selected':''}>${v}</option>`).join('')}</select></label><button class="btn subtle" data-action="clear-morning-filters">Clear filters</button><span class="morning-sort-note">${ICONS.chevron} Earliest wave first</span></div></section>
     <div class="morning-tool-grid">
       <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Work with the sheet</strong><small>Edit, select, or make the sheet compact.</small></span></div><div class="morning-tool-actions"><button class="btn ${state.editMode?'lime':''}" data-action="toggle-morning-edit">${state.editMode?'✓ Finish editing':'✎ Edit sheet'}</button><button class="btn ${state.copyMode?'lime':''}" data-action="toggle-morning-copy">${state.copyMode?'✓ Exit copy mode':'Copy cells'}</button><button class="btn ${state.fitMorningRows?'lime':''}" data-action="toggle-fit-rows">${state.fitMorningRows?'✓ Fit to drivers':'Remove blank rows'}</button></div></section>
       <section class="morning-tool-group"><div class="morning-tool-heading"><span><strong>Choose vans another way</strong><small>Optional alternatives to safe automatic assignment.</small></span></div><div class="morning-tool-actions morning-vehicle-actions"><button class="btn bag-ready-vans" data-action="assign-bag-ready-vans">${ICONS.phone} Prepped Vans</button><button class="btn" data-action="assign-vans-by-parking">${ICONS.van} Parking order</button><button class="btn" data-action="assign-ev-low">EV 1–58 low → high</button><button class="btn" data-action="assign-ev-random">Random EVs</button><button class="btn" data-action="assign-gas-vans">Gas vehicles</button><button class="btn danger-soft" data-action="clear-morning-evs">Clear EVs</button></div></section>
@@ -1806,11 +2068,14 @@ function morningSheetPage() {
   ${state.copyMode?`<div class="edit-help copy-help">Copy mode is on. Drag across cells exactly like Google Sheets, watch the blue highlight, then press ⌘C on Mac or Ctrl+C on Windows. Divider columns I and N split the original A–V Ops Log into setup, inspection, and operations blocks.</div>`:state.editMode?`<div class="edit-help">Editing is on. Columns A–V and every row are labeled like Google Sheets. Click and drag white cells to select a rectangle, press ⌘C to copy, or paste tabbed rows from Sheets to fill across/down.</div>`:''}
   <article class="card morning-board ${state.copyMode?'copy-board':state.editMode?'edit-board':'view-board'}"><div class="sheet-scroll"><table class="ops-sheet morning-template-sheet exact-ops-sheet ${state.copyMode?'copy-ops-sheet':''}"><thead>${sheetModeHeader(morningTemplateHeaders,sheetMode)}</thead><tbody>${groups.length?groups.map((section,sectionIndex)=>morningWaveGroup(section,sectionIndex)).join(''):`<tr><td colspan="23"><div class="empty-state"><h3>No routes match these filters</h3><p>Clear a filter or upload a new day-of-operations file.</p></div></td></tr>`}</tbody></table></div></article>
   <div class="dispatcher-rating card"><div><strong>How easy was this opening sheet?</strong><span>Your 5-star tap helps find what needs to be smoother next.</span></div><div class="stars">${[1,2,3,4,5].map(n=>`<button class="${state.rating>=n?'active':''}" data-action="rate-service" data-rating="${n}" aria-label="${n} stars">★</button>`).join('')}</div></div>`;
+  return stationWorkspacePage(pageBody);
 }
 
 function morningConnectorGuide() {
   const connected=Boolean(state.morningSheetsEndpoint),tabs=operationDateTabNames(state.morningOperationDate);
-  return `<details class="morning-connectors card"><summary><div><strong>Ops Log connector setup</strong><span>Google Sheets is ready through Apps Script. Slack stays locked until its secure connector is built.</span></div><b>Open</b></summary><div class="morning-connector-grid"><div><strong>1 · Slack / day file</strong><span>Locked for now. Use Amazon XLSX/CSV upload so no dispatcher expects an unfinished connection to work.</span><button class="btn small locked" disabled>Slack Import · locked</button></div><div><strong>2 · Cortex / Amazon Logistics</strong><span>Upload XLSX/CSV files. RelayOps reads them locally and filters ${esc(state.dspCode)} routes.</span><button class="btn small primary" data-action="import">Upload Amazon files</button></div><div><strong>3 · Google Sheets Ops Log</strong><span>${connected?`Connected. Sends only to ${esc(tabs.join(' or '))} using the original A:V layout.`:'Install the Apps Script once, save the /exec URL, then send to the selected operation-date tab.'}</span><button class="btn small lime" data-action="morning-sheets-connector">${connected?'Open Ops Log connector':'Connect Ops Log'}</button><a class="btn small" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open ops log</a></div></div><p>If the exact date tab is missing, RelayOps creates it by duplicating the blank OPS LOG 2026 template.</p></details>`;
+  const dur6Preview=MULTI_STATION_ENABLED&&activeMorningStationCode()==='DUR6';
+  const templateUrl=activeMorningTemplateUrl(),templateAction=templateUrl?`<a class="btn small" href="${templateUrl}" target="_blank" rel="noopener">Open ${activeMorningStationCode()} ops log</a>`:`<a class="btn small" href="${MULTI_STATION_LOCAL_PLAN_URL}" target="_blank" rel="noopener">Open local setup plan</a>`;
+  return `<details class="morning-connectors card"><summary><div><strong>${activeMorningStationCode()} Ops Log connector setup</strong><span>${dur6Preview?'DUR6 handoff · Google sign-in and confirmation required.':MULTI_STATION_PREVIEW?'Local planning only · DJT6 network sends are disabled.':'Google Sheets is ready through Apps Script. Slack stays locked until its secure connector is built.'}</span></div><b>Open</b></summary><div class="morning-connector-grid"><div><strong>1 · Slack / day file</strong><span>Locked for now. Use Amazon XLSX/CSV upload so no dispatcher expects an unfinished connection to work.</span><button class="btn small locked" disabled>Slack Import · locked</button></div><div><strong>2 · Cortex / Amazon Logistics</strong><span>Upload XLSX/CSV files. RelayOps reads them locally and filters ${esc(state.dspCode)} routes into ${activeMorningStationCode()}.</span><button class="btn small primary" data-action="import">Upload ${activeMorningStationCode()} files</button></div><div><strong>3 · Google Sheets Ops Log</strong><span>${dur6Preview?'Use the same Google spreadsheet and existing editor accounts. The DUR6 confirmation window checks OPS LOG DUR6 → '+esc(tabs[0]||'DUR6 M.D.YY')+' before copying or updating that date tab. Deployment validation and the write-enable switch must pass first.':MULTI_STATION_PREVIEW?'DJT6 stays local while the multi-station prototype is open.':connected?`Connected. Sends only to ${esc(tabs.join(' or '))} using the station layout.`:'Install the Apps Script once, save the /exec URL, then send to the selected operation-date tab.'}</span><button class="btn small lime" data-action="morning-sheets-connector">${dur6Preview?'Open DUR6 Google setup':MULTI_STATION_PREVIEW?'View connector handoff':connected?'Open Ops Log connector':'Connect Ops Log'}</button>${templateAction}</div></div><p>${dur6Preview?'Only an explicit DUR6 Google action opens the transfer window. Imports and station switches do not send data. DJT6’s connector is unchanged.':MULTI_STATION_PREVIEW?'DJT6 and DUR6 use separate station identities; this prototype never falls back to the other station’s endpoint.':'If the exact date tab is missing, RelayOps creates it by duplicating the station template.'}</p></details>`;
 }
 
 function morningWaveOverrideKey(label='') { return `${state.morningOperationDate}|${morningFixedSectionKey(label)}`; }
@@ -1836,38 +2101,41 @@ function saveMorningWaveTimeValue(label='',wave='',rawValue='') {
   return state.morningWaveTimeOverrides[key];
 }
 function morningBlankWaveAnchors() {
-  const existing=morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-6]$/i.test(section.label)).slice(0,MORNING_CORE_WAVE_COUNT);
-  return Array.from({length:MORNING_CORE_WAVE_COUNT},(_,index)=>{
-    const label=`WAVE ${index+1}`,section=existing[index]||{},override=morningWaveTimeOverride({label}),wave=override?.time||section.wave||MORNING_CORE_WAVE_TIMES[index];
+  const waveCount=activeMorningWaveCount(),waveTimes=activeMorningWaveTimes();
+  const existing=morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-6]$/i.test(section.label)).slice(0,waveCount);
+  return Array.from({length:waveCount},(_,index)=>{
+    const label=`WAVE ${index+1}`,section=existing[index]||{},override=morningWaveTimeOverride({label}),wave=override?.time||section.wave||waveTimes[index]||`Wave ${index+1}`;
     const pad=morningSectionPad({...section,label});
-    return {routeUid:`WAVE-ANCHOR-${state.morningOperationDate}-${index+1}`,dsp:state.dspCode,driver:'',route:`__blank_wave_${index+1}`,service:'Morning Sheet wave anchor',wave,staging:'',pad,padOverride:pad,ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true,_waveAnchor:true};
+    return {routeUid:`${activeMorningStationCode()}-WAVE-ANCHOR-${state.morningOperationDate}-${index+1}`,stationCode:activeMorningStationCode(),dsp:state.dspCode,driver:'',route:`__blank_wave_${index+1}`,service:'Morning Sheet wave anchor',wave,staging:'',pad,padOverride:pad,ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true,_waveAnchor:true};
   });
 }
 
-function morningSections(rows) {
+function morningSections(rows,options={}) {
   const regular=rows.filter(r=>isCxMorningRoute(r)||(!isExplicitHelperMorningRoute(r)&&!isExplicitAdhocMorningRoute(r)));
-  const importedWaves=[...new Set(regular.map(r=>r.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).slice(0,MORNING_CORE_WAVE_COUNT);
+  const waveCount=activeMorningWaveCount(),waveTimes=activeMorningWaveTimes(),capacities=activeMorningWaveCapacities();
+  const importedWaves=[...new Set(regular.map(r=>r.wave).filter(Boolean))].sort((a,b)=>waveMinutes(a)-waveMinutes(b)).slice(0,waveCount);
   const sectionWaves=[...importedWaves],usedWaves=new Set(sectionWaves);
-  while(sectionWaves.length<MORNING_CORE_WAVE_COUNT){
+  while(sectionWaves.length<waveCount){
     const index=sectionWaves.length,label=`WAVE ${index+1}`,override=morningWaveTimeOverride({label});
-    const candidates=[override?.time,MORNING_CORE_WAVE_TIMES[index],...MORNING_CORE_WAVE_TIMES].filter(Boolean);
-    const wave=candidates.find(value=>!usedWaves.has(value))||override?.time||MORNING_CORE_WAVE_TIMES[index]||`Wave ${index+1}`;
+    const candidates=[override?.time,waveTimes[index],...waveTimes].filter(Boolean);
+    const wave=candidates.find(value=>!usedWaves.has(value))||override?.time||waveTimes[index]||`Wave ${index+1}`;
     sectionWaves.push(wave);usedWaves.add(wave);
   }
-  const sections=sectionWaves.map((wave,i)=>{const label=`WAVE ${i+1}`;return {label,wave,rows:regular.filter(r=>r.wave===wave),pad:morningSectionPadOverride(label)||MORNING_CORE_WAVE_PADS[i],routeCapacity:MORNING_CORE_WAVE_CAPACITIES[i],hasTime:true,separatorRows:1};});
+  const sections=sectionWaves.map((wave,i)=>{const label=`WAVE ${i+1}`;return {label,wave,rows:regular.filter(r=>r.wave===wave),pad:morningSectionPadOverride(label)||MORNING_CORE_WAVE_PADS[i],routeCapacity:capacities[i]||15,hasTime:true,separatorRows:1};});
   const used=new Set(sections.flatMap(s=>s.rows.map(r=>r.route)));
   const adHoc=rows.filter(r=>!used.has(r.route)&&isExplicitAdhocMorningRoute(r));
   const helpers=rows.filter(r=>!used.has(r.route)&&isExplicitHelperMorningRoute(r)&&!adHoc.some(x=>x.route===r.route));
   sections.push({label:"ADHOC's",wave:'',rows:adHoc,pad:morningCanonicalPad('ADHOCS',adHoc[0]?.padOverride||''),routeCapacity:15,hasTime:false,separatorRows:1});
   sections.push({label:'HELPERS',wave:'',rows:helpers,routeCapacity:15,hasTime:false,separatorRows:1});
   sections.push({label:'DSP',wave:'',rows:[],routeCapacity:6,hasTime:false,separatorRows:0,dsp:true});
-  if(state.fitMorningRows) return sections.filter(s=>s.hasTime||s.rows.length||s.dsp);
+  if(options.includeEmpty)return sections;
+  if(state.fitMorningRows&&!options.fixed) return sections.filter(s=>s.hasTime||s.rows.length||s.dsp);
   return sections.filter(s=>s.rows.length||s.label.startsWith('WAVE')||s.dsp||state.morningFilters.wave==='all');
 }
 
 function blankMorningRow(section,index) {
   const pad=morningSectionPad(section);
-  return {dsp:state.dspCode,driver:'',route:`__blank_${section.label}_${index}`,service:'',wave:section.wave,staging:'',pad,padOverride:pad,ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true};
+  return {stationCode:activeMorningStationCode(),dsp:state.dspCode,driver:'',route:`__blank_${section.label}_${index}`,service:'',wave:section.wave,staging:'',pad,padOverride:pad,ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,stops:'',packages:'',packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',_blank:true};
 }
 
 function morningDisplayRows(section) {
@@ -1926,7 +2194,7 @@ function morningCopyGrid(groups=[]) {
 }
 
 function createManualMorningRoute(seed={}) {
-  const route={routeUid:`MR-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,dsp:state.dspCode,driver:'',route:seed.route||`MANUAL-${Date.now().toString().slice(-6)}`,service:'Manual opening edit',wave:seed.wave||'Manual',staging:'',duration:0,zones:0,packages:0,commercial:0,stops:0,eta:'',bags:0,overflow:0,parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
+  const route={routeUid:`${activeMorningStationCode()}-MR-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`,stationCode:activeMorningStationCode(),dsp:state.dspCode,driver:'',route:seed.route||`MANUAL-${Date.now().toString().slice(-6)}`,service:'Manual opening edit',wave:seed.wave||'Manual',staging:'',duration:0,zones:0,packages:0,commercial:0,stops:0,eta:'',bags:0,overflow:0,parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts:'',clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
   state.morningRoutes.push(route);
   return route;
 }
@@ -2142,13 +2410,16 @@ function deviceSheetTable(title,subtitle,section='') {
   return `<article class="card device-sheet-card ${section}-list"><div class="device-sheet-card-head"><div><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><div class="device-sheet-card-actions"><span>${count} rows</span><button class="btn small" data-action="open-equipment-issue" data-equipment-type="device" data-equipment-id="">⚠ Report issue</button><button class="btn small" data-action="add-device-sheet-row" data-device-section="${esc(section)}">${ICONS.plus} Add row</button><button class="btn small ${confirming?'danger':''}" data-action="clear-device-sheet-section" data-device-section="${esc(section)}">${confirming?'Click again to clear':'Clear sheet'}</button></div></div><div class="device-sheet-table-wrap"><table class="device-sheet-table"><thead><tr><th>VAN</th><th>DEVICE</th><th>PORTABLE</th></tr></thead><tbody>${deviceSheetRows(section)}</tbody></table></div></article>`;
 }
 function livePage() {
-  const details=deviceSheetDetails(),filled=Object.values(details).filter(item=>String(item?.device||'').trim()||String(item?.portable||'').trim()).length;
+  const station=activeMorningStationCode(),profile=activeOpeningStationProfile(),stationScoped=MULTI_STATION_ENABLED,details=deviceSheetDetails(),filled=Object.values(details).filter(item=>String(item?.device||'').trim()||String(item?.portable||'').trim()).length;
   const assigned=state.morningRoutes.filter(route=>route.ev&&details[normalizeEquipmentId(route.ev)]).length;
-  return `${contextBar(`<span class="status">${filled} assignments saved</span><span class="status ${activeEquipmentIssueCount()?'warn':''}">${activeEquipmentIssueCount()} equipment issues</span>`)}
-  <section class="device-sheet-intro card"><div><span class="eyebrow">TODAY’S EQUIPMENT</span><h2>Type the Device and Portable beside each van</h2><p>EV labels stay fixed. Click any white box and type today’s number. Signed-in dispatchers share saved updates; offline edits stay queued on this device.</p></div><div class="device-sheet-steps"><span><b>1</b>Type numbers</span><span><b>2</b>Check the EV</span><span><b>3</b>Send to Morning Sheet</span></div><button class="btn primary device-sheet-send" data-action="device-sheet-to-morning">Input to Morning Sheet ${ICONS.chevron}</button></section>
+  const sendLabel=stationScoped?`Input to ${station} Morning Sheet`:'Input to Morning Sheet',introTitle=stationScoped?`${station} Device & Portable Sheet`:'Type the Device and Portable beside each van';
+  const introCopy=stationScoped?`Type each Device and Portable beside its van. Uploads, manual entries, removals, and issue reports stay only with ${station} · ${profile.location} for this operating day.`:'EV labels stay fixed. Click any white box and type today’s number. Signed-in dispatchers share saved updates; offline edits stay queued on this device.';
+  const content=`${contextBar(`<span class="status">${stationScoped?`${station} · `:''}${filled} assignments saved</span><span class="status ${activeEquipmentIssueCount()?'warn':''}">${activeEquipmentIssueCount()} equipment issues</span>`)}
+  <section class="device-sheet-intro card" data-equipment-station="${station}"><div><span class="eyebrow">${stationScoped?`${station} · `:''}TODAY’S EQUIPMENT</span><h2>${esc(introTitle)}</h2><p>${esc(introCopy)}</p></div><div class="device-sheet-steps"><span><b>1</b>Type numbers</span><span><b>2</b>Check the EV</span><span><b>3</b>${stationScoped?`Send to ${station}`:'Send to Morning Sheet'}</span></div><button class="btn primary device-sheet-send" data-action="device-sheet-to-morning">${esc(sendLabel)} ${ICONS.chevron}</button></section>
   <section class="device-sheet-summary"><span><b>${filled}</b>van rows filled</span><span><b>${assigned}</b>Morning Sheet drivers currently matched</span><span><b>${state.morningRoutes.filter(route=>route.ev).length}</b>drivers have a van assigned</span></section>
   <section class="device-sheet-layout"><div>${deviceSheetTable('Electric vehicles','EV1 through EV58 plus Fleet Health and manual additions','ev')}</div><aside>${deviceSheetTable('Gas vehicles','Ford, Ram and rental vans from Fleet Health plus manual additions','gas')}${deviceSheetTable('Helper bags','Use H1–H4 or add another helper bag','helper')}</aside></section>
-  <div class="device-sheet-sticky-action"><div><strong>Ready to match equipment?</strong><span>The EV/VAN number is the match key. Driver names and routes stay unchanged.</span></div><button class="btn primary" data-action="device-sheet-to-morning">Input to Morning Sheet</button></div>`;
+  <div class="device-sheet-sticky-action"><div><strong>${stationScoped?`Ready to match ${station} equipment?`:'Ready to match equipment?'}</strong><span>The EV/VAN number is the match key. ${stationScoped?`${station} `:''}driver names and routes stay unchanged.</span></div><button class="btn primary" data-action="device-sheet-to-morning">${esc(sendLabel)}</button></div>`;
+  return stationWorkspacePage(content,'equipment');
 }
 
 function stayHomeHistoryEntries() {
@@ -3590,6 +3861,19 @@ function adminPage() {
   return `${contextBar('<span class="status">Admin PIN unlocked</span><button class="btn small" data-action="lock-admin">Lock Admin</button>')}<section class="admin-layout"><div class="admin-main"><article class="card settings-section"><h2>Organization</h2><p>These synchronized labels appear throughout RelayOps for everyone using the shared link.</p><div class="field-grid"><div class="field"><label for="admin-dsp-name">DSP name</label><input id="admin-dsp-name" value="${esc(state.organizationName)}"></div><div class="field"><label for="admin-station-code">Station code</label><input id="admin-station-code" value="${esc(state.stationCode)}" maxlength="12"></div><div class="field"><label>Timezone</label><input value="America/Los_Angeles" readonly></div><div class="field"><label>Operating day starts</label><input value="06:00" readonly></div></div><div class="modal-actions"><button class="btn primary" data-action="save-organization">Save organization</button></div></article><article class="card settings-section"><h2>Shared-link access</h2><p>No dispatcher email or sign-in link is required. Opening the published dashboard automatically creates a restricted Supabase link session and loads the same station workspace.</p><div class="cloud-account-summary"><span><b>✓</b>Automatic link session</span><span><b>✓</b>Automatic shared refresh</span><span><b>✓</b>Admin screen PIN-gated</span></div><div class="private-contact-note danger"><b>Share only with your operations team</b><span>Anyone who receives the dashboard link can view and edit synchronized operational data, including imported driver and fleet information.</span></div></article></div><aside class="admin-side"><article class="card settings-section"><h2>Connections</h2><p>Working handoffs and their current status.</p><div class="connection"><div class="connection-logo">amz</div><div class="connection-copy"><strong>Amazon Logistics</strong><span>Manual XLSX/CSV import</span></div><span class="status">Ready</span></div><div class="connection"><div class="connection-logo" style="background:#287247">GS</div><div class="connection-copy"><strong>Google Sheets</strong><span>${sheetReady?'Saved connector endpoint':'Connector endpoint not configured'}</span></div><span class="status ${sheetReady?'':'warn'}">${sheetReady?'Ready':'Setup required'}</span></div><div class="connection"><div class="connection-logo" style="background:#287247">SB</div><div class="connection-copy"><strong>Supabase sync</strong><span>${cloudConfigured?'Automatic shared-link session':'Cloud configuration missing'}</span></div><span class="status ${cloudConfigured?'':'warn'}">${cloudConfigured?'Live':'Setup required'}</span></div></article><article class="card settings-section"><h2>Share RelayOps</h2><p>Every dispatcher who opens this HTTPS link joins the same synchronized workspace automatically.</p><div class="callout"><strong>Live shared dashboard</strong><p><a href="${DISPATCHER_SHARE_URL}" target="_blank" rel="noopener">${DISPATCHER_SHARE_URL}</a></p><button class="btn small lime" data-action="share-dispatcher-link">${ICONS.copy} Copy clickable link</button></div><div class="callout"><strong>Fleet parking link</strong><p><a href="${FLEET_PARKING_SHARE_URL}" target="_blank" rel="noopener">${FLEET_PARKING_SHARE_URL}</a></p><button class="btn small lime" data-action="copy-fleet-parking-link">${ICONS.copy} Copy fleet link</button></div></article><article class="card settings-section admin-security-note"><h2>Admin protection</h2><p>The PIN is checked by Supabase, rate-limited after failed attempts, and remains unlocked for this shared browser session for up to eight hours.</p><button class="btn danger" data-action="lock-admin">Lock Admin now</button></article></aside></section>`;
 }
 
+function localPreviewAdminPage() {
+  const html=adminPage();
+  if(!MULTI_STATION_PREVIEW)return html;
+  return html
+    .replace('<span class="status">Admin PIN unlocked</span><button class="btn small" data-action="lock-admin">Lock Admin</button>','<span class="status">Local preview · Admin open</span>')
+    .replace('Shared-link access','Local preview access')
+    .replace('No dispatcher email or sign-in link is required. Opening the published dashboard automatically creates a restricted Supabase link session and loads the same station workspace.','This localhost planning workspace opens Admin without a PIN. It cannot contact Supabase, change live memberships, or unlock the published dashboard.')
+    .replace('Automatic link session','Production cloud disabled')
+    .replace('Automatic shared refresh','Browser-only preview storage')
+    .replace('Admin screen PIN-gated','Local Admin open without a PIN')
+    .replace('<h2>Admin protection</h2><p>The PIN is checked by Supabase, rate-limited after failed attempts, and remains unlocked for this shared browser session for up to eight hours.</p><button class="btn danger" data-action="lock-admin">Lock Admin now</button>','<h2>Local-only Admin access</h2><p>No PIN is used in this isolated preview. The published dashboard keeps its server-verified PIN, rate limit, and timed Admin session.</p>');
+}
+
 function importPreviewStats() {
   if(!state.importedFile)return null;
   if(state.importedFile.kind==='details') return {included:state.importedFile.routeDetailsCount||0,excluded:0};
@@ -3603,6 +3887,7 @@ function importColumnIndexes(file=state.importedFile) {
     dsp:index('dsp','dspcode','company'),
     route:index('route','routecode','cxnumber','cxroute','blockid'),
     driver:index('driver','drivername','transportername','employeename','daname','associatename','da'),
+    service:index('servicetype','deliveryservicetype','service'),
     wave:index('wave','wavetime','starttime','planneddeparturetime','planneddeparttime','departuretime'),
     staging:index('staging','staginglocation'),
     stops:index('stops','stopcount','plannedstops','stopsplanned','numstops','totalstops','allstops'),
@@ -3640,6 +3925,7 @@ function normalizeMorningWaveTime(value='') {
 }
 function importPreflight(file=state.importedFile) {
   if(!file)return null;
+  const routeFileLabel=activeMorningRouteFileLabel(),itineraryFileLabel=activeMorningItineraryFileLabel();
   if(file.kind==='details'||file.kind==='rts') {
     const count=file.routeDetailsCount||Object.keys(file.routeDetails||{}).length;
     return {
@@ -3649,7 +3935,7 @@ function importPreflight(file=state.importedFile) {
       matched:count,
       missing:count?[]:['No CX routes found'],
       checks:[
-        {label:file.kind==='rts'?'Planned return to station found':'ROUTE_DJT6 rows found',ok:count>0,detail:count?`${count} CX route${count===1?'':'s'} ready to match`:'Upload an Itineraries_DJT6 file with Route code and Planned return to station'},
+        {label:file.kind==='rts'?'Planned return to station found':`${routeFileLabel} rows found`,ok:count>0,detail:count?`${count} CX route${count===1?'':'s'} ready to match`:`Upload an ${itineraryFileLabel} file with Route code and Planned return to station`},
         {label:'CX route matching',ok:count>0,detail:'Updates only routes that already exist on the Morning Sheet'}
       ]
     };
@@ -3662,8 +3948,17 @@ function importPreflight(file=state.importedFile) {
   const routeKeys=new Set(candidates.map(item=>item.route));
   const detailKeys=new Set(Object.keys(file.routeDetails||{}).map(v=>String(v).toUpperCase()));
   const matched=[...routeKeys].filter(route=>detailKeys.has(route)).length;
+  const stationRegularCandidates=candidates.filter(item=>{
+    const probe={route:item.route,wave:ix.wave>=0?normalizeMorningWaveTime(item.row[ix.wave]):'',service:ix.service>=0?item.row[ix.service]:''};
+    return !isExplicitAdhocMorningRoute(probe)&&!isExplicitHelperMorningRoute(probe);
+  });
+  const stationRegularWaves=stationRegularCandidates.map(item=>ix.wave>=0?normalizeMorningWaveTime(item.row[ix.wave]):'');
+  const stationMissingWaveCount=stationRegularWaves.filter(value=>!value||/^(?:n\/?a|none|null|missing|-|wave\s*pending)$/i.test(String(value).trim())).length;
+  const stationWaveCount=new Set(stationRegularWaves.filter(value=>value&&!/^(?:n\/?a|none|null|missing|-|wave\s*pending)$/i.test(String(value).trim()))).size;
+  const stationWaveReady=activeMorningStationCode()!=='DUR6'||(stationWaveCount>=1&&stationWaveCount<=3&&stationMissingWaveCount===0);
   const missing=required.filter(([,ixValue])=>ixValue<0).map(([label])=>label);
-  const ready=!missing.length&&candidates.length>0;
+  if(!stationWaveReady)missing.push(stationMissingWaveCount?`DUR6 has ${stationMissingWaveCount} regular route${stationMissingWaveCount===1?'':'s'} without a wave time`:`DUR6 requires 1–3 populated regular waves; this file has ${stationWaveCount}`);
+  const ready=!missing.length&&candidates.length>0&&stationWaveReady;
   return {
     ready,
     included:candidates.length,
@@ -3673,10 +3968,11 @@ function importPreflight(file=state.importedFile) {
     checks:[
       {label:'DSP filter + valid Route Code',ok:ix.dsp>=0,detail:ix.dsp>=0?`${candidates.length} ${state.dspCode} route${candidates.length===1?'':'s'} kept · ${rows.length-candidates.length} other-DSP or non-route row${rows.length-candidates.length===1?'':'s'} skipped`:'No DSP column found — every nonblank Route Code row will be treated as your DSP'},
       {label:'Required columns',ok:!missing.length,detail:missing.length?`Missing: ${missing.join(', ')}`:'Route and wave-time columns are ready'},
-      {label:'Staging locations',ok:ix.staging>=0,detail:ix.staging>=0?'Staging locations will transfer with each CX route':'This Routes_DJT6 file has no staging column; routes will remain editable with blank staging until a DayOfOpsPlan file is added'},
+      {label:'Staging locations',ok:ix.staging>=0,detail:ix.staging>=0?'Staging locations will transfer with each CX route':`This ${routeFileLabel} file has no staging column; routes will remain editable with blank staging until a DayOfOpsPlan file is added`},
       {label:'Earliest waves first',ok:ix.wave>=0,detail:ix.wave>=0?'Routes will sort by launch time before hitting the template':'Wave column is required for morning order'},
+      {label:`${activeMorningStationCode()} wave capacity`,ok:stationWaveReady,detail:activeMorningStationCode()==='DUR6'?`${stationWaveCount} populated regular wave${stationWaveCount===1?'':'s'} found${stationMissingWaveCount?` · ${stationMissingWaveCount} regular route${stationMissingWaveCount===1?' is':'s are'} missing a wave time`:''} · DUR6 accepts one through three`:'DJT6 keeps its existing six-wave layout'},
       {label:'All Service Types included',ok:true,detail:'Standard, Nursery, Helper, XL, Donation, and other DSP route services stay in the import'},
-      {label:'CX route matching',ok:matched>0||!detailKeys.size,detail:detailKeys.size?`${matched} of ${routeKeys.size} plan CX route${routeKeys.size===1?'':'s'} matched ROUTE_DJT6 details`:'No ROUTE_DJT6 details uploaded — names/stops use the plan file or stay reviewable'},
+      {label:'CX route matching',ok:matched>0||!detailKeys.size,detail:detailKeys.size?`${matched} of ${routeKeys.size} plan CX route${routeKeys.size===1?'':'s'} matched ${routeFileLabel} details`:`No ${routeFileLabel} details uploaded — names/stops use the plan file or stay reviewable`},
       {label:'Template output',ok:ready,detail:ready?'Creates the A–M numbered Morning Sheet rows':'Fix the missing items before creating the sheet'}
     ]
   };
@@ -3685,7 +3981,7 @@ function importPreflightHtml(file=state.importedFile) {
   const proof=importPreflight(file);
   if(!proof)return '';
   const title=file?.kind==='rts'?`${proof.included} Planned RTS time${proof.included===1?'':'s'} ready`:file?.kind==='details'?`${proof.included} CX detail row${proof.included===1?'':'s'} ready`:`${proof.included} ${state.dspCode} route${proof.included===1?'':'s'} ready`;
-  const subtitle=file?.kind==='rts'?'Purple Planned RTS cells will fill by CX route.':file?.kind==='details'?'Driver names and stop counts will update by CX route.':`${proof.excluded} other-DSP route${proof.excluded===1?'':'s'} will be left out automatically${proof.matched?` · ${proof.matched} CX route${proof.matched===1?'':'s'} matched ROUTE_DJT6`:''}.`;
+  const subtitle=file?.kind==='rts'?'Purple Planned RTS cells will fill by CX route.':file?.kind==='details'?'Driver names and stop counts will update by CX route.':`${proof.excluded} other-DSP route${proof.excluded===1?'':'s'} will be left out automatically${proof.matched?` · ${proof.matched} CX route${proof.matched===1?'':'s'} matched ${activeMorningRouteFileLabel()}`:''}.`;
   return `<div class="import-proof ${proof.ready?'ready':'warn'}"><div class="import-proof-head"><span class="preview-check">${proof.ready?'✓':'!'}</span><div><strong>${esc(title)}</strong><span>${esc(subtitle)}</span></div></div><div class="import-proof-grid">${proof.checks.map(check=>`<div class="${check.ok?'ok':'warn'}"><b>${check.ok?'✓':'!'}</b><span>${esc(check.label)}</span><small>${esc(check.detail)}</small></div>`).join('')}</div></div>`;
 }
 
@@ -3705,7 +4001,7 @@ function morningImportTemplateProofHtml(file=state.importedFile,payload=morningS
     {label:'DSP filter',value:proof?`${included} ${state.dspCode} kept · ${excluded} excluded`:`${rows.length} ${state.dspCode} rows visible`,ok:!proof||proof.checks?.find(c=>c.label==='DSP filter')?.ok!==false},
     {label:'Earliest wave',value:earliest,ok:Boolean(rows.length)},
     {label:'Wave boxes',value:`${waves.length} wave section${waves.length===1?'':'s'} created`,ok:waves.length>0},
-    {label:'CX matches',value:file?.routeDetailsCount?`${matchedRoutes} matched to ROUTE_DJT6`:'No ROUTE_DJT6 file applied',ok:!file?.routeDetailsCount||matchedRoutes>0},
+    {label:'CX matches',value:file?.routeDetailsCount?`${matchedRoutes} matched to ${activeMorningRouteFileLabel()}`:`No ${activeMorningRouteFileLabel()} file applied`,ok:!file?.routeDetailsCount||matchedRoutes>0},
     {label:'First driver names',value:firstDriverOk?'Helper names removed after |':'A driver cell still has helper text',ok:firstDriverOk},
     {label:'Template rows',value:`${payload.rows.length} numbered A–M row${payload.rows.length===1?'':'s'}`,ok:payload.rows.length>0}
   ];
@@ -3874,8 +4170,9 @@ function modal() {
   if (state.modal === 'morning-diagnostics') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal diagnostics-modal" role="dialog" aria-modal="true" aria-labelledby="diagnostics-title"><div class="modal-head"><div><span class="eyebrow">MORNING SHEET</span><h2 id="diagnostics-title">Setup & diagnostics</h2><p>Use only when imports or Google Sheets are not working.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body morning-advanced-content">${morningConnectorGuide()}${morningHandoffReadinessHtml()}${morningImportTemplateProofHtml()}${morningSheetsHandoffProofHtml()}${morningSheetStructureProofHtml()}${morningCopyFallbackProofHtml()}</div></div></div>`;
   if (state.modal === 'import') {
     const proof=importPreflight(), isRts=['rts','itinerary-rts'].includes(state.importPurpose),readingFiles=Array.isArray(state.importReadingFiles)?state.importReadingFiles:[],isReading=readingFiles.length>0;
-    const source=state.importSource==='slack'&&!isRts?`<div class="slack-panel"><div class="slack-brand"><div class="slack-logo">S</div><div><strong>Slack Import</strong><span>#morning-operations · demo connection</span></div><span class="demo-tag">DEMO</span></div><button class="slack-file" data-action="load-slack-demo"><span class="file-type">CSV</span><span><strong>Today’s operations file</strong><small>Shared by Operations Bot · ready to use</small></span><span class="btn small">Choose this file</span></button><div class="import-note">For this demo, RelayOps will keep only ${state.dspCode} routes from the Slack file.</div></div>`:`<div class="drop-zone ${isReading?'reading':state.importedFile?'has-file':''}" id="drop-zone" ${isReading?'aria-live="polite" aria-busy="true"':''}><div><div class="drop-icon">${isReading?'<span aria-hidden="true">···</span>':state.importedFile?ICONS.check:ICONS.upload}</div><strong>${isReading?`Reading ${readingFiles.length} Amazon file${readingFiles.length===1?'':'s'}…`:state.importedFile?`Great! ${esc(state.importedFile.name)} is ready.`:isRts?'Choose Itineraries_DJT6 XLSX':'Choose DAYOFOPSPLAN and ROUTE_DJT6'}</strong><span>${isReading?`RelayOps is opening ${esc(readingFiles.join(' + '))} in the background. This page will stay responsive.`:state.importedFile?`${state.importedFile.rows.length} rows found${state.importedFile.routeDetailsCount?` · ${state.importedFile.routeDetailsCount} CX rows matched`:''}.`:isRts?'Only Route code and Planned return to station are read. All other Morning Sheet data stays unchanged.':'Choose both together or one at a time. RelayOps keeps the first file while you add the second. Excel (.xlsx) and CSV are supported.'}</span><button class="btn primary upload-choice" data-action="choose-file" ${isReading?'disabled':''}>${isReading?'Reading files…':state.importedFile?'Add or replace Amazon file':isRts?'Choose Itineraries_DJT6 file':'Choose Amazon files'}</button></div></div>`;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title"><div class="modal-head"><div><span class="eyebrow">${isRts?'PLANNED RTS':'EASY UPLOAD'}</span><h2 id="import-title">${isRts?'Upload Planned RTS times':'Make my morning sheet'}</h2><p>${isRts?'Drop the Routes_DJT6 export. Only the Planned Departure Time column is used.':'Choose the plan and route files. RelayOps joins them by CX route.'}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="upload-progress"><div class="upload-progress-step active"><b>1</b><span>Choose files</span></div><i></i><div class="upload-progress-step ${state.importedFile||isReading?'active':''}"><b>${state.importedFile?'✓':'2'}</b><span>${isReading?'Reading files':isRts?'Find planned time':'Match CX routes'}</span></div><i></i><div class="upload-progress-step"><b>3</b><span>${isRts?'Fill purple cells':'Make sheet'}</span></div></div>${!isRts?`<div class="source-tabs import-choice-grid"><button class="source-tab import-choice-card ${state.importSource==='slack'?'active':''}" data-action="set-import-source" data-source="slack" ${isReading?'disabled':''}><strong>Slack Import</strong><small>Daily file from the operations channel</small></button><button class="source-tab import-choice-card ${state.importSource==='computer'?'active':''}" data-action="set-import-source" data-source="computer" ${isReading?'disabled':''}><strong>Cortex Import</strong><small>Amazon DAYOFOPSPLAN + ROUTE_DJT6 exports</small></button></div>`:''}${source}${state.importedFile&&!isReading?`${importPreflightHtml()}<div class="auto-match"><strong>RelayOps will do these things:</strong><div><span>✓ Earliest wave first</span><span>✓ CX route matching</span><span>${isRts?'✓ Planned RTS purple cells':'✓ First driver name only'}</span></div></div>`:''}<div class="modal-actions easy-actions"><button class="btn sample-button" data-action="template-csv" ${isReading?'disabled':''}>Need an example file?</button><button class="btn primary create-sheet-button" data-action="apply-import" ${!isReading&&state.importedFile&&proof?.ready?'':'disabled'}>${isReading?'Reading files…':state.importedFile?(isRts?'Fill Planned RTS →':'Create my operations sheet →'):'Choose files first'}</button></div><p class="upload-help">${isReading?'The Excel work is isolated from the dashboard, so dispatchers can keep this page open.':'Nothing is sent to Amazon. RelayOps reads the files in this browser and keeps the originals unchanged.'}</p></div></div></div>`;
+    const routeFileLabel=activeMorningRouteFileLabel(),itineraryFileLabel=activeMorningItineraryFileLabel(),stationCode=activeMorningStationCode();
+    const source=state.importSource==='slack'&&!isRts?`<div class="slack-panel"><div class="slack-brand"><div class="slack-logo">S</div><div><strong>Slack Import</strong><span>#morning-operations · demo connection</span></div><span class="demo-tag">DEMO</span></div><button class="slack-file" data-action="load-slack-demo"><span class="file-type">CSV</span><span><strong>Today’s operations file</strong><small>Shared by Operations Bot · ready to use</small></span><span class="btn small">Choose this file</span></button><div class="import-note">For this demo, RelayOps will keep only ${state.dspCode} routes from the Slack file.</div></div>`:`<div class="drop-zone ${isReading?'reading':state.importedFile?'has-file':''}" id="drop-zone" ${isReading?'aria-live="polite" aria-busy="true"':''}><div><div class="drop-icon">${isReading?'<span aria-hidden="true">···</span>':state.importedFile?ICONS.check:ICONS.upload}</div><strong>${isReading?`Reading ${readingFiles.length} Amazon file${readingFiles.length===1?'':'s'}…`:state.importedFile?`Great! ${esc(state.importedFile.name)} is ready.`:isRts?`Choose ${itineraryFileLabel} XLSX`:`Choose DAYOFOPSPLAN and ${routeFileLabel}`}</strong><span>${isReading?`RelayOps is opening ${esc(readingFiles.join(' + '))} in the background. This page will stay responsive.`:state.importedFile?`${state.importedFile.rows.length} rows found${state.importedFile.routeDetailsCount?` · ${state.importedFile.routeDetailsCount} CX rows matched`:''}.`:isRts?'Only Route code and Planned return to station are read. All other Morning Sheet data stays unchanged.':'Choose both together or one at a time. RelayOps keeps the first file while you add the second. Excel (.xlsx) and CSV are supported.'}</span><button class="btn primary upload-choice" data-action="choose-file" ${isReading?'disabled':''}>${isReading?'Reading files…':state.importedFile?'Add or replace Amazon file':isRts?`Choose ${itineraryFileLabel} file`:'Choose Amazon files'}</button></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title"><div class="modal-head"><div><span class="eyebrow">${isRts?'PLANNED RTS':`${stationCode} · EASY UPLOAD`}</span><h2 id="import-title">${isRts?`Upload ${stationCode} Planned RTS times`:`Make my ${stationCode} morning sheet`}</h2><p>${isRts?`Drop the ${itineraryFileLabel} export. Only Planned return to station is used.`:`Choose the ${stationCode} plan and route files. RelayOps joins them by CX route.`}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="upload-progress"><div class="upload-progress-step active"><b>1</b><span>Choose files</span></div><i></i><div class="upload-progress-step ${state.importedFile||isReading?'active':''}"><b>${state.importedFile?'✓':'2'}</b><span>${isReading?'Reading files':isRts?'Find planned time':'Match CX routes'}</span></div><i></i><div class="upload-progress-step"><b>3</b><span>${isRts?'Fill purple cells':'Make sheet'}</span></div></div>${!isRts?`<div class="source-tabs import-choice-grid"><button class="source-tab import-choice-card ${state.importSource==='slack'?'active':''}" data-action="set-import-source" data-source="slack" ${isReading?'disabled':''}><strong>Slack Import</strong><small>Daily file from the operations channel</small></button><button class="source-tab import-choice-card ${state.importSource==='computer'?'active':''}" data-action="set-import-source" data-source="computer" ${isReading?'disabled':''}><strong>Cortex Import</strong><small>Amazon DAYOFOPSPLAN + ${routeFileLabel} exports</small></button></div>`:''}${source}${state.importedFile&&!isReading?`${importPreflightHtml()}<div class="auto-match"><strong>RelayOps will do these things:</strong><div><span>✓ Earliest wave first</span><span>✓ CX route matching</span><span>${isRts?'✓ Planned RTS purple cells':'✓ First driver name only'}</span></div></div>`:''}<div class="modal-actions easy-actions"><button class="btn sample-button" data-action="template-csv" ${isReading?'disabled':''}>Need an example file?</button><button class="btn primary create-sheet-button" data-action="apply-import" ${!isReading&&state.importedFile&&proof?.ready?'':'disabled'}>${isReading?'Reading files…':state.importedFile?(isRts?'Fill Planned RTS →':'Create my operations sheet →'):'Choose files first'}</button></div><p class="upload-help">${isReading?'The Excel work is isolated from the dashboard, so dispatchers can keep this page open.':'Nothing is sent to Amazon. RelayOps reads the files in this browser and keeps the originals unchanged.'}</p></div></div></div>`;
   }
   if (state.modal === 'add-driver') return `<div class="modal-backdrop" data-action="close-modal"><div class="modal add-driver-modal" role="dialog" aria-modal="true" aria-labelledby="add-driver-title"><div class="modal-head"><div><span class="eyebrow">DRIVERS & TEAM</span><h2 id="add-driver-title">Add Delivery Associate</h2><p>Add one associate without re-importing the full Amazon file.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="add-driver-fields"><label><span>Full name *</span><input id="manual-driver-name" autocomplete="name" placeholder="First and last name"></label><label><span>Personal phone *</span><input id="manual-driver-phone" inputmode="tel" autocomplete="tel" placeholder="(951) 555-0123"></label><label><span>Position</span><select id="manual-driver-role"><option>Delivery Associate</option><option>Helper, Driver</option><option>Lead DA</option><option>Helper</option></select></label><label><span>Transporter ID</span><input id="manual-driver-id" autocomplete="off" placeholder="Optional Amazon ID"></label></div><div class="private-contact-note"><b>Protected station contact</b><span>Signed-in dispatchers share this contact through Supabase. It is never published in the public GitHub Pages files.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="save-manual-driver">Add Delivery Associate</button></div></div></div></div>`;
   if (state.modal === 'remove-driver' && state.pendingDriverRemoval) return `<div class="modal-backdrop" data-action="close-modal"><div class="modal remove-driver-modal" role="alertdialog" aria-modal="true" aria-labelledby="remove-driver-title"><div class="modal-head"><div><span class="eyebrow">CONFIRM REMOVAL</span><h2 id="remove-driver-title">Remove ${esc(state.pendingDriverRemoval.name)}?</h2><p>This Delivery Associate will be removed from the shared Drivers & Team workspace for authorized dispatchers.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="remove-driver-warning">${ICONS.alert}<div><b>Are you sure?</b><span>You can add the associate again later by re-importing the roster or using Add Delivery Associate.</span></div></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn danger" data-action="confirm-driver-removal">${ICONS.trash} Remove DA</button></div></div></div></div>`;
@@ -3883,6 +4180,11 @@ function modal() {
   if (state.modal === 'sheets-helper') { const pasteRange=morningSheetsHandoffProof().range; return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="sheets-title"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS PASTE BOX</span><h2 id="sheets-title">Paste-ready morning sheet</h2><p>If one-click copy does not work, click Select all, copy, then paste into Google Sheets cell A3. Expected filled range: ${esc(pasteRange)}.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="paste-guide"><span><b>1</b> Select all</span><span><b>2</b> Copy</span><span><b>3</b> Paste ${esc(pasteRange)}</span></div><textarea id="sheets-copy-text" class="sheets-copy-text" readonly>${esc(state.sheetCopyText||morningSheetTsv())}</textarea><div class="modal-actions"><button class="btn" data-action="select-sheets-text">Select all text</button><button class="btn primary" data-action="copy-morning-visible">${ICONS.copy} Copy again</button></div></div></div></div>`; }
   if (state.modal === 'morning-sheets-connector') {
     const payload=morningSheetsConnectorPayload(), rows=payload.rows.length, sections=payload.sections.length;
+    if(MULTI_STATION_ENABLED&&activeMorningStationCode()==='DUR6')return dur6GoogleConnectorModal(payload);
+    if(MULTI_STATION_PREVIEW){
+      const profile=activeOpeningStationProfile(),scriptUrl=profile.code==='DUR6'?DUR6_MORNING_APPS_SCRIPT_URL:MORNING_APPS_SCRIPT_URL;
+      return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="morning-sheets-connector-title"><div class="modal-head"><div><span class="eyebrow">${profile.code} · LOCAL CONNECTOR HANDOFF</span><h2 id="morning-sheets-connector-title">Google setup is safely paused</h2><p>This prototype can inspect the ${esc(profile.layoutId)} payload, but it cannot contact Supabase or a Google workbook.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheets-connector-status warn"><strong>${profile.code} production setup is not enabled</strong><span>${profile.code==='DUR6'?'The Google spreadsheet is shared with DJT6. Copy OPS LOG DUR6 into a DUR6-prefixed date tab; install the separate DUR6 connector and finish station access setup before enabling Send.':'The existing DJT6 workbook remains untouched while the multi-station prototype is open.'}</span></div>${morningSheetsPreflightHtml(payload)}${morningSheetsHandoffProofHtml(payload)}<div class="sheets-connector-grid"><div class="connector-step"><b>1</b><strong>Review the station plan</strong><span>The handoff lists every cloud and Google prerequisite. No credentials or endpoints are stored in this prototype.</span><a class="btn small" href="${MULTI_STATION_LOCAL_PLAN_URL}" target="_blank" rel="noopener">Open transition plan</a></div><div class="connector-step"><b>2</b><strong>Review ${profile.code} Apps Script</strong><span>${profile.code==='DUR6'?'Uses the existing 142-row OPS LOG DUR6 template in DJT6’s spreadsheet. Fills waves 1–3, Ad Hoc, Helpers, and DSP; waves 4–6 stay unused.':'The current six-wave connector is available for comparison only.'}</span><a class="btn small ghost" href="${scriptUrl}" download>Download ${profile.code} .gs</a></div><div class="connector-step"><b>3</b><strong>Enable only after provisioning</strong><span>Station identity, shared spreadsheet ID, DUR6 template, dated tab, and membership checks must all pass first.</span><button class="btn small" disabled>Test connector · disabled locally</button><button class="btn small primary" disabled>Send · disabled locally</button></div></div><details class="sheets-advanced-preview"><summary>Local ${profile.code} payload preview</summary><div class="sheets-connector-preview"><strong>${rows} logical rows · ${sections} sections</strong><span>${esc(payload.stationCode)} · ${esc(payload.layoutId)} · ${payload.waveSlotCount} wave slots</span><textarea readonly>${esc(JSON.stringify(payload,null,2).slice(0,2400))}${JSON.stringify(payload).length>2400?'\n...':''}</textarea></div></details><div class="modal-actions"><a class="btn" href="${activeMorningTemplateUrl()}" target="_blank" rel="noopener">Open ${profile.code} template</a><a class="btn" href="${MULTI_STATION_LOCAL_PLAN_URL}" target="_blank" rel="noopener">Open local plan</a><a class="btn" href="${scriptUrl}" download>Download ${profile.code} script</a><button class="btn primary" data-action="close-modal">Done</button></div><p class="upload-help">Production DJT6 operations were not changed. This local handoff performs zero cloud and Google requests.</p></div></div></div>`;
+    }
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="morning-sheets-connector-title"><div class="modal-head"><div><span class="eyebrow">GOOGLE SHEETS CONNECTOR</span><h2 id="morning-sheets-connector-title">Send values into the Ops Log</h2><p>The connector writes only the Morning Sheet values into the fixed OPS LOG 2026 cells. It does not resize columns, change fonts, recolor cells, rebuild checkboxes, or modify the operations columns.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheets-connector-status ${state.morningSheetsEndpoint?'ready':'warn'}"><strong>${state.morningSheetsEndpoint?'Connector saved · update Apps Script once':'Connector not set yet'}</strong><span>${state.morningSheetsEndpoint?`Install the values-only OPS LOG script, redeploy it, then keep using this endpoint. Target: ${esc(payload.sheetName)} or ${esc(payload.sheetNameCandidates?.[1]||payload.sheetName)}.`:'Copy the values-only Apps Script, deploy it as a web app, then paste the web app URL below.'}</span></div>${morningSheetsPreflightHtml(payload)}${morningSheetsHandoffProofHtml(payload)}${morningSheetsRowAuditHtml(payload)}${morningSheetsLiveProofHtml(payload)}${morningSheetsReceiptHtml()}<div class="sheets-connector-grid"><div class="connector-step"><b>1</b><strong>Replace the old Apps Script</strong><span>Delete the previous connector code, paste the values-only OPS LOG version, save, then deploy a new Web app version.</span><button class="btn small lime" data-action="copy-morning-apps-script">${ICONS.copy} COPY REVISED APPS SCRIPT</button><button class="btn small ghost" data-action="copy-morning-sheets-setup">Copy setup checklist</button><a class="btn small ghost" href="${MORNING_APPS_SCRIPT_URL}" download>Download .gs file</a></div><div class="connector-step"><b>2</b><strong>Paste web app endpoint</strong><span>Use the Apps Script deployment URL. Do not paste Google passwords or Amazon/Rivian credentials.</span><input id="morning-sheets-endpoint" value="${esc(state.morningSheetsEndpoint)}" placeholder="https://script.google.com/macros/s/.../exec"><button class="btn small" data-action="save-morning-sheets-connector">Save endpoint</button><button class="btn small ghost" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button></div><div class="connector-step"><b>3</b><strong>Send checked sheet</strong><span>Values only: Wave/Driver/Route/Staging/Pad/EV/Device/Portable, Stop Count, Package Count, and Planned RTS. ${rows} logical rows · ${sections} sections.</span><button class="btn small ghost" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn small primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send to Google Sheet</button><button class="btn small ghost" data-action="copy-morning-sheets-verify">${ICONS.copy} Copy verify checklist</button></div></div>${state.morningSheetsLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Connector note</strong><span>${esc(state.morningSheetsLastError)}</span></div></div>`:''}<details class="sheets-advanced-preview"><summary>Advanced transfer preview — do not paste into Apps Script</summary><div class="sheets-connector-preview"><strong>Dashboard data JSON</strong><span>This is only a preview of the filtered wave data. It is not Apps Script code.</span><textarea readonly>${esc(JSON.stringify(payload,null,2).slice(0,1800))}${JSON.stringify(payload).length>1800?'\n...':''}</textarea></div></details><div class="modal-actions"><a class="btn" href="${MORNING_TEMPLATE_URL}" target="_blank" rel="noopener">Open template</a><a class="btn" href="${MORNING_APPS_SCRIPT_URL}" download>Download script</a><button class="btn lime" data-action="copy-morning-apps-script">${ICONS.copy} COPY REVISED APPS SCRIPT</button><button class="btn" data-action="test-morning-sheets-connector" ${state.morningSheetsEndpoint?'':'disabled'}>Test connector</button><button class="btn" data-action="dry-run-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Dry run</button><button class="btn primary" data-action="send-morning-to-sheets" ${state.morningSheetsEndpoint?'':'disabled'}>Send now</button></div><p class="upload-help">Values map into fixed cells only: A/B/C/D/E/F/G/H, P/Q, and U. All other Ops Log cells and formatting stay untouched.</p></div></div></div>`;
   }
   if (state.modal === 'preferred-vehicle-drivers') {
@@ -3896,8 +4198,12 @@ function modal() {
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="gas-assignment-title"><div class="modal-head"><div><span class="eyebrow">GAS VEHICLE ASSIGNMENT</span><h2 id="gas-assignment-title">Choose the driver boxes receiving gas vans</h2><p>No driver is selected automatically. Check only the names you want, review the safe gas vans, then assign.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="gas-assignment-steps"><span><b>1</b>Choose drivers</span><span><b>2</b>Review safe gas vans</span><span><b>3</b>Assign</span></div><strong class="gas-section-title">Drivers on the visible morning sheet</strong><div class="gas-choice-grid drivers">${targets.map(route=>`<button class="gas-choice ${selectedRoutes.has(route.route)?'selected':''}" data-action="toggle-gas-driver" data-route="${esc(route.route)}"><span>${selectedRoutes.has(route.route)?'✓':''}</span><b>${esc(route.driver||'Unassigned driver')}</b><small>${esc(route.route)} · ${esc(route.wave)}</small></button>`).join('')}</div><strong class="gas-section-title">Verified gas vans · safe vans start selected</strong><div class="gas-choice-grid vans">${gasIds.map(van=>{const assignment=equipmentAssignmentFor(van),safe=Boolean(assignment&&fleetVehicleAssignmentEligibility(van).eligible&&isGasFleetVehicle(fleetVehicleForEquipmentId(van)||{}));return `<button class="gas-choice ${selectedVans.has(van)?'selected':''}" data-action="toggle-gas-van" data-van="${esc(van)}" ${safe?'':'disabled'}><span>${selectedVans.has(van)?'✓':''}</span><b>${esc(van)}</b><small>${safe?'Safe · Device ready':assignment?'Fleet Health verification needed':'Enter a Device first'}</small></button>`;}).join('')}</div><div class="gas-assignment-summary"><strong>${selectedRoutes.size} driver${selectedRoutes.size===1?'':'s'} selected</strong><span>${selectedVans.size} verified gas van${selectedVans.size===1?'':'s'} ready · assigned in the displayed order</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-gas-assignment" ${selectedRoutes.size&&selectedVans.size?'':'disabled'}>Assign gas vans to selected drivers</button></div></div></div></div>`;
   }
   if (state.modal === 'equipment') {
-    const count=state.equipmentImport?Object.keys(state.equipmentImport.details||{}).length:0;
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="equipment-title"><div class="modal-head"><div><span class="eyebrow">VAN/DEV/PORT IMPORT</span><h2 id="equipment-title">Match vans to devices</h2><p>Upload the screenshot, CSV, XLSX, PDF, or Google Sheets export. RelayOps matches each EV/VAN number to the EV cell, then fills Device and Portable.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="equipment-drop" id="equipment-drop" tabindex="0"><div class="equipment-drop-copy"><strong>Drop VAN/DEV/PORT file here</strong><span>Accepts screenshots, JPEG/PNG, PDF, CSV, XLSX, TXT, or copied screenshot files. Best Google Sheets layout: one row per van with columns EV/VAN, DEVICE, PORTABLE.</span></div><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose file</button></div><div class="equipment-layout-tip"><strong>Safest Google Sheets layout</strong><span>EV/VAN | DEVICE | PORTABLE — no merged cells. The split two-table screenshot also works, but the simple 3-column list is easiest for every dispatcher.</span></div>${state.equipmentImport?`<div class="import-preview ${count?'':'import-warning'}"><span class="preview-check">${count?'✓':'!'}</span><div><strong>${count} EV/VAN assignments found</strong><span>${count?(state.equipmentImport.name?esc(state.equipmentImport.name):'Ready to match against the EV column.'):'Try the 3-column Google Sheets layout, or upload a clearer screenshot/export.'}</span></div></div><div class="equipment-preview">${Object.entries(state.equipmentImport.details||{}).slice(0,6).map(([van,d])=>`<span><b>${esc(van)}</b> Device ${esc(d.device||'')} · Portable ${esc(d.portable||'')}</span>`).join('')}</div>`:''}<div class="modal-actions"><button class="btn" data-action="equipment-template-csv">Download VAN/DEV/PORT layout</button><button class="btn primary" data-action="apply-equipment-import" ${count?'':'disabled'}>Fill Device + Portable cells</button></div></div></div></div>`;
+    const station=activeMorningStationCode(),profile=activeOpeningStationProfile(),count=state.equipmentImport?Object.keys(state.equipmentImport.details||{}).length:0,reading=state.importReadingFiles||[],stationScoped=MULTI_STATION_ENABLED;
+    const eyebrow=stationScoped?`${station} · VAN/DEV/PORT IMPORT`:'VAN/DEV/PORT IMPORT',title=stationScoped?`Match ${station} vans to devices`:'Match vans to devices';
+    const description=stationScoped?`Upload the ${station} screenshot, CSV, XLSX, PDF, or Google Sheets export. These assignments are saved only to ${station} · ${profile.location} for today.`:'Upload the screenshot, CSV, XLSX, PDF, or Google Sheets export. RelayOps matches each EV/VAN number to the EV cell, then fills Device and Portable.';
+    const dropTitle=reading.length?`Reading ${station} equipment…`:stationScoped?`Drop ${station} VAN/DEV/PORT file here`:'Drop VAN/DEV/PORT file here',layoutTitle=stationScoped?`Separate ${station} equipment sheet`:'Safest Google Sheets layout';
+    const layoutCopy=stationScoped?'EV/VAN | DEVICE | PORTABLE — no merged cells. A DJT6 import can never complete into DUR6, and a DUR6 import can never complete into DJT6.':'EV/VAN | DEVICE | PORTABLE — no merged cells. The split two-table screenshot also works, but the simple 3-column list is easiest for every dispatcher.';
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="equipment-title"><div class="modal-head"><div><span class="eyebrow">${esc(eyebrow)}</span><h2 id="equipment-title">${esc(title)}</h2><p>${esc(description)}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="equipment-drop ${reading.length?'reading':''}" id="equipment-drop" tabindex="0"><div class="equipment-drop-copy"><strong>${esc(dropTitle)}</strong><span>${reading.length?esc(reading.join(' + ')):'Accepts screenshots, JPEG/PNG, PDF, CSV, XLSX, TXT, or copied screenshot files. Best Google Sheets layout: one row per van with columns EV/VAN, DEVICE, PORTABLE.'}</span></div><button class="btn primary" data-action="choose-file" ${reading.length?'disabled':''}>${ICONS.upload} ${reading.length?'Reading file':'Choose file'}</button></div><div class="equipment-layout-tip"><strong>${esc(layoutTitle)}</strong><span>${esc(layoutCopy)}</span></div>${state.equipmentImport?`<div class="import-preview ${count?'':'import-warning'}"><span class="preview-check">${count?'✓':'!'}</span><div><strong>${count} ${stationScoped?`${station} `:''}EV/VAN assignments found</strong><span>${count?(state.equipmentImport.name?esc(state.equipmentImport.name):`Ready to match against the ${stationScoped?`${station} `:''}EV column.`):'Try the 3-column Google Sheets layout, or upload a clearer screenshot/export.'}</span></div></div><div class="equipment-preview">${Object.entries(state.equipmentImport.details||{}).slice(0,6).map(([van,d])=>`<span><b>${esc(van)}</b> Device ${esc(d.device||'')} · Portable ${esc(d.portable||'')}</span>`).join('')}</div>`:''}<div class="modal-actions"><button class="btn" data-action="equipment-template-csv">Download ${stationScoped?`${station} `:''}VAN/DEV/PORT layout</button><button class="btn primary" data-action="apply-equipment-import" ${count&&!reading.length?'':'disabled'}>Fill ${stationScoped?`${station} `:''}Device + Portable cells</button></div></div></div></div>`;
   }
   if (state.modal === 'fleet-import') {
     return `<div class="modal-backdrop" data-action="close-modal"><div class="modal equipment-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-import-title"><div class="modal-head"><div><span class="eyebrow">FLEETOS + AMAZON IMPORT</span><h2 id="fleet-import-title">Update EV battery board</h2><p>Upload both files together when you can. RelayOps matches by VIN and keeps the van name exactly like the Amazon fleet list.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body">${fleetUploadPrepChecklist()}${fleetFullExportSanityCheck()}<div class="fleet-import-sources"><button class="fleet-source-card" data-action="choose-file"><strong>Amazon fleet list</strong><span>Names, VINs, license plates, Active/Inactive, Operational/Grounded</span><small>Use this for the official van name.</small></button><button class="fleet-source-card" data-action="choose-file"><strong>FleetOS tracker</strong><span>VINs, battery %, range miles, live charge readiness</span><small>Use this for battery accuracy.</small></button></div><div class="fleet-import-status"><strong>Current upload status</strong><span class="${state.fleetSourceUploads?.amazon?.vehicles?.length?'ok':'warn'}"><b>Amazon</b>${esc(fleetSourceUploadLabel('amazon'))}</span><span class="${state.fleetSourceUploads?.fleetos?.vehicles?.length?'ok':'warn'}"><b>FleetOS</b>${esc(fleetSourceUploadLabel('fleetos'))}</span></div>${fleetImportChecklist()}${fleetFullRosterReadinessStrip()}${fleetDispatcherProofStrip()}<div class="fleet-column-guide"><div><strong>Amazon columns to copy</strong><span>Vehicle Name</span><span>VIN</span><span>License Plate</span><span>Active / Inactive</span><span>Operational / Grounded</span></div><div><strong>FleetOS columns to copy</strong><span>VIN</span><span>Battery % / State of Charge</span><span>Range Miles</span><span>Status if shown</span></div></div><div class="fleet-source-rule"><strong>Simple rule</strong><span>Amazon names/status win. FleetOS battery/range wins. VIN is the match key. Amazon also sets Expected EVs automatically. Do not rename Amazon vehicles.</span></div><div class="fleet-source-rule name-lock"><strong>Name lock</strong><span>If only FleetOS is uploaded, cards use the VIN as the temporary name until the matching Amazon fleet-list row is uploaded.</span></div><div class="equipment-drop" id="drop-zone"><div class="equipment-drop-copy"><strong>Drop CSV or XLSX fleet files here</strong><span>Best: choose the Amazon fleet list and FleetOS tracker at the same time. Accepted columns include VIN, vehicle/name, license plate, active/inactive, operational/grounded, SOC/battery %, and range/miles.</span></div><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose fleet files</button></div><label class="equipment-text-label" for="fleet-paste-text">Or paste the copied FleetOS/Amazon table here</label><textarea id="fleet-paste-text" class="equipment-paste-text" placeholder="Vehicle Name&#9;VIN&#9;License Plate&#9;Active&#9;Operational Status&#10;LLOL EV 21&#9;7FCEHEB79PN014816&#9;9ABC123&#9;Active&#9;Operational">${esc(state.fleetPasteText)}</textarea><div class="auto-match"><strong>RelayOps will do this:</strong><div><span>✓ Match by VIN</span><span>✓ Use Amazon fleet names exactly</span><span>✓ Set Expected EVs from Amazon</span><span>✓ Update battery + status cards</span></div></div><div class="modal-actions"><button class="btn" data-action="fleet-template-csv">Need fleet example?</button><button class="btn" data-action="parse-fleet-paste">Read pasted table</button><button class="btn primary" data-action="choose-file">${ICONS.upload} Choose fleet files</button></div><p class="upload-help">Tip: if only one file is uploaded, the Fleet board will warn whether Amazon names/status or FleetOS battery/range is missing. Amazon upload also sets the expected EV count so short lists are flagged automatically.</p></div></div></div>`;
@@ -3964,7 +4270,7 @@ function sendAChatMessage(prompt='') {
 function clearAChat() { state.aChatMessages=[];persist();render();toast('A-Chat history cleared'); }
 
 function pageContent(page=state.page) {
-  return ({dashboard,morning:morningSheetPage,roster:rosterPage,rostering:rosteringPage,live:livePage,achat:aChatPage,team:teamPage,fleet:fleetPage,parking:vanParkingPage,performance:performancePage,coaching:coachingPage,checklists:checklistsPage,inbox:inboxPage,inventory:inventoryPage,reports:reportsPage,admin:adminPage}[page] || dashboard)();
+  return ({dashboard,morning:morningSheetPage,roster:rosterPage,rostering:rosteringPage,live:livePage,achat:aChatPage,team:teamPage,fleet:fleetPage,parking:vanParkingPage,performance:performancePage,coaching:coachingPage,checklists:checklistsPage,inbox:inboxPage,inventory:inventoryPage,reports:reportsPage,admin:localPreviewAdminPage}[page] || dashboard)();
 }
 
 function messageQueueStatusKey(route='') { return `${state.morningOperationDate}|${route}`; }
@@ -4183,7 +4489,7 @@ function acknowledgeEarlyCalloffReminder() {
   rows.forEach(row=>{state.earlyCalloffAcknowledgements[earlyCalloffAcknowledgementKey(row.name)]={name:canonicalDriverName(row.name)||row.name,date:state.morningOperationDate,acknowledgedAt:now};});state.modal=null;persist();render();toast(`${rows.length} early call-off reminder${rows.length===1?'':'s'} acknowledged`);
 }
 function morningPadCheckRows() {
-  return morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-6]$/i.test(section.label)).slice(0,MORNING_CORE_WAVE_COUNT).map(section=>({label:section.label,wave:section.wave||'',pad:morningSectionPad(section)||'—',count:section.rows?.filter(row=>!row._blank&&isCxMorningRoute(row)).length||0}));
+  return morningSections(allMorningRows()).filter(section=>/^WAVE\s*[1-6]$/i.test(section.label)).slice(0,activeMorningWaveCount()).map(section=>({label:section.label,wave:section.wave||'',pad:morningSectionPad(section)||'—',count:section.rows?.filter(row=>!row._blank&&isCxMorningRoute(row)).length||0}));
 }
 function saveScreenshotReviewPad(input,commit=false) {
   const wave=String(input?.dataset?.screenshotReviewPad||''),value=String(input?.value||'').trim().toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,4);
@@ -4849,11 +5155,11 @@ function confirmClearOperationalSheet() {
   const scope=state.pendingSheetClear||'morning',datePrefix=`${state.morningOperationDate}|`,waveAnchors=scope==='morning'?morningBlankWaveAnchors():[];ensureMorningRouteUids();pushSheetHistory(scope==='picklist'?'Clear Opening Picklist':'Clear Morning Sheet',scope);
   setMorningSectionPadOverride('ADHOCS','');
   if(scope==='picklist'){
-    Array.from({length:MORNING_CORE_WAVE_COUNT},(_,index)=>`WAVE ${index+1}`).forEach(label=>setMorningSectionPadOverride(label,''));
+    Array.from({length:activeMorningWaveCount()},(_,index)=>`WAVE ${index+1}`).forEach(label=>setMorningSectionPadOverride(label,''));
     const visibleRouteUids=new Set(openingPicklistSections().flatMap(section=>section.rows).map(route=>route.routeUid).filter(Boolean));state.morningRoutes=(state.morningRoutes||[]).filter(route=>!visibleRouteUids.has(route.routeUid));
   } else {
     Object.keys(state.morningSectionPadOverrides||{}).filter(key=>key.startsWith(datePrefix)).forEach(key=>delete state.morningSectionPadOverrides[key]);
-    Array.from({length:MORNING_CORE_WAVE_COUNT},(_,index)=>`WAVE ${index+1}`).forEach(label=>setMorningSectionPadOverride(label,''));
+    Array.from({length:activeMorningWaveCount()},(_,index)=>`WAVE ${index+1}`).forEach(label=>setMorningSectionPadOverride(label,''));
     setMorningSectionPadOverride('ADHOCS','');
     waveAnchors.forEach(anchor=>{anchor.pad='';anchor.padOverride='';});
     state.morningRoutes=[...(state.morningRoutes||[]).filter(route=>route.dsp!==state.dspCode),...waveAnchors];
@@ -5017,7 +5323,7 @@ function resetSharedDailyOperationsState(date=defaultOperationDate()) {
   state.openingPicklistCalloffDrafts=[];
   state.openingPicklistBackupOverrides={};
   state.openingPicklistLabels={};
-  state.openingPicklistWaveSlots=MORNING_CORE_WAVE_COUNT;
+  state.openingPicklistWaveSlots=activeMorningWaveCount();
   state.openingPicklistShowAdhoc=true;
   state.picklistSwapAudit=[];
   state.sheetHistory={past:[],future:[]};
@@ -5070,11 +5376,17 @@ function resetDailyOperationsState(date=defaultOperationDate()) {
 function loadSharedOperationDate(date='',message='',options={}) {
   const nextDate=/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))?String(date):defaultOperationDate();
   const changed=nextDate!==state.morningOperationDate;
-  if(changed){resetDailyOperationsState(nextDate);persistWithoutCloud();}
+  if(changed)resetMorningImportBatch();
+  if(changed&&MULTI_STATION_PREVIEW){
+    captureOpeningStationPreviewDay();writeMultiStationPreviewStore();
+    const code=activeMorningStationCode(),record=multiStationPreviewStore.stations[code],snapshot=record.days[nextDate]||null;
+    restoreOpeningStationPreviewDay(code,nextDate,snapshot);captureOpeningStationPreviewDay();writeMultiStationPreviewStore();
+  }
+  else if(changed){resetDailyOperationsState(nextDate);persistWithoutCloud();}
   else state.morningOperationDate=nextDate;
   operationDatePinned=options.pin===undefined?(!options.automatic&&nextDate!==defaultOperationDate()):Boolean(options.pin);
   lastObservedOperationDate=defaultOperationDate();
-  state.morningSheetsLastReceipt=null;localStorage.setItem('relayops_morning_operation_date',state.morningOperationDate);render();if(message)toast(message);
+  state.morningSheetsLastReceipt=null;if(!MULTI_STATION_PREVIEW)localStorage.setItem('relayops_morning_operation_date',state.morningOperationDate);else persistMultiStationPreview();render();if(message)toast(message);
   try{const url=new URL(location.href);url.searchParams.set('date',state.morningOperationDate);history.replaceState(null,'',url.href);}catch{}
   if(window.RelayOpsCloud?.session){state.cloudStatus='connecting';window.RelayOpsCloud.load?.().catch(error=>{state.cloudStatus='error';render();toast(`Could not load ${state.morningOperationDate}: ${error?.message||'cloud sync error'}`,'error');});}
   return changed;
@@ -5121,7 +5433,7 @@ function confirmDeletePicklistWave() {
   const pending=state.pendingPicklistWaveDelete;if(!pending)return;
   pushSheetHistory(`Delete ${pending.label}`,'both');
   if(pending.key==='adhoc'){state.morningRoutes=(state.morningRoutes||[]).filter(row=>!(isExplicitAdhocMorningRoute(row)&&row.dsp===state.dspCode));state.openingPicklistShowAdhoc=false;}
-  else {state.morningRoutes=(state.morningRoutes||[]).filter(row=>!(row.dsp===state.dspCode&&row.wave===pending.wave));state.openingPicklistWaveSlots=Math.max(0,Number(state.openingPicklistWaveSlots||MORNING_CORE_WAVE_COUNT)-1);}
+  else {state.morningRoutes=(state.morningRoutes||[]).filter(row=>!(row.dsp===state.dspCode&&row.wave===pending.wave));state.openingPicklistWaveSlots=Math.max(0,Number(state.openingPicklistWaveSlots||activeMorningWaveCount())-1);}
   const label=pending.label;state.pendingPicklistWaveDelete=null;state.modal=null;persist();render();toast(`${label} deleted from Picklist and Morning Sheet`);
 }
 function acknowledgeVanIssueInline(route='',equipment='') {
@@ -5199,6 +5511,7 @@ function frameThrottle(fn) {
 const persistSoon=debounce(()=>persist(),320);
 function persistRosteringSlice() {
   invalidateNavigationPageCache();
+  if(MULTI_STATION_PREVIEW){persistMultiStationPreview();return;}
   localStorage.setItem('relayops_rostering_date',state.rosteringDate||defaultOperationDate());
   localStorage.setItem('relayops_rostering_plans',JSON.stringify(state.rosteringPlans||{}));
   localStorage.setItem('relayops_rostering_helper_pool',JSON.stringify(state.rosteringHelperPool||{}));
@@ -5213,7 +5526,7 @@ function toggleRosteringService(serviceId='',trigger=null) {
   if(!serviceId)return;
   const open=!Boolean(state.rosteringOpenServices[serviceId]);
   state.rosteringOpenServices[serviceId]=open;
-  localStorage.setItem('relayops_rostering_open_services',JSON.stringify(state.rosteringOpenServices||{}));
+  if(!MULTI_STATION_PREVIEW)localStorage.setItem('relayops_rostering_open_services',JSON.stringify(state.rosteringOpenServices||{}));else persistMultiStationPreview();
   const card=trigger?.closest?.('[data-rostering-service-card]')||[...(document.querySelectorAll?.('[data-rostering-service-card]')||[])].find(row=>row.dataset.rosteringServiceCard===serviceId);
   const bar=card?.querySelector?.('.rostering-service-bar'),body=card?.querySelector?.('.rostering-service-body');
   card?.classList?.toggle('open',open);
@@ -5310,7 +5623,7 @@ function renderLightweightModal() {
 function openLightweightModal(name='') { state.modal=name;return renderLightweightModal(); }
 function closeLightweightModal() {
   const wasOpen=modalWasOpen;
-  if(state.modal==='import'){resetMorningImportBatch();state.importedFile=null;}
+  if(['import','equipment','fleet-import'].includes(state.modal)){resetMorningImportBatch();if(state.modal==='import')state.importedFile=null;}
   if(['picklist-screenshot-review','screenshot'].includes(state.modal)){state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};}
   if(state.modal==='vto-route-swap')state.pendingVtoRouteSwap=null;
   if(state.modal==='roster-destination')state.pendingRosterDestination=null;
@@ -5331,6 +5644,7 @@ function updateGlobalSearchResults() {
   bindActionControls(anchor);
 }
 function persistFleetPresentation() {
+  if(MULTI_STATION_PREVIEW){persistMultiStationPreview();return;}
   if(!PARKING_ONLY_VIEW)return persist();
   try{
     localStorage.setItem('relayops_fleet_sort',state.fleetSort||'normal');
@@ -5571,7 +5885,14 @@ function flushDeferredCloudRender() {
 }
 document.addEventListener?.('focusout',()=>setTimeout(()=>{if(!activeOperationalEditor())operationalEditScrollLock=null;flushDeferredCloudRender();},80),true);
 
+function renderStationConfigurationError() {
+  if(!appStationBootError)return false;
+  app.innerHTML=`<main class="main"><section class="card" role="alert"><h1>Station setup needs attention</h1><p>${esc(appStationBootError)}</p><p>No station data was loaded or changed. Return to the home station or contact the dashboard owner.</p><a class="btn" href="?station=DJT6">Open DJT6</a></section></main>`;
+  return true;
+}
+
 function render() {
+  if(renderStationConfigurationError())return;
   closeDriverProfilePopover();
   closeDriverRouteContextMenu();
   closeDriverSuggestions();
@@ -5583,7 +5904,7 @@ function render() {
   if(PARKING_ONLY_VIEW&&!FLEET_TEAM_ALLOWED_PAGES.has(state.page))state.page=FLEET_TEAM_START_PAGE;
   if(state.page==='admin'&&!hasOwnerAdminAccess()){state.page='dashboard';state.modal='admin-pin';}
   if(state.modal&&!previouslyOpen)modalReturnFocus=captureModalReturnFocus();
-  app.innerHTML = `<div class="app-shell ${PARKING_ONLY_VIEW?'parking-only-shell':''}">${sidebar()}<main class="main">${topbar()}<div class="content">${pageContent()}</div></main></div>${modal()}<div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>`;
+  app.innerHTML = `<div class="app-shell ${PARKING_ONLY_VIEW?'parking-only-shell':''}">${sidebarForCurrentMode()}<main class="main">${topbar()}<div class="content">${pageContent()}</div></main></div>${modal()}<div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>`;
   enhanceDriverTextButtons();
   enhanceDriverStayHomeControls();
   enhanceOpeningRoster();
@@ -5599,8 +5920,9 @@ function render() {
 
 let initialCloudHydrationPending=Boolean(window.RelayOpsCloud?.configured);
 function renderInitialShell() {
+  if(renderStationConfigurationError())return;
   if(!initialCloudHydrationPending)return render();
-  app.innerHTML=`<div class="app-shell ${PARKING_ONLY_VIEW?'parking-only-shell':''}">${sidebar()}<main class="main">${topbar()}<div class="content navigation-loading" data-page="${esc(state.page)}" data-ready="false" aria-busy="true">${navigationLoadingHtml()}</div></main></div><div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>`;
+  app.innerHTML=`<div class="app-shell ${PARKING_ONLY_VIEW?'parking-only-shell':''}">${sidebarForCurrentMode()}<main class="main">${topbar()}<div class="content navigation-loading" data-page="${esc(state.page)}" data-ready="false" aria-busy="true">${navigationLoadingHtml()}</div></main></div><div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>`;
   bind();
 }
 function completeInitialCloudHydration() {
@@ -5655,7 +5977,7 @@ function enhanceItineraryRtsModal() {
   const eyebrow=dialog.querySelector('.modal-head .eyebrow'),title=dialog.querySelector('#import-title'),description=dialog.querySelector('.modal-head p');
   if(eyebrow)eyebrow.textContent='DA ITINERARIES · RTS ONLY';
   if(title)title.textContent="Import RTS TIME (DA's Tab)";
-  if(description)description.textContent='Upload Itineraries_DJT6. RelayOps reads only Planned return to station and matches it by Route code.';
+  if(description)description.textContent=`Upload ${activeMorningItineraryFileLabel()}. RelayOps reads only Planned return to station and matches it by Route code.`;
   const progress=[...dialog.querySelectorAll('.upload-progress-step span')];
   if(progress[1])progress[1].textContent='Find return time';if(progress[2])progress[2].textContent='Fill Planned RTS only';
   const auto=dialog.querySelector('.auto-match');if(auto){auto.querySelector('strong').textContent='RTS-only safety check:';const spans=auto.querySelectorAll('span');['✓ Match by CX Route code','✓ Read Planned return to station','✓ Leave all other cells unchanged'].forEach((text,i)=>{if(spans[i])spans[i].textContent=text;});}
@@ -5749,10 +6071,21 @@ function bindNavigationTopbar(root=null) {
 }
 function bind() {
   bindGlobalDocumentControls();
+  const stationTabs=[...document.querySelectorAll?.('[data-opening-station-tab="true"]')||[]];
+  stationTabs.forEach((tab,index)=>tab.addEventListener('keydown',event=>{
+    if(['Enter',' '].includes(event.key)){event.preventDefault();switchOpeningStation(tab.dataset.station||'');return;}
+    let nextIndex=index;
+    if(event.key==='ArrowRight')nextIndex=(index+1)%stationTabs.length;
+    else if(event.key==='ArrowLeft')nextIndex=(index-1+stationTabs.length)%stationTabs.length;
+    else if(event.key==='Home')nextIndex=0;
+    else if(event.key==='End')nextIndex=stationTabs.length-1;
+    else return;
+    event.preventDefault();stationTabs[nextIndex]?.focus?.();
+  }));
   const openingRosterControls=document.querySelector?.('[data-opening-roster-controls]');
   if(openingRosterControls)openingRosterControls.addEventListener('toggle',()=>{
     const open=openingRosterControls.open;if(open===state.openingRosterControlsOpen)return;
-    state.openingRosterControlsOpen=open;localStorage.setItem('relayops_opening_roster_controls_open',String(open));
+    state.openingRosterControlsOpen=open;if(!MULTI_STATION_PREVIEW)localStorage.setItem('relayops_opening_roster_controls_open',String(open));
     if(!open)return;
     const body=openingRosterControls.querySelector('[data-opening-roster-controls-body]');if(body)body.innerHTML='<div class="opening-roster-controls-loading"><i></i><span>Loading today’s roster controls…</span></div>';
     openingRosterControls.setAttribute('aria-busy','true');
@@ -6003,7 +6336,7 @@ function bind() {
     const chooseScreenshots=equipmentDrop.querySelector('[data-action="choose-file"]');
     if(chooseScreenshots)chooseScreenshots.innerHTML=`${ICONS.upload} Choose screenshot(s)`;
     const pasteSheetButton=document.createElement('button');
-    pasteSheetButton.className='btn lime equipment-clipboard-button';pasteSheetButton.type='button';pasteSheetButton.innerHTML=`${ICONS.copy} Paste copied Google Sheet`;
+    pasteSheetButton.className='btn lime equipment-clipboard-button';pasteSheetButton.type='button';pasteSheetButton.disabled=Boolean(state.importReadingFiles?.length);pasteSheetButton.innerHTML=`${ICONS.copy} Paste copied Google Sheet`;
     pasteSheetButton.addEventListener('click',importEquipmentFromClipboard);
     equipmentDrop.appendChild(pasteSheetButton);
   }
@@ -6034,8 +6367,13 @@ function rejectConflictingEquipmentMerge(details={}) {
 }
 
 async function importEquipmentFromClipboard() {
+  const purposeAtStart='equipment',stationAtStart=activeMorningStationCode(),dateAtStart=String(state.morningOperationDate||defaultOperationDate()),readToken=++morningImportReadToken;
+  const current=()=>readToken===morningImportReadToken&&state.importPurpose===purposeAtStart&&activeMorningStationCode()===stationAtStart&&String(state.morningOperationDate||'')===dateAtStart;
   try {
+    await stopActiveEquipmentOcr();
+    if(!current())return;
     const text=await navigator.clipboard.readText();
+    if(!current())return;
     if(!text.trim())return toast('Clipboard is empty — copy the VAN / DEVICE / PORTABLE cells in Google Sheets first','error');
     const rows=rowsFromPastedTable(text),details={...equipmentDetailsFromText(text),...equipmentDetailsFromRows(rows)};
     const count=Object.keys(details).length;
@@ -6045,6 +6383,7 @@ async function importEquipmentFromClipboard() {
     persist();
     return applyEquipmentImport();
   } catch {
+    if(!current())return;
     toast('Clipboard permission was blocked — click the import box and press ⌘V or Ctrl+V instead','error');
   }
 }
@@ -6447,6 +6786,10 @@ function handleEquipmentPaste(e) {
   const text=e.clipboardData?.getData('text/plain')||'';
   if(text&&document.activeElement?.id!=='equipment-paste-text') {
     e.preventDefault();
+    morningImportReadToken++;
+    state.importReadingFiles=[];
+    void stopActiveEquipmentOcr();
+    if(morningImportWorkerPending.size)stopMorningImportWorker('Pasted equipment replaced this import.','worker-cancelled');
     const details=equipmentDetailsFromText(text);
     const incomingCount=Object.keys(details).length;
     if(!incomingCount)return toast('No VAN / DEVICE / PORTABLE rows found — your saved assignments were kept','error');
@@ -6949,6 +7292,7 @@ async function shareFleetParkingLink() {
   return ok;
 }
 async function cloudSignIn() {
+  if(MULTI_STATION_PREVIEW)return toast('Shared sign-in is disabled in the local multi-station prototype. No production account was contacted.','error');
   const email=String(document.getElementById('cloud-signin-email')?.value||'').trim().toLowerCase();
   if(!/^\S+@\S+\.\S+$/.test(email))return toast('Enter a complete dispatcher email','error');
   if(state.cloudSigninCooldownUntil>Date.now())return toast('A secure email was just requested. Open the newest invitation in your inbox before requesting another.','error');
@@ -6973,10 +7317,12 @@ async function cloudSignIn() {
   }
 }
 async function cloudSignOut() {
+  if(MULTI_STATION_PREVIEW)return toast('Shared sign-out is disabled in the local multi-station prototype.','error');
   try{await window.RelayOpsCloud.signOut();clearCloudConnectingWatchdog();clearCloudAutoRetryTimer();state.modal=null;state.cloudStatus='signed-out';state.cloudUser='';state.role='viewer';localStorage.setItem('relayops_role','viewer');render();toast('Signed out · local cache remains on this device');}
   catch(error){toast(`Could not sign out: ${error.message||'try again'}`,'error');}
 }
 async function unlockAdminAccess() {
+  if(MULTI_STATION_PREVIEW){state.adminPinUnlocked=false;state.modal=null;state.page='admin';render();toast('Local Admin opened — no PIN is used in this preview');return true;}
   const pin=String(document.getElementById('admin-pin-input')?.value||'').trim();
   if(!/^\d{4}$/.test(pin))return toast('Enter the four-digit Admin PIN','error');
   const button=document.querySelector('[data-action="unlock-admin"]');
@@ -6988,6 +7334,7 @@ async function unlockAdminAccess() {
   }catch(error){if(button){button.disabled=false;button.textContent='Unlock Admin';}toast(`Admin unlock failed: ${error.message||'shared workspace is still connecting'}`,'error');}
 }
 async function lockAdminAccess() {
+  if(MULTI_STATION_PREVIEW){state.adminPinUnlocked=false;state.page='admin';state.modal=null;render();toast('Local Admin stays open without a PIN. The published dashboard is still protected.');return false;}
   state.adminPinUnlocked=false;state.page='dashboard';state.modal=null;render();
   try{await window.RelayOpsCloud?.lockAdmin?.();}catch(error){console.warn('Could not clear the server Admin session',error);}
   toast('Admin controls locked');
@@ -7118,9 +7465,47 @@ function go(page) {
   // entire workspace here serialized every route, driver, vehicle, inspection,
   // and history record before the next page could appear. Keep only the small
   // local view preference and leave shared/cloud saves to actual edits.
-  try{localStorage.setItem('relayops_page',state.page);if(PARKING_ONLY_VIEW)persistFleetPresentation();}catch{}
+  try{if(!MULTI_STATION_PREVIEW)localStorage.setItem('relayops_page',state.page);if(PARKING_ONLY_VIEW)persistFleetPresentation();}catch{}
   if(helperAdded)persistRosteringSlice();
   renderNavigationPage(previousPage);
+}
+
+function switchOpeningStation(code='') {
+  const next=String(code||'').toUpperCase();
+  if(!MULTI_STATION_ENABLED)return toast('Multi-station switching is not configured','error');
+  if(!OPENING_STATION_PROFILES[next])return toast('Choose DJT6 or DUR6','error');
+  if(next===activeMorningStationCode())return;
+  if(!MULTI_STATION_PREVIEW)return switchProductionOpeningStation(next);
+  document.activeElement?.blur?.();
+  captureOpeningStationPreviewDay();writeMultiStationPreviewStore();
+  resetMorningImportBatch();
+  const date=state.morningOperationDate||defaultOperationDate(),record=multiStationPreviewStore.stations[next],snapshot=record.days[date]||null;
+  restoreOpeningStationPreviewDay(next,date,snapshot);
+  captureOpeningStationPreviewDay();writeMultiStationPreviewStore();
+  try{const url=new URL(location.href);url.searchParams.set('multiStationPreview','1');url.searchParams.set('station',next);history.replaceState(null,'',url.href);}catch{}
+  render();setTimeout(()=>document.getElementById(`station-tab-${next.toLowerCase()}`)?.focus?.(),0);toast(`${next} · ${activeOpeningStationProfile().location} opened locally. ${next==='DUR6'?'DJT6 was not changed.':'DUR6 was not changed.'}`);
+}
+
+let productionStationSwitchPending=false;
+async function switchProductionOpeningStation(next) {
+  if(productionStationSwitchPending||appStationBootError)return false;
+  if(state.importReadingFiles?.length)return toast('Wait for the current station’s files to finish reading before switching','error');
+  // Blurring commits the active cell. Flush that station's pending snapshot
+  // before navigation; a failed save never moves its queue into another station.
+  document.activeElement?.blur?.();
+  if(dur6GoogleHandoffSession){dur6GoogleHandoffSession.close();dur6GoogleHandoffSession=null;}
+  productionStationSwitchPending=true;
+  try {
+    const cloud=window.RelayOpsCloud;
+    if(!cloud?.prepareStationSwitch)throw new Error('Shared sync is not ready. Please retry before switching stations.');
+    const result=await cloud.prepareStationSwitch();
+    if(!result?.ok)throw new Error(result?.error||'Save the current station’s changes before switching.');
+    resetMorningImportBatch();activeFilePickerContext=null;
+    const url=new URL(location.href);url.searchParams.delete('multiStationPreview');url.searchParams.set('station',next);url.searchParams.set('date',state.morningOperationDate||defaultOperationDate());url.searchParams.set('page',state.page);
+    location.assign(url.href);
+    return true;
+  } catch(error){toast(error?.message||'Station switch stopped to protect unsaved changes','error');return false;}
+  finally {productionStationSwitchPending=false;}
 }
 
 function toggleMobileSidebar() {
@@ -7137,6 +7522,7 @@ function saveOrganizationSettings() {
   const stationCode=document.getElementById('admin-station-code')?.value.trim().toUpperCase();
   if(!organizationName)return toast('Enter a DSP name','error');
   if(!stationCode)return toast('Enter a station code','error');
+  if(MULTI_STATION_ENABLED&&stationCode!==activeMorningStationCode())return toast('Use the station tabs to change station. This workspace’s station identity cannot be renamed.','error');
   state.organizationName=organizationName;
   state.stationCode=stationCode;
   persist();
@@ -7156,7 +7542,17 @@ function importAcceptForPurpose(purpose='morning') {
   return spreadsheet;
 }
 
+let activeFilePickerContext=null;
+function openImportFilePicker(purpose=state.importPurpose,accept=importAcceptForPurpose(purpose),sourceHint='') {
+  state.importPurpose=purpose;
+  if(purpose==='fleet')state.fleetImportSourceHint=sourceHint;
+  activeFilePickerContext={purpose,stationCode:activeMorningStationCode(),operationDate:String(state.morningOperationDate||defaultOperationDate()),sourceHint:String(sourceHint||'')};
+  fileInput.accept=accept;fileInput.value='';fileInput.multiple=['morning','equipment','fleet'].includes(purpose);
+  return fileInput.click();
+}
+
 function action(name,el) {
+  if(appStationBootError||productionStationSwitchPending)return;
   if(PARKING_ONLY_VIEW) {
     const allowed=new Set([
       'menu','retry-cloud-link','close-modal','copy-fleet-parking-link',
@@ -7171,8 +7567,10 @@ function action(name,el) {
   }
   if(OWNER_ADMIN_ACTIONS.has(name)&&!hasOwnerAdminAccess())return toast('Enter the Admin PIN first','error');
   if (name==='menu') return toggleMobileSidebar();
+  if (name==='switch-opening-station') return switchOpeningStation(el?.dataset?.station||'');
+  if(MULTI_STATION_PREVIEW&&new Set(['send-rts-to-sheets','send-whiparound-to-sheets','test-morning-sheets-connector','dry-run-morning-to-sheets','send-morning-to-sheets','sync-filtered-morning-to-sheets']).has(name))return toast(`${activeMorningStationCode()} Google sends are disabled in the local multi-station prototype`,'error');
   if (name==='retry-cloud-link') return retryCloudLinkAccess(false);
-  if (name==='opening-paycom-tab') { state.openingRosterPaycomTab=['scheduled','marked','unmarked'].includes(el.dataset.paycomTab)?el.dataset.paycomTab:'scheduled';localStorage.setItem('relayops_opening_roster_paycom_tab',state.openingRosterPaycomTab);return render(); }
+  if (name==='opening-paycom-tab') { state.openingRosterPaycomTab=['scheduled','marked','unmarked'].includes(el.dataset.paycomTab)?el.dataset.paycomTab:'scheduled';if(!MULTI_STATION_PREVIEW)localStorage.setItem('relayops_opening_roster_paycom_tab',state.openingRosterPaycomTab);return render(); }
   if (name==='clear-global-search') { state.search='';render();setTimeout(()=>document.getElementById('global-search')?.focus(),0);return; }
   if (name==='open-global-search-result') {
     const page=el.dataset.searchPage||'dashboard',value=el.dataset.searchValue||'';
@@ -7198,10 +7596,10 @@ function action(name,el) {
   if (name==='planned-rts-import'||name==='itineraries-rts-import') { resetMorningImportBatch();state.importSource='computer'; state.importPurpose='itinerary-rts'; state.importedFile=null; return openLightweightModal('import'); }
   if (name==='send-rts-to-sheets') return sendRtsTimesToGoogleSheets(el);
   if (name==='send-whiparound-to-sheets') return sendWhiparoundChecksToGoogleSheets(el);
-  if (name==='equipment-import') { state.modal='equipment'; state.importPurpose='equipment'; return render(); }
+  if (name==='equipment-import') { resetMorningImportBatch();state.modal='equipment'; state.importPurpose='equipment'; return render(); }
   if (name==='fleet-import') { state.modal='fleet-import'; state.importPurpose='fleet'; state.fleetImportSourceHint=''; return render(); }
-  if (name==='fleet-import-amazon') { state.importPurpose='fleet';state.fleetImportSourceHint='amazon';fileInput.accept='.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';return fileInput.click(); }
-  if (name==='fleet-import-fleetos') { state.importPurpose='fleet';state.fleetImportSourceHint='fleetos';fileInput.accept='.csv,text/csv';return fileInput.click(); }
+  if (name==='fleet-import-amazon') return openImportFilePicker('fleet','.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','amazon');
+  if (name==='fleet-import-fleetos') return openImportFilePicker('fleet','.csv,text/csv','fleetos');
   if (name==='save-fleet-issue') return saveFleetIssue();
   if (name==='mark-fleet-issue-fixed') return markFleetIssueFixed(el.dataset.issueKey||'',el.dataset.issueId||'');
   if (name==='remove-fleet-issue') return removeFleetIssue(el.dataset.issueKey||'');
@@ -7211,8 +7609,8 @@ function action(name,el) {
   if (name==='open-equipment-issue') return openEquipmentIssue(el.dataset.equipmentType||'device',el.dataset.equipmentId||'');
   if (name==='save-equipment-issue') return saveEquipmentIssue();
   if (name==='mark-equipment-issue-fixed') return markEquipmentIssueFixed(el.dataset.equipmentIssueKey||'',el.dataset.equipmentIssueId||'');
-  if (name==='driver-import') { state.importPurpose='drivers';fileInput.accept=importAcceptForPurpose('drivers');return fileInput.click(); }
-  if (name==='whiparound-import') { state.importPurpose='whiparound';fileInput.accept=importAcceptForPurpose('whiparound');return fileInput.click(); }
+  if (name==='driver-import') return openImportFilePicker('drivers');
+  if (name==='whiparound-import') return openImportFilePicker('whiparound');
   if (name==='whiparound-remind') return openWhiparoundReminder(el.dataset.driverName||'',el.dataset.inspectionType||'pre');
   if (name==='whiparound-not-route') return markWhiparoundNotOnRoute(el.dataset.driverName||'');
   if (name==='whiparound-restore') return restoreWhiparoundDriver(el.dataset.driverKey||'');
@@ -7230,21 +7628,21 @@ function action(name,el) {
   if (name==='acknowledge-pad-check-reminder') return acknowledgePadCheckReminder();
   if (name==='acknowledge-screenshot-review') return acknowledgeScreenshotReview(el.dataset.reviewCheck||'');
   if (name==='continue-picklist-screenshot') return continuePicklistScreenshot();
-  if (name==='parking-choose-file') { state.importPurpose='parking';fileInput.accept=importAcceptForPurpose('parking');return fileInput.click(); }
+  if (name==='parking-choose-file') return openImportFilePicker('parking');
   if (name==='report-charging-station') return openChargerReport(el.dataset.chargerKey||'');
   if (name==='copy-charger-report') return copyChargerReportOnly();
   if (name==='copy-open-charger-slack') return copyChargerReportAndOpenSlack();
   if (name==='set-import-source') { resetMorningImportBatch();state.importSource=el.dataset.source; state.importedFile=null; return renderLightweightModal(); }
   if (name==='load-slack-demo') return loadSlackDemo();
   if (name==='close-modal')state.pendingCxRouteSwap=null;
-  if (name==='close-modal'&&['picklist-screenshot-review','screenshot','vto-route-swap','roster-destination','roster-swap','route-trainer','route-vto-swap','duplicate-driver-name','adhoc-route-swap','cx-route-swap','helper-match','preferred-vehicle-drivers','early-calloff-reminder','import'].includes(state.modal)) return closeLightweightModal();
+  if (name==='close-modal'&&['picklist-screenshot-review','screenshot','vto-route-swap','roster-destination','roster-swap','route-trainer','route-vto-swap','duplicate-driver-name','adhoc-route-swap','cx-route-swap','helper-match','preferred-vehicle-drivers','early-calloff-reminder','import','equipment','fleet-import'].includes(state.modal)) return closeLightweightModal();
   if (name==='close-modal') { state.modal=null;state.pendingDriverRemoval=null;state.pendingDriverText=null;state.pendingRosterSwap=null;state.pendingRosterDestination=null;state.pendingVtoRouteSwap=null;state.pendingRouteTrainer=null;state.pendingRouteVtoSwap=null;state.pendingDuplicateDriverName=null;state.pendingAdhocRouteSwap=null;state.pendingMorningIssue=null;state.pendingPicklistWaveDelete=null;state.pendingHelperMatch=null;state.pendingDriverAlias=null;state.pendingDriverFlags=null;state.pendingPreferredVehicleId='';state.pendingEquipmentIssue=null;state.pendingSheetClear=null;state.pendingMemberEdit=null;state.pendingChargerReport=null;state.pendingRosteringServiceDelete=null;state.pendingRosteringSwap=null;state.pendingRosteringTrainingAdd=null;state.pendingCoachingId='';state.inventoryEditingId='';state.inventoryPendingId='';state.screenshotPreview=null;state.screenshotKind='';state.screenshotReview={pads:false,cortex:false};state.fleetRefreshPreview=null;return render(); }
-  if (name==='choose-file') { fileInput.accept=importAcceptForPurpose(state.importPurpose);return fileInput.click(); }
-  if (name==='schedule-import') { state.scheduleImportDestination=state.page==='rostering'?'rostering':'roster';state.importPurpose='schedule';fileInput.accept='.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf';return fileInput.click(); }
-  if (name==='rostering-import-screenshot') { state.importPurpose='rostering-screenshot';fileInput.accept=importAcceptForPurpose('rostering-screenshot');return fileInput.click(); }
+  if (name==='choose-file') return openImportFilePicker(state.importPurpose);
+  if (name==='schedule-import') { state.scheduleImportDestination=state.page==='rostering'?'rostering':'roster';return openImportFilePicker('schedule','.xls,.xlsx,.csv,.pdf,.txt,image/*,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/html,text/csv,application/pdf'); }
+  if (name==='rostering-import-screenshot') return openImportFilePicker('rostering-screenshot');
   if (name==='rostering-auto-roster') return autoRosterFromPaycom();
   if (name==='rostering-paycom-category') {
-    state.rosteringPaycomCategory=el.dataset.rosteringCategory||'all';localStorage.setItem('relayops_rostering_paycom_category',state.rosteringPaycomCategory);
+    state.rosteringPaycomCategory=el.dataset.rosteringCategory||'all';if(!MULTI_STATION_PREVIEW)localStorage.setItem('relayops_rostering_paycom_category',state.rosteringPaycomCategory);
     const panel=el.closest('.rostering-paycom');panel?.querySelectorAll('[data-action="rostering-paycom-category"]').forEach(button=>button.classList.toggle('active',button===el));
     const input=panel?.querySelector('[data-rostering-paycom-search]');if(input)filterRosteringPaycomSoon(input);return;
   }
@@ -7314,7 +7712,7 @@ function action(name,el) {
   if (name==='confirm-clear-operational-sheet') return confirmClearOperationalSheet();
   if (name==='share-dispatcher-link') return shareDispatcherLink();
   if (name==='copy-fleet-parking-link') return shareFleetParkingLink();
-  if (name==='open-admin-pin') { state.modal='admin-pin';return render(); }
+  if (name==='open-admin-pin') { if(MULTI_STATION_PREVIEW)return go('admin');state.modal='admin-pin';return render(); }
   if (name==='unlock-admin') return unlockAdminAccess();
   if (name==='lock-admin') return lockAdminAccess();
   if (name==='invite') { if(!window.RelayOpsCloud?.session)return toast('Sign in as the owner before inviting users','error');state.modal='invite-user';return render(); }
@@ -7390,6 +7788,9 @@ function action(name,el) {
   if (name==='copy-wave') return copyWaveByIndex(Number(el.dataset.waveIndex)||0,el.dataset.copyBlock||'all');
   if (name==='morning-sheets-connector') { state.modal='morning-sheets-connector'; return render(); }
   if (name==='save-morning-sheets-connector') return saveMorningSheetsConnector();
+  if (name==='dur6-google-status') return openDur6GoogleTransfer('status');
+  if (name==='dur6-google-dry-run') return openDur6GoogleTransfer('dry-run');
+  if (name==='dur6-google-send') return openDur6GoogleTransfer('send');
   if (name==='copy-morning-apps-script') return copyMorningAppsScript();
   if (name==='copy-morning-sheets-setup') return copyMorningSheetsSetup();
   if (name==='copy-morning-sheets-verify') return copyMorningSheetsVerification();
@@ -7428,7 +7829,14 @@ function action(name,el) {
   toast('Action captured in this prototype');
 }
 
-fileInput.addEventListener('change',e=>{if(e.target.files.length)readFiles([...e.target.files]);e.target.value='';});
+fileInput.addEventListener('change',e=>{
+  const files=[...(e.target.files||[])],context=activeFilePickerContext;activeFilePickerContext=null;e.target.value='';
+  if(!files.length)return;
+  if(context?.cancelled)return toast(`The ${context.stationCode} file picker was cancelled before anything changed.`,'error');
+  if(context&&(context.stationCode!==activeMorningStationCode()||context.operationDate!==String(state.morningOperationDate||'')||context.purpose!==state.importPurpose))return toast(`The ${context.stationCode} file picker was closed after the station, date, or import type changed. Nothing was uploaded.`,'error');
+  if(context?.purpose==='fleet')state.fleetImportSourceHint=context.sourceHint;
+  return readFiles(files);
+});
 
 const headerKey=value=>String(value??'').toLowerCase().replace(/[^a-z0-9]/g,'');
 function findImportHeader(rows,groups) {
@@ -7601,12 +8009,18 @@ const MORNING_IMPORT_WORKER_TIMEOUT_MS=45000;
 const MORNING_IMPORT_MAX_FILE_BYTES=50*1024*1024;
 const MORNING_IMPORT_MAX_ROWS=20000;
 const MORNING_IMPORT_MAX_CELLS=250000;
-let morningImportWorker=null,morningImportWorkerRequest=0,morningImportReadToken=0,pendingMorningImportFiles=[];
+let morningImportWorker=null,morningImportWorkerRequest=0,morningImportReadToken=0,pendingMorningImportFiles=[],activeEquipmentOcrWorker=null;
 const morningImportWorkerPending=new Map();
+function stopActiveEquipmentOcr() {
+  const worker=activeEquipmentOcrWorker;
+  if(!worker)return Promise.resolve();
+  activeEquipmentOcrWorker=null;
+  try{return Promise.resolve(worker.terminate?.()).catch(()=>{});}catch{return Promise.resolve();}
+}
 function morningImportRawFileRole(file={}) {
   const key=headerKey(file.name||'');
   if(key.includes('dayofopsplan'))return 'plan';
-  if(/routes?djt6/.test(key))return 'routes';
+  if(/routes?(?:djt6|dur6)/.test(key))return 'routes';
   return `file:${key}`;
 }
 function mergePendingMorningImportFiles(files=[]) {
@@ -7626,12 +8040,14 @@ function resetMorningImportBatch() {
   pendingMorningImportFiles=[];
   state.importReadingFiles=[];
   morningImportReadToken++;
+  if(activeFilePickerContext)activeFilePickerContext.cancelled=true;
   if(morningImportWorkerPending.size)stopMorningImportWorker('The Morning import was closed or replaced.','worker-cancelled');
+  void stopActiveEquipmentOcr();
 }
 function morningParsedFileRole(file={}) {
   const key=headerKey(file.name||''),rows=Array.isArray(file.rows)?file.rows:[];
   if(key.includes('dayofopsplan'))return 'plan';
-  if(/routes?djt6/.test(key))return 'routes';
+  if(/routes?(?:djt6|dur6)/.test(key))return 'routes';
   const planHeader=morningPlanHeaderIndex(rows);
   if(planHeader>=0) {
     const headers=(rows[planHeader]||[]).map(headerKey);
@@ -7645,7 +8061,7 @@ function morningImportFailureMessage(error,files=[]) {
   if(/too long|larger than|too large|safe (?:browser )?import|expands beyond/i.test(message))return message;
   const names=[...new Set((files||[]).map(file=>String(file?.name||'').trim()).filter(Boolean))].join(' + '),label=names||'The selected Morning files';
   if(/^empty$/i.test(message))return `${label} did not contain readable spreadsheet rows. Download the original CSV or XLSX again, then retry. No sheet data was changed.`;
-  if(/^unrecognized$/i.test(message))return `${label} does not look like DAYOFOPSPLAN or Routes_DJT6. Check the filenames and export columns, then retry. No sheet data was changed.`;
+  if(/^unrecognized$/i.test(message))return `${label} does not look like DAYOFOPSPLAN or ${activeMorningRouteFileLabel()}. Check the filenames and export columns, then retry. No sheet data was changed.`;
   if(message)return `${label} could not be read. Reader detail: ${message.slice(0,220)}. No sheet data was changed.`;
   return `${label} could not be read. Refresh the dashboard once and retry. No sheet data was changed.`;
 }
@@ -7691,7 +8107,7 @@ function getMorningImportWorker() {
   if(morningImportWorker)return morningImportWorker;
   if(typeof Worker==='undefined'||typeof URL==='undefined'||!window?.location?.href)return null;
   try {
-    const worker=new Worker(new URL('./morning-import-worker.js?v=20260906-dispatch-actions-reset-r1',window.location.href),{name:'relayops-morning-import'});
+    const worker=new Worker(new URL('./morning-import-worker.js?v=20260907-dual-station-release-r1',window.location.href),{name:'relayops-morning-import'});
     worker.addEventListener('message',event=>{
       const message=event.data||{},entry=morningImportWorkerPending.get(message.id);if(!entry)return;
       morningImportWorkerPending.delete(message.id);clearTimeout(entry.timer);
@@ -7753,8 +8169,9 @@ async function parseMorningXlsxWithFallback(file,buffer,shouldContinue=null) {
 }
 async function parseUploadedFile(file,purpose=state.importPurpose,shouldContinue=null) {
   const name=file.name.toLowerCase(); let rows;
-  if(/^image\//.test(file.type)||/\.(png|jpe?g|webp)$/i.test(name)) { const image=await readImageContent(file);return {name:file.name,rows:image.rows||[],text:image.text||'',kind:'image'}; }
-  if(file.type==='application/pdf'||name.endsWith('.pdf')) return {name:file.name,rows:[],text:await readPdfText(await file.arrayBuffer()),kind:'pdf'};
+  const current=()=>typeof shouldContinue!=='function'||shouldContinue();
+  if(/^image\//.test(file.type)||/\.(png|jpe?g|webp)$/i.test(name)) { const image=await readImageContent(file,purpose,shouldContinue);if(!current())throw new Error('This import was closed or replaced.');return {name:file.name,rows:image.rows||[],text:image.text||'',kind:'image'}; }
+  if(file.type==='application/pdf'||name.endsWith('.pdf')) {const buffer=await file.arrayBuffer();if(!current())throw new Error('This import was closed or replaced.');return {name:file.name,rows:[],text:await readPdfText(buffer,shouldContinue),kind:'pdf'};}
   if(name.endsWith('.csv')&&purpose==='morning') {
     const size=Number(file.size)||0;
     if(size>MORNING_IMPORT_MAX_FILE_BYTES)throw new Error(`${file.name} is larger than 50 MB. Split the plan and route files, then retry.`);
@@ -7763,17 +8180,17 @@ async function parseUploadedFile(file,purpose=state.importPurpose,shouldContinue
     if(typeof shouldContinue==='function'&&!shouldContinue())throw new Error('This import was closed or replaced.');
     rows=await parseMorningCsvInWorker(buffer,file.name);
   }
-  else if(name.endsWith('.csv')) rows=parseCSV(await file.text());
+  else if(name.endsWith('.csv')) {const text=await file.text();if(!current())throw new Error('This import was closed or replaced.');rows=parseCSV(text);}
   else if(name.endsWith('.xlsx')) {
     const size=Number(file.size)||0;
     if(purpose==='morning'&&size>MORNING_IMPORT_MAX_FILE_BYTES)throw new Error(`${file.name} is larger than 50 MB. Export it as CSV or split the plan and route files, then retry.`);
     const buffer=await file.arrayBuffer();
     if(purpose==='morning'&&buffer.byteLength>MORNING_IMPORT_MAX_FILE_BYTES)throw new Error(`${file.name} is larger than 50 MB. Export it as CSV or split the plan and route files, then retry.`);
-    if(typeof shouldContinue==='function'&&!shouldContinue())throw new Error('This import was closed or replaced.');
+    if(!current())throw new Error('This import was closed or replaced.');
     rows=purpose==='morning'?await parseMorningXlsxWithFallback(file,buffer,shouldContinue):await parseXlsxArrayBuffer(buffer,file.name,purpose);
   }
   else if(name.endsWith('.xls')) {
-    const buffer=await file.arrayBuffer(),text=new TextDecoder('utf-8').decode(buffer);
+    const buffer=await file.arrayBuffer();if(!current())throw new Error('This import was closed or replaced.');const text=new TextDecoder('utf-8').decode(buffer);
     if(/<table\b/i.test(text)) {
       rows=htmlTableRows(text);
       if(rows.length<2)throw new Error('empty Paycom HTML workbook');
@@ -7782,7 +8199,7 @@ async function parseUploadedFile(file,purpose=state.importPurpose,shouldContinue
     rows=await parseXlsxArrayBuffer(buffer,file.name,purpose);
   }
   else {
-    const text=await file.text().catch(()=>''),clean=text.replace(/^\uFEFF/,'');
+    const text=await file.text().catch(()=>''),clean=text.replace(/^\uFEFF/,'');if(!current())throw new Error('This import was closed or replaced.');
     // Amazon AssociateData exports are sometimes downloaded without a .csv
     // suffix. Only enable content sniffing for the driver-import workflow;
     // fleet and RTS filename gates remain strict.
@@ -7795,23 +8212,31 @@ async function parseUploadedFile(file,purpose=state.importPurpose,shouldContinue
   if(rows.length<2) throw new Error('empty');
   return {name:file.name,rows};
 }
-async function readImageContent(file) {
+async function readImageContent(file,purpose=state.importPurpose,shouldContinue=null) {
+  const current=()=>typeof shouldContinue!=='function'||shouldContinue();
   try {
-    if(state.importPurpose!=='equipment'&&typeof TextDetector!=='undefined'&&typeof createImageBitmap!=='undefined') {
+    if(purpose!=='equipment'&&typeof TextDetector!=='undefined'&&typeof createImageBitmap!=='undefined') {
       const detector=new TextDetector();
       const bitmap=await createImageBitmap(file);
+      if(!current()){bitmap.close?.();throw new Error('This import was closed or replaced.');}
       const results=await detector.detect(bitmap);
+      bitmap.close?.();
+      if(!current())throw new Error('This import was closed or replaced.');
       const text=detectionsToText(results);
       if(text.trim())return {text,rows:[]};
     }
   } catch {}
-  return readImageWithOcr(file);
+  if(!current())throw new Error('This import was closed or replaced.');
+  return readImageWithOcr(file,shouldContinue);
 }
-async function equipmentOcrCanvas(file) {
+async function equipmentOcrCanvas(file,shouldContinue=null) {
   if(typeof createImageBitmap==='undefined')return file;
-  const bitmap=await createImageBitmap(file), scale=Math.max(1.5,Math.min(3,1800/Math.max(1,bitmap.width)));
+  const current=()=>typeof shouldContinue!=='function'||shouldContinue(),bitmap=await createImageBitmap(file);
+  if(!current()){bitmap.close?.();throw new Error('This import was closed or replaced.');}
+  const maxPixels=10000000,baseScale=Math.min(3,Math.max(1,1800/Math.max(1,bitmap.width))),pixelScale=Math.sqrt(maxPixels/Math.max(1,bitmap.width*bitmap.height)),scale=Math.max(.25,Math.min(baseScale,pixelScale));
   const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
   const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+  bitmap.close?.();
   const image=ctx.getImageData(0,0,canvas.width,canvas.height), data=image.data;
   for(let i=0;i<data.length;i+=4){const gray=.299*data[i]+.587*data[i+1]+.114*data[i+2],value=Math.max(0,Math.min(255,(gray-128)*1.35+128));data[i]=value;data[i+1]=value;data[i+2]=value;}
   const horizontal=[],vertical=[];
@@ -7877,26 +8302,36 @@ function equipmentRowsFromOcrTsv(tsv='',imageWidth=0,imageCanvas=null) {
   }).filter(row=>row.some(Boolean));
   return isDouble?rows:repairSequentialEquipmentRows(rows);
 }
-async function readImageWithOcr(file) {
+async function readImageWithOcr(file,shouldContinue=null) {
+  let worker=null;
+  const current=()=>typeof shouldContinue!=='function'||shouldContinue();
   try {
     if(!window.Tesseract?.createWorker)return {text:'',rows:[]};
-    const image=await equipmentOcrCanvas(file);
-    const worker=await window.Tesseract.createWorker('eng',1,{logger:message=>{
+    const image=await equipmentOcrCanvas(file,shouldContinue);
+    if(!current())throw new Error('This import was closed or replaced.');
+    worker=await window.Tesseract.createWorker('eng',1,{logger:message=>{
+      if(!current())return;
       if(message.status==='recognizing text'&&message.progress>.15) {
         const percent=Math.round(message.progress*100);
         const drop=document.querySelector('#equipment-drop .equipment-drop-copy span');
         if(drop)drop.textContent=`Reading screenshot… ${percent}%`;
       }
     }});
+    if(!current()){await worker.terminate?.();worker=null;throw new Error('This import was closed or replaced.');}
+    activeEquipmentOcrWorker=worker;
     const pageMode=image.height/image.width>2?'3':'6';
     await worker.setParameters({tessedit_pageseg_mode:pageMode,preserve_interword_spaces:'1',user_defined_dpi:'300'});
+    if(!current())throw new Error('This import was closed or replaced.');
     const result=await worker.recognize(image,{}, {text:true,tsv:true});
-    await worker.terminate();
+    if(!current())throw new Error('This import was closed or replaced.');
     const text=String(result?.data?.text||'').replace(/\f/g,'\n').trim();
     return {text,rows:equipmentRowsFromOcrTsv(result?.data?.tsv||'',image.width||0,image)};
   } catch(error) {
     console.warn('VAN/DEV/PORT OCR failed',error);
     return {text:'',rows:[]};
+  } finally {
+    if(worker){try{await worker.terminate?.();}catch{}}
+    if(activeEquipmentOcrWorker===worker)activeEquipmentOcrWorker=null;
   }
 }
 function detectionBox(result) {
@@ -7923,13 +8358,16 @@ function pdfBytesToLatin1(buffer) {
 function decodePdfString(value='') {
   return String(value).replace(/\\([nrtbf()\\])/g,(_,c)=>({n:'\n',r:'\r',t:'\t',b:'\b',f:'\f','(':'(',')':')','\\':'\\'}[c]||c)).replace(/\\([0-7]{1,3})/g,(_,n)=>String.fromCharCode(parseInt(n,8)));
 }
-async function readPdfText(buffer) {
+async function readPdfText(buffer,shouldContinue=null) {
+  const current=()=>typeof shouldContinue!=='function'||shouldContinue();
   try {
     if(window.pdfjsLib?.getDocument) {
       window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
       const pdf=await window.pdfjsLib.getDocument({data:new Uint8Array(buffer)}).promise,pages=[];
       for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++) {
+        if(!current())throw new Error('This import was closed or replaced.');
         const page=await pdf.getPage(pageNumber),content=await page.getTextContent();
+        if(!current())throw new Error('This import was closed or replaced.');
         const lines=[],items=[...content.items].filter(item=>String(item.str||'').trim()).sort((a,b)=>{
           const ay=Number(a.transform?.[5]||0),by=Number(b.transform?.[5]||0);return Math.abs(by-ay)>3?by-ay:Number(a.transform?.[4]||0)-Number(b.transform?.[4]||0);
         });
@@ -8164,41 +8602,54 @@ function currentScheduleEntries() {
   return scheduleEntriesForDate(state.morningOperationDate);
 }
 async function readFiles(files) {
-  const incomingFiles=[...files],purposeAtStart=state.importPurpose,operationDateAtStart=state.morningOperationDate,isMorningRead=purposeAtStart==='morning';
+  const incomingFiles=[...files],purposeAtStart=state.importPurpose,isMorningRead=purposeAtStart==='morning',isEquipmentRead=purposeAtStart==='equipment';
+  const stationAtStart=activeMorningStationCode(),operationDateAtStart=String(state.morningOperationDate||defaultOperationDate());
   const previousMorningFiles=isMorningRead?[...pendingMorningImportFiles]:[];
   const selectedFiles=isMorningRead?mergePendingMorningImportFiles(incomingFiles):incomingFiles,readToken=++morningImportReadToken;
+  const importStillCurrent=()=>readToken===morningImportReadToken&&state.importPurpose===purposeAtStart&&activeMorningStationCode()===stationAtStart&&String(state.morningOperationDate||'')===operationDateAtStart;
+  // A newer selection must stop an older screenshot OCR job, not merely ignore
+  // its eventual result. Otherwise two Tesseract workers can overlap and make
+  // another station's dispatcher tab unresponsive even though state is isolated.
+  await stopActiveEquipmentOcr();
+  if(!importStillCurrent())return;
   if(!isMorningRead){pendingMorningImportFiles=[];state.importReadingFiles=[];}
   // A new picker result supersedes any older background workbook job.
   if(morningImportWorkerPending.size)stopMorningImportWorker('A newer file selection replaced this import.','worker-cancelled');
-  if(isMorningRead) {
-    state.importReadingFiles=selectedFiles.map(file=>String(file.name||'Amazon file'));
-    if(state.modal==='import')renderLightweightModal();
+  if(isMorningRead||isEquipmentRead) {
+    state.importReadingFiles=selectedFiles.map(file=>String(file.name||(isEquipmentRead?'Equipment file':'Amazon file')));
+    if(state.modal==='import'||state.modal==='equipment')renderLightweightModal();
     // Let Chrome paint the reading state before arrayBuffer/ZIP work starts.
     await yieldMorningImportPaint();
   }
   try {
-    if(state.importPurpose==='fleet'&&state.fleetImportSourceHint==='amazon') {
+    if(['morning','itinerary-rts','equipment','fleet','parking'].includes(purposeAtStart))incomingFiles.forEach(assertOpeningStationFile);
+    if(purposeAtStart==='fleet'&&state.fleetImportSourceHint==='amazon') {
       const invalid=selectedFiles.find(file=>!/^VehiclesData.*\.xlsx$/i.test(String(file.name||'')));
       if(invalid)throw new Error('Amazon Fleet Import only accepts VehiclesData… .xlsx files');
     }
-    if(state.importPurpose==='fleet'&&state.fleetImportSourceHint==='fleetos') {
+    if(purposeAtStart==='fleet'&&state.fleetImportSourceHint==='fleetos') {
       const invalid=selectedFiles.find(file=>!/^Vehicle_List.*\.csv$/i.test(String(file.name||'')));
       if(invalid)throw new Error('FleetOS Import only accepts Vehicle_List… .csv files');
     }
     let parsed;
-    if(isMorningRead) {
-      // Amazon plan/route workbooks are intentionally processed one at a time
-      // to cap memory use on dispatcher laptops.
+    if(isMorningRead||isEquipmentRead) {
+      // Morning workbooks and Device/Portable screenshots are intentionally
+      // processed one at a time. This bounds browser memory/OCR CPU and lets a
+      // station/date switch cancel the batch without touching the next sheet.
       parsed=[];
       for(const file of selectedFiles) {
-        if(readToken!==morningImportReadToken||state.importPurpose!==purposeAtStart)return;
-        parsed.push(await parseUploadedFile(file,purposeAtStart,()=>readToken===morningImportReadToken&&state.importPurpose===purposeAtStart));
+        if(!importStillCurrent())return;
+        parsed.push(await parseUploadedFile(file,purposeAtStart,importStillCurrent));
+        if(!importStillCurrent())return;
+        await yieldMorningImportPaint();
       }
-      if(readToken!==morningImportReadToken||state.importPurpose!==purposeAtStart)return;
+      if(!importStillCurrent())return;
       state.importReadingFiles=[];
-    } else parsed=await Promise.all(selectedFiles.map(file=>parseUploadedFile(file,purposeAtStart)));
-    if(purposeAtStart==='whiparound'&&state.morningOperationDate!==operationDateAtStart)return toast('The operating day changed while this report was being read. Import the new day’s Whiparound report.','error');
-    if(state.importPurpose==='whiparound') {
+      if(state.modal==='equipment')renderLightweightModal();
+    } else parsed=await Promise.all(selectedFiles.map(file=>parseUploadedFile(file,purposeAtStart,importStillCurrent)));
+    if(purposeAtStart==='whiparound'&&activeMorningStationCode()===stationAtStart&&state.morningOperationDate!==operationDateAtStart)return toast('The operating day changed while this report was being read. Import the new day’s Whiparound report.','error');
+    if(!importStillCurrent())return;
+    if(purposeAtStart==='whiparound') {
       const records=parsed.flatMap(file=>inspectionRecordsFromRows(file.rows||[]));
       if(!records.length)throw new Error('No Pre-Trip or Post-Trip EDV Inspection (DVIR) rows found');
       const byId=new Map((state.whiparoundInspections||[]).map(row=>[row.id,row]));records.forEach(row=>byId.set(row.id,row));
@@ -8211,7 +8662,7 @@ async function readFiles(files) {
       state.importPurpose='morning';state.page='inbox';persist();render();
       return toast(`${records.length} DVIR rows read · ${applied.pre} Pre-Trip and ${applied.post} Post-Trip Morning Sheet checks updated`);
     }
-    if(state.importPurpose==='schedule') {
+    if(purposeAtStart==='schedule') {
       let entries=parsed.flatMap(file=>file.rows?.length?scheduleEntriesFromRows(file.rows,{fileName:file.name}):scheduleEntriesFromText(file.text||''));
       if(!entries.length)throw new Error('no schedule shifts');
       const destination=state.scheduleImportDestination||'roster',importName=parsed.map(file=>file.name).join(' + ');
@@ -8225,11 +8676,11 @@ async function readFiles(files) {
       const dateNote=entryDate?` · ${formatShortOperationDate(entryDate)}`:'';
       return toast(destination==='rostering'?`${entries.length} PAYCOM shifts imported${dateNote} · ${helperAdded} Helper shift${helperAdded===1?'':'s'} added automatically · Auto Roster is ready`:`${entries.length} Paycom shifts organized for the Opening Roster${dateNote}`);
     }
-    if(state.importPurpose==='rostering-screenshot') {
+    if(purposeAtStart==='rostering-screenshot') {
       const text=parsed.map(file=>file.text||rowsToText(file.rows||[])).filter(Boolean).join('\n');if(!text.trim())throw new Error('No readable roster text was found in the screenshot');
       const name=parsed.map(file=>file.name).join(' + '),plan=applyRosteringScreenshotText(text,name),rostered=plan.assignments.filter(row=>row.associate).length;state.importPurpose='morning';state.page='rostering';persist();render();return toast(`${plan.services.length} confirmed service${plan.services.length===1?'':'s'} rebuilt · ${rostered} associate${rostered===1?'':'s'} recognized`);
     }
-    if(state.importPurpose==='parking') {
+    if(purposeAtStart==='parking') {
       const text=parsed.map(f=>[f.text,rowsToText(f.rows||[])].filter(Boolean).join('\n')).filter(Boolean).join('\n');
       const count=applyParkingText(text,{silent:true});
       state.vanParkingPasteText=text;
@@ -8237,7 +8688,7 @@ async function readFiles(files) {
       persist();render();
       return toast(count?`Van Parking updated from imported file · ${count} spot${count===1?'':'s'} matched`:'No parking spots found in that file — use a clear Google Sheets screenshot or paste rows with # spot numbers',count?'success':'error');
     }
-    if(state.importPurpose==='equipment') {
+    if(purposeAtStart==='equipment') {
       const textParts=parsed.map(f=>f.text||rowsToText(f.rows)).filter(Boolean);
       const details=textParts.reduce((all,text)=>({...all,...equipmentDetailsFromText(text)}),{});
       const rowDetails=parsed.reduce((all,f)=>({...all,...equipmentDetailsFromRows(f.rows||[])}),{});
@@ -8249,9 +8700,9 @@ async function readFiles(files) {
       mergeEquipmentImport(parsed.map(f=>f.name).join(' + '),incomingDetails,batchText);
       const total=Object.keys(state.equipmentImport.details).length;
       persist();render();
-      return toast(`${incomingCount} EV/VAN assignment${incomingCount===1?'':'s'} read · ${total} saved for today and queued for dispatcher sync`);
+      return toast(`${incomingCount} ${stationAtStart} EV/VAN assignment${incomingCount===1?'':'s'} read · ${total} saved only to ${stationAtStart} for today`);
     }
-    if(state.importPurpose==='fleet') {
+    if(purposeAtStart==='fleet') {
       const forcedSource=state.fleetImportSourceHint==='amazon'?'Amazon fleet list':state.fleetImportSourceHint==='fleetos'?'FleetOS tracker':'';
       const vehicles=parsed.flatMap(f=>fleetDetailsFromRows(f.rows||[],forcedSource||f.name));
       if(!vehicles.length) throw new Error('no fleet rows');
@@ -8262,7 +8713,7 @@ async function readFiles(files) {
       const groundedCount=vehicles.filter(vehicle=>normalizeOperational(vehicle.operational)==='Grounded').length,operationalCount=vehicles.filter(vehicle=>normalizeOperational(vehicle.operational)==='Operational').length;
       return toast(`${vehicles.length} fleet rows read · ${operationalCount} operational · ${groundedCount} grounded · ${total} vehicle cards tracked`);
     }
-    if(state.importPurpose==='drivers') {
+    if(purposeAtStart==='drivers') {
       const contacts=parsed.flatMap(f=>{const fromRows=driverContactsFromRows(f.rows||[]);return fromRows.length?fromRows:driverContactsFromText(f.text||'');});
       if(!contacts.length) throw new Error('no driver contacts');
       const total=mergeDriverContacts(contacts);
@@ -8272,9 +8723,10 @@ async function readFiles(files) {
       persist(); render();
       return toast(`${contacts.length} driver contact${contacts.length===1?'':'s'} imported · ${total} total saved`);
     }
-    if(state.importPurpose==='itinerary-rts') {
-      const invalidName=parsed.find(file=>!/^itineraries_djt6/i.test(String(file.name||'')));
-      if(invalidName)throw new Error('RTS import requires a file beginning with Itineraries_DJT6');
+    if(purposeAtStart==='itinerary-rts') {
+      const expected=activeMorningItineraryFileLabel(),pattern=new RegExp(`^itineraries[_\\s-]*${activeMorningStationCode()}(?:[_\\s-]|$)`,'i');
+      const invalidName=parsed.find(file=>!pattern.test(String(file.name||'')));
+      if(invalidName)throw new Error(`RTS import requires a file beginning with ${expected}`);
       const details=parsed.reduce((all,file)=>mergeItineraryRtsDetails(all,itineraryRtsDetailsFromRows(file.rows||[])),{}),count=Object.keys(details).length;
       if(!count)throw new Error('No Route code + Planned return to station rows found');
       state.lastItineraryRts=details;
@@ -8296,21 +8748,20 @@ async function readFiles(files) {
     if(!primary)throw new Error('unrecognized');
     const planHeader=plan?morningPlanHeaderIndex(plan.rows):findImportHeader(primary.rows,[['route','routecode','routeid','cx','cxnumber','cxroute','blockid']]);
     const rows=primary.rows.slice(Math.max(0,planHeader));
-    state.importedFile={name:parsed.map(f=>f.name).join(' + '),headers:rows[0],rows:rows.slice(1),kind:state.importPurpose==='rts'?'rts':(plan?'plan':'details'),routeDetails:details,routeDetailsCount:Object.keys(details).length};
+    state.importedFile={name:parsed.map(f=>f.name).join(' + '),headers:rows[0],rows:rows.slice(1),kind:purposeAtStart==='rts'?'rts':(plan?'plan':'details'),routeDetails:details,routeDetailsCount:Object.keys(details).length};
     if(state.modal==='import')renderLightweightModal();else render();
     toast(`${parsed.length} file${parsed.length===1?'':'s'} ready · CX routes will be matched automatically`);
   } catch(error) {
-    if(isMorningRead) {
-      if(readToken!==morningImportReadToken)return;
+    if(!importStillCurrent())return;
+    if(isMorningRead||isEquipmentRead) {
       // Do not let a corrupt or unrelated selection poison the next retry.
       // Keep only the previously parsed Morning batch until this selection
       // has completed successfully.
-      pendingMorningImportFiles=previousMorningFiles;
+      if(isMorningRead)pendingMorningImportFiles=previousMorningFiles;
       state.importReadingFiles=[];
-      if(state.importPurpose!==purposeAtStart)return;
-      if(state.modal==='import')renderLightweightModal();
+      if(state.modal==='import'||state.modal==='equipment')renderLightweightModal();
     }
-    console.error(error);if(state.importPurpose==='itinerary-rts')return toast(error?.message||'Choose an Itineraries_DJT6 XLSX containing Route code and Planned return to station','error');toast(state.importPurpose==='rostering-screenshot'?(error?.message||'Could not read Amazon confirmed services or associate rows. Upload a clear full-size roster screenshot.'):state.importPurpose==='whiparound'?(error?.message||'Could not find the five required Whiparound columns. Choose a CSV or XLSX inspection report.'):state.importPurpose==='schedule'?'Could not find scheduled names, times, and shift labels. Upload the Paycom PDF, screenshot, CSV, Excel, or text export.':state.importPurpose==='fleet'?(error?.message||'Could not find VIN rows in the selected fleet file.'):state.importPurpose==='drivers'?'Could not find driver names and phone numbers. Use a CSV, XLSX, or text-based PDF with Name and Personal Phone information.':purposeAtStart==='morning'?morningImportFailureMessage(error,selectedFiles):'The selected files could not be read.','error');
+    console.error(error);if(purposeAtStart==='itinerary-rts')return toast(error?.message||`Choose a ${activeMorningItineraryFileLabel()} XLSX containing Route code and Planned return to station`,'error');toast(purposeAtStart==='rostering-screenshot'?(error?.message||'Could not read Amazon confirmed services or associate rows. Upload a clear full-size roster screenshot.'):purposeAtStart==='whiparound'?(error?.message||'Could not find the five required Whiparound columns. Choose a CSV or XLSX inspection report.'):purposeAtStart==='schedule'?'Could not find scheduled names, times, and shift labels. Upload the Paycom PDF, screenshot, CSV, Excel, or text export.':purposeAtStart==='fleet'?(error?.message||'Could not find VIN rows in the selected fleet file.'):purposeAtStart==='drivers'?'Could not find driver names and phone numbers. Use a CSV, XLSX, or text-based PDF with Name and Personal Phone information.':purposeAtStart==='morning'?morningImportFailureMessage(error,selectedFiles):'The selected files could not be read.','error');
   }
 }
 async function readFile(file) { return readFiles([file]); }
@@ -8815,7 +9266,7 @@ async function parseXlsxArrayBuffer(buffer,fileName='',purpose=state.importPurpo
     if(purpose==='morning'&&/day[_\s-]*of[_\s-]*ops[_\s-]*plan/i.test(fileName)) {
       const planHeader=morningPlanHeaderIndex(rows);if(planHeader>=0)return rows.slice(planHeader);
     }
-    if(purpose==='morning'&&/routes?[_\s-]*djt6/i.test(fileName)) {
+    if(purpose==='morning'&&/routes?[_\s-]*(?:djt6|dur6)/i.test(fileName)) {
       const routeHeader=findImportHeader(rows,[['route','routecode','routeid','cx','cxnumber','cxroute','blockid'],['driver','drivername','transportername','employeename','daname','associatename','name','deliveryassociate','stops','stopcount','plannedstops','numstops','planneddeparturetime']]);
       if(routeHeader>=0)return rows.slice(routeHeader);
     }
@@ -8869,19 +9320,19 @@ function applyImport() {
     // Remove stale manual footer overrides so the visible Wave rows, footer
     // labels, screenshot, and Google connector all use the same six times.
     state.morningWaveTimeOverrides=state.morningWaveTimeOverrides&&typeof state.morningWaveTimeOverrides==='object'?state.morningWaveTimeOverrides:{};
-    for(let waveIndex=1;waveIndex<=MORNING_CORE_WAVE_COUNT;waveIndex++)delete state.morningWaveTimeOverrides[morningWaveOverrideKey(`WAVE ${waveIndex}`)];
+    for(let waveIndex=1;waveIndex<=activeMorningWaveCount();waveIndex++)delete state.morningWaveTimeOverrides[morningWaveOverrideKey(`WAVE ${waveIndex}`)];
     state.morningRoutes=candidates.map(({row:r,route},i)=>{
       const detail=f.routeDetails?.[route];
       const packages=Number(r[ix.packages])||0, zones=Number(r[ix.zones])||0;
       const importedStops=Number(r[ix.stops]);
       const wave=normalizeMorningWaveTime(r[ix.wave])||'Wave pending', plannedRts=detail?.plannedRts||'', duration=Number(r[ix.duration])||0;
-      return {dsp:state.dspCode,driver:firstDriverName(detail?.driver||(ix.driver>=0&&r[ix.driver])||'Unassigned driver'),route,service:(ix.service>=0&&r[ix.service])||'Standard Parcel',wave,staging:ix.staging>=0?(r[ix.staging]||'—'):'—',duration,zones,packages,commercial:Number(r[ix.commercial])||0,stops:detail?.stops!==null&&detail?.stops!==undefined?detail.stops:(Number.isFinite(importedStops)?importedStops:0),eta:'—',bags:Math.max(1,Math.round(packages/13)),overflow:Math.max(0,Math.round(packages/24)),parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts,plannedRtsIssue:isIrregularPlannedRts(plannedRts,wave,duration),clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
+      return {stationCode:activeMorningStationCode(),dsp:state.dspCode,driver:firstDriverName(detail?.driver||(ix.driver>=0&&r[ix.driver])||'Unassigned driver'),route,service:(ix.service>=0&&r[ix.service])||'Standard Parcel',wave,staging:ix.staging>=0?(r[ix.staging]||'—'):'—',duration,zones,packages,commercial:Number(r[ix.commercial])||0,stops:detail?.stops!==null&&detail?.stops!==undefined?detail.stops:(Number.isFinite(importedStops)?importedStops:0),eta:'—',bags:Math.max(1,Math.round(packages/13)),overflow:Math.max(0,Math.round(packages/24)),parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts,plannedRtsIssue:isIrregularPlannedRts(plannedRts,wave,duration),clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
     }).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||routeCompare(a.route,b.route)||a.staging.localeCompare(b.staging,undefined,{numeric:true}));
-    state.routes=state.morningRoutes.map((r,i)=>({route:r.route,driver:r.driver,id:`DA-${1100+i}`,wave:r.wave,staging:r.staging,van:'Unassigned',device:'Unassigned',stops:r.stops,packages:r.packages,progress:0,delta:0,status:r.driver==='Unassigned driver'?'Needs review':'Assigned',rescue:'—'}));
-    const importedWaves=[...new Set(state.morningRoutes.filter(row=>!isExplicitAdhocMorningRoute(row)&&!isExplicitHelperMorningRoute(row)).map(row=>row.wave).filter(Boolean))];state.openingPicklistWaveSlots=Math.min(MORNING_CORE_WAVE_COUNT,importedWaves.length);state.openingPicklistShowAdhoc=true;
-    state.lastImportExcluded=excluded;state.lastMorningImportFingerprint=`${state.morningOperationDate}|${Date.now()}|${String(f.name||'morning-files').slice(0,120)}`;resetMorningImportBatch();state.modal=null;state.page='morning';state.morningFilters={wave:'all',staging:'all',pad:'all'};state.rosterPublished=false;persist();render();return toast(`${state.morningRoutes.length} ${state.dspCode} routes loaded across every Service Type · ${excluded} other-DSP or non-route rows skipped`);
+    state.routes=state.morningRoutes.map((r,i)=>({stationCode:activeMorningStationCode(),route:r.route,driver:r.driver,id:`${activeMorningStationCode()}-DA-${1100+i}`,wave:r.wave,staging:r.staging,van:'Unassigned',device:'Unassigned',stops:r.stops,packages:r.packages,progress:0,delta:0,status:r.driver==='Unassigned driver'?'Needs review':'Assigned',rescue:'—'}));
+    const importedWaves=[...new Set(state.morningRoutes.filter(row=>!isExplicitAdhocMorningRoute(row)&&!isExplicitHelperMorningRoute(row)).map(row=>row.wave).filter(Boolean))];state.openingPicklistWaveSlots=Math.min(activeMorningWaveCount(),importedWaves.length);state.openingPicklistShowAdhoc=true;
+    state.lastImportExcluded=excluded;state.lastMorningImportFingerprint=`${activeMorningStationCode()}|${state.morningOperationDate}|${Date.now()}|${String(f.name||'morning-files').slice(0,120)}`;resetMorningImportBatch();state.modal=null;state.page='morning';state.morningFilters={wave:'all',staging:'all',pad:'all'};state.rosterPublished=false;persist();render();return toast(`${state.morningRoutes.length} ${state.dspCode} routes loaded into ${activeMorningStationCode()} · ${excluded} other-DSP or non-route rows skipped`);
   }
-  state.routes=f.rows.map((r,i)=>({route:r[ix.route]||`IMP-${i+1}`,driver:firstDriverName(r[ix.driver]||'Unassigned driver'),id:`DA-${1100+i}`,wave:r[ix.wave]||'Wave pending',staging:r[ix.staging]||'—',van:r[ix.van]||'Unassigned',device:r[ix.device]||'Unassigned',stops:Number(r[ix.stops])||0,packages:Number(r[ix.packages])||0,progress:0,delta:0,status:(r[ix.driver]&&r[ix.van])?'Assigned':'Needs review',rescue:'—'}));
+  state.routes=f.rows.map((r,i)=>({stationCode:activeMorningStationCode(),route:r[ix.route]||`IMP-${i+1}`,driver:firstDriverName(r[ix.driver]||'Unassigned driver'),id:`${activeMorningStationCode()}-DA-${1100+i}`,wave:r[ix.wave]||'Wave pending',staging:r[ix.staging]||'—',van:r[ix.van]||'Unassigned',device:r[ix.device]||'Unassigned',stops:Number(r[ix.stops])||0,packages:Number(r[ix.packages])||0,progress:0,delta:0,status:(r[ix.driver]&&r[ix.van])?'Assigned':'Needs review',rescue:'—'}));
   resetMorningImportBatch();state.modal=null;state.page='roster';state.rosterPublished=false;persist();render();toast(`${state.routes.length} routes imported — review before publishing`);
 }
 
@@ -8894,7 +9345,7 @@ function parseEquipmentTextAction() {
   if(rejectConflictingEquipmentMerge(details))return;
   mergeEquipmentImport('Pasted EV/device list',details);
   persist();render();
-  toast(`${count} EV/VAN assignment${count===1?'':'s'} found · saved for today and queued for dispatcher sync`);
+  toast(`${count} ${activeMorningStationCode()} EV/VAN assignment${count===1?'':'s'} found · saved only to this station for today`);
 }
 function parseFleetPasteAction() {
   const el=document.getElementById('fleet-paste-text');
@@ -8922,7 +9373,7 @@ function applyEquipmentImport() {
     route.portable=item.portable||'';
   });
   recalculateEquipmentReadiness();state.modal=null;state.page='morning';persist();render();
-  toast(`${matched} EV/VAN rows updated${missing.length?` · ${missing.length} EVs not found in import`:''}`);
+  toast(`${matched} ${activeMorningStationCode()} EV/VAN rows updated${missing.length?` · ${missing.length} EVs not found in import`:''}`);
 }
 function equipmentAssignmentConflicts(details=deviceSheetDetails()) {
   const seen={device:new Map(),portable:new Map()},conflicts=[];
@@ -9433,7 +9884,7 @@ function namedReportDataset(name='Daily roster') {
   }
   if(name==='Weekly scorecard')return {headers:['Driver','Role','Status','Delivery Quality','Last Coaching'],rows:teamDriverRows().map(row=>[row.name,row.role,row.status,row.quality,row.coaching]),file:'relayops-weekly-scorecard.csv'};
   const morning=filteredMorningRows().filter(row=>row.route&&!String(row.route).startsWith('__blank_'));
-  return {headers:['Wave','Driver','Route','Staging','Pad','EV','Device','Portable','Stops','Packages','Planned RTS'],rows:morning.map(row=>[row.wave,row.driver,row.route,row.staging,morningEffectivePad(row),row.ev||'',row.deviceName||'',row.portable||'',row.stops||'',row.packages||'',row.plannedRts||'']),file:'relayops-daily-roster.csv'};
+  return {headers:['Wave','Driver','Route','Staging','Pad','EV','Device','Portable','Stops','Packages','Planned RTS'],rows:morning.map(row=>[row.wave,row.driver,row.route,row.staging,morningEffectivePad(row),row.ev||'',row.deviceName||'',row.portable||'',row.stops||'',row.packages||'',row.plannedRts||'']),file:MULTI_STATION_ENABLED?`relayops-${activeMorningStationCode().toLowerCase()}-daily-roster.csv`:'relayops-daily-roster.csv'};
 }
 function exportNamedReport(name='Daily roster') {
   const report=namedReportDataset(name),csv=[report.headers,...report.rows].map(row=>row.map(csvEscape).join(',')).join('\r\n');
@@ -9594,13 +10045,18 @@ function morningSheetCopyRows() {
 function morningSheetTsv(){ return morningSheetCopyRows().map(row=>row.join('\t')).join('\n'); }
 function morningCoreWaveLabels() {
   const byKey=new Map(morningSections(allMorningRows()).filter(section=>section.hasTime&&/^WAVE\s*[1-6]$/i.test(section.label)).map(section=>[morningFixedSectionKey(section.label),section]));
-  return Array.from({length:MORNING_CORE_WAVE_COUNT},(_,index)=>{
-    const label=`WAVE ${index+1}`,section=byKey.get(`WAVE${index+1}`)||{label,wave:MORNING_CORE_WAVE_TIMES[index],rows:[]};
+  const waveTimes=activeMorningWaveTimes();
+  return Array.from({length:activeMorningWaveCount()},(_,index)=>{
+    const label=`WAVE ${index+1}`,section=byKey.get(`WAVE${index+1}`)||{label,wave:waveTimes[index]||'',rows:[]};
     return {label,value:morningWaveTimeText(section)};
   });
 }
 function morningSheetsConnectorPayload() {
-  const visibleRows=filteredMorningRows(),sections=fixedMorningSections(visibleRows),rows=[],rowTypes=[],sectionMeta=[],writeMode=morningFiltersAreActive()?'partial-update':'full-replace';
+  // The DUR6 scaffold intentionally supports full replacement only. Dashboard
+  // filters remain a viewing aid and cannot produce a partial connector shape
+  // that the station-specific script would reject or misinterpret.
+  const dur6FullReplace=activeMorningStationCode()==='DUR6';
+  const visibleRows=dur6FullReplace?allMorningRows():filteredMorningRows(),sections=fixedMorningSections(visibleRows,{includeEmpty:dur6FullReplace}),rows=[],rowTypes=[],sectionMeta=[],writeMode=dur6FullReplace?'full-replace':morningFiltersAreActive()?'partial-update':'full-replace';
   let index=0;
   sections.forEach(section=>{
     const display=morningDisplayRows(section), pad=morningSectionPad(section);
@@ -9620,8 +10076,9 @@ function morningSheetsConnectorPayload() {
     const driverCount=section.rows.filter(row=>!row._blank&&String(row.driver||'').trim()&&!routeMissingPrimary(row)).length,waveTime=section.hasTime?morningWaveTimeText(section):'';
     sectionMeta.push({label:waveLabel,slotKey:morningFixedSectionKey(waveLabel),wave:section.wave||'',driverCount,waveTime,pad,sourceIndex,startRow,rowCount:display.length,timeRow,hasTimeRow:Boolean(section.hasTime),separatorRow,separatorRows,dsp:Boolean(section.dsp)});
   });
-  const dateTabs=operationDateTabNames(state.morningOperationDate),sheetName=dateTabs[0]||MORNING_TEMPLATE_SHEET_NAME;
-  return {version:'relayops-morning-v1',writeMode,templateUrl:MORNING_TEMPLATE_URL,templateSheet:MORNING_TEMPLATE_SHEET_NAME,templateLayout:'fixed-ops-log-2026',operationDate:state.morningOperationDate,sheetName,sheetNameCandidates:dateTabs.length?dateTabs:MORNING_TEMPLATE_SHEET_CANDIDATES,dsp:state.dspCode,generatedAt:new Date().toISOString(),startCell:'A3',writeRange:'A3:M',headers:morningConnectorHeaders,rows,rowTypes,sections:sectionMeta,waves:morningCoreWaveLabels()};
+  const dateTabs=operationDateTabNames(state.morningOperationDate),sheetName=dateTabs[0]||(dur6FullReplace?'':MORNING_TEMPLATE_SHEET_NAME);
+  const profile=activeOpeningStationProfile(),activeWaveCount=new Set(visibleRows.filter(row=>!row._blank&&!isExplicitAdhocMorningRoute(row)&&!isExplicitHelperMorningRoute(row)).map(row=>row.wave).filter(Boolean)).size;
+  return {version:profile.code==='DUR6'?'relayops-morning-v2':'relayops-morning-v1',stationCode:profile.code,spreadsheetId:profile.spreadsheetId,workbookKey:profile.workbookKey,workbookLabel:profile.workbookLabel,layoutId:profile.layoutId,connectorBuild:profile.connectorBuild,waveSlotCount:profile.coreWaveCount,activeWaveCount,requestId:globalThis.crypto?.randomUUID?.()||`${profile.code}-${Date.now()}`,workspaceRevision:null,writeMode,templateUrl:activeMorningTemplateUrl(),templateSheet:profile.templateSheet,templateLayout:profile.layoutId,operationDate:state.morningOperationDate,sheetName,sheetNameCandidates:dateTabs.length?dateTabs:(dur6FullReplace?[]:[profile.templateSheet]),dsp:state.dspCode,generatedAt:new Date().toISOString(),startCell:'A3',writeRange:'A3:M',headers:morningConnectorHeaders,rows,rowTypes,sections:sectionMeta,waves:morningCoreWaveLabels()};
 }
 function morningRtsOnlyPayload() {
   const dateTabs=operationDateTabNames(state.morningOperationDate),visibleRows=filteredMorningRows(),sections=fixedMorningSections(visibleRows),sectionByRoute=morningFixedSectionByRoute();
@@ -9634,9 +10091,9 @@ function morningRtsOnlyPayload() {
     else if(route.plannedRtsSource==='itinerary'&&route.plannedRts)sourceLocked.set(key,normalizeTimeDisplay(route.plannedRts));
   });
   return {
-    version:'relayops-morning-v1',mode:'rts-only',operationDate:state.morningOperationDate,
-    sheetName:dateTabs[0]||MORNING_TEMPLATE_SHEET_NAME,sheetNameCandidates:dateTabs,
-    // Only send values proven to come from the latest Itineraries_DJT6 upload.
+    version:activeMorningStationCode()==='DUR6'?'relayops-morning-v2':'relayops-morning-v1',mode:'rts-only',stationCode:activeMorningStationCode(),spreadsheetId:activeOpeningStationProfile().spreadsheetId,templateSheet:activeOpeningStationProfile().templateSheet,workbookKey:activeOpeningStationProfile().workbookKey,layoutId:activeOpeningStationProfile().layoutId,waveSlotCount:activeMorningWaveCount(),operationDate:state.morningOperationDate,
+    sheetName:dateTabs[0]||(activeMorningStationCode()==='DUR6'?'':activeOpeningStationProfile().templateSheet),sheetNameCandidates:dateTabs,
+    // Only send values proven to come from the latest station Itineraries upload.
     // Older purple-cell values may be Planned Departure Time and must never leak
     // into an RTS-only update.
     updates:[...sourceLocked.entries()].map(([route,plannedRts])=>({route,plannedRts,expectedSection:sectionByRoute.get(route)||''})),
@@ -9649,7 +10106,7 @@ function morningWhiparoundOnlyPayload() {
   const updates=filteredMorningRows().filter(route=>route.route&&!String(route.route).startsWith('__blank_')&&route.driver&&!routeMissingPrimary(route)&&!/helper/i.test(String(route.service||''))).map(route=>({
     route:normalizeCxRoute(route.route),driver:driverDisplayName(canonicalDriverName(morningDriverNames(route.driver)[0]||route.driver)),expectedSection:sectionByRoute.get(normalizeCxRoute(route.route))||'',preWhip:Boolean(route.preWhip),postWhip:Boolean(route.postWhip)
   })).filter(update=>update.route);
-  return {version:'relayops-morning-v1',mode:'whiparound-only',operationDate:state.morningOperationDate,sheetName:dateTabs[0]||MORNING_TEMPLATE_SHEET_NAME,sheetNameCandidates:dateTabs,updates,generatedAt:new Date().toISOString()};
+  return {version:activeMorningStationCode()==='DUR6'?'relayops-morning-v2':'relayops-morning-v1',mode:'whiparound-only',stationCode:activeMorningStationCode(),spreadsheetId:activeOpeningStationProfile().spreadsheetId,templateSheet:activeOpeningStationProfile().templateSheet,workbookKey:activeOpeningStationProfile().workbookKey,layoutId:activeOpeningStationProfile().layoutId,waveSlotCount:activeMorningWaveCount(),operationDate:state.morningOperationDate,sheetName:dateTabs[0]||(activeMorningStationCode()==='DUR6'?'':activeOpeningStationProfile().templateSheet),sheetNameCandidates:dateTabs,updates,generatedAt:new Date().toISOString()};
 }
 function morningSheetsPreflight(payload=morningSheetsConnectorPayload()) {
   const rows=payload.rows||[], rowTypes=payload.rowTypes||[], sections=payload.sections||[], headers=payload.headers||[],waves=payload.waves||[];
@@ -9657,12 +10114,14 @@ function morningSheetsPreflight(payload=morningSheetsConnectorPayload()) {
   const capacityIssues=sections.map(section=>({section,key:morningFixedSectionKey(section.slotKey||section.label),used:Number(section.rowCount)||0})).filter(item=>MORNING_FIXED_SECTION_CAPACITIES[item.key]!==undefined&&item.used>MORNING_FIXED_SECTION_CAPACITIES[item.key]);
   const capacityDetail=capacityIssues.length?capacityIssues.map(item=>`${item.section.label||item.key} exceeds ${MORNING_FIXED_SECTION_CAPACITIES[item.key]} available route rows`).join(' · '):'Every Wave, Ad Hoc, Helper, and DSP section fits its fixed Google Sheet route block.';
   const checks=[
+    ...(payload.stationCode==='DUR6'?[{label:'DUR6 Google destination',ok:payload.spreadsheetId===OPENING_STATION_PROFILES.DUR6.spreadsheetId&&payload.templateSheet==='OPS LOG DUR6'&&operationDateTabNames(payload.operationDate,'DUR6').includes(payload.sheetName)&&Array.isArray(payload.sheetNameCandidates)&&payload.sheetNameCandidates.length>0&&payload.sheetNameCandidates.every(name=>operationDateTabNames(payload.operationDate,'DUR6').includes(name)),detail:'Shared DJT6 spreadsheet, OPS LOG DUR6 master, and a separate DUR6-prefixed date tab.'}]:[]),
     {label:'Target cell A3',ok:payload.startCell==='A3',detail:'Data starts below the fixed template header row.'},
-    {label:'A–M write scope only',ok:payload.writeRange==='A3:M',detail:'RelayOps will not touch columns N and beyond.'},
+    {label:payload.stationCode==='DUR6'?'Values-only A:H, P:Q, U mapping':'A–M write scope only',ok:payload.writeRange==='A3:M',detail:payload.stationCode==='DUR6'?'The 13 transport fields map to A:H, P:Q, and U. Checkbox and manual operations columns stay untouched.':'RelayOps will not touch columns N and beyond.'},
     {label:'Row 1 headers ready',ok:headers.length===13&&headers[0]==='WAVE'&&headers[12]==='PLANNED RTS',detail:'A–M headers match the opening template.'},
-    {label:'Every row has 13 columns',ok:rows.length>0&&rows.every(row=>Array.isArray(row)&&row.length===13),detail:`${rows.length} row${rows.length===1?'':'s'} will write across A–M.`},
+    {label:'Every row has 13 columns',ok:rows.length>0&&rows.every(row=>Array.isArray(row)&&row.length===13),detail:`${rows.length} logical row${rows.length===1?'':'s'} ${payload.stationCode==='DUR6'?'map into the fixed 142-row DUR6 template.':'will write across A–M.'}`},
     {label:'Black dividers are real rows',ok:separatorIndexes.length>0&&separatorIndexes.every(i=>rows[i]?.length===13&&rows[i].every(cell=>String(cell||'')==='')),detail:`${separatorIndexes.length} divider row${separatorIndexes.length===1?'':'s'} included as numbered sheet rows.`},
-    {label:'All six wave times ready',ok:waves.length===MORNING_CORE_WAVE_COUNT&&waves.every((wave,index)=>morningFixedSectionKey(wave.label)===`WAVE${index+1}`&&String(wave.value||'').trim()),detail:`${waves.length}/${MORNING_CORE_WAVE_COUNT} wave time/count labels will be written to the fixed footer rows.`},
+    {label:`All ${activeMorningWaveCount()} wave slots ready`,ok:waves.length===activeMorningWaveCount()&&waves.every((wave,index)=>morningFixedSectionKey(wave.label)===`WAVE${index+1}`&&(activeMorningStationCode()==='DUR6'||String(wave.value||'').trim())),detail:`${waves.length}/${activeMorningWaveCount()} station wave slots are mapped to fixed footer rows.${activeMorningStationCode()==='DUR6'?' Empty future DUR6 slots stay blank until used.':''}`},
+    {label:`${activeMorningStationCode()} active waves`,ok:activeMorningStationCode()!=='DUR6'||(Number(payload.activeWaveCount)>=1&&Number(payload.activeWaveCount)<=3),detail:activeMorningStationCode()==='DUR6'?`${Number(payload.activeWaveCount)||0}/3 DUR6 waves contain routes. One to three may operate.`:'DJT6 keeps its existing six-slot contract.'},
     {label:'Fixed route capacity',ok:capacityIssues.length===0,detail:capacityDetail},
     {label:'Wave/Pad merge map ready',ok:sections.length>0&&sections.every(section=>Number(section.startRow)>=3&&Number(section.rowCount)>0&&((section.hasTimeRow===false&&Number(section.timeRow)===Number(section.startRow)+Number(section.rowCount)-1)||(!section.timeRow||Number(section.timeRow)>=Number(section.startRow)+Number(section.rowCount)))&&(!section.separatorRow||Number(section.separatorRow)>Number(section.startRow))),detail:`${sections.length} section${sections.length===1?'':'s'} tell Google which Wave and Pad cells to merge.`},
     {label:'Row types match payload',ok:rowTypes.length===rows.length&&rowTypes.includes('route')&&(payload.writeMode==='partial-update'||(rowTypes.includes('time')&&rowTypes.includes('separator'))),detail:payload.writeMode==='partial-update'?'Partial update carries only the selected fixed-slot routes.':'Google can tell route rows, wave-time rows, blank rows, and dividers apart.'}
@@ -9671,11 +10130,12 @@ function morningSheetsPreflight(payload=morningSheetsConnectorPayload()) {
 }
 function morningSheetsPreflightHtml(payload=morningSheetsConnectorPayload()) {
   const preflight=morningSheetsPreflight(payload);
-  return `<div class="sheets-preflight ${preflight.ready?'ready':'warn'}"><div><strong>${preflight.ready?'Preflight ready':'Preflight needs review'}</strong><span>${preflight.ready?'This payload is shaped for the A–M Google Sheets template. Columns N+ stay untouched.':'Fix the warning items before sending to the template.'}</span></div><div class="sheets-preflight-grid">${preflight.checks.map(check=>`<span class="${check.ok?'ok':'warn'}"><b>${check.ok?'✓':'!'}</b><em>${esc(check.label)}</em><small>${esc(check.detail)}</small></span>`).join('')}</div></div>`;
+  return `<div class="sheets-preflight ${preflight.ready?'ready':'warn'}"><div><strong>${preflight.ready?'Preflight ready':'Preflight needs review'}</strong><span>${preflight.ready?(payload.stationCode==='DUR6'?'DUR6 logical rows map into A:H, P:Q, and U of the dated template copy. Checkboxes, manual operations cells, and master templates stay untouched.':'This payload is shaped for the A–M Google Sheets template. Columns N+ stay untouched.'):'Fix the warning items before sending to the template.'}</span></div><div class="sheets-preflight-grid">${preflight.checks.map(check=>`<span class="${check.ok?'ok':'warn'}"><b>${check.ok?'✓':'!'}</b><em>${esc(check.label)}</em><small>${esc(check.detail)}</small></span>`).join('')}</div></div>`;
 }
 function morningSheetsHandoffProof(payload=morningSheetsConnectorPayload()) {
   const rows=payload.rows||[], sections=payload.sections||[];
-  const visibleRows=morningCopyRowsForSections(fixedMorningSections(filteredMorningRows())).map(item=>item.values).map(row=>[row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[15],row[16],row[13],row[20]]);
+  const dur6FullReplace=activeMorningStationCode()==='DUR6',sourceRows=dur6FullReplace?allMorningRows():filteredMorningRows();
+  const visibleRows=morningCopyRowsForSections(fixedMorningSections(sourceRows,{includeEmpty:dur6FullReplace})).map(item=>item.values).map(row=>[row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[15],row[16],row[13],row[20]]);
   const mismatchIndex=rows.findIndex((row,i)=>JSON.stringify(row.map(cell=>String(cell??'')))!==JSON.stringify((visibleRows[i]||[]).map(cell=>String(cell??''))));
   const exactRows=rows.length===visibleRows.length&&mismatchIndex<0;
   const lastRow=rows.length?rows.length+2:2;
@@ -9720,6 +10180,7 @@ function morningSheetsRowAuditHtml(payload=morningSheetsConnectorPayload()) {
 }
 function morningSheetsLiveProofHtml(payload=morningSheetsConnectorPayload()) {
   const proof=morningSheetsHandoffProof(payload);
+  if(payload.stationCode==='DUR6')return `<div class="sheets-live-proof"><strong>DUR6 Google target</strong><div><span><b>Tab</b>${esc(payload.sheetName)}</span><span><b>Template</b>OPS LOG DUR6</span><span><b>Template range</b>A3:V142</span><span><b>Value writes</b>A:H · P:Q · U</span><span><b>Preserved columns</b>I:O · R:T · V</span><span><b>Active waves</b>1–3</span></div><small>Copy OPS LOG DUR6 within the shared spreadsheet. Ad Hoc maps to row 105, Helpers to row 121, and DSP to row 137. Unused wave 4–6 values are cleared in the dated copy only. Neither master template nor DJT6 daily tabs are changed.</small></div>`;
   const lastCell=proof.range.split(':')[1]||'M';
   return `<div class="sheets-live-proof"><strong>Live Google test target</strong><div><span><b>Tab</b>${esc(payload.sheetName)}</span><span><b>Paste/send starts</b>${esc(payload.startCell)}</span><span><b>Expected finish</b>${esc(lastCell)}</span><span><b>Frozen row</b>Row 1</span><span><b>Untouched</b>Columns N+</span><span><b>Merge map</b>${esc(proof.sections)} sections</span></div><small>After Send now, the Google Sheet should show ${esc(proof.range)}, row 1 frozen, black divider rows still numbered, and no changes outside A:M.</small></div>`;
 }
@@ -10445,6 +10906,7 @@ function testRelayOpsMorningSheet() {
 }
 function saveMorningSheetsConnector() {
   const input=document.getElementById('morning-sheets-endpoint');
+  if(!input)return false;
   const endpoint=(input?.value||'').trim();
   if(endpoint&&!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec(?:[?#].*)?$/i.test(endpoint)) {
     state.morningSheetsLastError='Use the Apps Script Web app URL ending in /exec. The normal Google Sheet edit link cannot receive dashboard data.';
@@ -10459,25 +10921,96 @@ function saveMorningSheetsConnector() {
   toast(state.morningSheetsEndpoint?'Google Sheets connector endpoint saved':'Google Sheets connector endpoint cleared');
 }
 
+// Explicit DUR6 Google handoffs are separate from the preview's blocked legacy
+// fetch routes. Imports, station switching, and DJT6 never invoke this transport.
+let dur6GoogleHandoffSession = null;
+function dur6GoogleConnectorModal(payload=morningSheetsConnectorPayload()) {
+  const connected=Boolean(state.morningSheetsEndpoint),target=esc(payload.sheetName||'DUR6 + operation date');
+  return `<div class="modal-backdrop" data-action="close-modal"><div class="modal sheets-modal" role="dialog" aria-modal="true" aria-labelledby="morning-sheets-connector-title"><div class="modal-head"><div><span class="eyebrow">DUR6 · GOOGLE SHEETS</span><h2 id="morning-sheets-connector-title">Send the DUR6 morning sheet</h2><p>Same spreadsheet. Separate DUR6 dated tab. Sign in with a Google account that already has editing access.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><div class="sheets-connector-status ${connected?'ready':'warn'}"><strong>OPS LOG DUR6 → ${target}</strong><span>A missing date tab is copied from OPS LOG DUR6. Later sends update the same DUR6 date, with a backup first. DJT6 tabs and both master templates stay unchanged.</span></div><label class="cloud-email-field"><span>DUR6 Google connector URL</span><input id="morning-sheets-endpoint" type="url" value="${esc(state.morningSheetsEndpoint)}" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off"></label><button class="btn" data-action="save-morning-sheets-connector">Save DUR6 connector</button><p class="upload-help">Saved in the DUR6 workspace only. Google may ask each dispatcher to authorize the connector once. No passwords are saved in the dashboard.</p>${morningSheetsPreflightHtml(payload)}${morningSheetsHandoffProofHtml(payload)}${morningSheetsReceiptHtml()}${state.morningSheetsLastError?`<div class="import-preview import-warning"><span class="preview-check">!</span><div><strong>Transfer note</strong><span>${esc(state.morningSheetsLastError)}</span></div></div>`:''}<div class="private-contact-note"><b>Review before transfer</b><span>Google opens a separate confirmation window. The selected date and all DUR6 waves are checked there before any write. Switching station, changing the date, or editing this sheet cancels the pending handoff. This does not change DJT6 or send data automatically.</span></div><div class="modal-actions"><a class="btn" href="${activeMorningTemplateUrl()}" target="_blank" rel="noopener">Open DUR6 template</a><button class="btn" data-action="dur6-google-status" ${connected?'':'disabled'}>Test Google access</button><button class="btn" data-action="dur6-google-dry-run" ${connected?'':'disabled'}>Check without writing</button><button class="btn primary" data-action="dur6-google-send" ${connected?'':'disabled'}>Send DUR6 Morning Sheet</button></div></div></div></div>`;
+}
+function dur6GooglePayloadSnapshot(payload) {
+  const copy={...payload};delete copy.requestId;delete copy.generatedAt;
+  return JSON.stringify(copy);
+}
+async function openDur6GoogleTransfer(action='status') {
+  if(!MULTI_STATION_ENABLED||activeMorningStationCode()!=='DUR6'||!['status','dry-run','send'].includes(action))return false;
+  const endpoint=String(state.morningSheetsEndpoint||'').trim();
+  if(!endpoint){state.modal='morning-sheets-connector';render();toast('Save the separate DUR6 Google connector first','error');return false;}
+  if(!window.RelayOpsDur6Transfer){toast('The DUR6 Google connection component is unavailable. Refresh and try again.','error');return false;}
+  if(dur6GoogleHandoffSession){toast('Finish or close the existing DUR6 Google confirmation first','error');return false;}
+  const payload=morningSheetsConnectorPayload(),date=payload.operationDate,snapshot=dur6GooglePayloadSnapshot(payload);
+  if(action!=='status'&&(!morningSheetsPreflight(payload).ready||!morningSheetsHandoffProof(payload).ready)){
+    state.modal='morning-sheets-connector';render();toast('Review the DUR6 morning sheet checks before transferring','error');return false;
+  }
+  const isCurrent=()=>MULTI_STATION_ENABLED&&activeMorningStationCode()==='DUR6'&&state.morningOperationDate===date&&state.morningSheetsEndpoint===endpoint&&dur6GooglePayloadSnapshot(morningSheetsConnectorPayload())===snapshot;
+  let session=null;
+  try {
+    session=window.RelayOpsDur6Transfer.open(endpoint,{isCurrent});
+    dur6GoogleHandoffSession=session;
+    toast(action==='send'?'Review and confirm the DUR6 date in the Google window':'Checking DUR6 in the Google window');
+    const result=await session.request(action,payload);
+    if(!isCurrent())throw new Error('DUR6 handoff cancelled because the station, date, or morning sheet changed.');
+    verifyMorningWorkbookIdentity(result,payload,{checkTarget:action!=='status'});
+    if(result.build!==activeMorningConnectorBuild()||Number(result.waveTimes)!==3)throw confirmedConnectorError('The DUR6 Google connector version or wave layout does not match this dashboard.');
+    if(action==='dry-run'&&!result.dryRun)throw confirmedConnectorError('Google did not confirm a read-only DUR6 check.');
+    if(action==='send'&&(result.dryRun||result.requestId!==payload.requestId||result.writeMode!=='full-replace'))throw confirmedConnectorError('Google did not return the matching DUR6 transfer receipt.');
+    const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
+    state.morningSheetsLastError='';
+    if(action==='send'){
+      state.morningSheetsLastPush=sentAt;
+      state.morningSheetsLastReceipt={sheet:result.sheet,stationCode:'DUR6',operationDate:date,requestId:payload.requestId,status:'confirmed',writeRange:result.writtenRanges||result.writtenRange,lastCell:result.lastCell,rows:payload.rows.length,sections:payload.sections.length,updatedAt:result.updatedAt,sentAt,backupSheet:result.backupSheet||''};
+    } else if(action==='dry-run')state.morningSheetsLastDryRun=sentAt;
+    persist();render();
+    toast(action==='send'?`Google confirmed ${result.sheet} · DJT6 unchanged`:action==='dry-run'?`DUR6 check passed · ${result.sheet} · no cells changed`:`DUR6 Google access confirmed · transfers ${result.writesEnabled?'enabled':'still disabled'}`);
+    return true;
+  } catch(error) {
+    if(isCurrent()){state.morningSheetsLastError=error?.message||'DUR6 transfer was not confirmed';persist();render();}
+    toast(error?.message||'DUR6 transfer was not confirmed. No fallback send was attempted.','error');return false;
+  } finally {if(session)session.close();if(dur6GoogleHandoffSession===session)dur6GoogleHandoffSession=null;}
+}
+
 async function postMorningSheetsPayload(endpoint,payload) {
+  if(activeMorningStationCode()==='DUR6')throw new Error('DUR6 transfers require the separate Google confirmation window. No direct send was attempted.');
+  if(MULTI_STATION_PREVIEW)throw new Error(`${activeMorningStationCode()} Google sends are disabled in the local multi-station prototype.`);
   const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
   const text=await response.text();
   if(!response.ok)throw new Error(`Connector returned ${response.status}`);
   return parseMorningSheetsResponse(text,response.status);
 }
 function confirmedConnectorError(message='Google connector did not complete every requested update') { const error=new Error(message);error.relayOpsConfirmed=true;return error; }
+function verifyMorningWorkbookIdentity(result={},payload={}, {checkTarget=true}={}) {
+  // Same physical spreadsheet, separate station namespaces and template tabs.
+  // DJT6 keeps its legacy contract; DUR6 must prove the exact destination.
+  if(String(payload.stationCode||'').toUpperCase()!=='DUR6')return true;
+  const expected=OPENING_STATION_PROFILES.DUR6,allowed=operationDateTabNames(payload.operationDate,'DUR6');
+  const identityOk=payload.spreadsheetId===expected.spreadsheetId&&payload.workbookKey===expected.workbookKey&&payload.templateSheet===expected.templateSheet
+    &&result.stationCode==='DUR6'&&result.spreadsheetId===expected.spreadsheetId&&result.workbookKey===expected.workbookKey&&result.templateSheet===expected.templateSheet;
+  const reportedTargets=[result.sheet,result.targetSheet].filter(value=>value!==undefined);
+  const targetOk=!checkTarget||(allowed.includes(payload.sheetName)&&reportedTargets.length>0&&reportedTargets.every(value=>allowed.includes(value))&&new Set(reportedTargets).size===1);
+  if(identityOk&&targetOk)return true;
+  throw confirmedConnectorError('Google did not confirm the shared spreadsheet, OPS LOG DUR6 template, and separate DUR6 date tab. No RelayOps success receipt was saved.');
+}
+function localMultiStationGoogleActionBlocked() {
+  if(activeMorningStationCode()==='DUR6'){toast('Use Send DUR6 Morning Sheet and confirm in Google. RTS-only and Whiparound-only sends are not enabled for DUR6.','error');return true;}
+  if(!MULTI_STATION_PREVIEW)return false;
+  toast(`${activeMorningStationCode()} Google sends are disabled in this local prototype. Production cloud and workbooks were not contacted.`,'error');
+  return true;
+}
 
 async function sendRtsTimesToGoogleSheets(button=null) {
+  if(localMultiStationGoogleActionBlocked())return false;
   const endpoint=(state.morningSheetsEndpoint||'').trim(),payload=morningRtsOnlyPayload();
   if(!endpoint){state.modal='morning-sheets-connector';render();return toast('Connect the Google Sheet first, then send RTS times','error');}
-  if(!payload.updates.length)return toast("Import an Itineraries_DJT6 file first — no Planned RTS times are ready",'error');
+  if(!payload.updates.length)return toast(`Import an ${activeMorningItineraryFileLabel()} file first — no Planned RTS times are ready`,'error');
   if(button){button.disabled=true;button.dataset.originalText=button.textContent;button.textContent='Checking RTS times…';}
   try {
     const dry=await postMorningSheetsPayload(endpoint,{...payload,dryRun:true});
+    verifyMorningWorkbookIdentity(dry,payload);
     if(!dry.dryRun||dry.mode!=='rts-only')throw new Error('Google did not confirm RTS-only mode');
     if(dry.wouldCreateSheet)throw new Error('Send the full Morning Sheet once first. RTS-only send will not create a blank route sheet.');
     if(button)button.textContent='Sending RTS times only…';
     const result=await postMorningSheetsPayload(endpoint,payload);
+    verifyMorningWorkbookIdentity(result,payload);
     if(result.mode!=='rts-only')throw new Error('Google did not confirm RTS-only write');
     if(!Number(result.updated))throw new Error(`Google found none of the ${payload.updates.length} CX routes on ${result.sheet||payload.sheetName}. Send filtered waves once, then retry RTS times.`);
     if(result.missingRoutes?.length||result.sectionMismatches?.length||Number(result.updated)!==payload.updates.length)throw confirmedConnectorError(`Google updated ${result.updated||0} of ${payload.updates.length} RTS rows, then stopped safely · ${result.missingRoutes?.length||0} missing CX · ${result.sectionMismatches?.length||0} wrong wave slot`);
@@ -10494,16 +11027,19 @@ async function sendRtsTimesToGoogleSheets(button=null) {
 }
 
 async function sendWhiparoundChecksToGoogleSheets(button=null) {
+  if(localMultiStationGoogleActionBlocked())return false;
   const endpoint=(state.morningSheetsEndpoint||'').trim(),payload=morningWhiparoundOnlyPayload();
   if(!endpoint){state.modal='morning-sheets-connector';render();return toast('Connect the Google Sheet first, then send Whiparound checks','error');}
   if(!payload.updates.length)return toast('No active Morning Sheet routes are ready for Whiparound checks','error');
   if(button){button.disabled=true;button.dataset.originalText=button.textContent;button.textContent='Checking Whiparound…';}
   try {
     const dry=await postMorningSheetsPayload(endpoint,{...payload,dryRun:true});
+    verifyMorningWorkbookIdentity(dry,payload);
     if(!dry.dryRun||dry.mode!=='whiparound-only')throw new Error('Google did not confirm Whiparound-only mode. Update and redeploy the revised Apps Script once.');
     if(dry.wouldCreateSheet)throw new Error('Send the full Morning Sheet once first. Whiparound-only send will not create an empty route sheet.');
     if(button)button.textContent='Sending checks only…';
     const result=await postMorningSheetsPayload(endpoint,payload);
+    verifyMorningWorkbookIdentity(result,payload);
     if(result.mode!=='whiparound-only')throw new Error('Google did not confirm the Whiparound-only write');
     if(!Number(result.updated))throw new Error(`Google found none of the ${payload.updates.length} CX routes on ${result.sheet||payload.sheetName}. Send filtered waves once, then retry.`);
     if(result.missingRoutes?.length||result.driverMismatches?.length||result.sectionMismatches?.length||Number(result.updated)!==payload.updates.length)throw confirmedConnectorError(`Google updated ${result.updated||0} of ${payload.updates.length} Whiparound rows, then skipped ${result.missingRoutes?.length||0} missing CX, ${result.driverMismatches?.length||0} driver mismatch, and ${result.sectionMismatches?.length||0} wrong wave slot`);
@@ -10519,6 +11055,7 @@ async function sendWhiparoundChecksToGoogleSheets(button=null) {
 }
 
 async function syncFilteredMorningToSheets() {
+  if(localMultiStationGoogleActionBlocked())return false;
   const endpoint=(state.morningSheetsEndpoint||'').trim();
   if(!endpoint) { state.modal='morning-sheets-connector'; render(); return toast('Connect the Google Sheet once, then this button sends filtered waves','error'); }
   const payload=morningSheetsConnectorPayload();
@@ -10532,16 +11069,18 @@ async function syncFilteredMorningToSheets() {
   if(button){button.disabled=true;button.dataset.originalText=button.textContent;button.textContent='Checking Google…';}
   try {
     const dryResult=await postMorningSheetsPayload(endpoint,{...payload,dryRun:true});
+    verifyMorningWorkbookIdentity(dryResult,payload);
     if(!dryResult.dryRun)throw new Error('Google did not confirm the safety check');
-    if(String(dryResult.build||'')!==MORNING_CONNECTOR_BUILD)throw confirmedConnectorError('Google is using an older Apps Script build that does not support the 142-row six-wave template. Download, paste, and redeploy the revised connector once.');
-    if(Number(dryResult.waveTimes)!==MORNING_CORE_WAVE_COUNT)throw confirmedConnectorError('Google is still using the older connector that can skip Wave 6. Install and redeploy the newest six-wave Apps Script before sending.');
+    if(String(dryResult.build||'')!==activeMorningConnectorBuild())throw confirmedConnectorError(`Google is using an Apps Script build that does not match ${activeMorningStationCode()}. Download, paste, and redeploy that station's connector once.`);
+    if(Number(dryResult.waveTimes)!==activeMorningWaveCount())throw confirmedConnectorError(`Google is using a connector that does not match the ${activeMorningStationCode()} ${activeMorningWaveCount()}-wave layout. Install and redeploy that station's Apps Script before sending.`);
     if(payload.writeMode==='partial-update'&&dryResult.wouldCreateSheet)throw new Error('Send all waves once before using a filtered partial update. No unrelated wave sections were changed.');
     if(button)button.textContent='Sending filtered waves…';
     const result=await postMorningSheetsPayload(endpoint,payload);
+    verifyMorningWorkbookIdentity(result,payload);
     const requestedRoutes=payload.sections.reduce((count,section)=>count+(payload.rows||[]).slice(Number(section.sourceIndex)||0,(Number(section.sourceIndex)||0)+Number(section.rowCount||0)).filter(row=>String(row?.[2]||'').trim()).length,0);
     if(result.writeMode!==payload.writeMode)throw confirmedConnectorError('Google did not confirm the requested full/partial write mode. Update and redeploy the revised Apps Script.');
-    if(String(result.build||'')!==MORNING_CONNECTOR_BUILD)throw confirmedConnectorError('Google did not confirm the revised six-wave connector build.');
-    if(Number(result.waveTimes)!==MORNING_CORE_WAVE_COUNT)throw confirmedConnectorError(`Google updated ${result.waveTimes||0} of ${MORNING_CORE_WAVE_COUNT} wave time/count labels. Update and redeploy the newest Apps Script connector, then send again.`);
+    if(String(result.build||'')!==activeMorningConnectorBuild())throw confirmedConnectorError(`Google did not confirm the ${activeMorningStationCode()} connector build.`);
+    if(Number(result.waveTimes)!==activeMorningWaveCount())throw confirmedConnectorError(`Google updated ${result.waveTimes||0} of ${activeMorningWaveCount()} ${activeMorningStationCode()} wave slots. Update and redeploy that station's Apps Script connector, then send again.`);
     if(payload.writeMode==='partial-update'&&(result.missingRoutes?.length||result.sectionMismatches?.length||Number(result.updated)!==requestedRoutes))throw confirmedConnectorError(`Google updated ${result.updated||0} of ${requestedRoutes} filtered routes; ${result.missingRoutes?.length||0} CX missing and ${result.sectionMismatches?.length||0} in a different fixed wave slot. Unrelated sections were left unchanged.`);
     const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastDryRun=sentAt;
@@ -10549,10 +11088,10 @@ async function syncFilteredMorningToSheets() {
     state.morningSheetsLastReceipt={sheet:result.sheet||payload.sheetName,startCell:result.startCell||payload.startCell,writeRange:result.writtenRange||result.writeRange||payload.writeRange,lastCell:result.lastCell||'',rows:result.rows||payload.rows.length,sections:result.sections||payload.sections.length,status:'confirmed',updatedAt:result.updatedAt||sentAt,sentAt,filterScope:morningFilterScopeText()};
     state.morningSheetsLastError='';
     persist(); render();
-    toast(`Google confirmed ${filteredMorningRows().length} filtered routes + all ${MORNING_CORE_WAVE_COUNT} wave times · ${result.writtenRange||payload.writeRange}`);
+    toast(`Google confirmed ${filteredMorningRows().length} filtered routes + all ${activeMorningWaveCount()} ${activeMorningStationCode()} wave slots · ${result.writtenRange||payload.writeRange}`);
     return true;
   } catch(error) {
-    if(!error?.relayOpsConfirmed) {
+    if(!error?.relayOpsConfirmed&&payload.stationCode!=='DUR6') {
       try {
         await fetch(endpoint,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)});
         const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
@@ -10571,6 +11110,10 @@ async function syncFilteredMorningToSheets() {
   }
 }
 async function copyMorningAppsScript() {
+  if(MULTI_STATION_ENABLED&&activeMorningStationCode()==='DUR6'){
+    toast('Download the local DUR6 connector for the shared spreadsheet and OPS LOG DUR6 template. Sends stay off until its separate deployment and Script Properties are configured.');
+    return false;
+  }
   const code=morningSheetsAppsScript();
   if(!code.includes(MORNING_CONNECTOR_BUILD)){toast('The six-wave Apps Script is still loading — refresh the dashboard and try again','error');return false;}
   const ok=await writeClipboardText(code);
@@ -10584,10 +11127,35 @@ async function copyMorningSheetsPayload() {
   return ok;
 }
 function morningSheetsSetupChecklist() {
-  return [
-    'RelayOps Google Sheets Connector Setup',
+  const profile=activeOpeningStationProfile(),templateUrl=activeMorningTemplateUrl();
+  if(profile.code==='DUR6')return [
+    'RelayOps DUR6 Google Sheets Connector Setup — authenticated Google handoff',
     '',
-    `1. Open template: ${MORNING_TEMPLATE_URL}`,
+    `Shared spreadsheet ID: ${profile.spreadsheetId}`,
+    `DUR6 template: ${templateUrl}`,
+    `Target tab: ${operationDateTabNames(state.morningOperationDate)[0]||'DUR6 M.D.YY'}`,
+    '1. Keep DJT6’s existing Apps Script and endpoint unchanged. Use the separate RelayOps DUR6 Morning Sheet Transfer project.',
+    '2. Install the current google-sheets/relayops-morning-connector-dur6.local.gs source into that DUR6 project. Deployment verification is still required.',
+    `3. Set Script Property RELAYOPS_DUR6_SPREADSHEET_ID to ${profile.spreadsheetId}.`,
+    '4. Set RELAYOPS_DUR6_TEMPLATE_SHEET to OPS LOG DUR6. Keep RELAYOPS_DUR6_WRITES_ENABLED false during validation.',
+    '5. Run relayOpsDur6ValidateStandalone in the separate editor. Use the existing 142-row template; do not resize or replace either station’s master.',
+    '6. Deploy the DUR6 web app as User accessing the web app and require signed-in Google accounts. Never execute DUR6 transfers as the owner or allow anonymous writes.',
+    '7. Save only the DUR6 /exec URL in this browser’s DUR6 connector settings. Each dispatcher uses a Google account that already has editing access to the shared spreadsheet and may need to authorize the connector once.',
+    '8. Use Test Google access and Check without writing. Verify DUR6, this spreadsheet ID, OPS LOG DUR6, the dated target, and the current build while writes remain disabled.',
+    '9. Enable RELAYOPS_DUR6_WRITES_ENABLED only after validation and approval for a supervised transfer. This manual Google handoff does not enable shared DUR6 cloud sync or publish the multi-station dashboard.',
+    '10. Send DUR6 Morning Sheet opens a Google window. Review the date and all DUR6 waves, then explicitly confirm. It copies OPS LOG DUR6 when the dated tab is missing; later sends back up and update the same DUR6 date tab.',
+    '11. Verify waves 1–3, Ad Hoc at row 105, Helpers at row 121, and DSP at row 137. Waves 4–6 stay unused.',
+    'DJT6 keeps OPS LOG 2026 and its existing unprefixed date tabs. Both master templates remain unchanged.',
+    'Google file sharing applies to both stations because they share one spreadsheet. No sharing permissions are added by the connector.',
+    'Direct POST and no-cors fallback transfers are blocked. A station/date/content change cancels the pending handoff; a newer DUR6 transfer invalidates an older preview.'
+  ].join('\n');
+  const accessInstruction='8. Set Who has access: Anyone with the link.';
+  return [
+    `RelayOps ${profile.code} Google Sheets Connector Setup`,
+    '',
+    `Station: ${profile.code} · ${profile.location}`,
+    `Layout: ${profile.layoutId} · ${profile.coreWaveCount} wave slots`,
+    `1. Open template: ${templateUrl}`,
     '2. In Google Sheets, go to Extensions > Apps Script.',
     '3. Paste the RelayOps Apps Script from the dashboard, or upload/download relayops-morning-connector.gs.',
     '4. Save the Apps Script project.',
@@ -10596,7 +11164,7 @@ function morningSheetsSetupChecklist() {
     '6. Existing connector: click Deploy > Manage deployments > Edit (pencil) > Version: New version > Deploy. Keep the same /exec URL.',
     '6a. First-time connector only: click Deploy > New deployment > Web app.',
     '7. Set Execute as: Me.',
-    '8. Set Who has access: Anyone with the link.',
+    accessInstruction,
     '9. Copy the Web app /exec URL. Do not copy passwords, cookies, or Amazon/Rivian credentials.',
     '10. Paste that /exec URL into RelayOps > Morning Sheet > Sheets connector.',
     '11. Click Save endpoint.',
@@ -10616,11 +11184,15 @@ async function copyMorningSheetsSetup() {
 function morningSheetsVerificationChecklist(payload=morningSheetsConnectorPayload()) {
   const proof=morningSheetsHandoffProof(payload);
   const firstSection=payload.sections?.[0]||{};
-  const lastCell=`V${payload.rows.length+2}`;
+  // The existing DUR6 master has the same 142-row geometry as DJT6. Its
+  // three logical waves map into the first three physical wave blocks.
+  const lastCell=payload.stationCode==='DUR6'?'V142':`V${payload.rows.length+2}`;
   return [
     'RelayOps Google Sheet Send Verification',
     '',
-    `Template: ${MORNING_TEMPLATE_URL}`,
+    `Station: ${payload.stationCode||activeMorningStationCode()}`,
+    `Layout: ${payload.layoutId||activeOpeningStationProfile().layoutId}`,
+    `Template: ${activeMorningTemplateUrl()||'[station workbook not provisioned]'}`,
     `Target tab: ${payload.sheetName}`,
     `Expected template range: A3:${lastCell}`,
     `Expected last cell: ${lastCell}`,
@@ -10663,25 +11235,29 @@ function parseMorningSheetsResponse(text='',status=200) {
   return data||{ok:true,raw:text};
 }
 async function testMorningSheetsConnector() {
+  if(localMultiStationGoogleActionBlocked())return false;
   const endpoint=(state.morningSheetsEndpoint||'').trim();
   if(!endpoint) { state.modal='morning-sheets-connector'; render(); return toast('Paste your Google Apps Script web app URL first','error'); }
   try {
     const response=await fetch(connectorUrlWithPing(endpoint),{method:'GET'});
     const text=await response.text();
-    if(!response.ok||!/relayops-morning-v1/.test(text)||!/A3:V/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
-    if(!text.includes(MORNING_CONNECTOR_BUILD))throw new Error('Connector deployment is outdated. Replace it with the 142-row six-wave Apps Script, then choose Deploy → Manage deployments → Edit → New version → Deploy.');
+    const payload=morningSheetsConnectorPayload();
+    if(!response.ok||!text.includes(payload.version)||!/A3:V/.test(text))throw new Error(`Unexpected connector response ${response.status}`);
+    if(!text.includes(activeMorningConnectorBuild()))throw new Error(`Connector deployment does not match ${activeMorningStationCode()}. Replace it with that station's Apps Script, then choose Deploy → Manage deployments → Edit → New version → Deploy.`);
+    if(activeMorningStationCode()==='DUR6')verifyMorningWorkbookIdentity(parseMorningSheetsResponse(text,response.status),payload,{checkTarget:false});
     state.morningSheetsLastError='';
     persist(); render();
     toast('Google Sheets connector confirmed');
     return true;
   } catch(error) {
-    state.morningSheetsLastError='Browser could not confirm the connector. If this is an Apps Script CORS block, Send can still use fallback mode; verify the Google Sheet after sending.';
+    state.morningSheetsLastError=activeMorningStationCode()==='DUR6'?`DUR6 connector was not confirmed: ${error?.message||'unreadable response'}. No fallback send is permitted.`:'Browser could not confirm the connector. If this is an Apps Script CORS block, Send can still use fallback mode; verify the Google Sheet after sending.';
     persist(); render();
-    toast('Could not confirm connector from the browser — use Send, then check the sheet','error');
+    toast(activeMorningStationCode()==='DUR6'?'DUR6 destination not confirmed — check its connector setup':'Could not confirm connector from the browser — use Send, then check the sheet','error');
     return false;
   }
 }
 async function dryRunMorningToSheets() {
+  if(localMultiStationGoogleActionBlocked())return false;
   const endpoint=(state.morningSheetsEndpoint||'').trim();
   if(!endpoint) { state.modal='morning-sheets-connector'; render(); return toast('Paste your Google Apps Script web app URL first','error'); }
   const payload={...morningSheetsConnectorPayload(),dryRun:true};
@@ -10707,7 +11283,8 @@ async function dryRunMorningToSheets() {
     if(!response.ok)throw new Error(`Connector returned ${response.status}`);
     const result=parseMorningSheetsResponse(text,response.status);
     if(!result.dryRun)throw new Error('Connector did not confirm dry run mode');
-    if(String(result.build||'')!==MORNING_CONNECTOR_BUILD||Number(result.waveTimes)!==MORNING_CORE_WAVE_COUNT)throw confirmedConnectorError('Google is using an older connector that cannot verify all six Wave sections. Install and redeploy the revised Apps Script once.');
+    verifyMorningWorkbookIdentity(result,payload);
+    if(String(result.build||'')!==activeMorningConnectorBuild()||Number(result.waveTimes)!==activeMorningWaveCount())throw confirmedConnectorError(`Google is using a connector that does not match ${activeMorningStationCode()}. Install and redeploy that station's Apps Script once.`);
     state.morningSheetsLastDryRun=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastError='';
     state.modal='morning-sheets-connector';
@@ -10724,6 +11301,7 @@ async function dryRunMorningToSheets() {
   }
 }
 async function sendMorningToSheets() {
+  if(localMultiStationGoogleActionBlocked())return false;
   const endpoint=(state.morningSheetsEndpoint||'').trim();
   if(!endpoint) { state.modal='morning-sheets-connector'; render(); return toast('Paste your Google Apps Script web app URL first','error'); }
   const payload=morningSheetsConnectorPayload();
@@ -10748,7 +11326,8 @@ async function sendMorningToSheets() {
     const text=await response.text();
     if(!response.ok)throw new Error(`Connector returned ${response.status}`);
     const result=parseMorningSheetsResponse(text,response.status);
-    if(String(result.build||'')!==MORNING_CONNECTOR_BUILD||Number(result.waveTimes)!==MORNING_CORE_WAVE_COUNT)throw confirmedConnectorError('Google did not verify all six Wave sections. Install and redeploy the revised Apps Script once before sending.');
+    verifyMorningWorkbookIdentity(result,payload);
+    if(String(result.build||'')!==activeMorningConnectorBuild()||Number(result.waveTimes)!==activeMorningWaveCount())throw confirmedConnectorError(`Google did not verify the ${activeMorningStationCode()} wave layout. Install and redeploy that station's Apps Script before sending.`);
     const sentAt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(new Date());
     state.morningSheetsLastPush=sentAt;
     state.morningSheetsLastReceipt={sheet:result.sheet||payload.sheetName,startCell:result.startCell||payload.startCell,writeRange:result.writtenRange||result.writeRange||payload.writeRange,lastCell:result.lastCell||'',rows:result.rows||payload.rows.length,sections:result.sections||payload.sections.length,status:'confirmed',updatedAt:result.updatedAt||sentAt,sentAt};
@@ -10757,7 +11336,7 @@ async function sendMorningToSheets() {
     toast(`Google confirmed Morning Sheet update · ${result.rows||payload.rows.length} rows`);
     return true;
   } catch(error) {
-    if(error?.relayOpsConfirmed) {
+    if(error?.relayOpsConfirmed||payload.stationCode==='DUR6') {
       state.morningSheetsLastError=error.message||'Google Sheets connector rejected the payload';
       state.modal='morning-sheets-connector';
       persist(); render();
@@ -10801,7 +11380,7 @@ function loadSlackDemo(){
   rows.splice(5,0,['OTHER','Other DSP Driver','ZZ101','Standard Parcel','11:10 AM','STG.A.1',390,19,301,11,172],['OTHER','Another DSP Driver','ZZ102','Standard Parcel','11:15 AM','STG.A.2',405,22,344,16,181],['TEST','Test DSP Driver','ZZ103','Standard Parcel','11:20 AM','STG.B.1',420,23,355,9,185]);
   state.importedFile={name:'day-of-operations-07-02.csv',headers,rows,kind:'plan',routeDetails:{},routeDetailsCount:0};renderLightweightModal();toast('Slack demo file selected · DSP filter preview ready');
 }
-function exportMorningSheet(){const h=['Wave','Driver','Route','Staging','Pad','EV','Device','Portable','Stop Count','Package Count','Planned RTS'];const rows=filteredMorningRows().map(r=>[r.wave,r.driver,r.route,r.staging,morningEffectivePad(r),r.ev||'',r.deviceName||'',r.portable||'',r.stops,r.packages,r.plannedRts||'']);downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8',`${state.dspCode}-opening-operations.csv`);toast('Morning operations sheet downloaded');}
+function exportMorningSheet(){const h=['Wave','Driver','Route','Staging','Pad','EV','Device','Portable','Stop Count','Package Count','Planned RTS'];const rows=filteredMorningRows().map(r=>[r.wave,r.driver,r.route,r.staging,morningEffectivePad(r),r.ev||'',r.deviceName||'',r.portable||'',r.stops,r.packages,r.plannedRts||'']);downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n'),'text/csv;charset=utf-8',`${openingStationFilePrefix()}-opening-operations.csv`);toast(`${activeMorningStationCode()} Morning operations sheet downloaded`);}
 function exportMorningTemplateSheet(){
   const headers=morningTemplateHeaders;
   const cls=(i)=>i===0?'waveHead':sheetSpacerColumns.has(i)?'spacer':i===20?'plannedHead':i>=9&&i<=10?'preInspectionHead':i>=11&&i<=12?'postInspectionHead':i===14?'rescuedHead':i===17?'returnsHead':'head';
@@ -10825,7 +11404,7 @@ function exportMorningTemplateSheet(){
     .waveHead{background:#b4a7d6}.plannedHead{background:#92f4fa}.preInspectionHead{background:#fce5cd}.postInspectionHead{background:#fff2cc}.rescuedHead{background:#93c47d}.returnsHead{background:#ea9999}.spacer{width:18px;background:#000;border:1px solid #000;color:#000}
     .cell,.driver,.planned{height:24px;min-width:70px;border:1px solid #222;text-align:center;font-weight:700;font-size:10px;background:#fff}.driver{min-width:210px}.wave{min-width:76px;font-size:28px;font-weight:900;writing-mode:vertical-rl;transform:rotate(180deg);background:#fff}.waveTime{font-size:13px;font-weight:900;background:#fff}.dsp{vertical-align:bottom}.pad{font-size:24px;font-weight:900;background:#fff}.planned{background:#b4a7d6}.separatorCell{height:14px;background:#000;border:1px solid #000;color:#000}
   </style></head><body><table>${colgroup}<tr>${headers.map((h,i)=>cell(h,cls(i))).join('')}</tr>${body}</table></body></html>`;
-  downloadBlob('\ufeff'+html,'application/vnd.ms-excel',`${state.dspCode}-opening-operations-formatted.xls`);
+  downloadBlob('\ufeff'+html,'application/vnd.ms-excel',`${openingStationFilePrefix()}-opening-operations-formatted.xls`);
   toast('Formatted opening sheet downloaded — import/open this in Google Sheets to keep layout');
 }
 function buildWaveScreenshot(rows) {
@@ -10843,7 +11422,7 @@ function buildWaveScreenshot(rows) {
 }
 function buildPicklistScreenshot() {
   const columns=[['Wave',170],['Driver / Helper',390],['Route',150],['Staging',210],['Pad',100],['EV / Bag',150],['Device',150],['Portable',150]],rowHeight=48,titleHeight=78,headerHeight=58,separator=12,sections=openingPicklistSections().filter(section=>section.rows.length),width=columns.reduce((sum,column)=>sum+column[1],0),height=titleHeight+headerHeight+sections.reduce((sum,section)=>sum+section.rows.length*rowHeight+separator,0);
-  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);ctx.textBaseline='middle';ctx.fillStyle='#17241d';ctx.fillRect(0,0,width,titleHeight);ctx.fillStyle='#fff';ctx.textAlign='left';ctx.font='bold 29px Arial';ctx.fillText(`${state.organizationName} · Opening Picklist`,24,29);ctx.font='bold 20px Arial';ctx.fillStyle='#b8f37a';ctx.fillText(`DATE ${openingPicklistDateText()} · ${state.stationCode}`,24,57);
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);ctx.textBaseline='middle';ctx.fillStyle='#17241d';ctx.fillRect(0,0,width,titleHeight);ctx.fillStyle='#fff';ctx.textAlign='left';ctx.font='bold 29px Arial';ctx.fillText(`${state.organizationName} · ${displayedStationCode()} Opening Picklist`,24,29);ctx.font='bold 20px Arial';ctx.fillStyle='#b8f37a';ctx.fillText(`DATE ${openingPicklistDateText()} · ${displayedStationCode()}`,24,57);
   let x=0;columns.forEach(([label,w])=>{ctx.fillStyle='#303733';ctx.fillRect(x,titleHeight,w,headerHeight);ctx.strokeStyle='#555b57';ctx.strokeRect(x,titleHeight,w,headerHeight);ctx.fillStyle='#fff';ctx.font='bold 18px Arial';ctx.textAlign='center';ctx.fillText(label,x+w/2,titleHeight+headerHeight/2);x+=w;});
   let y=titleHeight+headerHeight;sections.forEach(section=>{ctx.fillStyle='#050505';ctx.fillRect(0,y,width,separator);y+=separator;const startY=y;section.rows.forEach(row=>{let cx=0;const values=['',row.driver||'',row.route||'',row.staging||'',section.pad||'',routeEquipmentValue(row),row.deviceName||'',row.portable||''];columns.forEach(([label,w],index)=>{ctx.fillStyle='#fff';ctx.fillRect(cx,y,w,rowHeight);ctx.strokeStyle='#656b67';ctx.strokeRect(cx,y,w,rowHeight);if(index){ctx.fillStyle='#111';ctx.font=index===1?'bold 17px Arial':'bold 18px Arial';ctx.textAlign='center';const raw=String(values[index]||''),max=Math.max(3,Math.floor(w/10));ctx.fillText(raw.length>max?`${raw.slice(0,max-1)}…`:raw,cx+w/2,y+rowHeight/2);}cx+=w;});y+=rowHeight;});const groupHeight=section.rows.length*rowHeight;ctx.fillStyle='#fff';ctx.fillRect(0,startY,columns[0][1],groupHeight);ctx.strokeStyle='#656b67';ctx.strokeRect(0,startY,columns[0][1],groupHeight);ctx.fillStyle='#090b09';ctx.textAlign='center';ctx.font='bold 25px Arial';ctx.fillText(section.label,columns[0][1]/2,startY+groupHeight/2-(section.hasTime?16:0));if(section.hasTime){ctx.font='bold 18px Arial';ctx.fillText(openingPicklistTime(section),columns[0][1]/2,startY+groupHeight/2+18);}});
   return canvas.toDataURL('image/jpeg',.94);
@@ -10863,7 +11442,7 @@ function continuePicklistScreenshot() {
   if(!state.screenshotReview?.pads||!state.screenshotReview?.cortex)return toast('Confirm pads and Cortex swaps first','error');
   state.screenshotPreview=buildPicklistScreenshot();state.screenshotKind='picklist';openLightweightModal('screenshot');
 }
-function saveWaveScreenshot(){if(!state.screenshotPreview)return;const a=document.createElement('a');a.href=state.screenshotPreview;a.download=state.screenshotKind==='picklist'?`${state.dspCode}-opening-picklist-${state.morningOperationDate}.jpg`:`${state.dspCode}-${state.morningFilters.wave==='all'?'all-waves':state.morningFilters.wave.replace(/[^a-z0-9]+/gi,'-')}.jpg`;document.body.appendChild(a);a.click();a.remove();state.modal=null;state.screenshotPreview=null;state.screenshotKind='';render();toast('Approved JPEG saved — ready for GroupMe');}
+function saveWaveScreenshot(){if(!state.screenshotPreview)return;const a=document.createElement('a'),prefix=openingStationFilePrefix();a.href=state.screenshotPreview;a.download=state.screenshotKind==='picklist'?`${prefix}-opening-picklist-${state.morningOperationDate}.jpg`:`${prefix}-${state.morningFilters.wave==='all'?'all-waves':state.morningFilters.wave.replace(/[^a-z0-9]+/gi,'-')}.jpg`;document.body.appendChild(a);a.click();a.remove();state.modal=null;state.screenshotPreview=null;state.screenshotKind='';render();toast(`Approved ${activeMorningStationCode()} JPEG saved — ready for GroupMe`);}
 function printOpeningPicklistOnePage() {
   const sheet=document.querySelector?.('.opening-picklist-sheet'),frame=document.querySelector?.('.opening-picklist-scroll');
   if(sheet&&frame){const main=sheet.querySelector?.('.opening-picklist-main'),side=sheet.querySelector?.('.opening-picklist-right'),width=Math.max(1,main&&side?(main.offsetWidth+side.offsetWidth+12):(sheet.scrollWidth||sheet.offsetWidth||1014)),height=Math.max(1,Math.max(main?.scrollHeight||0,side?.scrollHeight||0,sheet.scrollHeight||sheet.offsetHeight||2100)),targetWidth=1000,targetHeight=1530,scale=Math.min(1,targetWidth/width,targetHeight/height)*.985,scaledWidth=Math.min(targetWidth,Math.ceil(width*scale)),scaledHeight=Math.min(targetHeight,Math.ceil(height*scale));document.documentElement?.style?.setProperty?.('--picklist-print-scale',String(scale));document.documentElement?.style?.setProperty?.('--picklist-print-height',`${scaledHeight}px`);document.documentElement?.style?.setProperty?.('--picklist-print-width',`${scaledWidth}px`);document.body?.classList?.add?.('printing-picklist');}
@@ -10876,8 +11455,9 @@ function downloadEquipmentTemplate(){
     ['1','40','31'],['2','41','32'],['3','42','33'],['21','60','51'],['37','31','-'],['40','34','r'],['43','37','cc'],['58','52','9'],
     ['F33','',''],['F34','',''],['R35','',''],['R36','',''],['R54','',''],['R55','',''],['R62','',''],['H1','',''],['H2','',''],['H3','',''],['H4','','']
   ];
-  downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n')+'\r\n','text/csv;charset=utf-8','van-dev-port-google-sheets-layout.csv');
-  toast('VAN/DEV/PORT Google Sheets layout downloaded');
+  const station=activeMorningStationCode();
+  downloadBlob('\ufeff'+[h,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n')+'\r\n','text/csv;charset=utf-8',MULTI_STATION_ENABLED?`${station.toLowerCase()}-van-dev-port-google-sheets-layout.csv`:'van-dev-port-google-sheets-layout.csv');
+  toast(`${MULTI_STATION_ENABLED?`${station} `:''}VAN/DEV/PORT Google Sheets layout downloaded`);
 }
 function downloadFleetTemplate(){const h=['Source','Vehicle Name','VIN','License Plate','Active','Operational Status','Battery %','Range Miles','Dispatcher Note'];const guide1=['READ ME','','','','','','','','Amazon required: Vehicle Name, VIN, License Plate, Active, Operational Status'];const guide2=['READ ME','','','','','','','','FleetOS required: VIN, Battery % or State of Charge, Range Miles'];const guide3=['READ ME','','','','','','','','Do not rename Amazon vehicles — RelayOps keeps Amazon fleet-list names exactly'];const amazon=['Amazon fleet list','LLOL EV 21','7FCEHEB79PN014816','9ABC123','Active','Operational','','','Official name/status row'];const fleetos=['FleetOS tracker','','7FCEHEB79PN014816','','','','63%','98','Battery/range row for same VIN'];const both=['Amazon + FleetOS','LLOL EV 22','7FCTGAAA1PN000184','9XYZ222','Active','Operational','88%','137','One complete combined row also works'];downloadBlob(`${[h,guide1,guide2,guide3,amazon,fleetos,both].map(r=>r.map(csvEscape).join(',')).join('\r\n')}\r\n`,'text/csv','fleetos-amazon-ev-import-template.csv');toast('FleetOS/Amazon EV template downloaded');}
 
@@ -10887,7 +11467,8 @@ function persist(){
 invalidateNavigationPageCache();
 invalidateOperationalAlertGroups();
 invalidateDriverDirectoryCaches();
-const nativeStorage=window.localStorage||globalThis.localStorage;
+if(MULTI_STATION_PREVIEW){persistMultiStationPreview();return;}
+const nativeStorage=appStationStorage;
 const cloudRedundantCaches=new Set(['relayops_fleet_import','relayops_fleet_source_uploads','relayops_van_parking','relayops_driver_contacts','relayops_schedule_entries','relayops_rostering_plans','relayops_whiparound_inspections','relayops_whiparound_roster_snapshots','relayops_inventory_log','relayops_equipment_import']);
 const localStorage={setItem(key,value){
   if(window.RelayOpsCloud?.session&&cloudRedundantCaches.has(key)){try{nativeStorage.removeItem(key);}catch{}return;}
@@ -10941,7 +11522,7 @@ localStorage.setItem('relayops_opening_picklist_notes',state.openingPicklistNote
 localStorage.setItem('relayops_opening_picklist_calloff_rows',String(state.openingPicklistCalloffRows||6));
 localStorage.setItem('relayops_opening_picklist_topic_rows',String(state.openingPicklistTopicRows||4));
 localStorage.setItem('relayops_opening_picklist_backup_rows',String(state.openingPicklistBackupRows||21));
-localStorage.setItem('relayops_opening_picklist_wave_slots',String(state.openingPicklistWaveSlots??MORNING_CORE_WAVE_COUNT));
+localStorage.setItem('relayops_opening_picklist_wave_slots',String(state.openingPicklistWaveSlots??activeMorningWaveCount()));
 localStorage.setItem('relayops_opening_picklist_show_adhoc',String(state.openingPicklistShowAdhoc!==false));
 localStorage.setItem('relayops_fit_picklist_rows',String(Boolean(state.fitOpeningPicklistRows)));
 localStorage.setItem('relayops_opening_picklist_calloff_drafts',JSON.stringify(state.openingPicklistCalloffDrafts||[]));
@@ -11012,7 +11593,17 @@ function persistentWorkspaceState() {
     morningSheetsEndpoint:state.morningSheetsEndpoint,slackReportRoomUrl:state.slackReportRoomUrl,chargerReports:normalizeChargerReports(state.chargerReports||[])
   };
 }
+function assertWorkspaceStationIdentity(payload={}) {
+  if(appStationBootError)throw new Error(appStationBootError);
+  const incoming=String(payload.stationCode||'').trim().toUpperCase();
+  if(MULTI_STATION_ENABLED&&incoming&&incoming!==activeMorningStationCode())throw new Error(`Blocked ${incoming} data from loading into ${activeMorningStationCode()}. No station data was changed.`);
+  if(MULTI_STATION_ENABLED){
+    const tagged=[...(Array.isArray(payload.routes)?payload.routes:[]),...(Array.isArray(payload.morningRoutes)?payload.morningRoutes:[]),payload.equipmentImport,payload.fleetImport];
+    if(tagged.some(record=>record?.stationCode&&String(record.stationCode).toUpperCase()!==activeMorningStationCode()))throw new Error(`The imported snapshot includes another station’s data. ${activeMorningStationCode()} was not changed.`);
+  }
+}
 function applySharedWorkspaceState(payload={}) {
+  assertWorkspaceStationIdentity(payload);
   // Older or stale tabs may send valid route/equipment changes without the
   // newer section-level pad fields. Preserve this dispatcher's explicit pads
   // unless the incoming snapshot contains that exact key (including an
@@ -11022,7 +11613,7 @@ function applySharedWorkspaceState(payload={}) {
   const incomingPadOverrides=Object.prototype.hasOwnProperty.call(payload,'morningSectionPadOverrides')&&payload.morningSectionPadOverrides&&typeof payload.morningSectionPadOverrides==='object'?payload.morningSectionPadOverrides:null;
   const parkingChargerMovePlan=lowerParkingChargerMovePlan(payload.vanParking);
   const allowed=['dspCode','organizationName','stationCode','routes','morningRoutes','fleetImport','fleetSourceUploads','fleetExpectedCount','fleetLastRefresh','equipmentImport','deviceCustomRows','removedDeviceVehicleIds','vanParking','vanParkingUpdated','chargingStationChecked','vanParkingBatteries','parkingChargerStatus','parkingNotes','lastImportExcluded','rosterPublished','morningIssueAcknowledgements','messageQueueStatus','scheduleEntries','scheduleImportName','rosteringDate','callOffDriverKeys','scheduleDriverMarks','scheduleBackupRecords','scheduleStayHome','scheduleReductions','scheduleHelpers','callOffReasons','morningWaveTimeOverrides','morningSectionPadOverrides','earlyCalloffAcknowledgements','padCheckAcknowledgements','lastMorningImportFingerprint','fitMorningRows','fitOpeningPicklistRows','openingPicklistTopics','openingPicklistNotes','openingPicklistCalloffRows','openingPicklistTopicRows','openingPicklistBackupRows','openingPicklistWaveSlots','openingPicklistShowAdhoc','openingPicklistCalloffDrafts','openingPicklistBackupOverrides','openingPicklistLabels','picklistSwapAudit','sheetHistory','whiparoundInspections','whiparoundRosterSnapshots','whiparoundNotOnRoute','whiparoundImportName','whiparoundSelectedDate'];
-  allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
+  allowed.forEach(key=>{if((key!=='stationCode'||!MULTI_STATION_ENABLED)&&Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   state.fleetSourceUploads=state.fleetSourceUploads&&typeof state.fleetSourceUploads==='object'?state.fleetSourceUploads:{};
   state.fleetExpectedCount=Math.max(0,Number(state.fleetExpectedCount)||0);
   state.fleetLastRefresh=String(state.fleetLastRefresh||'Not refreshed yet');
@@ -11056,7 +11647,7 @@ function applySharedWorkspaceState(payload={}) {
   state.openingPicklistCalloffRows=Math.max(1,Number(state.openingPicklistCalloffRows)||6);
   state.openingPicklistTopicRows=Math.max(1,Number(state.openingPicklistTopicRows)||4);
   state.openingPicklistBackupRows=Math.max(1,Number(state.openingPicklistBackupRows)||21);
-  state.openingPicklistWaveSlots=Math.max(0,Math.min(MORNING_CORE_WAVE_COUNT,Number(state.openingPicklistWaveSlots??MORNING_CORE_WAVE_COUNT)));
+  state.openingPicklistWaveSlots=Math.max(0,Math.min(activeMorningWaveCount(),Number(state.openingPicklistWaveSlots??activeMorningWaveCount())));
   state.openingPicklistShowAdhoc=state.openingPicklistShowAdhoc!==false;
   state.scheduleHelpers=state.scheduleHelpers&&typeof state.scheduleHelpers==='object'?state.scheduleHelpers:{};
   state.openingPicklistCalloffDrafts=Array.isArray(state.openingPicklistCalloffDrafts)?state.openingPicklistCalloffDrafts:[];
@@ -11072,10 +11663,11 @@ function applySharedWorkspaceState(payload={}) {
   invalidateDriverDirectoryCaches();
 }
 function applyPersistentWorkspaceState(payload={}) {
+  assertWorkspaceStationIdentity(payload);
   const persistedParkingLayout=payload.vanParkingLayout||payload.vanParking;
   const parkingChargerMovePlan=lowerParkingChargerMovePlan(persistedParkingLayout);
   const allowed=['organizationName','stationCode','dspCode','fleetNameOverrides','fleetIssues','equipmentIssues','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','whiparoundComplianceHistory','whiparoundReminderTemplates','messageQueueTemplate','inventoryItems','inventoryLog','coachingQueue','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
-  allowed.forEach(key=>{if(Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
+  allowed.forEach(key=>{if((key!=='stationCode'||!MULTI_STATION_ENABLED)&&Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
   if(Array.isArray(persistedParkingLayout))state.vanParking=mergeParkingLayout(persistedParkingLayout,state.vanParking);
   else state.vanParking=normalizeVanParkingLayout(state.vanParking);
   if(parkingChargerMovePlan.length){const migrated=migrateLowerParkingChargerRows(state.parkingChargerStatus,state.chargerReports,parkingChargerMovePlan);state.parkingChargerStatus=migrated.status;state.chargerReports=migrated.reports;}
@@ -11098,7 +11690,11 @@ function applyPersistentWorkspaceState(payload={}) {
   if(state.fleetImport?.vehicles?.length)applyFleetVehicles(state.fleetImport.vehicles,{silent:true});
   invalidateDriverDirectoryCaches();
 }
-window.RelayOpsApp={sharedState:sharedWorkspaceState,persistentState:persistentWorkspaceState,applySharedState:applySharedWorkspaceState,applyPersistentState:applyPersistentWorkspaceState,resetDailyState:resetDailyOperationsState,resetSharedDailyState:resetSharedDailyOperationsState,rolloverOperationDateIfNeeded,operationDate:()=>state.morningOperationDate,operationDateIsWritable:(date=state.morningOperationDate)=>/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))&&String(date)>=defaultOperationDate(),morningSheetsPayload:()=>morningSheetsConnectorPayload(),__test:{defaultOperationDate,resetDailyOperationsState,resetSharedDailyOperationsState,rolloverOperationDateIfNeeded}};
+// Run the local station restore only after every cache, parser, and state
+// dependency has initialized. This avoids boot-time temporal-dead-zone errors
+// while keeping the production DJT6 boot path unchanged.
+initializeMultiStationPreview();
+window.RelayOpsApp={assertWorkspaceStationIdentity,sharedState:sharedWorkspaceState,persistentState:persistentWorkspaceState,applySharedState:applySharedWorkspaceState,applyPersistentState:applyPersistentWorkspaceState,resetDailyState:resetDailyOperationsState,resetSharedDailyState:resetSharedDailyOperationsState,rolloverOperationDateIfNeeded,operationDate:()=>state.morningOperationDate,operationDateIsWritable:(date=state.morningOperationDate)=>/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))&&String(date)>=defaultOperationDate(),morningSheetsPayload:()=>morningSheetsConnectorPayload(),__test:{defaultOperationDate,resetDailyOperationsState,resetSharedDailyOperationsState,rolloverOperationDateIfNeeded}};
 if(window.addEventListener){
   window.addEventListener('focus',()=>rolloverOperationDateIfNeeded('focus',new Date()));
   window.addEventListener('online',()=>rolloverOperationDateIfNeeded('online',new Date()));

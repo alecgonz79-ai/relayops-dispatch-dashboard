@@ -59,7 +59,7 @@ const checks = `
   if (!importTemplateProofHtml.includes('Import → Template proof') || !importTemplateProofHtml.includes('DSP filter') || !importTemplateProofHtml.includes('2 LLOL kept · 1 excluded') || !importTemplateProofHtml.includes('Earliest wave') || !importTemplateProofHtml.includes('11:15 AM') || !importTemplateProofHtml.includes('First driver names') || !importTemplateProofHtml.includes('Template rows')) throw new Error('Morning import-to-template proof missing after DAYOFOPSPLAN import');
   state.modal = 'import';
   const uploadHtml = modal();
-  if (!uploadHtml.includes('Make my morning sheet')) throw new Error('Simple upload heading missing');
+  if (!uploadHtml.includes('Make my DJT6 morning sheet')) throw new Error('Station-specific simple upload heading missing');
   if (!uploadHtml.includes('Create my operations sheet')) throw new Error('Simple upload action missing');
   if (!uploadHtml.includes('CX route matching')) throw new Error('CX matching explanation missing');
   action('open-morning-diagnostics',{});
@@ -522,7 +522,7 @@ const checks = `
   action('approve-fleet-refresh',{});
   if (state.fleetLastRefresh === 'Not refreshed yet' || state.modal || state.fleetRefreshPreview || !fleetPage().includes('All vehicles') || !fleetPage().includes('data-action="refresh-fleet"')) throw new Error('Approved fleet refresh did not update the board');
   const morningHtml = morningSheetPage();
-  if (!morningHtml.includes('Morning setup') || !morningHtml.includes('Upload day files') || !morningHtml.includes('Send Morning Sheet') || !morningHtml.includes('Later: add RTS times')) throw new Error('Ordered Morning Sheet workflow missing');
+  if (!morningHtml.includes('Morning setup') || !morningHtml.includes('Upload DJT6 day files') || !morningHtml.includes('Send DJT6 Morning Sheet') || !morningHtml.includes('Later: add RTS times')) throw new Error('Ordered DJT6 Morning Sheet workflow missing');
   if(morningHtml.includes('Three easy steps')||morningHtml.includes('Fixed Ops Log check')||morningHtml.includes('Dated Ops Log'))throw new Error('Morning Sheet still renders duplicate instructional boxes');
   if (morningHtml.includes('id="morning-diagnostics"') || morningHtml.includes('Slack Import') || !morningHtml.includes('DAYOFOPSPLAN + ROUTE_DJT6')) throw new Error('Morning page should show the real import flow without duplicate inline diagnostics or locked Slack');
   state.modal='morning-diagnostics';const diagnosticHtml=modal();state.modal=null;
@@ -691,7 +691,7 @@ const checks = `
   state.editMode = true;
   state.copyMode = false;
   const editableHtml = morningSheetPage();
-  const editableRequirements=['contenteditable="true"','data-view-field="ev"','Press Enter to save','data-sheet-cell="true"','sheet-letters-row','sheet-row-num','PORTABLE','sheet-spacer-col','PLANNED RTS','Device and Portable Import','EV 1–58 low → high','Random EVs','Gas vehicles','Assign safe vans','Clear EVs','Copy cells','Morning setup','Send Morning Sheet','Copy fallback','Paste box','Remove blank rows','Click and drag white cells'];
+  const editableRequirements=['contenteditable="true"','data-view-field="ev"','Press Enter to save','data-sheet-cell="true"','sheet-letters-row','sheet-row-num','PORTABLE','sheet-spacer-col','PLANNED RTS','Device and Portable Import','EV 1–58 low → high','Random EVs','Gas vehicles','Assign safe vans','Clear EVs','Copy cells','Morning setup','Send DJT6 Morning Sheet','Copy fallback','Paste box','Remove blank rows','Click and drag white cells'];
   const missingEditableRequirements=editableRequirements.filter(value=>!editableHtml.includes(value));
   if(missingEditableRequirements.length) throw new Error('Editable sheet or JPEG control missing: '+missingEditableRequirements.join(', '));
   rivianFleet.push({name:'EV1',vin:'7FCEHEB79PN000001',battery:90,miles:140,operational:'Operational',active:'Active',source:'Amazon fleet list + FleetOS tracker',hasBattery:true,hasActive:true,hasOperational:true});
