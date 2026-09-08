@@ -30,7 +30,7 @@
   const queuePrefix=()=>`relayops_cloud_queue:${config.stationId||'local'}:`;
   const queueKey=(date=operationDate())=>`relayops_cloud_queue:${config.stationId||'local'}:${date}`;
   function storage(){try{return window.localStorage||globalThis.localStorage||null;}catch{return null;}}
-  function pendingSnapshot(date=operationDate()){const key=queueKey(date);try{return JSON.parse(storage()?.getItem(key)||'null')||memoryPendingByKey.get(key)||null;}catch{return memoryPendingByKey.get(key)||null;}}
+  function pendingSnapshot(date=operationDate()){const key=queueKey(date);if(memoryPendingByKey.has(key))return memoryPendingByKey.get(key);try{return JSON.parse(storage()?.getItem(key)||'null')||null;}catch{return null;}}
   function clearPending(date=operationDate()){const key=queueKey(date);memoryPendingByKey.delete(key);try{storage()?.removeItem(key);}catch{}}
   function sanitizeCloudString(value=''){
     const input=String(value),parts=[];
@@ -263,7 +263,7 @@
   function writePending(record,date=operationDate()){
     assertStationQueue(record);
     const key=queueKey(date);memoryPendingByKey.set(key,record);
-    try{storage()?.setItem(key,JSON.stringify(record));memoryPendingByKey.delete(key);}catch{}
+    try{const target=storage();if(target){target.setItem(key,JSON.stringify(record));memoryPendingByKey.delete(key);}}catch{}
     return record;
   }
   function queueSnapshot(payload,action='workspace.offline',persistentPayload,date=operationDate(),baseOverrides={}){
@@ -857,7 +857,18 @@
   function canSafelySwitch(){
     if(stationRuntime?.error)return false;
     if(localMultiStationPreview)return true;
-    return !initializing&&!applying&&!loadInFlight&&!saveInFlight&&!saveTimer&&!saveRetryTimer&&!saveContinuationTimers.size&&!pendingSaveAction&&stationPendingRecords().length===0;
+    return !initializing&&!applying&&!loadInFlight&&!saveInFlight&&!saveTimer&&!saveContinuationTimers.size&&!pendingSaveAction&&!stationSwitchQueueIssue();
+  }
+  function stationSwitchQueueIssue(){
+    // A dated queue already stored on this device survives full navigation.
+    // Do not drain, discard, or rewrite historical imports just to switch tabs.
+    // Memory fallback may be newer than a durable copy, so any such station
+    // record still blocks navigation instead of losing or overwriting edits.
+    const prefix=queuePrefix();
+    for(const [key,record] of memoryPendingByKey){if(key.startsWith(prefix)&&record)return 'Some edits are only saved in this tab’s memory. Keep this tab open until they can be saved.';}
+    try{const target=storage();if(target&&target.getItem(queueKey())!==null)return 'This station still has unsaved changes for the current day. Stay here and retry after it shows Saved.';}
+    catch{return 'The current-day save queue could not be checked. Keep this station open and retry.';}
+    return '';
   }
   async function performStationSwitchPreparation(){
     const blocked=message=>({ok:false,error:message||'This station still has unsaved changes. Stay here and retry after it shows Saved.'});
@@ -877,7 +888,7 @@
         const result=await save('workspace.station-switch');
         if(result?.conflict||result?.delayed)return blocked();
       }
-      return canSafelySwitch()?{ok:true}:blocked();
+      return canSafelySwitch()?{ok:true}:blocked(stationSwitchQueueIssue());
     }catch(error){return blocked(`Could not save this station: ${String(error?.message||error)}. Your changes remain on this device.`);}
   }
   function prepareStationSwitch(){

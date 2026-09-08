@@ -2043,7 +2043,7 @@ function morningSheetPage() {
   const irregular=routeRows.filter(r=>r.plannedRtsIssue).length;
   const sheetMode=state.copyMode?'copy':'edit';
   const connected=Boolean(state.morningSheetsEndpoint),receipt=state.morningSheetsLastReceipt;
-  const connectorStatus=connected?(receipt?.status==='confirmed'?'Google Sheet confirmed':'Google Sheet connected'):'Google Sheet needs setup';
+  const connectorStatus=connected?(receipt?.status==='confirmed'?'Google Sheet confirmed':activeMorningStationCode()==='DUR6'?'Google connector saved · confirmation required':'Google Sheet connected'):'Google Sheet needs setup';
   const stationCode=activeMorningStationCode(),templateUrl=activeMorningTemplateUrl(),templateLink=templateUrl?`<a class="btn morning-open-sheet" href="${templateUrl}" target="_blank" rel="noopener">Open ${stationCode} Google Sheet ↗</a>`:`<button class="btn morning-open-sheet" type="button" disabled>${stationCode} Google Sheet setup pending</button>`;
   const pageBody=`${contextBar(`<span class="status blue">${stationCode} · Earliest waves first</span>`)}
   <section class="morning-workflow card" aria-label="Build today's morning sheet">
@@ -8107,7 +8107,7 @@ function getMorningImportWorker() {
   if(morningImportWorker)return morningImportWorker;
   if(typeof Worker==='undefined'||typeof URL==='undefined'||!window?.location?.href)return null;
   try {
-    const worker=new Worker(new URL('./morning-import-worker.js?v=20260907-dual-station-release-r1',window.location.href),{name:'relayops-morning-import'});
+    const worker=new Worker(new URL('./morning-import-worker.js?v=20260907-dual-station-release-r2',window.location.href),{name:'relayops-morning-import'});
     worker.addEventListener('message',event=>{
       const message=event.data||{},entry=morningImportWorkerPending.get(message.id);if(!entry)return;
       morningImportWorkerPending.delete(message.id);clearTimeout(entry.timer);

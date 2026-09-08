@@ -1,17 +1,17 @@
-const CACHE='relayops-dual-stations-dispatch-v122';
+const CACHE='relayops-dual-stations-dispatch-v123';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=20260907-dual-station-release-r1',
+  './styles.css?v=20260907-dual-station-release-r2',
   './macos-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260726-fleet-warning-r1',
-  './app.js?v=20260907-dual-station-release-r1',
-  './dur6-google-transfer.js?v=20260907-dual-station-release-r1',
-  './morning-import-worker.js?v=20260907-dual-station-release-r1',
-  './supabase/config.js?v=20260907-dual-station-release-r1',
-  './station-workspace.js?v=20260907-dual-station-release-r1',
-  './cloud-sync.js?v=20260907-dual-station-release-r1',
+  './app.js?v=20260907-dual-station-release-r2',
+  './dur6-google-transfer.js?v=20260907-dual-station-release-r2',
+  './morning-import-worker.js?v=20260907-dual-station-release-r2',
+  './supabase/config.js?v=20260907-dual-station-release-r2',
+  './station-workspace.js?v=20260907-dual-station-release-r2',
+  './cloud-sync.js?v=20260907-dual-station-release-r2',
   './vendor/jszip.min.js',
   './assets/rivian-prime-van.png'
 ];
