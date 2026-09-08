@@ -18,6 +18,7 @@ const linkMigration = read('../supabase/migrations/20260720_link_access_admin_pi
 
 assert(/Build public site allowlist/.test(workflow), 'GitHub Pages must be assembled from an explicit public-file allowlist');
 assert(/Run release regression gate/.test(workflow), 'GitHub Pages publishing must be gated by the release regression suite');
+assert(/uses: actions\/checkout@v\d+\s+with:[\s\S]{0,250}?fetch-depth: 2/.test(workflow), 'Release whitespace checks need the parent commit instead of treating historic files as newly added');
 assert(/node --check app\.js/.test(workflow) && /for test_file in tests\/\*\.cjs/.test(workflow), 'The Pages gate must run browser syntax checks and every CJS regression');
 assert(/path:\s*_site/.test(workflow), 'GitHub Pages must upload only the assembled _site directory');
 assert(!/upload-pages-artifact@[\s\S]{0,180}?path:\s*\.(?:\s|$)/.test(workflow), 'GitHub Pages must never publish the repository root');

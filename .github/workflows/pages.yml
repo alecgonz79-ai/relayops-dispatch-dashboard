@@ -24,6 +24,10 @@ jobs:
     steps:
       - name: Check out dashboard
         uses: actions/checkout@v4
+        with:
+          # The whitespace gate compares this release to its parent. A
+          # shallow root checkout would incorrectly check all historic files.
+          fetch-depth: 2
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
