@@ -11,12 +11,12 @@ vm.runInContext(fs.readFileSync(require.resolve('../app.js'),'utf8'),context,{fi
 vm.runInContext(`
   toast=()=>{};render=()=>{};persist=()=>{};
   state.rosteringDate='2026-07-18';state.rosteringPlans={[state.rosteringDate]:normalizeRosteringPlan({services:rosteringDefaultServices()})};
-  state.scheduleEntries=[
+  storeRosteringScheduleEntries([
     {date:'7/18/2026',name:'Actual Associate',role:'Delivery Associate',start:'11:15 AM'},
     {date:'7/18/2026',name:'Rescue Backup',role:'Rescue',start:'11:20 AM'},
     {date:'7/18/2026',name:'Fleet Lead',role:'Fleet Coordinator',start:'8:00 AM'},
     {date:'7/18/2026',name:'Midshift Support',role:'Midshift',start:'2:00 PM'}
-  ];
+  ],'paycom-roster-fixture.xls');
   state.scheduleStayHomeHistory={'2026-07-17|rescue backup':{name:'Rescue Backup',date:'2026-07-17'}};
   const plan=currentRosteringPlan(),groups=rosteringUnrosteredBackupGroups(plan);
   globalThis.__groups={vto2:groups.vto2.map(row=>row.name),vto4:groups.vto4.map(row=>row.name),other:groups.other.map(row=>row.name)};

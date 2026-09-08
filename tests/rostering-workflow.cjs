@@ -40,7 +40,7 @@ function run() {
   const context = harness();
   vm.runInContext(`
     state.page='rostering';state.rosteringDate='2026-07-15';state.rosteringPlans={};
-    state.scheduleEntries=[
+    storeRosteringScheduleEntries([
       {date:'7/15/2026',name:'Maya Collins',role:'Delivery Associate',start:'11:15 AM',end:'9:15 PM'},
       {date:'7/15/2026',name:'John Helper',role:'Driver Helper',start:'11:20 AM',end:'9:20 PM'},
       {date:'7/15/2026',name:'Nina Patel',role:'Rescue',start:'11:25 AM',end:'9:25 PM'},
@@ -48,7 +48,7 @@ function run() {
       {date:'7/15/2026',name:'Evan Stone',role:'Delivery Associate',start:'11:40 AM',end:'9:40 PM'},
       {date:'7/15/2026',name:'Riley Rookie',role:'Ride Along',start:'11:15 AM',end:'9:15 PM'},
       {date:'7/15/2026',name:'Terry Trainer',role:'Fleet Coordinator',start:'10:00 AM',end:'8:00 PM'}
-    ];
+    ],'paycom-roster-fixture.xls');
     state.driverContacts=[
       {name:'Maya Collins',key:'maya collins'},{name:'John Helper',key:'john helper'},{name:'Nina Patel',key:'nina patel'},{name:'Rex Rescue',key:'rex rescue'},{name:'Evan Stone',key:'evan stone'}
       ,{name:'Riley Rookie',key:'riley rookie',transporterId:'RID-RILEY'},{name:'Terry Trainer',key:'terry trainer',transporterId:'RID-TERRY'}
@@ -67,7 +67,7 @@ function run() {
     };
     const emptyPlan=currentRosteringPlan();
     globalThis.__emptyDefaults={services:emptyPlan.services.length,assignments:emptyPlan.assignments.length};
-    state.rosteringPlans[state.rosteringDate]=normalizeRosteringPlan({services:rosteringDefaultServices()});
+    state.rosteringPlans[state.rosteringDate]=normalizeRosteringPlan({services:rosteringDefaultServices(),paycomEntries:rosteringScheduleEntriesForDate()});
     const plan=currentRosteringPlan();
     globalThis.__defaults={services:plan.services.length,confirmed:plan.services.reduce((n,s)=>n+s.confirmed,0),assignments:plan.assignments.length};
     globalThis.__samePlan=currentRosteringPlan()===plan;
@@ -76,7 +76,7 @@ function run() {
     globalThis.__after={rostered:plan.assignments.filter(row=>row.associate).length,helpers:plan.assignments.filter(row=>row.associate==='John Helper').map(row=>plan.services.find(service=>service.id===row.serviceId)?.kind),mayaCount:rosteringStayHomeCount('Maya Collins'),ninaCount:rosteringStayHomeCount('Nina Patel'),evanCount:rosteringStayHomeCount('Evan Stone')};
     globalThis.__html=rosteringPage();
     globalThis.__pageInfoRostering=pageInfo.rostering;
-    state.rosteringPlans={[state.rosteringDate]:normalizeRosteringPlan({services:rosteringDefaultServices()})};state.rosteringAutoMode='abc';const autoPlan=currentRosteringPlan();globalThis.__autoResult=autoRosterFromPaycom({silent:true});
+    state.rosteringPlans={[state.rosteringDate]:normalizeRosteringPlan({services:rosteringDefaultServices(),paycomEntries:rosteringScheduleEntriesForDate()})};state.rosteringAutoMode='abc';const autoPlan=currentRosteringPlan();globalThis.__autoResult=autoRosterFromPaycom({silent:true});
     globalThis.__autoRows=autoPlan.assignments.filter(row=>row.source==='auto-roster').map(row=>row.associate);
     globalThis.__autoHelpers=autoPlan.assignments.filter(row=>row.source==='auto-helper').map(row=>row.associate);
     globalThis.__donationAutoRows=autoPlan.assignments.filter(row=>row.serviceId==='xl-donations'&&row.associate).length;
@@ -84,7 +84,7 @@ function run() {
     globalThis.__orders={abc:rosteringOrderEntries([{name:'Charlie'},{name:'Alpha'},{name:'Bravo'}],'abc').map(row=>row.name),random:rosteringOrderEntries([{name:'Alpha'},{name:'Bravo'},{name:'Charlie'}],'random',()=>0).map(row=>row.name),randomFallback:rosteringOrderEntries([{name:'Alpha'},{name:'Bravo'},{name:'Charlie'}],'random',()=>0.999999).map(row=>row.name)};
     autoPlan.services.push({id:'random-order-proof',name:'Random order proof',confirmed:3,kind:'driver',defaultTime:'11:15 AM'});autoPlan.assignments.push({id:'random-row-1',serviceId:'random-order-proof',start:'11:15 AM',associate:'Bravo',route:'',role:'Delivery Associate',source:'test'},{id:'random-row-2',serviceId:'random-order-proof',start:'11:15 AM',associate:'Charlie',route:'',role:'Delivery Associate',source:'test'},{id:'random-row-3',serviceId:'random-order-proof',start:'11:15 AM',associate:'Alpha',route:'',role:'Delivery Associate',source:'test'});globalThis.__renderedRandomOrder=rosteringServiceRows('random-order-proof').map(row=>row.associate);
     globalThis.__helperHtml=rosteringHelperShiftsHtml(autoPlan);
-    state.scheduleEntries.push({date:'7/15/2026',name:'Uma Rescue',role:'Rescue',start:'11:45 AM',end:'9:45 PM'},{date:'7/15/2026',name:'Zora VTO Four',role:'Delivery Associate',start:'11:45 AM',end:'9:45 PM'},{date:'7/15/2026',name:'Morgan Midshift',role:'Midshift',start:'2:00 PM',end:'8:00 PM'},{date:'7/15/2026',name:'Parker Pilot',role:'Pilot/Rescues',start:'12:00 PM',end:'8:30 PM'},{date:'7/15/2026',name:'Moe Modified',role:'Modified duty/Rescues',start:'12:00 PM',end:'8:30 PM'});
+    autoPlan.paycomEntries.push({date:'7/15/2026',name:'Uma Rescue',role:'Rescue',start:'11:45 AM',end:'9:45 PM'},{date:'7/15/2026',name:'Zora VTO Four',role:'Delivery Associate',start:'11:45 AM',end:'9:45 PM'},{date:'7/15/2026',name:'Morgan Midshift',role:'Midshift',start:'2:00 PM',end:'8:00 PM'},{date:'7/15/2026',name:'Parker Pilot',role:'Pilot/Rescues',start:'12:00 PM',end:'8:30 PM'},{date:'7/15/2026',name:'Moe Modified',role:'Modified duty/Rescues',start:'12:00 PM',end:'8:30 PM'});
     state.scheduleStayHomeHistory['2026-07-14|uma rescue']={name:'Uma Rescue',date:'2026-07-14'};
     globalThis.__paycomHtml=rosteringPaycomHtml(autoPlan);globalThis.__backupEmail=rosteringBackupEmailText(autoPlan);globalThis.__backupGroups=rosteringUnrosteredBackupGroups(autoPlan);
     globalThis.__specialRoles=[{name:'Parker Pilot',role:'Pilot/Rescues'},{name:'Moe Modified',role:'Modified duty/Rescues'}].map(entry=>({category:rosteringPaycomCategoryFor(entry),eligible:rosteringEntryEligibleForRoster(entry),group:scheduleRoleGroup(entry.role),helper:canBecomeHelperRole(entry.role)}));
@@ -92,8 +92,8 @@ function run() {
     ensureDriverProfile({name:'Zora VTO Four'}).profile.flags=['modified-duty'];
     globalThis.__emailTemplate=rosteringEmailTemplateText(autoPlan);globalThis.__emailTemplateHtml=rosteringEmailTemplateHtml(autoPlan);
     state.rosteringPaycomCategory='vto2';globalThis.__vto2PaycomHtml=rosteringPaycomHtml(autoPlan);state.rosteringPaycomCategory='all';
-    state.scheduleEntries.push({date:'7/15/2026',name:'Riley R',role:'Training',start:'11:15 AM',end:'9:15 PM'});
-    globalThis.__trainingHtml=rosteringTrainingHtml();globalThis.__trainingRidealongCount=[...new Map(scheduleEntriesForDate(state.rosteringDate).filter(entry=>isRidealongRole(entry.role)).map(entry=>[driverIdentityKey(entry.name),entry])).values()].length;
+    autoPlan.paycomEntries.push({date:'7/15/2026',name:'Riley R',role:'Training',start:'11:15 AM',end:'9:15 PM'});
+    globalThis.__trainingHtml=rosteringTrainingHtml();globalThis.__trainingRidealongCount=[...new Map(rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>isRidealongRole(entry.role)).map(entry=>[driverIdentityKey(entry.name),entry])).values()].length;
     assignRosteringTrainer('Riley R','Coach T');globalThis.__trainingMatch=state.rosteringTrainingMatches[rosteringTrainingKey('Riley Rookie')];globalThis.__matchedTrainingHtml=rosteringTrainingHtml();clearRosteringTrainerMatch('Riley R');globalThis.__swapCleared=!state.rosteringTrainingMatches[rosteringTrainingKey('Riley Rookie')];assignRosteringTrainer('Riley R','Coach T');
     trainerProfile.tags=[];globalThis.__staleTrainingHtml=rosteringTrainingHtml();trainerProfile.tags=['trainer'];
     globalThis.__roleGroups=['Ride Along','Ride-Along Shift','Training','Trainee','New Hire'].map(scheduleRoleGroup);
@@ -116,11 +116,11 @@ function run() {
     globalThis.__screenshotSummary={services:__screenshotPlan.services.length,xlUs:__screenshotPlan.services.find(row=>row.id==='xl-us')?.confirmed,medium:__screenshotPlan.services.find(row=>row.id==='rivian-medium')?.confirmed,associates:__screenshotPlan.assignments.filter(row=>row.associate).map(row=>({name:row.associate,route:row.route})),source:__screenshotPlan.importName};
     const originalRosterDate=state.rosteringDate;
     state.rosteringDate='2026-07-16';
-    const lockedPlan=applyRosteringScreenshotText('Standard Parcel Electric - Rivian MEDIUM - Default as station - 10 Hours 2 Confirmed 0 Rostered','one-block.png');
+    let lockedPlan=applyRosteringScreenshotText('Standard Parcel Electric - Rivian MEDIUM - Default as station - 10 Hours 2 Confirmed 0 Rostered','one-block.png');
     let lockedPaycom=[{date:'7/17/2026',name:'Screenshot Driver One',role:'Delivery Associate',start:'11:15 AM',end:'9:15 PM'},{date:'7/17/2026',name:'Screenshot Driver Two',role:'Delivery Associate',start:'11:20 AM',end:'9:20 PM'}];
     const lockedDate=alignScheduleImportDate(lockedPaycom,'rostering');if(activeRosteringScreenshotPlan())lockedPaycom=pinScheduleEntriesToDate(lockedPaycom,state.rosteringDate);
-    state.scheduleEntries=mergeScheduleEntriesByImportedDate(state.scheduleEntries,lockedPaycom);lockedPlan.paycomImportName='paycom-next-day.xls';lockedPlan.paycomImportedAt='now';syncRosteringHelperShifts(lockedPlan);
-    globalThis.__screenshotLockedImport={date:state.rosteringDate,lockedDate,services:lockedPlan.services.map(row=>row.id),importName:lockedPlan.importName,paycomImportName:lockedPlan.paycomImportName,entries:scheduleEntriesForDate(state.rosteringDate).map(row=>row.name),nextDayPlan:state.rosteringPlans['2026-07-17']};
+    storeRosteringScheduleEntries(lockedPaycom,'paycom-next-day.xls');lockedPlan=currentRosteringPlan();syncRosteringHelperShifts(lockedPlan);
+    globalThis.__screenshotLockedImport={date:state.rosteringDate,lockedDate,services:lockedPlan.services.map(row=>row.id),importName:lockedPlan.importName,paycomImportName:lockedPlan.paycomImportName,entries:rosteringScheduleEntriesForDate(state.rosteringDate).map(row=>row.name),nextDayPlan:state.rosteringPlans['2026-07-17']};
     state.rosteringDate=originalRosterDate;
     const clearPlan=currentRosteringPlan(),clearService=clearPlan.services.find(row=>row.id==='rivian-medium'),clearRows=clearPlan.assignments.filter(row=>row.serviceId===clearService.id),clearRow=clearRows.find(row=>row.associate)||clearRows[0];clearRow.associate='Maya Collins';clearRow.route='CX909';clearRow.role='Delivery Associate';clearRosteringAssociate(clearRow.id);globalThis.__singleClear={associate:clearRow.associate,route:clearRow.route,confirmed:clearService.confirmed,rows:clearRows.length};clearRows.slice(0,2).forEach((row,index)=>{row.associate=index?'Nina Patel':'Maya Collins';row.route='CX91'+index;});clearRosteringServiceAssociates(clearService.id);globalThis.__serviceClear={names:clearRows.map(row=>row.associate),routes:clearRows.slice(0,2).map(row=>row.route),confirmed:clearService.confirmed,rows:clearRows.length};
     globalThis.__flagLabels=driverFlagSummary('Maya Collins');globalThis.__notesHtml=rosteringDriverNotesHtml();

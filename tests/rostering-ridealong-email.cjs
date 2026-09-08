@@ -79,7 +79,7 @@ function run() {
 
     const imported=[...paycomReport,...roleExport,...titleExport,...shiftExport];
     const variantRoles=['Ride Along','RIDE-ALONG','rIdEaLoNg shift','Delivery Associate Ride  Along'];
-    state.scheduleEntries=mergeScheduleEntriesByImportedDate([],imported);
+    storeRosteringScheduleEntries(imported,'paycom-ridealong-fixture.xls');
     const plan=currentRosteringPlan();
     const autoResult=autoRosterFromPaycom({silent:true,mode:'abc'});
     const ridealongs=rosteringRidealongEntries();
@@ -109,11 +109,11 @@ function run() {
   assert(result.variants.every(row=>row.group==='training'&&row.category==='training'&&!row.helper&&!row.eligible), 'Case, spacing, hyphen, compact, and embedded Ride Along role values must classify only as Training');
 
   const expected = [
-    ['Jordan Hyphen', '9/6/2026', '10:35 AM', '8:35 PM'],
-    ['Morgan Embedded', '9/6/2026', '10:45 AM', '8:45 PM'],
-    ['Riley Space', '9/6/2026', '10:30 AM', '8:30 PM'],
-    ['Sam Split Role', '9/6/2026', '10:50 AM', '8:50 PM'],
-    ['Taylor Compact', '9/6/2026', '10:40 AM', '8:40 PM']
+    ['Jordan Hyphen', '2026-09-06', '10:35 AM', '8:35 PM'],
+    ['Morgan Embedded', '2026-09-06', '10:45 AM', '8:45 PM'],
+    ['Riley Space', '2026-09-06', '10:30 AM', '8:30 PM'],
+    ['Sam Split Role', '2026-09-06', '10:50 AM', '8:50 PM'],
+    ['Taylor Compact', '2026-09-06', '10:40 AM', '8:40 PM']
   ];
   assert(JSON.stringify(result.ridealongs.map(row=>[row.name,row.date,row.start,row.end])) === JSON.stringify(expected), 'Ride-along rows must preserve each imported name, date, start, and end time');
   assert(result.ridealongs.length === 5 && new Set(result.ridealongs.map(row=>row.name.toLowerCase())).size === 5, 'Repeated PAYCOM ride-along rows must collapse to one Rostering row per person');
@@ -151,12 +151,12 @@ function run() {
     const unavailableProfile=driverProfileEntry('Unavailable Canon').profile;unavailableProfile.nickname='Unavailable Ridealong';unavailableProfile.names.push('Unavailable Ridealong');
     invalidateDriverDirectoryCaches();
     state.scheduleStayHome={['2026-09-06|'+nameKey('Unavailable Canon')]:{name:'Unavailable Canon'}};
-    state.scheduleEntries=[
+    storeRosteringScheduleEntries([
       {date:'9/6/2026',name:'Helper Wins',role:'Driver Helper',start:'11:20 AM',end:'9:20 PM'},
       {date:'9/6/2026',name:'Helper Wins',role:'Ride Along',start:'10:20 AM',end:'8:20 PM'},
       {date:'9/6/2026',name:'Available Ridealong',role:'Ride Along',start:'10:25 AM',end:'8:25 PM'},
       {date:'9/6/2026',name:'Unavailable Ridealong',role:'Ride Along',start:'10:30 AM',end:'8:30 PM'}
-    ];
+    ],'paycom-ridealong-precedence-fixture.xls');
     const precedencePlan=currentRosteringPlan();autoRosterFromPaycom({silent:true,mode:'abc'});
     const staleDriverAssignment=precedencePlan.assignments.find(row=>precedencePlan.services.find(service=>service.id===row.serviceId)?.kind==='driver');
     Object.assign(staleDriverAssignment,{associate:'Available Ridealong',role:'Delivery Associate',source:'manual'});

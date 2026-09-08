@@ -683,8 +683,16 @@ if(MULTI_STATION_ENABLED&&!MULTI_STATION_PREVIEW)Object.defineProperty(state,'st
 const MULTI_STATION_PREVIEW_STORAGE_KEY='relayops_multistation_preview_v1';
 let multiStationPreviewStore=null;
 let multiStationPreviewStorageErrorShown=false;
+let multiStationPreviewRosteringUpgradePending=false;
 function previewClone(value){return value===undefined?undefined:JSON.parse(JSON.stringify(value));}
-function newPreviewStationRecord(){return {connector:{endpoint:'',lastPush:'',lastError:'',lastReceipt:null,lastDryRun:''},fleetNameOverrides:{},equipmentIssues:{},fleetIssues:{},days:{}};}
+function normalizedPreviewRostering(source={}) {
+  const record=source&&typeof source==='object'?source:{},object=value=>value&&typeof value==='object'&&!Array.isArray(value)?previewClone(value):{};
+  return {plans:object(record.plans),helperPool:object(record.helperPool),trainingMatches:object(record.trainingMatches),manualTraining:object(record.manualTraining),date:/^\d{4}-\d{2}-\d{2}$/.test(String(record.date||''))?String(record.date):'',openServices:object(record.openServices),paycomCategory:String(record.paycomCategory||'all'),autoMode:record.autoMode==='abc'?'abc':'random'};
+}
+function capturePreviewRostering() {
+  return normalizedPreviewRostering({plans:state.rosteringPlans,helperPool:state.rosteringHelperPool,trainingMatches:state.rosteringTrainingMatches,manualTraining:state.rosteringManualTraining,date:state.rosteringDate,openServices:state.rosteringOpenServices,paycomCategory:state.rosteringPaycomCategory,autoMode:state.rosteringAutoMode});
+}
+function newPreviewStationRecord(){return {connector:{endpoint:'',lastPush:'',lastError:'',lastReceipt:null,lastDryRun:''},fleetNameOverrides:{},equipmentIssues:{},fleetIssues:{},rostering:normalizedPreviewRostering(),days:{}};}
 function normalizedMultiStationPreviewStore(raw={}) {
   const source=raw&&typeof raw==='object'?raw:{};
   const stations={};
@@ -695,6 +703,7 @@ function normalizedMultiStationPreviewStore(raw={}) {
       record.fleetNameOverrides=previewClone(Object.prototype.hasOwnProperty.call(saved,'fleetNameOverrides')&&saved.fleetNameOverrides&&typeof saved.fleetNameOverrides==='object'?saved.fleetNameOverrides:{});
       record.equipmentIssues=normalizeEquipmentIssuesStore(Object.prototype.hasOwnProperty.call(saved,'equipmentIssues')?saved.equipmentIssues:{});
       record.fleetIssues=normalizeFleetIssuesStore(Object.prototype.hasOwnProperty.call(saved,'fleetIssues')?saved.fleetIssues:{});
+      record.rostering=normalizedPreviewRostering(saved.rostering);
       record.days=saved.days&&typeof saved.days==='object'?saved.days:{};
     }
     stations[code]=record;
@@ -711,6 +720,11 @@ function readMultiStationPreviewStore(options={}){
       if(!Object.prototype.hasOwnProperty.call(raw.stations.DJT6,'fleetNameOverrides'))normalized.stations.DJT6.fleetNameOverrides=previewClone(state.fleetNameOverrides||{});
       if(!Object.prototype.hasOwnProperty.call(raw.stations.DJT6,'equipmentIssues'))normalized.stations.DJT6.equipmentIssues=previewClone(normalizeEquipmentIssuesStore(state.equipmentIssues||{}));
       if(!Object.prototype.hasOwnProperty.call(raw.stations.DJT6,'fleetIssues'))normalized.stations.DJT6.fleetIssues=previewClone(normalizeFleetIssuesStore(state.fleetIssues||{}));
+    }
+    // Older previews held Rostering in the legacy DJT6 browser state. Upgrade
+    // only the home station once; DUR6 must start with its own empty planner.
+    if(options.seedLegacyDjt6&&!Object.prototype.hasOwnProperty.call(raw.stations?.DJT6||{},'rostering')){
+      normalized.stations.DJT6.rostering=capturePreviewRostering();multiStationPreviewRosteringUpgradePending=true;
     }
     return normalized;
   }
@@ -733,14 +747,19 @@ function writeMultiStationPreviewStore(){
         remote.fleetNameOverrides=previewClone(local.fleetNameOverrides||{});
         remote.equipmentIssues=previewClone(local.equipmentIssues||{});
         remote.fleetIssues=previewClone(local.fleetIssues||{});
+        // Rostering may be preparing a future date while today's opening
+        // sheet stays active. Its station-owned record is not today's slice.
+        remote.rostering=normalizedPreviewRostering(local.rostering);
         if(local.days?.[date])remote.days[date]=previewClone(local.days[date]);
       } else if(!Object.keys(remote.days||{}).length&&Object.keys(local.days||{}).length) {
         latest.stations[stationCode]=previewClone(local);
+      } else if(stationCode==='DJT6'&&multiStationPreviewRosteringUpgradePending) {
+        remote.rostering=normalizedPreviewRostering(local.rostering);
       }
     });
     latest.activeStation=code;
     window.localStorage?.setItem(MULTI_STATION_PREVIEW_STORAGE_KEY,JSON.stringify(latest));
-    multiStationPreviewStore=latest;multiStationPreviewStorageErrorShown=false;return true;
+    multiStationPreviewStore=latest;multiStationPreviewStorageErrorShown=false;multiStationPreviewRosteringUpgradePending=false;return true;
   }
   catch(error){
     console.warn('Local multi-station preview could not be saved',error);
@@ -748,7 +767,7 @@ function writeMultiStationPreviewStore(){
     return false;
   }
 }
-function captureOpeningStationPreviewDay() {
+function captureOpeningStationPreviewDay(options={}) {
   if(!MULTI_STATION_PREVIEW||!multiStationPreviewStore)return null;
   const code=activeMorningStationCode(),date=state.morningOperationDate||defaultOperationDate(),daily=previewClone(sharedWorkspaceState());
   // Station identity comes from the immutable local profile. A saved payload
@@ -762,6 +781,7 @@ function captureOpeningStationPreviewDay() {
   record.fleetNameOverrides=previewClone(state.fleetNameOverrides&&typeof state.fleetNameOverrides==='object'?state.fleetNameOverrides:{});
   record.equipmentIssues=previewClone(normalizeEquipmentIssuesStore(state.equipmentIssues||{}));
   record.fleetIssues=previewClone(normalizeFleetIssuesStore(state.fleetIssues||{}));
+  if(!options.preserveRostering)record.rostering=capturePreviewRostering();
   record.days[date]={daily,ui:{morningFilters:previewClone(state.morningFilters||{wave:'all',staging:'all',pad:'all'}),lastItineraryRts:previewClone(state.lastItineraryRts||{}),fitMorningRows:Boolean(state.fitMorningRows),fitOpeningPicklistRows:Boolean(state.fitOpeningPicklistRows)}};
   multiStationPreviewStore.activeStation=code;
   return record.days[date];
@@ -775,7 +795,12 @@ function restoreOpeningStationPreviewDay(code,date,snapshot=null) {
   state.morningRoutes=(state.morningRoutes||[]).map(row=>({...row,stationCode:profile.code}));
   state.routes=(state.routes||[]).map(row=>({...row,stationCode:profile.code}));
   state.morningOperationDate=date;
-  state.rosteringDate=date;
+  const rostering=normalizedPreviewRostering(record.rostering);
+  state.rosteringPlans=rostering.plans;state.rosteringHelperPool=rostering.helperPool;
+  state.rosteringTrainingMatches=rostering.trainingMatches;state.rosteringManualTraining=rostering.manualTraining;
+  state.rosteringDate=rostering.date||date;state.rosteringOpenServices=rostering.openServices;
+  state.rosteringPaycomCategory=rostering.paycomCategory;state.rosteringAutoMode=rostering.autoMode;
+  pruneExpiredRosteringState(date);
   state.stationCode=profile.code;
   state.dspCode=profile.dspCode;
   state.morningFilters=previewClone(snapshot?.ui?.morningFilters||{wave:'all',staging:'all',pad:'all'});
@@ -805,7 +830,7 @@ function initializeMultiStationPreview() {
   if(!djt6Record.days[date]){
     const originalCode=activeOpeningStationCode,originalSlots=state.openingPicklistWaveSlots;activeOpeningStationCode='DJT6';state.activeOpeningStation='DJT6';
     state.openingPicklistWaveSlots=Math.max(0,Math.min(MORNING_CORE_WAVE_COUNT,Number(window.localStorage?.getItem('relayops_opening_picklist_wave_slots')??MORNING_CORE_WAVE_COUNT)));
-    captureOpeningStationPreviewDay();activeOpeningStationCode=originalCode;state.activeOpeningStation=originalCode;state.openingPicklistWaveSlots=originalSlots;
+    captureOpeningStationPreviewDay({preserveRostering:true});activeOpeningStationCode=originalCode;state.activeOpeningStation=originalCode;state.openingPicklistWaveSlots=originalSlots;
   }
   const targetRecord=multiStationPreviewStore.stations[requestedCode],saved=targetRecord.days[date]||null;
   restoreOpeningStationPreviewDay(requestedCode,date,saved);
@@ -1586,7 +1611,7 @@ function normalizeRosteringPlan(plan={}) {
   const services=(Array.isArray(plan.services)?plan.services:[]).map((service,index)=>({id:String(service.id||`service-${index+1}`),name:String(service.name||`Custom service ${index+1}`),confirmed:Math.max(0,Math.trunc(Number(service.confirmed)||0)),kind:service.kind==='helper'?'helper':'driver',defaultTime:String(service.defaultTime||'11:15 AM')}));
   const serviceIds=new Set(services.map(service=>service.id)),assignments=(Array.isArray(plan.assignments)?plan.assignments:[]).filter(row=>row&&serviceIds.has(row.serviceId)).map(row=>({id:String(row.id||rosteringId()),serviceId:String(row.serviceId),start:String(row.start||'11:15 AM'),associate:String(row.associate||''),route:String(row.route||''),role:String(row.role||''),source:String(row.source||'manual')}));
   if(!assignments.length)services.forEach(service=>rosteringTimeBlueprint(service,service.confirmed).forEach(start=>assignments.push({id:rosteringId(),serviceId:service.id,start,associate:'',route:'',role:'',source:'template'})));
-  return {services,assignments,updatedAt:String(plan.updatedAt||''),importName:String(plan.importName||''),importedAt:String(plan.importedAt||''),paycomImportName:String(plan.paycomImportName||''),paycomImportedAt:String(plan.paycomImportedAt||''),source:String(plan.source||''),importKind:String(plan.importKind||''),_normalized:true};
+  return {services,assignments,updatedAt:String(plan.updatedAt||''),importName:String(plan.importName||''),importedAt:String(plan.importedAt||''),paycomEntries:Array.isArray(plan.paycomEntries)?plan.paycomEntries.filter(entry=>entry&&typeof entry==='object').map(entry=>({...entry})):[],paycomImportName:String(plan.paycomImportName||''),paycomImportedAt:String(plan.paycomImportedAt||''),source:String(plan.source||''),importKind:String(plan.importKind||''),_normalized:true};
 }
 function currentRosteringPlan() {
   state.rosteringPlans=state.rosteringPlans&&typeof state.rosteringPlans==='object'?state.rosteringPlans:{};
@@ -1602,6 +1627,29 @@ function scheduleEntriesForDate(date=state.morningOperationDate) {
   if(exact.length)return exact;
   const dated=entries.filter(entry=>scheduleDateKey(entry.date)),undated=entries.filter(entry=>!scheduleDateKey(entry.date));
   return dated.length?[]:undated;
+}
+function rosteringScheduleEntriesForDate(date=state.rosteringDate) {
+  // Planning imports belong to this station's date-scoped roster, never to
+  // Opening's live PAYCOM schedule (which drives backups and helper lists).
+  const entries=state.rosteringPlans?.[date]?.paycomEntries;
+  return Array.isArray(entries)?entries.filter(entry=>entry&&scheduleDateKey(entry.date)===date):[];
+}
+function storeRosteringScheduleEntries(entries=[],importName='') {
+  const selectedDate=state.rosteringDate||defaultOperationDate(),byDate=new Map(),importedAt=new Date().toISOString();
+  (Array.isArray(entries)?entries:[]).forEach(entry=>{
+    if(!entry||typeof entry!=='object')return;
+    const date=scheduleDateKey(entry.date)||selectedDate;
+    if(!byDate.has(date))byDate.set(date,[]);
+    byDate.get(date).push({...entry,date});
+  });
+  state.rosteringPlans=state.rosteringPlans&&typeof state.rosteringPlans==='object'?state.rosteringPlans:{};
+  byDate.forEach((rows,date)=>{
+    const previous=state.rosteringPlans[date],plan=previous?._normalized?previous:normalizeRosteringPlan(previous||{});
+    plan.paycomEntries=mergeScheduleEntriesByImportedDate([],rows);
+    plan.paycomImportName=String(importName||'');plan.paycomImportedAt=importedAt;plan.updatedAt=importedAt;
+    state.rosteringPlans[date]=plan;
+  });
+  return byDate.size;
 }
 function rosteringHistoryDate(value='',key='') {
   const direct=String(value||'').match(/^\d{4}-\d{2}-\d{2}/)?.[0],fromKey=String(key||'').match(/^\d{4}-\d{2}-\d{2}/)?.[0];
@@ -1663,13 +1711,13 @@ function addPaycomEntryToRostering(entry={},onlyServiceId='') {
   target.associate=exact;target.start=entry.start||target.start;target.role=entry.role||'';target.source='paycom';touchRosteringPlan();return true;
 }
 function fillRosteringFromPaycom(serviceId='',options={}) {
-  const entries=scheduleEntriesForDate(state.rosteringDate).filter(rosteringEntryEligibleForRoster);if(!entries.length){if(!options.silent)toast('No eligible PAYCOM drivers are available for this roster date','error');return 0;}
+  const entries=rosteringScheduleEntriesForDate(state.rosteringDate).filter(rosteringEntryEligibleForRoster);if(!entries.length){if(!options.silent)toast('No eligible PAYCOM drivers are available for this roster date','error');return 0;}
   let added=0;entries.forEach(entry=>{if(addPaycomEntryToRostering(entry,serviceId))added++;});
   if(!options.silent){persistRosteringSlice();renderRosteringContent();toast(added?`${added} PAYCOM driver${added===1?'':'s'} added to the roster`:'Every matching PAYCOM driver is already rostered');}
   return added;
 }
 function rosteringHelperPoolRows(date=state.rosteringDate) {
-  const saved=Array.isArray(state.rosteringHelperPool?.[date])?state.rosteringHelperPool[date]:[],scheduled=scheduleEntriesForDate(date).filter(entry=>isDriverHelperOnlyRole(entry.role)),rows=new Map();
+  const saved=Array.isArray(state.rosteringHelperPool?.[date])?state.rosteringHelperPool[date]:[],scheduled=rosteringScheduleEntriesForDate(date).filter(entry=>isDriverHelperOnlyRole(entry.role)),rows=new Map();
   [...scheduled,...saved].forEach(entry=>{const exact=canonicalDriverName(contactForMorningDriver(entry.name)?.name||entry.name),key=driverIdentityKey(exact);if(key&&!rows.has(key))rows.set(key,{...entry,name:exact,role:entry.role||'Driver Helper'});});
   return [...rows.values()].sort((a,b)=>waveMinutes(a.start)-waveMinutes(b.start)||driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'}));
 }
@@ -1691,7 +1739,7 @@ function syncRosteringHelperShifts(plan=currentRosteringPlan()) {
   if(added)touchRosteringPlan();return added;
 }
 function autoRosterFromPaycom(options={}) {
-  const plan=currentRosteringPlan(),entries=scheduleEntriesForDate(state.rosteringDate).filter(entry=>scheduleRoleGroup(entry.role)==='driver');if(!entries.length){if(!options.silent)toast('Import a PAYCOM schedule for this roster date first','error');return {drivers:0,helpers:0,prioritized:0,remaining:0};}
+  const plan=currentRosteringPlan(),entries=rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>scheduleRoleGroup(entry.role)==='driver');if(!entries.length){if(!options.silent)toast('Import a PAYCOM schedule for this roster date first','error');return {drivers:0,helpers:0,prioritized:0,remaining:0};}
   plan.assignments.forEach(row=>{if(['paycom','auto-roster','auto-helper'].includes(row.source)){row.associate='';row.role='';row.route='';row.source='template';}});
   const helpers=syncRosteringHelperShifts(plan),locked=rosteringAssignedNameKeys(plan),mode=options.mode||state.rosteringAutoMode||'random',eligible=entries.filter(entry=>!isDriverHelperOnlyRole(entry.role)&&rosteringEntryEligibleForRoster(entry)&&!locked.has(driverIdentityKey(entry.name))),drivers=rosteringOrderEntries(eligible,mode,options.random||Math.random),services=plan.services.filter(service=>service.kind!=='helper'&&service.id!=='xl-donations'),open=services.flatMap(service=>{
     let rows=plan.assignments.filter(row=>row.serviceId===service.id);while(rows.length<service.confirmed){rows.push(addRosteringAssignment(service.id));}
@@ -1731,7 +1779,11 @@ function rosteringPlanFromScreenshotText(text='',fileName='Amazon roster screens
   plan.importName=fileName;plan.importedAt=new Date().toISOString();plan.source='screenshot';plan.importKind='screenshot';return plan;
 }
 function applyRosteringScreenshotText(text='',fileName='Amazon roster screenshot') {
-  const plan=rosteringPlanFromScreenshotText(text,fileName);if(!plan)throw new Error('No Amazon confirmed-service or associate roster rows were recognized');state.rosteringPlans[state.rosteringDate]=plan;state.rosteringOpenServices=Object.fromEntries(plan.services.map(service=>[service.id,true]));syncRosteringHelperShifts(plan);touchRosteringPlan();return plan;
+  const plan=rosteringPlanFromScreenshotText(text,fileName);if(!plan)throw new Error('No Amazon confirmed-service or associate roster rows were recognized');
+  const previous=state.rosteringPlans?.[state.rosteringDate];
+  plan.paycomEntries=Array.isArray(previous?.paycomEntries)?previous.paycomEntries.map(entry=>({...entry})):[];
+  plan.paycomImportName=String(previous?.paycomImportName||'');plan.paycomImportedAt=String(previous?.paycomImportedAt||'');
+  state.rosteringPlans[state.rosteringDate]=plan;state.rosteringOpenServices=Object.fromEntries(plan.services.map(service=>[service.id,true]));syncRosteringHelperShifts(plan);touchRosteringPlan();return plan;
 }
 function adjustRosteringConfirmed(serviceId='',delta=0) {
   const plan=currentRosteringPlan(),service=plan.services.find(row=>row.id===serviceId);if(!service)return;
@@ -1763,7 +1815,7 @@ function rosteringServiceHtml(service={},plan=currentRosteringPlan(),duplicates=
 }
 function rosteringUnrosteredBackupGroups(plan=currentRosteringPlan()) {
   const assigned=rosteringAssignedNameKeys(plan),ridealongIdentities=rosteringRidealongIdentityKeys(),seen=new Set(),groups={vto2:[],vto4:[],other:[]};
-  scheduleEntriesForDate(state.rosteringDate).filter(entry=>!isDriverHelperOnlyRole(entry.role)&&!isRidealongRole(entry.role)&&!ridealongIdentities.has(driverIdentityKey(entry.name))&&!isNonRosterableOtherShift(entry.role)&&!rosteringUnavailableToday(entry.name)&&!assigned.has(driverIdentityKey(entry.name))).forEach(entry=>{const identity=driverIdentityKey(entry.name);if(!identity||seen.has(identity))return;seen.add(identity);const category=rosteringPaycomCategoryFor(entry);groups[category==='vto2'?'vto2':category==='vto4'?'vto4':'other'].push(entry);});
+  rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>!isDriverHelperOnlyRole(entry.role)&&!isRidealongRole(entry.role)&&!ridealongIdentities.has(driverIdentityKey(entry.name))&&!isNonRosterableOtherShift(entry.role)&&!rosteringUnavailableToday(entry.name)&&!assigned.has(driverIdentityKey(entry.name))).forEach(entry=>{const identity=driverIdentityKey(entry.name);if(!identity||seen.has(identity))return;seen.add(identity);const category=rosteringPaycomCategoryFor(entry);groups[category==='vto2'?'vto2':category==='vto4'?'vto4':'other'].push(entry);});
   Object.values(groups).forEach(rows=>rows.sort((a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})));return groups;
 }
 function rosteringDriverActionButtons(entry={},isAssigned=false) {
@@ -1781,7 +1833,7 @@ function rosteringBackupEmailText(plan=currentRosteringPlan()) { const groups=ro
 async function copyRosteringBackupEmailText() { const ok=await writeClipboardText(rosteringBackupEmailText());toast(ok?'Grouped backup email text copied':'Clipboard access was blocked',ok?'success':'error'); }
 function rosteringDispatchAssignments() {
   const result={opener1:'',opener2:'',fleet:'',mid:'',closer1:'',closer2:''};let midFallback='';
-  scheduleEntriesForDate(state.rosteringDate).forEach(entry=>{const key=headerKey(entry.role),name=driverDisplayName(entry.name).split(/\s+/)[0]||'';if(!name)return;if(key.includes('firstopeningdispatch'))result.opener1||=name;else if(key.includes('secondopeningdispatch'))result.opener2||=name;else if(key.includes('fleetcoordinator'))result.fleet||=name;else if((key.includes('mid')||key.includes('midshift'))&&key.includes('dispatch'))result.mid||=name;else if(key==='mid'||key==='midshift')midFallback||=name;else if(key.includes('secondcloser')||key.includes('secondclosingdispatch'))result.closer2||=name;else if(key.includes('closingdispatch')||key.includes('firstcloser')||key.includes('firstclosingdispatch'))result.closer1||=name;});
+  rosteringScheduleEntriesForDate(state.rosteringDate).forEach(entry=>{const key=headerKey(entry.role),name=driverDisplayName(entry.name).split(/\s+/)[0]||'';if(!name)return;if(key.includes('firstopeningdispatch'))result.opener1||=name;else if(key.includes('secondopeningdispatch'))result.opener2||=name;else if(key.includes('fleetcoordinator'))result.fleet||=name;else if((key.includes('mid')||key.includes('midshift'))&&key.includes('dispatch'))result.mid||=name;else if(key==='mid'||key==='midshift')midFallback||=name;else if(key.includes('secondcloser')||key.includes('secondclosingdispatch'))result.closer2||=name;else if(key.includes('closingdispatch')||key.includes('firstcloser')||key.includes('firstclosingdispatch'))result.closer1||=name;});
   result.mid||=midFallback;
   return result;
 }
@@ -1846,7 +1898,7 @@ async function copyRosteringEmailTemplateText() {
   toast(ok?'Roster email template copied with formatting':'Clipboard access was blocked',ok?'success':'error');
 }
 function openRosteringDriverSwap(name='') {
-  const entry=scheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(name));
+  const entry=rosteringScheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(name));
   if(!entry||!rosteringEntryEligibleForRoster(entry))return toast('Choose an available Rescue or Delivery Associate shift','error');
   const assignments=currentRosteringPlan().assignments.filter(row=>String(row.associate||'').trim());
   if(!assignments.length)return toast('Roster at least one driver before using Swap','error');
@@ -1855,17 +1907,17 @@ function openRosteringDriverSwap(name='') {
 function applyRosteringDriverSwap() {
   const pending=state.pendingRosteringSwap,assignmentId=document.getElementById('rostering-swap-assignment')?.value||'',target=rosteringAssignment(assignmentId);
   if(!pending||!target)return toast('Choose the rostered driver to swap','error');
-  const entry=scheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(pending.name));
+  const entry=rosteringScheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(pending.name));
   if(!entry||!rosteringEntryEligibleForRoster(entry))return toast('That PAYCOM driver is no longer available','error');
   const incoming=canonicalDriverName(contactForMorningDriver(entry.name)?.name||entry.name),displaced=target.associate;
   if(driverIdentityKey(incoming)===driverIdentityKey(displaced))return toast('Choose a different rostered driver','error');
   target.associate=incoming;target.role=entry.role||'';target.source='paycom-swap';touchRosteringPlan();state.pendingRosteringSwap=null;state.modal=null;persist();render();toast(`${incoming} replaced ${displaced} · ${displaced} is now unrostered`);
 }
 function rosteringPaycomHtml(plan=currentRosteringPlan()) {
-  const assigned=rosteringAssignedNameKeys(plan),seen=new Set(),entries=scheduleEntriesForDate(state.rosteringDate).filter(entry=>{const key=driverIdentityKey(entry.name);if(!key||seen.has(key))return false;seen.add(key);return true;}).sort((a,b)=>Number(assigned.has(driverIdentityKey(b.name)))-Number(assigned.has(driverIdentityKey(a.name)))||driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})),category=state.rosteringPaycomCategory||'all',categories=[['all','All'],['rostered','Rostered'],['unrostered','Unrostered'],['vto4','Delivery Associate'],['vto2','Rescue / VTO 2'],['midshift','Midshift'],['training','Training'],['helper','Helpers'],['other','Other roles']];
+  const assigned=rosteringAssignedNameKeys(plan),seen=new Set(),entries=rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>{const key=driverIdentityKey(entry.name);if(!key||seen.has(key))return false;seen.add(key);return true;}).sort((a,b)=>Number(assigned.has(driverIdentityKey(b.name)))-Number(assigned.has(driverIdentityKey(a.name)))||driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})),category=state.rosteringPaycomCategory||'all',categories=[['all','All'],['rostered','Rostered'],['unrostered','Unrostered'],['vto4','Delivery Associate'],['vto2','Rescue / VTO 2'],['midshift','Midshift'],['training','Training'],['helper','Helpers'],['other','Other roles']];
   const categoryCount=key=>entries.filter(entry=>key==='all'||key==='rostered'&&assigned.has(driverIdentityKey(entry.name))||key==='unrostered'&&!assigned.has(driverIdentityKey(entry.name))||rosteringPaycomCategoryFor(entry)===key).length;
-  const importName=plan.paycomImportName||state.scheduleImportName;
-  return `<section class="card rostering-paycom"><header><div><span class="eyebrow">PAYCOM</span><h2>All Scheduled driver shifts</h2><p>${importName?`Source: ${esc(importName)}`:'Import PAYCOM, then choose Random or ABC before Auto Roster.'}</p></div><div><button class="btn" data-action="schedule-import">${ICONS.upload} Import PAYCOM</button><button class="btn primary" data-action="rostering-auto-roster">Auto Roster scheduled drivers</button></div></header><div class="rostering-paycom-stats"><span><b>${entries.length}</b> scheduled shifts</span><span><b>${entries.filter(entry=>assigned.has(driverIdentityKey(entry.name))).length}</b> rostered</span><span><b>${entries.filter(entry=>rosteringStayHomeCount(entry.name)>0).length}</b> fairness flags</span></div><div class="rostering-paycom-categories" role="group" aria-label="Filter PAYCOM shifts">${categories.map(([key,label])=>`<button type="button" class="${category===key?'active':''}" data-action="rostering-paycom-category" data-rostering-category="${key}">${esc(label)} <b>${categoryCount(key)}</b></button>`).join('')}</div><label class="roster-search rostering-paycom-search">${ICONS.search||'⌕'}<input type="search" data-rostering-paycom-search placeholder="Search names or shift roles" aria-label="Search PAYCOM drivers"></label><div class="rostering-paycom-list">${entries.length?entries.map(entry=>{const isAssigned=assigned.has(driverIdentityKey(entry.name)),entryCategory=rosteringPaycomCategoryFor(entry),visible=category==='all'||category==='rostered'&&isAssigned||category==='unrostered'&&!isAssigned||category===entryCategory,training=entryCategory==='training',haystack=nameKey(`${driverDisplayName(entry.name)} ${entry.role} ${entryCategory}`);return `<div data-rostering-paycom-name="${esc(haystack)}" data-rostering-paycom-category="${entryCategory}" data-rostering-paycom-status="${isAssigned?'rostered':'unrostered'}" class="${isAssigned?'assigned':'unassigned'}" ${visible?'':'hidden'} ${driverProfileAttrs(entry.name)}><span><strong>${esc(driverDisplayName(entry.name))}</strong><small>${esc(entry.role)} · ${esc(entry.start)}${entry.end?`–${esc(entry.end)}`:''}</small></span>${rosteringPaycomFairnessBadge(entry.name)}${driverFlagBadgeHtml(entry.name)}${training?`<button class="btn small" data-action="rostering-focus-training">Training box</button>`:rosteringDriverActionButtons(entry,isAssigned)}</div>`;}).join(''):'<div class="rostering-empty"><strong>No PAYCOM shifts for this date</strong><span>Import CSV, XLS, XLSX, PDF, image, or text.</span></div>'}</div>${rosteringBackupBuilderHtml(plan)}</section>`;
+  const importName=plan.paycomImportName;
+  return `<section class="card rostering-paycom"><header><div><span class="eyebrow">${activeMorningStationCode()} · ROSTERING ONLY</span><h2>All Scheduled driver shifts</h2><p>${importName&&entries.length?`Source: ${esc(importName)}`:importName?'Re-import PAYCOM here to load this roster’s separate shift list.':'Import PAYCOM, then choose Random or ABC before Auto Roster.'}</p><p>For ${esc(formatShortOperationDate(state.rosteringDate))} planning and the roster email only. Opening backups and Morning Sheet assignments stay unchanged.</p></div><div><button class="btn" data-action="schedule-import">${ICONS.upload} Import PAYCOM</button><button class="btn primary" data-action="rostering-auto-roster">Auto Roster scheduled drivers</button></div></header><div class="rostering-paycom-stats"><span><b>${entries.length}</b> scheduled shifts</span><span><b>${entries.filter(entry=>assigned.has(driverIdentityKey(entry.name))).length}</b> rostered</span><span><b>${entries.filter(entry=>rosteringStayHomeCount(entry.name)>0).length}</b> fairness flags</span></div><div class="rostering-paycom-categories" role="group" aria-label="Filter PAYCOM shifts">${categories.map(([key,label])=>`<button type="button" class="${category===key?'active':''}" data-action="rostering-paycom-category" data-rostering-category="${key}">${esc(label)} <b>${categoryCount(key)}</b></button>`).join('')}</div><label class="roster-search rostering-paycom-search">${ICONS.search||'⌕'}<input type="search" data-rostering-paycom-search placeholder="Search names or shift roles" aria-label="Search PAYCOM drivers"></label><div class="rostering-paycom-list">${entries.length?entries.map(entry=>{const isAssigned=assigned.has(driverIdentityKey(entry.name)),entryCategory=rosteringPaycomCategoryFor(entry),visible=category==='all'||category==='rostered'&&isAssigned||category==='unrostered'&&!isAssigned||category===entryCategory,training=entryCategory==='training',haystack=nameKey(`${driverDisplayName(entry.name)} ${entry.role} ${entryCategory}`);return `<div data-rostering-paycom-name="${esc(haystack)}" data-rostering-paycom-category="${entryCategory}" data-rostering-paycom-status="${isAssigned?'rostered':'unrostered'}" class="${isAssigned?'assigned':'unassigned'}" ${visible?'':'hidden'} ${driverProfileAttrs(entry.name)}><span><strong>${esc(driverDisplayName(entry.name))}</strong><small>${esc(entry.role)} · ${esc(entry.start)}${entry.end?`–${esc(entry.end)}`:''}</small></span>${rosteringPaycomFairnessBadge(entry.name)}${driverFlagBadgeHtml(entry.name)}${training?`<button class="btn small" data-action="rostering-focus-training">Training box</button>`:rosteringDriverActionButtons(entry,isAssigned)}</div>`;}).join(''):'<div class="rostering-empty"><strong>No PAYCOM shifts for this date</strong><span>Import CSV, XLS, XLSX, PDF, image, or text.</span></div>'}</div>${rosteringBackupBuilderHtml(plan)}</section>`;
 }
 function rosteringTrainingKey(name='') { return `${state.rosteringDate}|${driverIdentityKey(name)}`; }
 function rosteringManualTrainingKey(name='',kind='ridealong') { return `${state.rosteringDate}|${kind==='trainer'?'trainer':'ridealong'}|${driverIdentityKey(name)}`; }
@@ -1873,7 +1925,7 @@ function rosteringManualTrainingRows(kind='') {
   return Object.entries(state.rosteringManualTraining||{}).filter(([key,row])=>key.startsWith(`${state.rosteringDate}|`)&&(!kind||row.kind===kind)).map(([key,row])=>({...row,key,name:canonicalDriverName(row.name||''),manual:true,date:row.date||state.rosteringDate,role:row.kind==='trainer'?'Manual Trainer':'Manual Ridealong'})).filter(row=>row.name);
 }
 function rosteringRidealongEntries() {
-  const scheduled=[...new Map(scheduleEntriesForDate(state.rosteringDate).filter(entry=>isRidealongRole(entry.role)).map(entry=>[driverIdentityKey(entry.name),{...entry,manual:false}])).values()];
+  const scheduled=[...new Map(rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>isRidealongRole(entry.role)).map(entry=>[driverIdentityKey(entry.name),{...entry,manual:false}])).values()];
   const byIdentity=new Map(scheduled.map(entry=>[driverIdentityKey(entry.name),entry]));
   rosteringManualTrainingRows('ridealong').forEach(row=>{const key=driverIdentityKey(row.name);if(key&&!byIdentity.has(key))byIdentity.set(key,row);});
   return [...byIdentity.values()].sort((a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'}));
@@ -1883,7 +1935,7 @@ function rosteringTrainerUnavailable(name='') {
   return rosteringUnavailableToday(name);
 }
 function rosteringTrainerCandidates() {
-  const scheduled=new Set(scheduleEntriesForDate(state.rosteringDate).map(entry=>driverIdentityKey(entry.name)));
+  const scheduled=new Set(rosteringScheduleEntriesForDate(state.rosteringDate).map(entry=>driverIdentityKey(entry.name)));
   const rows=[...teamDriverRows().filter(driver=>driverHasCapability(driver.name,'trainer')).map(driver=>({name:driver.name,manual:false})),...rosteringManualTrainingRows('trainer')];
   const byIdentity=new Map();rows.forEach(row=>{const name=canonicalDriverName(row.name),key=driverIdentityKey(name);if(key&&!rosteringTrainerUnavailable(name)&&!byIdentity.has(key))byIdentity.set(key,{...row,name});});
   return [...byIdentity.values()].sort((a,b)=>Number(scheduled.has(driverIdentityKey(b.name)))-Number(scheduled.has(driverIdentityKey(a.name)))||Number(b.manual)-Number(a.manual)||rosteringStayHomeCount(a.name)-rosteringStayHomeCount(b.name)||a.name.localeCompare(b.name));
@@ -1908,11 +1960,11 @@ function removeRosteringManualTraining(key='') {
   persistRosteringSlice();renderRosteringContent();toast(`${driverDisplayName(row.name)} removed from manual training`);
 }
 function rosteringTrainingHtml() {
-  const ridealongs=rosteringRidealongEntries(),trainers=rosteringTrainerCandidates(),scheduled=new Set(scheduleEntriesForDate(state.rosteringDate).map(entry=>driverIdentityKey(entry.name))),manualTrainers=rosteringManualTrainingRows('trainer');
+  const ridealongs=rosteringRidealongEntries(),trainers=rosteringTrainerCandidates(),scheduled=new Set(rosteringScheduleEntriesForDate(state.rosteringDate).map(entry=>driverIdentityKey(entry.name))),manualTrainers=rosteringManualTrainingRows('trainer');
   return `<section class="card rostering-training" id="rostering-training-box"><header><div><span class="eyebrow">RIDEALONGS / TRAINING</span><h2>Training matches</h2><p>Every PAYCOM or manual ridealong stays on its own row. Trainers scheduled today are suggested first.</p></div><div class="rostering-training-head-actions"><button class="btn small" data-action="open-rostering-training-add" data-training-kind="ridealong">+ Ridealong</button><button class="btn small" data-action="open-rostering-training-add" data-training-kind="trainer">+ Trainer</button><b>${ridealongs.length}</b></div></header><div class="rostering-training-list">${ridealongs.length?ridealongs.map(entry=>{const key=rosteringTrainingKey(entry.name),saved=state.rosteringTrainingMatches[key]?.trainer||'',eligible=trainers.filter(driver=>driverIdentityKey(driver.name)!==driverIdentityKey(entry.name)),matched=eligible.find(driver=>driverIdentityKey(driver.name)===driverIdentityKey(saved))?.name||'',suggested=eligible.find(driver=>scheduled.has(driverIdentityKey(driver.name)))?.name||eligible[0]?.name||'',stale=Boolean(saved&&!matched);return `<article class="${entry.manual?'manual-training-row':''}"><div><strong>${esc(driverDisplayName(entry.name))}</strong><span>${entry.manual?'Manual ridealong':esc(entry.role)}${entry.start?` · ${esc(entry.start)}`:''}${entry.end?`–${esc(entry.end)}`:''}</span></div><label><span>Trainer</span><select data-rostering-training-match="${esc(entry.name)}"><option value="">Choose trainer…</option>${eligible.map(driver=>`<option value="${esc(driver.name)}" ${driverIdentityKey(matched)===driverIdentityKey(driver.name)?'selected':''}>${esc(driverDisplayName(driver.name))}${scheduled.has(driverIdentityKey(driver.name))?' · scheduled':driver.manual?' · manual':''}</option>`).join('')}</select></label>${matched?`<span class="rostering-trainer-match"><em>✓ ${esc(driverDisplayName(matched))}</em><button class="btn small" data-action="rostering-swap-trainer" data-ridealong-name="${esc(entry.name)}">Swap Trainer</button>${entry.manual?`<button class="btn small ghost" data-action="remove-rostering-manual-training" data-manual-training-key="${esc(entry.key)}">Remove</button>`:''}</span>`:suggested?`<span class="rostering-trainer-match"><button class="btn small" data-action="rostering-use-trainer-suggestion" data-ridealong-name="${esc(entry.name)}" data-trainer-name="${esc(suggested)}">${stale?'Rematch':'Use'} ${esc(driverDisplayName(suggested))}</button>${entry.manual?`<button class="btn small ghost" data-action="remove-rostering-manual-training" data-manual-training-key="${esc(entry.key)}">Remove</button>`:''}</span>`:`<span class="rostering-trainer-match"><em class="needs-trainer">${stale?'Saved trainer unavailable':'Add a trainer'}</em>${entry.manual?`<button class="btn small ghost" data-action="remove-rostering-manual-training" data-manual-training-key="${esc(entry.key)}">Remove</button>`:''}</span>`}</article>`;}).join(''):'<div class="rostering-empty"><strong>No ridealong shifts found</strong><span>Import PAYCOM or use + Ridealong to add one manually.</span></div>'}</div>${manualTrainers.length?`<div class="rostering-manual-trainers"><strong>Manual trainers</strong>${manualTrainers.map(row=>`<span>${esc(driverDisplayName(row.name))}<button data-action="remove-rostering-manual-training" data-manual-training-key="${esc(row.key)}" aria-label="Remove ${esc(row.name)}">×</button></span>`).join('')}</div>`:''}<footer><span>${trainers.length} Trainer${trainers.length===1?'':'s'} available</span><small>Trainer and Helper Driver tags are managed on Drivers & Team. Use + Trainer for one-day ridealong coverage.</small></footer></section>`;
 }
 function rosteringDriverNotesHtml() {
-  const scheduled=[...new Map(scheduleEntriesForDate(state.rosteringDate).filter(entry=>scheduleRoleGroup(entry.role)==='driver').map(entry=>[driverIdentityKey(entry.name),canonicalDriverName(entry.name)])).values()].sort((a,b)=>driverDisplayName(a).localeCompare(driverDisplayName(b),undefined,{sensitivity:'base'}));
+  const scheduled=[...new Map(rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>scheduleRoleGroup(entry.role)==='driver').map(entry=>[driverIdentityKey(entry.name),canonicalDriverName(entry.name)])).values()].sort((a,b)=>driverDisplayName(a).localeCompare(driverDisplayName(b),undefined,{sensitivity:'base'}));
   const flagged=scheduled.filter(name=>driverProfileFlags(name).length).length;
   return `<section class="card rostering-driver-notes"><header><div><span class="eyebrow">DRIVER NOTES</span><h2>Scheduled driver flags</h2><p>Alphabetical PAYCOM list · click any driver to update shared notes.</p></div><b>${flagged}</b></header><label class="roster-search rostering-driver-note-search">${ICONS.search||'⌕'}<input type="search" data-rostering-driver-note-search placeholder="Search driver flags" aria-label="Search driver flags"></label><div class="rostering-driver-note-list">${scheduled.length?scheduled.map(name=>`<div data-rostering-driver-note-name="${esc(nameKey(`${driverDisplayName(name)} ${driverFlagSummary(name).join(' ')}`))}">${driverFlagsCardHtml(name)}</div>`).join(''):'<div class="rostering-empty"><strong>No scheduled drivers</strong><span>Import PAYCOM to build this list.</span></div>'}</div></section>`;
 }
@@ -7660,7 +7712,7 @@ function action(name,el) {
   if (name==='confirm-delete-rostering-service') return confirmDeleteRosteringService();
   if (name==='rostering-fill-paycom') return fillRosteringFromPaycom();
   if (name==='rostering-fill-paycom-service') return fillRosteringFromPaycom(el.dataset.serviceId||'');
-  if (name==='rostering-add-paycom-driver') { const entry=scheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(el.dataset.driverName||''));if(!entry)return toast('PAYCOM driver was not found for this date','error');if(!rosteringEntryEligibleForRoster(entry))return toast('This shift is not an available driver route shift','error');const added=addPaycomEntryToRostering(entry);if(!added)return toast('This driver is already on the roster','error');persistRosteringSlice();renderRosteringContent();return toast(`${entry.name} added to the roster`); }
+  if (name==='rostering-add-paycom-driver') { const entry=rosteringScheduleEntriesForDate(state.rosteringDate).find(row=>driverIdentityKey(row.name)===driverIdentityKey(el.dataset.driverName||''));if(!entry)return toast('PAYCOM driver was not found for this date','error');if(!rosteringEntryEligibleForRoster(entry))return toast('This shift is not an available driver route shift','error');const added=addPaycomEntryToRostering(entry);if(!added)return toast('This driver is already on the roster','error');persistRosteringSlice();renderRosteringContent();return toast(`${entry.name} added to the roster`); }
   if (name==='open-rostering-driver-swap') return openRosteringDriverSwap(el.dataset.driverName||'');
   if (name==='apply-rostering-driver-swap') return applyRosteringDriverSwap();
   if (name==='open-rostering-training-add') return openRosteringTrainingAdd(el.dataset.trainingKind||'ridealong');
@@ -8107,7 +8159,7 @@ function getMorningImportWorker() {
   if(morningImportWorker)return morningImportWorker;
   if(typeof Worker==='undefined'||typeof URL==='undefined'||!window?.location?.href)return null;
   try {
-    const worker=new Worker(new URL('./morning-import-worker.js?v=20260907-dual-station-release-r2',window.location.href),{name:'relayops-morning-import'});
+    const worker=new Worker(new URL('./morning-import-worker.js?v=20260907-rostering-import-isolation-r1',window.location.href),{name:'relayops-morning-import'});
     worker.addEventListener('message',event=>{
       const message=event.data||{},entry=morningImportWorkerPending.get(message.id);if(!entry)return;
       morningImportWorkerPending.delete(message.id);clearTimeout(entry.timer);
@@ -8604,9 +8656,10 @@ function currentScheduleEntries() {
 async function readFiles(files) {
   const incomingFiles=[...files],purposeAtStart=state.importPurpose,isMorningRead=purposeAtStart==='morning',isEquipmentRead=purposeAtStart==='equipment';
   const stationAtStart=activeMorningStationCode(),operationDateAtStart=String(state.morningOperationDate||defaultOperationDate());
+  const scheduleDestinationAtStart=state.scheduleImportDestination||'roster',rosteringDateAtStart=String(state.rosteringDate||defaultOperationDate()),isRosteringRead=purposeAtStart==='rostering-screenshot'||purposeAtStart==='schedule'&&scheduleDestinationAtStart==='rostering';
   const previousMorningFiles=isMorningRead?[...pendingMorningImportFiles]:[];
   const selectedFiles=isMorningRead?mergePendingMorningImportFiles(incomingFiles):incomingFiles,readToken=++morningImportReadToken;
-  const importStillCurrent=()=>readToken===morningImportReadToken&&state.importPurpose===purposeAtStart&&activeMorningStationCode()===stationAtStart&&String(state.morningOperationDate||'')===operationDateAtStart;
+  const importStillCurrent=()=>readToken===morningImportReadToken&&state.importPurpose===purposeAtStart&&activeMorningStationCode()===stationAtStart&&String(state.morningOperationDate||'')===operationDateAtStart&&(!isRosteringRead||String(state.rosteringDate||'')===rosteringDateAtStart)&&(purposeAtStart!=='schedule'||(state.scheduleImportDestination||'roster')===scheduleDestinationAtStart);
   // A newer selection must stop an older screenshot OCR job, not merely ignore
   // its eventual result. Otherwise two Tesseract workers can overlap and make
   // another station's dispatcher tab unresponsive even though state is isolated.
@@ -8665,16 +8718,18 @@ async function readFiles(files) {
     if(purposeAtStart==='schedule') {
       let entries=parsed.flatMap(file=>file.rows?.length?scheduleEntriesFromRows(file.rows,{fileName:file.name}):scheduleEntriesFromText(file.text||''));
       if(!entries.length)throw new Error('no schedule shifts');
-      const destination=state.scheduleImportDestination||'roster',importName=parsed.map(file=>file.name).join(' + ');
+      const destination=scheduleDestinationAtStart,importName=parsed.map(file=>file.name).join(' + ');
       let entryDate=alignScheduleImportDate(entries,destination);
       if(destination==='rostering'&&activeRosteringScreenshotPlan()){entries=pinScheduleEntriesToDate(entries,state.rosteringDate);entryDate=state.rosteringDate;}
-      state.scheduleEntries=mergeScheduleEntriesByImportedDate(state.scheduleEntries,entries);
-      if(destination==='roster')reconcileOpeningPaycomAutoBackups(entries);
-      if(destination==='rostering'){const plan=currentRosteringPlan();plan.paycomImportName=importName;plan.paycomImportedAt=new Date().toISOString();}else state.scheduleImportName=importName;
+      if(destination==='rostering')storeRosteringScheduleEntries(entries,importName);
+      else {
+        state.scheduleEntries=mergeScheduleEntriesByImportedDate(state.scheduleEntries,entries);
+        reconcileOpeningPaycomAutoBackups(entries);state.scheduleImportName=importName;
+      }
       let helperAdded=0;if(destination==='rostering')helperAdded=syncRosteringHelperShifts(currentRosteringPlan());
       state.scheduleImportDestination='';state.importPurpose='morning';state.page=destination==='rostering'?'rostering':'roster';persist();render();
       const dateNote=entryDate?` · ${formatShortOperationDate(entryDate)}`:'';
-      return toast(destination==='rostering'?`${entries.length} PAYCOM shifts imported${dateNote} · ${helperAdded} Helper shift${helperAdded===1?'':'s'} added automatically · Auto Roster is ready`:`${entries.length} Paycom shifts organized for the Opening Roster${dateNote}`);
+      return toast(destination==='rostering'?`${entries.length} PAYCOM shifts imported to Rostering only${dateNote} · ${helperAdded} Helper shift${helperAdded===1?'':'s'} added automatically · Auto Roster is ready`:`${entries.length} Paycom shifts organized for the Opening Roster${dateNote}`);
     }
     if(purposeAtStart==='rostering-screenshot') {
       const text=parsed.map(file=>file.text||rowsToText(file.rows||[])).filter(Boolean).join('\n');if(!text.trim())throw new Error('No readable roster text was found in the screenshot');
