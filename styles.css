@@ -2974,8 +2974,12 @@ body .modal { border:1px solid rgba(255,255,255,.55); border-radius:22px; box-sh
 @media print {
   @page { size:11in 17in; margin:.15in; }
   html,body { width:100%; min-width:0; margin:0!important; padding:0!important; background:#fff!important; }
-  body .sidebar,body .topbar,body .content > *:not(.opening-picklist-print) { display:none!important; }
-  body .app-shell,body .main,body .content { display:block!important; width:auto!important; min-width:0!important; height:auto!important; min-height:0!important; margin:0!important; padding:0!important; overflow:visible!important; }
+  /* Keep the active station's wrapper in the print tree: visibility cannot
+     restore a picklist whose parent has display:none. Hide only its siblings. */
+  body .sidebar,body .topbar,
+  body .content > *:not(.opening-picklist-print):not(.station-workspace-panel),
+  body .station-workspace-panel > *:not(.opening-picklist-print) { display:none!important; }
+  body .app-shell,body .main,body .content,body .station-workspace-panel { display:block!important; width:auto!important; min-width:0!important; height:auto!important; min-height:0!important; margin:0!important; padding:0!important; overflow:visible!important; }
   body * { visibility:hidden!important; }
   .opening-picklist-print,.opening-picklist-print * { visibility:visible!important; }
   .opening-picklist-print { position:absolute!important; left:0!important; top:0!important; width:var(--picklist-print-width,1000px)!important; height:var(--picklist-print-height,1530px)!important; max-width:none!important; max-height:none!important; margin:0!important; padding:0!important; border:0!important; border-radius:0!important; box-shadow:none!important; overflow:hidden!important; break-inside:avoid-page!important; page-break-inside:avoid!important; break-after:avoid-page!important; page-break-after:avoid!important; }

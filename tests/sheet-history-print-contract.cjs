@@ -6,7 +6,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-function appContext() {
+function appContext({ station } = {}) {
   const app = { innerHTML: '' }, fileInput = { addEventListener() {}, click() {} }, storage = new Map();
   const element = () => ({ addEventListener() {}, appendChild() {}, remove() {}, insertAdjacentHTML() {}, classList: { add() {}, remove() {}, toggle() {} }, setAttribute() {}, style: {}, focus() {}, blur() {}, setSelectionRange() {}, click() {}, querySelector() { return null; }, querySelectorAll() { return []; } });
   const context = {
@@ -16,6 +16,7 @@ function appContext() {
     localStorage: { getItem: key => storage.has(key) ? storage.get(key) : null, setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) },
     document: { body: { appendChild() {}, classList: { add() {}, remove() {} } }, documentElement: { style: { setProperty() {}, removeProperty() {} } }, activeElement: null, getElementById: id => id === 'app' ? app : id === 'file-input' ? fileInput : null, querySelector: () => null, querySelectorAll: () => [], createElement: element, addEventListener() {}, removeEventListener() {} }
   };
+  if (station) context.window.RelayOpsStation = { enabled: true, code: station };
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(require.resolve('../app.js'), 'utf8'), context, { filename: 'app.js' });
   vm.runInContext('toast=()=>{}; render=()=>{}; persist=()=>{};', context);
@@ -115,8 +116,26 @@ function testPrintScalingContract() {
   assert(css.includes('transform:scale(var(--picklist-print-scale,.72))') && css.includes('position:absolute!important') && css.includes('height:var(--picklist-print-height,1530px)'), 'Print CSS must remove the unscaled sheet from pagination and apply the measured scale');
 }
 
+function testStationPicklistPrintVisibilityContract() {
+  const css = fs.readFileSync(require.resolve('../styles.css'), 'utf8');
+  const printRules = css.slice(css.indexOf('@media print {'), css.indexOf('/* Admin access control'));
+  assert(!/\.content\s*>\s*\*:not\(\.opening-picklist-print\)\s*\{\s*display\s*:\s*none/.test(printRules), 'Print must not hide the station panel ancestor: visibility:visible cannot undo display:none on a parent');
+  assert(/\.content\s*>\s*\*:not\(\.opening-picklist-print\):not\(\.station-workspace-panel\)/.test(printRules), 'Print must preserve both the legacy direct Picklist and the station workspace panel');
+  assert(/\.station-workspace-panel\s*>\s*\*:not\(\.opening-picklist-print\)/.test(printRules), 'Station controls and roster tools must be hidden without hiding their Picklist sibling');
+  assert(/body\s+\.station-workspace-panel\s*\{[^}]*display:block!important[^}]*overflow:visible!important/.test(printRules), 'The station panel must participate in the print layout reset so it cannot collapse or clip the sheet');
+  for (const station of ['DJT6', 'DUR6']) {
+    const context = appContext({ station });
+    const html = vm.runInContext('rosterPage()', context);
+    const wrapper = html.indexOf('<section id="station-workspace-panel" class="station-workspace-panel"');
+    const article = html.indexOf('<article class="card opening-picklist-print">');
+    assert(wrapper >= 0 && article > wrapper && html.lastIndexOf('</section>') > article, `${station}: exercise the real station-wrapped Picklist, not a legacy direct-child fixture`);
+    assert(html.includes(`${station} Opening Picklist`) && html.includes('class="opening-picklist-sheet"'), `${station}: the print wrapper must contain the selected station's sheet`);
+  }
+}
+
 testPicklistClearUndoRedoAndScope();
 testMorningClearAndRouteUidVehicleClear();
 testEditableWaveFooterAndGooglePayload();
 testPrintScalingContract();
+testStationPicklistPrintVisibilityContract();
 console.log('Sheet history, scoped clear, route UID, and one-page print contract checks passed.');
