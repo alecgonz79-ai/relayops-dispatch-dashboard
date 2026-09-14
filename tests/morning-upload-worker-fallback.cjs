@@ -405,17 +405,18 @@ async function verifyServiceWorkerAssetHardening() {
 
   const version = '20260907-rostering-import-isolation-r1';
   const printVersion = '20260914-station-picklist-print-r1';
+  const iconVersion = '20260914-picklist-equipment-icons-r1';
   assert(new RegExp(`morning-import-worker\\.js\\?v=${version}`).test(appSource),
     'app.js must start the local station dispatch Morning import worker');
-  assert(new RegExp(`app\\.js\\?v=${version}`).test(indexSource)
-    && new RegExp(`service-worker\\.js\\?v=${printVersion}`).test(indexSource)
+  assert(new RegExp(`app\\.js\\?v=${iconVersion}`).test(indexSource)
+    && new RegExp(`service-worker\\.js\\?v=${iconVersion}`).test(indexSource)
     && new RegExp(`styles\\.css\\?v=${printVersion}`).test(indexSource),
-  'The print-only release must register its new stylesheet and service worker while preserving the dispatch app version');
-  assert(/const CACHE='relayops-station-picklist-print-v125'/.test(serviceWorkerSource)
+  'The icon release must register its app and service worker while preserving the print stylesheet');
+  assert(/const CACHE='relayops-picklist-equipment-icons-v126'/.test(serviceWorkerSource)
     && new RegExp(`styles\\.css\\?v=${printVersion}`).test(serviceWorkerSource)
-    && new RegExp(`app\\.js\\?v=${version}`).test(serviceWorkerSource)
+    && new RegExp(`app\\.js\\?v=${iconVersion}`).test(serviceWorkerSource)
     && new RegExp(`morning-import-worker\\.js\\?v=${version}`).test(serviceWorkerSource),
-  'Print release cache v125 must precache the new stylesheet and unchanged dispatch app and Morning worker assets');
+  'Icon release cache v126 must precache the updated app and unchanged print stylesheet and Morning worker');
 }
 
 (async () => {

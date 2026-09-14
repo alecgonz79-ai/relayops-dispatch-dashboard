@@ -11475,11 +11475,32 @@ function buildWaveScreenshot(rows) {
   });
   return canvas.toDataURL('image/jpeg',0.92);
 }
+// Draw equipment symbols directly into the exported canvas. No emoji fonts or
+// external images: the preview and downloaded JPEG share these exact pixels.
+function drawPicklistEquipmentValue(ctx,value,kind,centerX,centerY,cellWidth) {
+  const raw=String(value??'');if(!raw.trim())return;
+  const iconWidth=kind==='van'?24:kind==='phone'?14:12,gap=7,available=cellWidth-16-iconWidth-gap;
+  let text=raw;
+  while(text.length>1&&ctx.measureText(text).width>available)text=text.slice(0,-1);
+  if(text!==raw){while(text.length>1&&ctx.measureText(`${text}…`).width>available)text=text.slice(0,-1);text+='…';}
+  const left=centerX-(iconWidth+gap+ctx.measureText(text).width)/2;
+  ctx.save();ctx.translate(left,centerY-10);ctx.strokeStyle='#263d46';ctx.fillStyle='#263d46';ctx.lineWidth=1.8;ctx.lineJoin='round';ctx.lineCap='round';
+  if(kind==='van'){
+    ctx.beginPath();ctx.moveTo(1,14);ctx.lineTo(1,3);ctx.lineTo(15,3);ctx.lineTo(22,9);ctx.lineTo(23,14);ctx.lineTo(20,14);ctx.moveTo(15,14);ctx.lineTo(9,14);ctx.moveTo(4,14);ctx.lineTo(1,14);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(15,4);ctx.lineTo(15,9);ctx.lineTo(21,9);ctx.stroke();
+    for(const x of [6.5,17.5]){ctx.beginPath();ctx.arc(x,15,2.5,0,Math.PI*2);ctx.stroke();}
+  }else if(kind==='phone'){
+    ctx.strokeRect(1,1,12,18);ctx.beginPath();ctx.moveTo(5,4);ctx.lineTo(9,4);ctx.moveTo(6,16);ctx.lineTo(8,16);ctx.stroke();
+  }else{
+    ctx.beginPath();ctx.moveTo(7,0);ctx.lineTo(0,11);ctx.lineTo(5,11);ctx.lineTo(3,20);ctx.lineTo(12,8);ctx.lineTo(7,8);ctx.closePath();ctx.fill();
+  }
+  ctx.restore();ctx.save();ctx.textAlign='left';ctx.fillText(text,left+iconWidth+gap,centerY);ctx.restore();
+}
 function buildPicklistScreenshot() {
   const columns=[['Wave',170],['Driver / Helper',390],['Route',150],['Staging',210],['Pad',100],['EV / Bag',150],['Device',150],['Portable',150]],rowHeight=48,titleHeight=78,headerHeight=58,separator=12,sections=openingPicklistSections().filter(section=>section.rows.length),width=columns.reduce((sum,column)=>sum+column[1],0),height=titleHeight+headerHeight+sections.reduce((sum,section)=>sum+section.rows.length*rowHeight+separator,0);
   const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);ctx.textBaseline='middle';ctx.fillStyle='#17241d';ctx.fillRect(0,0,width,titleHeight);ctx.fillStyle='#fff';ctx.textAlign='left';ctx.font='bold 29px Arial';ctx.fillText(`${state.organizationName} · ${displayedStationCode()} Opening Picklist`,24,29);ctx.font='bold 20px Arial';ctx.fillStyle='#b8f37a';ctx.fillText(`DATE ${openingPicklistDateText()} · ${displayedStationCode()}`,24,57);
   let x=0;columns.forEach(([label,w])=>{ctx.fillStyle='#303733';ctx.fillRect(x,titleHeight,w,headerHeight);ctx.strokeStyle='#555b57';ctx.strokeRect(x,titleHeight,w,headerHeight);ctx.fillStyle='#fff';ctx.font='bold 18px Arial';ctx.textAlign='center';ctx.fillText(label,x+w/2,titleHeight+headerHeight/2);x+=w;});
-  let y=titleHeight+headerHeight;sections.forEach(section=>{ctx.fillStyle='#050505';ctx.fillRect(0,y,width,separator);y+=separator;const startY=y;section.rows.forEach(row=>{let cx=0;const values=['',row.driver||'',row.route||'',row.staging||'',section.pad||'',routeEquipmentValue(row),row.deviceName||'',row.portable||''];columns.forEach(([label,w],index)=>{ctx.fillStyle='#fff';ctx.fillRect(cx,y,w,rowHeight);ctx.strokeStyle='#656b67';ctx.strokeRect(cx,y,w,rowHeight);if(index){ctx.fillStyle='#111';ctx.font=index===1?'bold 17px Arial':'bold 18px Arial';ctx.textAlign='center';const raw=String(values[index]||''),max=Math.max(3,Math.floor(w/10));ctx.fillText(raw.length>max?`${raw.slice(0,max-1)}…`:raw,cx+w/2,y+rowHeight/2);}cx+=w;});y+=rowHeight;});const groupHeight=section.rows.length*rowHeight;ctx.fillStyle='#fff';ctx.fillRect(0,startY,columns[0][1],groupHeight);ctx.strokeStyle='#656b67';ctx.strokeRect(0,startY,columns[0][1],groupHeight);ctx.fillStyle='#090b09';ctx.textAlign='center';ctx.font='bold 25px Arial';ctx.fillText(section.label,columns[0][1]/2,startY+groupHeight/2-(section.hasTime?16:0));if(section.hasTime){ctx.font='bold 18px Arial';ctx.fillText(openingPicklistTime(section),columns[0][1]/2,startY+groupHeight/2+18);}});
+  let y=titleHeight+headerHeight;sections.forEach(section=>{ctx.fillStyle='#050505';ctx.fillRect(0,y,width,separator);y+=separator;const startY=y;section.rows.forEach(row=>{let cx=0;const values=['',row.driver||'',row.route||'',row.staging||'',section.pad||'',routeEquipmentValue(row),row.deviceName||'',row.portable||''];columns.forEach(([label,w],index)=>{ctx.fillStyle='#fff';ctx.fillRect(cx,y,w,rowHeight);ctx.strokeStyle='#656b67';ctx.strokeRect(cx,y,w,rowHeight);if(index){ctx.fillStyle='#111';ctx.font=index===1?'bold 17px Arial':'bold 18px Arial';ctx.textAlign='center';const raw=String(values[index]||''),max=Math.max(3,Math.floor(w/10));if(index>=5)drawPicklistEquipmentValue(ctx,raw,['van','phone','bolt'][index-5],cx+w/2,y+rowHeight/2,w);else ctx.fillText(raw.length>max?`${raw.slice(0,max-1)}…`:raw,cx+w/2,y+rowHeight/2);}cx+=w;});y+=rowHeight;});const groupHeight=section.rows.length*rowHeight;ctx.fillStyle='#fff';ctx.fillRect(0,startY,columns[0][1],groupHeight);ctx.strokeStyle='#656b67';ctx.strokeRect(0,startY,columns[0][1],groupHeight);ctx.fillStyle='#090b09';ctx.textAlign='center';ctx.font='bold 25px Arial';ctx.fillText(section.label,columns[0][1]/2,startY+groupHeight/2-(section.hasTime?16:0));if(section.hasTime){ctx.font='bold 18px Arial';ctx.fillText(openingPicklistTime(section),columns[0][1]/2,startY+groupHeight/2+18);}});
   return canvas.toDataURL('image/jpeg',.94);
 }
 function previewWaveScreenshot(){const rows=filteredMorningRows();if(!rows.length)return toast('No wave rows are visible to capture','error');state.screenshotKind='morning';state.screenshotPreview=buildWaveScreenshot(rows);state.modal='screenshot';render();}

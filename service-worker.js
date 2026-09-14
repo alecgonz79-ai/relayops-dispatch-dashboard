@@ -1,4 +1,4 @@
-const CACHE='relayops-station-picklist-print-v125';
+const CACHE='relayops-picklist-equipment-icons-v126';
 const CORE=[
   './',
   './index.html',
@@ -6,7 +6,7 @@ const CORE=[
   './macos-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260726-fleet-warning-r1',
-  './app.js?v=20260907-rostering-import-isolation-r1',
+  './app.js?v=20260914-picklist-equipment-icons-r1',
   './dur6-google-transfer.js?v=20260907-rostering-import-isolation-r1',
   './morning-import-worker.js?v=20260907-rostering-import-isolation-r1',
   './supabase/config.js?v=20260907-rostering-import-isolation-r1',
