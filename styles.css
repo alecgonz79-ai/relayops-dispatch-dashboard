@@ -3569,3 +3569,10 @@ body .sidebar-stations .sidebar-station:hover{border-color:#d0e3ef}
 body .sidebar-stations .sidebar-station:focus-visible{outline:2px solid #fff;outline-offset:3px}
 @media screen and (min-width:761px) and (max-width:1180px){body .sidebar-stations .sidebar-station{padding:7px;gap:0}body .sidebar-stations .sidebar-station-indicator{display:none}}
 @media(prefers-reduced-motion:reduce){body .sidebar-stations .sidebar-station{transition:none}}
+/* Additional PAYCOM roles remain visible without becoming route assignments. */
+.rostering-unlisted-shifts { padding:18px; margin:0 0 16px; border:2px solid #bd8b26; border-radius:14px; background:#fff4d9; color:#493716; }
+.rostering-unlisted-shifts header { display:flex; justify-content:space-between; align-items:center; gap:12px; font-size:18px; }
+.rostering-unlisted-shifts header b { padding:4px 10px; border-radius:8px; background:#725219; color:#fff; }
+.rostering-unlisted-shifts p { font-size:13px; line-height:1.5; }
+.rostering-unlisted-shifts ul { margin:12px 0 0; padding-left:20px; }
+.rostering-unlisted-shifts li { padding:6px 0; line-height:1.45; overflow-wrap:anywhere; }

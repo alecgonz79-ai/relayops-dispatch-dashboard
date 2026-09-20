@@ -1,0 +1,20 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const source=fs.readFileSync(require.resolve('../app.js'),'utf8');
+const slice=(from,to)=>source.slice(source.indexOf('function '+from),source.indexOf('function '+to));
+const rows=['Modified Duty','Closing Training','Opening Training','Fleet Training','Training Day 1','Ride Along','Low Performer Ride Along','Unrecognized Task','Delivery Associate','Rescue','Driver Helper','First Opening Dispatch','Midshift'].map((role,i)=>({name:'Person '+i,role,start:'10:00 AM',end:'6:00 PM'}));
+rows.push({...rows[0]},{...rows[0],start:'7:00 PM'},{name:'<Test>',role:'Unknown <role>',start:'',end:''});
+const context={state:{rosteringDate:'2026-09-20'},headerKey:v=>String(v).toLowerCase().replace(/[^a-z0-9]/g,''),driverIdentityKey:v=>v.toLowerCase(),driverDisplayName:v=>v,rosteringScheduleEntriesForDate:date=>date==='2026-09-20'?rows:[],rosteringUnavailableToday:()=>false,esc:v=>String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')};
+vm.createContext(context);
+vm.runInContext(slice('scheduleRoleGroup','isDriverHelperOnlyRole')+slice('rosteringUnlistedShiftEntries','rosteringEmailTemplateHtml'),context);
+const entries=vm.runInContext('rosteringUnlistedShiftEntries()',context);
+assert.equal(entries.length,10); // Eight special/unknown roles, second shift, escaped-name fixture.
+for(const role of rows.slice(0,8).map(r=>r.role))assert(entries.some(e=>e.role===role),role);
+assert(!entries.some(e=>['Delivery Associate','Rescue','Driver Helper','First Opening Dispatch','Midshift'].includes(e.role)));
+assert.equal(entries.filter(e=>e.name==='Person 0').length,2,'Keep distinct shifts, collapse exact duplicates');
+const html=vm.runInContext('rosteringUnlistedShiftsHtml()',context);
+assert(html.includes('&lt;Test&gt;')&&!html.includes('<Test>'));
+assert(html.includes('10:00 AM'));
+context.state.rosteringDate='2026-09-21';assert.equal(vm.runInContext('rosteringUnlistedShiftEntries().length',context),0);
+assert(source.includes("'Unlisted shifts:',\n    ...rosteringUnlistedShiftLines()"));
+assert(source.includes('${rosteringUnlistedShiftsHtml()}<section'));
+console.log('Unlisted shifts: named roles, unknown fallback, distinct shifts, date isolation and escaping passed');

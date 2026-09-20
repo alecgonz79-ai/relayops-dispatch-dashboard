@@ -1882,6 +1882,9 @@ function rosteringEmailTemplateText(plan=currentRosteringPlan()) {
     'VTO (4)',
     names(groups.vto4),
     '',
+    'Unlisted shifts:',
+    ...rosteringUnlistedShiftLines(),
+    '',
     line,
     'Allocated:',
     '',
@@ -1889,7 +1892,28 @@ function rosteringEmailTemplateText(plan=currentRosteringPlan()) {
     `${counts.total} Total`
   ].join('\n');
 }
+function rosteringUnlistedShiftEntries() {
+  const seen=new Set();
+  return rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>{
+    const role=String(entry.role||''),key=headerKey(role),group=scheduleRoleGroup(role);
+    const special=/training|trainee|newhire|ridealong|modifiedduty/.test(key);
+    if(!special&&(group==='driver'||group==='dispatch'||/^(mid|midshift)$/.test(key)))return false;
+    const identity=JSON.stringify([driverIdentityKey(entry.name),key,entry.start||'',entry.end||'']);
+    if(seen.has(identity))return false;
+    seen.add(identity);return true;
+  }).sort((a,b)=>String(a.role||'').localeCompare(String(b.role||''))||driverDisplayName(a.name).localeCompare(driverDisplayName(b.name)));
+}
+function rosteringUnlistedShiftLines() {
+  return rosteringUnlistedShiftEntries().map(entry=>`${driverDisplayName(entry.name)} · ${entry.role||'Unspecified role'}${entry.start||entry.end?` · ${entry.start||'?'}–${entry.end||'?'}`:''}${rosteringUnavailableToday(entry.name)?' · Unavailable — review status':''}`);
+}
+function rosteringUnlistedShiftsHtml() {
+  const lines=rosteringUnlistedShiftLines();
+  return `<section class="rostering-unlisted-shifts" aria-label="Unlisted shifts"><header><strong>Unlisted shifts</strong><b>${lines.length}</b></header><p>Review every additional role before sending. Training and ride-along shifts are included here with their shift labels; they may also appear in the training summary.</p>${lines.length?`<ul>${lines.map(line=>`<li>${esc(line)}</li>`).join('')}</ul>`:'<p>No additional shifts for this roster date.</p>'}</section>`;
+}
 function rosteringEmailTemplateHtml(plan=currentRosteringPlan()) {
+  return rosteringEmailTemplateCoreHtml(plan).replace('<div><strong>Allocated:</strong></div>',`<div><strong>Unlisted shifts:</strong></div>${rosteringUnlistedShiftLines().map(line=>`<div>${esc(line)}</div>`).join('')}<div><br></div><div><strong>Allocated:</strong></div>`);
+}
+function rosteringEmailTemplateCoreHtml(plan=currentRosteringPlan()) {
   const dispatch=rosteringDispatchAssignments(),helpers=rosteringEmailHelperRows(plan),ridealongs=rosteringEmailRidealongRows(plan),groups=rosteringUnrosteredBackupGroups(plan),counts=rosteringAllocatedCounts(plan),line='---------------------------------------------------',row=value=>`<div>${value||'<br>'}</div>`,names=rows=>rows.map(item=>row(esc(rosteringEmailBackupName(item)))).join('');
   return `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.45;color:#111">${row(`<strong>Opener:</strong> <strong>1st</strong> ${esc(dispatch.opener1||'')} /<strong>2nd</strong> ${esc(dispatch.opener2||'')} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <strong>Fleet:</strong> ${esc(dispatch.fleet||'')}`)}${row('')}${row(`<strong>MidShift:</strong> ${esc(dispatch.mid||'')}`)}${row('')}${row(`<strong>1st Closer:</strong> ${esc(dispatch.closer1||'')} &nbsp;&nbsp; <strong>2nd Closer:</strong> ${esc(dispatch.closer2||'')}`)}${row('')}${row(line)}${row('<strong>Helpers:</strong>')}${row('')}${helpers.map(name=>row(esc(name))).join('')}${row('')}${row('<strong>Ride Alongs:</strong>')}${row('')}${ridealongs.map(name=>row(esc(name))).join('')}${row('')}${row(line)}${row('')}${row('<strong>Back Ups:</strong>')}${row('')}${row('<strong><u>VTO (2)</u></strong>')}${names(groups.vto2)}${row('')}${row('<strong><u>VTO (4)</u></strong>')}${names(groups.vto4)}${row('')}${row(line)}${row('<strong>Allocated:</strong>')}${row('')}${row(`<strong><em>${counts.rivian} RIV</em></strong>`)}${row(`<strong><em>${counts.total} Total</em></strong>`)}</div>`;
 }
@@ -1970,7 +1994,7 @@ function rosteringDriverNotesHtml() {
 }
 function rosteringEmailHandoffHtml(plan=currentRosteringPlan()) {
   const text=rosteringEmailTemplateText(plan),counts=rosteringAllocatedCounts(plan);
-  return `<section class="card rostering-email-handoff"><header><div><span class="eyebrow">EMAIL HANDOFF</span><h2>Opening roster email</h2><p>Copy this into the route-total email after reviewing Helpers, Ride Alongs, backups, and counts.</p></div><button class="btn small primary" data-action="copy-rostering-email-template">${ICONS.copy} Copy formatted text</button></header><div class="rostering-email-preview" aria-label="Formatted opening roster email template">${rosteringEmailTemplateHtml(plan)}</div><textarea class="sr-only" readonly aria-label="Plain opening roster email template">${esc(text)}</textarea><footer><span>${counts.rivian} RIV · ${counts.total} total allocated</span><small>Bold headings and bold-italic totals are preserved when pasted into email.</small></footer></section>`;
+  return `${rosteringUnlistedShiftsHtml()}<section class="card rostering-email-handoff"><header><div><span class="eyebrow">EMAIL HANDOFF</span><h2>Opening roster email</h2><p>Copy this into the route-total email after reviewing Helpers, Ride Alongs, unlisted shifts, backups, and counts.</p></div><button class="btn small primary" data-action="copy-rostering-email-template">${ICONS.copy} Copy formatted text</button></header><div class="rostering-email-preview" aria-label="Formatted opening roster email template">${rosteringEmailTemplateHtml(plan)}</div><textarea class="sr-only" readonly aria-label="Plain opening roster email template">${esc(text)}</textarea><footer><span>${counts.rivian} RIV · ${counts.total} total allocated</span><small>Bold headings and bold-italic totals are preserved when pasted into email.</small></footer></section>`;
 }
 function rosteringHelperShiftsHtml(plan=currentRosteringPlan()) {
   const helpers=rosteringHelperPoolRows(),assigned=rosteringAssignedNameKeys(plan),hasHelperService=plan.services.some(service=>service.kind==='helper');
