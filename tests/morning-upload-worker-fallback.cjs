@@ -404,15 +404,15 @@ async function verifyServiceWorkerAssetHardening() {
     'The service worker must cache the exact versioned URL only after response.ok');
 
   const version = '20260907-rostering-import-isolation-r1';
-  const printVersion = '20260914-station-picklist-print-r1';
-  const iconVersion = '20260914-picklist-equipment-icons-r1';
+  const printVersion = '20260919-unlisted-shifts-r1';
+  const iconVersion = '20260926-gas-route-exclusion-r1';
   assert(new RegExp(`morning-import-worker\\.js\\?v=${version}`).test(appSource),
     'app.js must start the local station dispatch Morning import worker');
   assert(new RegExp(`app\\.js\\?v=${iconVersion}`).test(indexSource)
     && new RegExp(`service-worker\\.js\\?v=${iconVersion}`).test(indexSource)
     && new RegExp(`styles\\.css\\?v=${printVersion}`).test(indexSource),
   'The icon release must register its app and service worker while preserving the print stylesheet');
-  assert(/const CACHE='relayops-picklist-equipment-icons-v126'/.test(serviceWorkerSource)
+  assert(/const CACHE='relayops-gas-route-exclusion-v128'/.test(serviceWorkerSource)
     && new RegExp(`styles\\.css\\?v=${printVersion}`).test(serviceWorkerSource)
     && new RegExp(`app\\.js\\?v=${iconVersion}`).test(serviceWorkerSource)
     && new RegExp(`morning-import-worker\\.js\\?v=${version}`).test(serviceWorkerSource),

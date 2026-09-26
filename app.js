@@ -9681,8 +9681,16 @@ function assignOperationalVehicles() {
   if(!pool.length)return noVerifiedSafeFleetToast();
   assignAutomaticVehiclePool(targets,pool,'verified safe EVs');
 }
+function isGasOnlyMorningService(route={}) {
+  const service=String(route.service||'').replace(/[\u2010-\u2015\u2212]/g,'-').replace(/\s+/g,' ').trim();
+  return /^Standard Parcel\s*-\s*(?:Extra Large|Large|Small) Van\s*-\s*US(?:\s*-|$)/i.test(service);
+}
 function assignBagReadyVehicles() {
-  const targets=morningAssignmentTargets().filter(route=>!isExplicitHelperMorningRoute(route));if(!targets.length)return toast('No visible driver rows to assign','error');
+  // Skip gas-only services before reserving/clearing equipment or consuming EVs.
+  // Existing manual gas assignments remain untouched in either station.
+  const visible=morningAssignmentTargets().filter(route=>!isExplicitHelperMorningRoute(route));
+  const targets=visible.filter(route=>!isGasOnlyMorningService(route));
+  if(!targets.length)return toast(visible.length?'Gas-only routes skipped · enter gas vans manually. No assignments changed.':'No visible driver rows to assign','error');
   if(!dailyFleetHealthLoaded())return openMissingDailyFleetHealth();
   const safePool=automaticFleetVehiclePool({electricOnly:true,requireDevice:false});
   if(!safePool.length)return noVerifiedSafeFleetToast();

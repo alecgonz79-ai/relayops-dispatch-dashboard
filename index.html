@@ -24,7 +24,7 @@
     <script src="station-workspace.js?v=20260907-rostering-import-isolation-r1"></script>
     <script src="cloud-sync.js?v=20260907-rostering-import-isolation-r1"></script>
     <script src="dur6-google-transfer.js?v=20260907-rostering-import-isolation-r1"></script>
-    <script src="app.js?v=20260919-unlisted-shifts-r1"></script>
+    <script src="app.js?v=20260926-gas-route-exclusion-r1"></script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -35,7 +35,7 @@
             window.location.reload();
           });
           navigator.serviceWorker
-            .register('./service-worker.js?v=20260919-unlisted-shifts-r1', { updateViaCache: 'none' })
+            .register('./service-worker.js?v=20260926-gas-route-exclusion-r1', { updateViaCache: 'none' })
             .then(registration => registration.update())
             .catch(() => {});
         });
