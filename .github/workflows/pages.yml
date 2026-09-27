@@ -58,6 +58,7 @@ jobs:
         run: |
           mkdir -p _site/assets _site/vendor _site/supabase _site/google-sheets
           cp index.html 404.html .nojekyll app.js station-workspace.js cloud-sync.js morning-import-worker.js dur6-google-transfer.js service-worker.js styles.css macos-preview.css tahoe-preview.css tahoe-midnight-preview.css _site/
+          cp apple-design-preview.js apple-design-preview.css apple-scroll-cards.js apple-scroll-cards.css _site/
           cp assets/rivian-prime-van.png _site/assets/
           cp vendor/jszip.min.js _site/vendor/
           cp supabase/config.js _site/supabase/

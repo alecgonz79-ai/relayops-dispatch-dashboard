@@ -59,7 +59,7 @@ const checks = `
   if (!importTemplateProofHtml.includes('Import → Template proof') || !importTemplateProofHtml.includes('DSP filter') || !importTemplateProofHtml.includes('2 LLOL kept · 1 excluded') || !importTemplateProofHtml.includes('Earliest wave') || !importTemplateProofHtml.includes('11:15 AM') || !importTemplateProofHtml.includes('First driver names') || !importTemplateProofHtml.includes('Template rows')) throw new Error('Morning import-to-template proof missing after DAYOFOPSPLAN import');
   state.modal = 'import';
   const uploadHtml = modal();
-  if (!uploadHtml.includes('Make my DJT6 morning sheet')) throw new Error('Station-specific simple upload heading missing');
+  if (!uploadHtml.includes('Morning File Import') || !uploadHtml.includes('ROUTE_DJT6')) throw new Error('Morning File Import heading or station-specific files missing');
   if (!uploadHtml.includes('Create my operations sheet')) throw new Error('Simple upload action missing');
   if (!uploadHtml.includes('CX route matching')) throw new Error('CX matching explanation missing');
   action('open-morning-diagnostics',{});

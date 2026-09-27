@@ -1,0 +1,33 @@
+const fs=require('fs');
+const vm=require('vm');
+const assert=require('assert');
+// Reuse the existing full-app harness without running its scenarios.
+const harness=fs.readFileSync(require.resolve('./opening-roster-auto-backups.cjs'),'utf8').split('function testAutomaticVtoDestinations')[0];
+const context=new Function('require',`${harness.replace('console, Intl,', "location:{hostname:'localhost',search:'',href:'http://localhost:4173/'}, console, Intl,")}\nreturn appContext();`)(require);
+vm.runInContext(`
+state.dspCode='LLOL';state.morningOperationDate='2026-09-26';
+state.callOffDriverKeys={'2026-09-26|alex driver':{name:'Alex Driver'},'2026-09-25|old driver':{name:'Old Driver'}};
+state.scheduleEntries=[{date:'9/26/2026',name:'Alex Driver',role:'Delivery Associate',start:'10:00 AM'}];
+state.morningRoutes=[];state.scheduleDriverMarks={};state.scheduleBackupRecords={};state.scheduleStayHome={};state.scheduleReductions={};state.scheduleHelpers={};
+globalThis.results={match:morningCalloffConflict('  ALEX DRIVER  '),paired:morningCalloffConflict('Other Person + Alex Driver'),old:morningCalloffConflict('Old Driver'),empty:morningCalloffConflict(''),other:morningCalloffConflict('Alex Other'),backups:openingPicklistBackupRows(),available:currentBackupDriverRows(),html:picklistVtoDriverCell('vto4',0,null,'Alex Driver')};
+state.morningRoutes=[{dsp:'LLOL',route:'CX1',driver:'Alex Driver'}];
+results.routedBackups=openingPicklistBackupRows();
+importPreflight=()=>({ready:true});morningImportCandidates=()=>[{row:['LLOL','CX1','Alex Driver','10:00 AM'],route:'CX1'}];
+state.importedFile={name:'Morning.csv',headers:['DSP','Route','Driver','Wave'],rows:[['LLOL','CX1','Alex Driver','10:00 AM']]};
+applyImport();results.afterImport=morningCalloffConflict(state.morningRoutes[0].driver);
+state.callOffDriverKeys={};results.otherStation=morningCalloffConflict('Alex Driver');
+`,context);
+const r=context.results;
+assert(r.match&&r.paired&&!r.old&&!r.empty&&!r.other&&!r.otherStation);
+assert(r.afterImport,'Call-off recorded before import must survive route creation');
+assert.equal(r.backups.length,1);assert(r.backups[0].calloffConflict);
+assert.equal(r.available.length,0);assert.equal(r.routedBackups.length,0);
+assert(r.html.includes('calloff-conflict-cell')&&r.html.includes('CALLED OFF'));
+assert(!r.html.includes('open-vto-route-swap'));
+const source=fs.readFileSync(require.resolve('../app.js'),'utf8');
+const modal=source.split('const source=`<div class="drop-zone')[1].split('function ')[0];
+assert(modal.includes('Morning File Import'));
+assert(!modal.includes('Slack Import')&&!modal.includes('Cortex Import'));
+assert(source.includes("field==='driver'&&morningCalloffConflict(value)"));
+console.log('Morning import and call-off conflict tests passed');
+

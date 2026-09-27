@@ -1,0 +1,20 @@
+/* Weather-style collapsing edge: the next card replaces the outgoing one.
+   Original layout heights and scroll distance are preserved; never hide data. */
+@media screen and (prefers-reduced-motion: no-preference) {
+  html.apple-design-preview:not(.apple-motion-paused) .weather-scroll-card.weather-collapsing {
+    clip-path: inset(var(--weather-cut,0px) 0 0 round 18px);
+  }
+  html.apple-design-preview:not(.apple-motion-paused) .weather-collapsing > .weather-card-heading {
+    position: relative;
+    z-index: 2;
+    translate: 0 var(--weather-head-y,0px);
+    background: var(--weather-card-surface,#dce8ee) !important;
+    border-radius: 16px 16px 0 0;
+    transition: none !important;
+  }
+}
+@media print {
+  .weather-scroll-card { clip-path: none !important; }
+  .weather-card-heading { translate: none !important; }
+}
+
