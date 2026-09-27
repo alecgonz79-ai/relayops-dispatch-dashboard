@@ -87,7 +87,9 @@ function testVisiblePageInventory() {
   assert(inventory.parking.actions.includes('parking-choose-file') && inventory.parking.actions.includes('copy-parking-list'), 'Van Parking lost import/copy controls');
   assert(inventory.inbox.actions.includes('whiparound-import') && inventory.inbox.actions.includes('send-whiparound-to-sheets'), 'Whiparound lost import/send controls');
   assert(inventory.performance.actions.length >= 2 && inventory.performance.unhandled.length === 0, 'Performance launcher should expose only working shared-shell controls');
-  assert(inventory.coaching.unhandled.length === 0 && ['coach-all','template','coach'].every(action=>inventory.coaching.actions.includes(action)), 'Coaching must expose only implemented queue, template, and review controls');
+  assert(inventory.coaching.unhandled.length === 0 && !['coach-all','template','coach'].some(action=>inventory.coaching.actions.includes(action)), 'Call Off Tracker must not expose legacy coaching actions');
+  vm.runInContext('globalThis.__trackerHtml=coachingPage();', context);
+  assert(context.__trackerHtml.includes('https://callofftracker.pplx.app/#/') && context.__trackerHtml.includes('rel="noopener noreferrer"'), 'Call Off Tracker must provide a safe working external link');
   assert(inventory.inventory.unhandled.length === 0 && ['inventory-log','add-item','inventory-adjust','inventory-edit'].every(action=>inventory.inventory.actions.includes(action)), 'Inventory must expose only implemented add/edit/adjust/log controls');
 
   // An inert button looks interactive but cannot dispatch anything. Release

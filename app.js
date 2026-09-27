@@ -58,7 +58,7 @@ const NAV = [
     ['team','Drivers & team','users'], ['fleet','Fleet Health','battery'], ['parking','Van Parking','parking'], ['inbox','Whiparound','whiparound'], ['inventory','Inventory','box']
   ]},
   { section: 'Improve', items: [
-    ['performance','Performance','chart'], ['coaching','Coaching','coach','6'], ['reports','Reports & export','report'], ['achat','A-Chat','achat'], ['admin','Admin access','settings','',true]
+    ['performance','Performance','chart'], ['coaching','Call Off Tracker','calendar'], ['reports','Reports & export','report'], ['achat','A-Chat','achat'], ['admin','Admin access','settings','',true]
   ]}
 ];
 
@@ -68,6 +68,7 @@ const DISPATCHER_SHARE_NOTE = 'Use this exact full link. GitHub Pages will show 
 const FLEET_PARKING_SHARE_URL = `${DISPATCHER_SHARE_URL}?view=fleet`;
 const FLEET_PARKING_SHARE_TEXT = `LLOL Fleet Health + Van Parking\n${FLEET_PARKING_SHARE_URL}`;
 const AMAZON_FLEET_PORTAL_URL = 'https://logistics.amazon.com/fleet-management/#vehicles';
+const CALL_OFF_TRACKER_URL = 'https://callofftracker.pplx.app/#/';
 const AMAZON_WORKFORCE_ASSOCIATES_URL = 'https://logistics.amazon.com/workforce?pageId=da_console_associates&station=DJT6&companyId=ab7228f0-51de-4c53-98f3-7d3c3da46724&tabId=da-console-associates-tab';
 const FLEETOS_PORTAL_URL = 'https://business.rivian.com/vehicles/tracker';
 const FIXED_FLEET_NAMES = Object.freeze({
@@ -1359,7 +1360,7 @@ function sidebar() {
   return `<aside class="sidebar" id="sidebar">
     <div class="brand"><div class="brand-mark"></div><div class="brand-copy"><div class="brand-name">RelayOps</div><div class="brand-sub">Dispatch command</div></div></div>
     ${sidebarStationSelectorHtml()}
-    <nav>${NAV.map(group=>({...group,items:group.items})).filter(group=>group.items.length).map(group => `<div class="side-section"><div class="side-label">${group.section}</div>${group.items.map(([id,label,icon,count]) => `<button class="nav-item ${state.page===id?'active':''}" data-page="${id}" aria-label="${label}">${ICONS[icon]}<span>${label}</span>${id==='admin'&&!hasOwnerAdminAccess()?'<b class="nav-count">🔒</b>':count?`<b class="nav-count">${count}</b>`:''}</button>`).join('')}</div>`).join('')}</nav>
+    <nav>${NAV.map(group=>({...group,items:group.items})).filter(group=>group.items.length).map(group => `<div class="side-section"><div class="side-label">${group.section}</div>${group.items.map(([id,label,icon,count]) => id==='coaching'?`<a class="nav-item" href="${CALL_OFF_TRACKER_URL}" target="_blank" rel="noopener noreferrer" aria-label="Call Off Tracker (opens in a new tab)" style="text-decoration:none">${ICONS[icon]}<span>${label}</span></a>`:`<button class="nav-item ${state.page===id?'active':''}" data-page="${id}" aria-label="${label}">${ICONS[icon]}<span>${label}</span>${id==='admin'&&!hasOwnerAdminAccess()?'<b class="nav-count">🔒</b>':count?`<b class="nav-count">${count}</b>`:''}</button>`).join('')}</div>`).join('')}</nav>
     <div class="side-bottom"><div class="user-card"><div class="avatar">RO</div><div class="user-copy"><strong>RelayOps team</strong><span>${hasOwnerAdminAccess()?'Admin PIN unlocked':'Shared link access'}</span></div><div class="role-tag">${hasOwnerAdminAccess()?'ADMIN':'LIVE'}</div></div></div>
   </aside>`;
 }
@@ -1377,7 +1378,7 @@ const pageInfo = {
   rostering:['Rostering','Build confirmed services, catch unfilled shifts, and rotate hours fairly'],
   live:['Device and Portable Sheet','Type today’s assignments, then match them to every EV on the Morning Sheet'], team:['Drivers & team','Availability, compliance, recognition, and history'],
   fleet:['Fleet Health','Electric and gas vehicle status, battery, and operational health'], parking:['Van Parking','Interactive parking map for closing and morning dispatch'], performance:['Performance','Scorecard trends and driver-level focus areas'],
-  coaching:['Coaching','Turn scorecard signals into consistent follow-through'], checklists:['Checklists','Repeatable opening, load-out, and closeout routines'],
+  coaching:['Call Off Tracker','Open the call-off tracking website'], checklists:['Checklists','Repeatable opening, load-out, and closeout routines'],
   inbox:['Whiparound','Pre-trip and post-trip DVIR completion checker'], inventory:['Inventory','Devices, uniforms, supplies, and assignments'],
   reports:['Reports & export','Google Sheets-ready operational data'], achat:['A-Chat','A small dispatcher helper for quick operational answers'], admin:['Admin access','People, permissions, connections, and audit history']
 };
@@ -3690,6 +3691,9 @@ function coachingMessage(op,record={}) {
     .replaceAll('{focus}',record.focus||op.focus).replaceAll('{notes}',notes).trim();
 }
 function coachingPage() {
+  return `<article class="card"><div class="card-head"><div class="card-title"><h2>Call Off Tracker</h2><p>The tracker opens in a separate tab. Your dashboard stays open here.</p></div><a class="btn primary" href="${CALL_OFF_TRACKER_URL}" target="_blank" rel="noopener noreferrer">Open Call Off Tracker</a></div></article>`;
+}
+function legacyCoachingPage() {
   state.coachingQueue=normalizeCoachingQueue(state.coachingQueue);
   const directory=new Set(teamDriverRows().map(driver=>driverIdentityKey(driver.name))),opportunities=COACHING_OPPORTUNITIES.filter(op=>directory.has(driverIdentityKey(op.driver)));
   const queued=state.coachingQueue.length,reviewed=state.coachingQueue.filter(record=>['reviewed','ready-manual','sent-manual'].includes(record.status)).length,sent=state.coachingQueue.filter(record=>record.status==='sent-manual').length;
