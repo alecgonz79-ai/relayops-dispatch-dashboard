@@ -33,4 +33,3 @@ for(const split of [false,true]){
   assert(p.assignments.every(r=>!r.associate),'collapsed blocks must not invent driver names');
 }
 console.log('All supplied screenshot block types preserve names, counts, separate identities and helper roles');
-

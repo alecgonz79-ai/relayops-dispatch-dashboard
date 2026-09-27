@@ -98,4 +98,3 @@
     document.body.prepend(controls);
   }, { once: true });
 })();
-

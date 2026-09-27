@@ -30,4 +30,3 @@ assert(modal.includes('Morning File Import'));
 assert(!modal.includes('Slack Import')&&!modal.includes('Cortex Import'));
 assert(source.includes("field==='driver'&&morningCalloffConflict(value)"));
 console.log('Morning import and call-off conflict tests passed');
-
