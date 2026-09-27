@@ -5285,19 +5285,28 @@ function saveOpeningPicklistCell(el) {
   if(!route)return;
   pushSheetHistory(`Edit ${field} on ${route.route||sectionKey}`,'both');
   const clean=field==='driver'?canonicalDriverEntryValue(value):['route','staging','ev','deviceName','portable'].includes(field)?value.toUpperCase():value;
-  if(field==='ev'){const parts=clean.split('/').map(part=>part.trim()).filter(Boolean);route.ev=parts[0]||'';if(parts[1])route.helperBag=parts[1];}
+  if(field==='ev'){const parts=clean.split('/').map(part=>part.trim()).filter(Boolean);route.ev=parts[0]||'';if(parts[1])route.helperBag=parts[1];else delete route.helperBag;}
   else if(field==='driver'){
     const previous=route.driver||'',adhoc=sectionKey==='adhoc'||isExplicitAdhocMorningRoute(route);
     applyDriverCellEdit(route,value,'Driver cleared in Picklist',{kind:adhoc?'adhoc':''});
     if(adhoc)syncManualAdhocRosterAssignment(route,previous,route.driver||'');
   }
   else route[field]=clean;
-  if(field==='ev'){fillEquipmentForRoute(route);setTimeout(()=>warnDuplicateMorningEquipment(route.ev),0);}
+  if(field==='ev'){
+    fillEquipmentForRoute(route);
+    el.parentElement?.querySelectorAll('[data-picklist-edit]').forEach(cell=>{
+      const siblingField=cell.dataset.picklistField;
+      if(!['deviceName','portable'].includes(siblingField))return;
+      cell.textContent=route[siblingField]||'';
+      cell.dataset.picklistOriginal=cell.textContent;
+    });
+    setTimeout(()=>warnDuplicateMorningEquipment(route.ev),0);
+  }
   if(field==='deviceName'||field==='portable')recalculateEquipmentReadiness();
   persist();
 }
 function handleOpeningPicklistKeydown(event,el) {
-  if(event.key==='Enter'){event.preventDefault();saveOpeningPicklistCell(el);state.editMode=false;render();return toast('Picklist and Morning Sheet updated · editing off');}
+  if(event.key==='Enter'){event.preventDefault();saveOpeningPicklistCell(el);operationalGridFocusRequestVersion++;el.blur();return toast('Picklist and Morning Sheet updated');}
   if(event.key==='Escape'){event.preventDefault();el.blur();}
 }
 function renameOpeningPicklistCalloff(key='',name='') {
@@ -5975,7 +5984,9 @@ function render() {
   invalidateOperationalAlertGroups();
   invalidateNavigationPageCache();
   const anchored=Date.now()<operationalInteractionUntil&&operationalScrollAnchor?.memory?.page===state.page;
-  const scrollMemory=anchored?operationalScrollAnchor.memory:captureUiScrollMemory(),scrollVersion=operationalScrollAnchor?.version||0;deferredCloudRender=false;
+  // A dispatcher may have scrolled since the last cell interaction. Preserve
+  // the current viewport, never an earlier interaction's stale position.
+  const scrollMemory=captureUiScrollMemory(),scrollVersion=operationalScrollAnchor?.version||0;deferredCloudRender=false;
   const previouslyOpen=modalWasOpen;
   if(PARKING_ONLY_VIEW&&!FLEET_TEAM_ALLOWED_PAGES.has(state.page))state.page=FLEET_TEAM_START_PAGE;
   if(state.page==='admin'&&!hasOwnerAdminAccess()){state.page='dashboard';state.modal='admin-pin';}
@@ -6928,8 +6939,8 @@ function saveMorningEditCell(el) {
       fillEquipmentForRoute(route);
       const rowEl=el.closest('tr');
       const deviceCell=rowEl?.querySelector('[data-edit-field="deviceName"]'), portableCell=rowEl?.querySelector('[data-edit-field="portable"]');
-      if(deviceCell)deviceCell.textContent=route.deviceName||'';
-      if(portableCell)portableCell.textContent=route.portable||'';
+      if(deviceCell){deviceCell.textContent=route.deviceName||'';deviceCell.dataset.editOriginal=deviceCell.textContent;}
+      if(portableCell){portableCell.textContent=route.portable||'';portableCell.dataset.editOriginal=portableCell.textContent;}
       setTimeout(()=>warnDuplicateMorningEquipment(route.ev),0);
     }
     if(field==='deviceName'||field==='portable')recalculateEquipmentReadiness();
@@ -7120,6 +7131,12 @@ function preservePageScrollAfterCellFocus(el,pageX=window.scrollX||0,pageY=windo
   window.requestAnimationFrame?.(restore);
 }
 let sheetFocusRequestVersion=0;
+function prepareVanAssignmentEditor(editor) {
+  if((editor?.dataset?.editField||editor?.dataset?.picklistField)!=='ev'||!editor.isContentEditable)return false;
+  // Hidden issue popovers are not editable assignment text.
+  editor.textContent=morningEditableCellValue(editor);
+  return true;
+}
 function focusSheetCell(el) {
   if(!el)return;
   const version=++sheetFocusRequestVersion,pageX=window.scrollX||0,pageY=window.scrollY||0,pane=operationalScrollPaneFor(el),paneTop=pane?.scrollTop||0,paneLeft=pane?.scrollLeft||0;
@@ -7131,10 +7148,11 @@ function focusSheetCell(el) {
     const active=document.activeElement;
     if(!initial&&active&&active!==document.body&&active!==el)return;
     const refocusing=active!==el;
+    const replaceVan=initial&&refocusing&&prepareVanAssignmentEditor(el);
     el.focus({preventScroll:true});
     if(refocusing&&el.isContentEditable){
       const range=document.createRange(),selection=window.getSelection();
-      if(!el.contains?.(selection.anchorNode)){range.selectNodeContents(el);range.collapse(false);selection.removeAllRanges();selection.addRange(range);}
+      if(replaceVan||!el.contains?.(selection.anchorNode)){range.selectNodeContents(el);if(!replaceVan)range.collapse(false);selection.removeAllRanges();selection.addRange(range);}
     }
     if(pane?.isConnected){pane.scrollTop=paneTop;pane.scrollLeft=paneLeft;}
     if(Math.abs((window.scrollX||0)-pageX)>1||Math.abs((window.scrollY||0)-pageY)>1)window.scrollTo(pageX,pageY);
@@ -7261,9 +7279,9 @@ function handleSheetKeydown(e,el) {
   if(e.key==='Enter') {
     e.preventDefault();
     saveMorningEditCell(el);
-    state.editMode=false;
-    render();
-    return toast('Cell saved · editing off');
+    sheetFocusRequestVersion++;
+    el.blur();
+    return toast('Cell saved');
   }
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab'].includes(e.key)) {
     e.preventDefault();
@@ -7302,11 +7320,12 @@ function focusOperationalGridEditor(editor) {
     const active=document.activeElement;
     if(!initial&&active&&active!==document.body&&active!==editor)return;
     const refocusing=active!==editor;
+    const replaceVan=initial&&refocusing&&prepareVanAssignmentEditor(editor);
     editor.focus?.({preventScroll:true});
     if(editor.matches?.('input:not([type="date"]),textarea')){
       if(refocusing)editor.select?.();
     } else if(refocusing&&editor.isContentEditable&&window.getSelection&&document.createRange){
-      const range=document.createRange(),selection=window.getSelection();if(!editor.contains?.(selection.anchorNode)){range.selectNodeContents(editor);range.collapse(false);selection.removeAllRanges();selection.addRange(range);}
+      const range=document.createRange(),selection=window.getSelection();if(replaceVan||!editor.contains?.(selection.anchorNode)){range.selectNodeContents(editor);if(!replaceVan)range.collapse(false);selection.removeAllRanges();selection.addRange(range);}
     }
     if(pane?.isConnected){pane.scrollTop=paneTop;pane.scrollLeft=paneLeft;}
     if(Math.abs((window.scrollX||0)-pageX)>1||Math.abs((window.scrollY||0)-pageY)>1)window.scrollTo(pageX,pageY);

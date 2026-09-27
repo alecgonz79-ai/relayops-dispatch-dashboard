@@ -12,7 +12,7 @@ const context={
   setTimeout:fn=>callbacks.push(fn),Date,Boolean,
   sheetFocusRequestVersion:0,operationalGridFocusRequestVersion:0,operationalScrollAnchorVersion:0,operationalInteractionUntil:0,
   activeParkingEditId:'',deferredCloudRender:false,sheetSelection:{},
-  operationalScrollPaneFor:()=>null,captureOperationalEditScrollLock(){},selectSheetCell(){},applySheetSelection(){},keepOperationalEditorVisible(){},rememberOperationalScrollAnchor(){},showDriverNameSuggestions(){},
+  operationalScrollPaneFor:()=>null,captureOperationalEditScrollLock(){},selectSheetCell(){},applySheetSelection(){},keepOperationalEditorVisible(){},rememberOperationalScrollAnchor(){},showDriverNameSuggestions(){},prepareVanAssignmentEditor:()=>false,
   captureUiScrollMemory:()=>({page:'morning'}),restoreUiScrollMemory(){},render(){renders++;},
   selectedSheetTsv:()=>{copied++;return 'Full cell';},selectedSheetHtml:()=>'<table></table>',selectedSheetCells:()=>[{}],toast(){},sheetCopyZone:()=>true
 };
