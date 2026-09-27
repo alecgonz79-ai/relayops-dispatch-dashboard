@@ -5875,6 +5875,7 @@ function captureOperationalEditScrollLock(editor=document.activeElement,preferre
   operationalEditScrollLock={
     editor,
     pane,
+    expiresAt:Date.now()+180,
     pageX:Number.isFinite(preferred.pageX)?preferred.pageX:window.scrollX||0,
     pageY:Number.isFinite(preferred.pageY)?preferred.pageY:window.scrollY||0,
     paneLeft:Number.isFinite(preferred.paneLeft)?preferred.paneLeft:pane?.scrollLeft||0,
@@ -5894,22 +5895,21 @@ function markOperationalUserScrollIntent(event) {
   if(!active?.matches?.(operationalGridEditorSelector))return;
   const pointerPane=event?.target?.closest?.(OPERATIONAL_SCROLL_PANE_SELECTOR);
   if(event?.type==='pointerdown'&&(!pointerPane||event.target?.closest?.(OPERATIONAL_INTERACTION_SELECTOR)))return;
+  // Wheel/touch/scrollbar movement belongs to the dispatcher. Cancel pending
+  // focus repairs as well as the old lock so neither can rewind that movement.
+  sheetFocusRequestVersion++;
+  operationalGridFocusRequestVersion++;
+  operationalEditScrollLock=null;
   operationalUserScrollUntil=Date.now()+(event?.type==='pointerdown'?2500:850);
-  const capture=()=>{
-    if(Date.now()>operationalUserScrollUntil||document.activeElement!==active)return;
-    captureOperationalEditScrollLock(active);
-  };
-  window.requestAnimationFrame?.(capture);
-  setTimeout(capture,80);
 }
 function handleOperationalScrollGuard() {
   const lock=operationalEditScrollLock,active=document.activeElement;
-  if(!lock||lock.editor?.isConnected===false||active!==lock.editor||!activeOperationalEditor()){
+  if(!lock||Date.now()>=lock.expiresAt||lock.editor?.isConnected===false||active!==lock.editor||!activeOperationalEditor()){
     operationalEditScrollLock=null;
     return;
   }
   if(Date.now()<operationalUserScrollUntil){
-    window.requestAnimationFrame?.(()=>{if(document.activeElement===lock.editor)captureOperationalEditScrollLock(lock.editor);});
+    operationalEditScrollLock=null;
     return;
   }
   if(operationalScrollGuardRestoring)return;
