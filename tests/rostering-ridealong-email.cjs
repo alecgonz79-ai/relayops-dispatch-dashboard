@@ -135,8 +135,8 @@ function run() {
   assert(/<strong>Ride[ -]?Alongs?:<\/strong>/i.test(result.emailHtml), 'Formatted email template must contain a separate bold Ride Alongs heading');
   const emailLines=result.emailText.split('\n'),helperIndex=emailLines.indexOf('Helpers:'),ridealongIndex=emailLines.findIndex(line=>/^Ride[ -]?Alongs?:\s*$/i.test(line)),backupIndex=emailLines.indexOf('Back Ups:'),dividerAfterRidealong=emailLines.findIndex((line,index)=>index>ridealongIndex&&/^-{10,}$/.test(line));
   const ridealongSection=emailLines.slice(ridealongIndex+1,dividerAfterRidealong).filter(Boolean);
-  assert(helperIndex>=0&&helperIndex<ridealongIndex&&ridealongIndex<dividerAfterRidealong&&dividerAfterRidealong<backupIndex, 'Email sections must stay ordered as Helpers, Ride Alongs, then Back Ups');
-  assert(JSON.stringify(ridealongSection)===JSON.stringify(expected.map(row=>row[0])), 'The plain Ride Alongs email section must contain only the unique ride-along names');
+  assert(helperIndex>=0&&ridealongIndex<dividerAfterRidealong&&dividerAfterRidealong<backupIndex, 'Special sections precede backups, with Helpers retained when present');
+  assert(JSON.stringify(emailLines.slice(ridealongIndex+1,emailLines.indexOf('Amazon Training:')).filter(Boolean))===JSON.stringify(expected.map(row=>row[0]+'>Trainer needed')), 'Ride Along email rows show trainee and an explicit missing-trainer marker');
   expected.forEach(([name])=>{
     assert(occurrences(result.emailText.split('Unlisted shifts:')[0],name) === 1, name+' must appear exactly once in the plain Ride Alongs summary');
     assert(occurrences(result.emailHtml.split('<strong>Unlisted shifts:</strong>')[0],name) === 1, name+' must appear exactly once in the formatted Ride Alongs summary');
@@ -164,10 +164,10 @@ function run() {
   `, context);
   const precedence=context.__precedence;
   assert(precedence.helpers.join(',')==='Helper Wins' && occurrences(precedence.text.split('Unlisted shifts:')[0],'Helper Wins')===1, 'An assigned Helper must remain only in Helpers in the allocation summary');
-  assert(precedence.ridealongs.join(',')==='Available Ridealong', 'Unavailable or assigned-Helper identities must not appear in the Ride Alongs email block');
+  assert(precedence.ridealongs.join(',')==='Available Ridealong>Trainer needed', 'Unavailable or assigned-Helper identities are excluded from ridealong pairings');
   assert(!precedence.text.split('Unlisted shifts:')[0].includes('Unavailable Ridealong') && !precedence.html.split('<strong>Unlisted shifts:</strong>')[0].includes('Unavailable Ridealong'), 'Unavailable shifts must not leak into the available allocation summary');
-  assert(precedence.text.includes('Unavailable — review status'), 'Unlisted shifts must flag unavailable people rather than silently omit their imported shift');
-  assert(precedence.counts.rivian===0 && precedence.counts.total===0, 'Ride Along and Helper shifts, including a stale manual Ride Along route assignment, changed allocated route totals');
+  assert(!precedence.text.includes('Unavailable — review status'), 'Email contains names and pairings, without status/time suffixes');
+  assert(precedence.counts.rivian===44&&precedence.counts.total===46, 'Allocated reflects confirmed service positions, not the number of currently named drivers');
 
   console.log('PAYCOM ride-along Rostering and separate email-section regression passed');
 }

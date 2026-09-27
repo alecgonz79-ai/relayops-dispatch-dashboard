@@ -1609,7 +1609,7 @@ function rosteringPlanFromScreenshot(plan={}) { return plan?.source==='screensho
 function normalizeRosteringPlan(plan={}) {
   // Only imported or manually added confirmed services belong to this date.
   // An empty day (including a deliberately cleared plan) must stay empty.
-  const services=(Array.isArray(plan.services)?plan.services:[]).map((service,index)=>({id:String(service.id||`service-${index+1}`),name:String(service.name||`Custom service ${index+1}`),confirmed:Math.max(0,Math.trunc(Number(service.confirmed)||0)),kind:service.kind==='helper'?'helper':'driver',defaultTime:String(service.defaultTime||'11:15 AM')}));
+  const services=(Array.isArray(plan.services)?plan.services:[]).map((service,index)=>({id:String(service.id||`service-${index+1}`),name:String(service.name||`Custom service ${index+1}`),confirmed:Math.max(0,Math.trunc(Number(service.confirmed)||0)),screenshotRostered:Number.isInteger(service.screenshotRostered)&&service.screenshotRostered>=0?service.screenshotRostered:null,kind:service.kind==='helper'?'helper':'driver',defaultTime:String(service.defaultTime||'11:15 AM')}));
   const serviceIds=new Set(services.map(service=>service.id)),assignments=(Array.isArray(plan.assignments)?plan.assignments:[]).filter(row=>row&&serviceIds.has(row.serviceId)).map(row=>({id:String(row.id||rosteringId()),serviceId:String(row.serviceId),start:String(row.start||'11:15 AM'),associate:String(row.associate||''),route:String(row.route||''),role:String(row.role||''),source:String(row.source||'manual')}));
   if(!assignments.length)services.forEach(service=>rosteringTimeBlueprint(service,service.confirmed).forEach(start=>assignments.push({id:rosteringId(),serviceId:service.id,start,associate:'',route:'',role:'',source:'template'})));
   return {services,assignments,updatedAt:String(plan.updatedAt||''),importName:String(plan.importName||''),importedAt:String(plan.importedAt||''),paycomEntries:Array.isArray(plan.paycomEntries)?plan.paycomEntries.filter(entry=>entry&&typeof entry==='object').map(entry=>({...entry})):[],paycomImportName:String(plan.paycomImportName||''),paycomImportedAt:String(plan.paycomImportedAt||''),source:String(plan.source||''),importKind:String(plan.importKind||''),_normalized:true};
@@ -1760,31 +1760,42 @@ function rosteringScreenshotAssociate(line='') {
   return canonicalDriverName(clean.replace(/\s+/g,' '));
 }
 function rosteringPlanFromScreenshotText(text='',fileName='Amazon roster screenshot') {
-  const lines=String(text||'').replace(/\r/g,'').split('\n').map(line=>line.replace(/[✓✔]/g,'').replace(/\s+/g,' ').trim()).filter(Boolean),services=[],serviceMap=new Map(),rows=[];let activeServiceId='',pendingTime='',lastRow=null;
-  const ensureService=(rawName='',confirmedValue=null)=>{const template=rosteringScreenshotServiceTemplate(rawName),name=template?.name||rawName.replace(/^[+\-!\s]+/,'').trim(),id=template?.id||`screenshot-${headerKey(name).slice(0,48)||services.length+1}`;let service=serviceMap.get(id);if(!service){service={id,name,confirmed:Math.max(0,Number.isFinite(confirmedValue)?confirmedValue:(template?.confirmed||0)),kind:template?.kind||(/helper\s*:\s*helper/i.test(rawName)?'helper':'driver'),defaultTime:template?.defaultTime||'11:15 AM'};serviceMap.set(id,service);services.push(service);}else if(Number.isFinite(confirmedValue))service.confirmed=Math.max(service.confirmed,confirmedValue);return service;};
+  const lines=String(text||'').replace(/\r/g,'').split('\n').map(line=>line.replace(/[✓✔]/g,'').replace(/\s+/g,' ').trim()).filter(Boolean),services=[],rows=[];let active=null,pendingTime='',lastRow=null;
+  const metric=(text,label)=>{const match=text.match(new RegExp(`(?:\\b(\\d+)\\s*${label}\\b|\\b${label}\\s*:?\\s*(\\d+)\\b)`,'i'));return match?Number(match[1]??match[2]):null;};
+  const isCount=line=>/^(?:\d+\s*(?:Confirmed|Rostered)|(?:Confirmed|Rostered)\s*:?\s*\d+)/i.test(line);
+  const isHeader=(line,index)=>{
+    if(isCount(line)||/^(?:Confirmed Services?|Confirmed Routes|Bulk Import Associates|START TIME|Associate Name|Filter Start Time|Total|Roster|Services?)\b/i.test(line)||/\b\d{1,2}:\d{2}\b/.test(line))return false;
+    return /Standard Parcel/i.test(line)||Boolean(rosteringScreenshotServiceTemplate(line))||/^(?:SWA|Pilot|Pilot\s*\/\s*Rescue|Rescue)(?:\b|\s|$)/i.test(line)||metric(line,'Confirmed')!==null||isCount(lines[index+1]||'')&&/[a-z]/i.test(line);
+  };
   lines.forEach((line,index)=>{
-    if(/Standard Parcel/i.test(line)||rosteringScreenshotServiceTemplate(line)){const nearby=lines.slice(index,index+3).join(' '),nameMatch=line.match(/(Standard Parcel[\s\S]*?)(?=\s+\d+\s*Confirmed|$)/i),confirmedMatch=nearby.match(/(\d+)\s*Confirmed/i),service=ensureService(nameMatch?.[1]||line,confirmedMatch?Number(confirmedMatch[1]):null);activeServiceId=service.id;pendingTime='';lastRow=null;return;}
+    if(isHeader(line,index)){
+      const name=line.replace(/\s+(?:\d+\s*(?:Confirmed|Rostered)|(?:Confirmed|Rostered)\s*:?\s*\d+).*$/i,'').replace(/^[+\-!\s]+/,'').trim();
+      const template=rosteringScreenshotServiceTemplate(name),base=template?.id||`screenshot-${headerKey(name)}`,existing=services.find(service=>service.name===name);
+      active=existing||{id:services.some(service=>service.id===base)?`${base}-${services.length+1}`:base,name,confirmed:0,kind:template?.kind||(/helper\s*:\s*helper/i.test(name)?'helper':'driver'),defaultTime:template?.defaultTime||'11:15 AM',screenshotRostered:null};
+      if(!existing)services.push(active);
+      const confirmed=metric(line,'Confirmed'),rostered=metric(line,'Rostered');if(confirmed!==null){active.confirmed=confirmed;active.explicitConfirmed=true;}if(rostered!==null)active.screenshotRostered=rostered;
+      pendingTime='';lastRow=null;return;
+    }
+    if(active){const confirmed=metric(line,'Confirmed'),rostered=metric(line,'Rostered');if(confirmed!==null||rostered!==null){if(confirmed!==null){active.confirmed=confirmed;active.explicitConfirmed=true;}if(rostered!==null)active.screenshotRostered=rostered;return;}}
+    if(/^(?:Confirmed|Rostered)(?:\s*Services?)?$/i.test(line)&&/^\d+$/.test(lines[index+1]||'')&&active){const count=Number(lines[index+1]);if(/^Confirmed/i.test(line)){active.confirmed=count;active.explicitConfirmed=true;}else active.screenshotRostered=count;return;}
     const routeMatch=line.match(/\b(CX\s*\d+|No Route Generated)\b/i);if(lastRow&&routeMatch&&!/\b\d{1,2}:\d{2}\b/.test(line)){lastRow.route=/^CX/i.test(routeMatch[1])?routeMatch[1].replace(/\s+/g,'').toUpperCase():'No Route Generated';return;}
     const timeMatch=line.match(/\b(\d{1,2}:\d{2}\s*(?:AM|PM))\b/i);if(timeMatch)pendingTime=normalizeTimeDisplay(timeMatch[1]);
-    if(/(?:Confirmed Services?|Confirmed Routes|Bulk Import Associates|START TIME|Associate Name|Filter Start Time)/i.test(line))return;
-    const associate=rosteringScreenshotAssociate(line);if(!associate)return;
-    const serviceId=activeServiceId||rosteringScreenshotServiceTemplate('Standard Parcel Electric - Rivian MEDIUM')?.id||'rivian-medium';
-    if(serviceId==='xl-donations')return;
-    const row={serviceId,start:pendingTime||'11:15 AM',associate,route:routeMatch?/^CX/i.test(routeMatch[1])?routeMatch[1].replace(/\s+/g,'').toUpperCase():'No Route Generated':'',role:'',source:'screenshot'};rows.push(row);lastRow=row;
+    if(/(?:Confirmed Services?|Confirmed Routes|Bulk Import Associates|START TIME|Associate Name|Filter Start Time|Rostered)/i.test(line))return;
+    const associate=rosteringScreenshotAssociate(line);if(!associate||!active)return;
+    const row={serviceId:active.id,start:pendingTime||active.defaultTime,associate,route:routeMatch?/^CX/i.test(routeMatch[1])?routeMatch[1].replace(/\s+/g,'').toUpperCase():'No Route Generated':'',role:'',source:'screenshot'};rows.push(row);lastRow=row;
   });
-  if(!services.length&&rows.length){const fallback=rosteringScreenshotServiceTemplate('Standard Parcel Electric - Rivian MEDIUM');services.push({...fallback});serviceMap.set(fallback.id,services[0]);rows.forEach(row=>row.serviceId=fallback.id);}
   if(!services.length)return null;
-  services.forEach(service=>{const rostered=rows.filter(row=>row.serviceId===service.id).length;if(!service.confirmed)service.confirmed=rostered||1;});
+  services.forEach(service=>{const visible=rows.filter(row=>row.serviceId===service.id).length;if(!service.explicitConfirmed)service.confirmed=visible;});
   const plan=normalizeRosteringPlan({services,assignments:[],importName:fileName,importedAt:new Date().toISOString(),source:'screenshot',importKind:'screenshot'});
-  rows.forEach(imported=>{const service=plan.services.find(row=>row.id===imported.serviceId)||plan.services[0];const confirmedRows=plan.assignments.filter(row=>row.serviceId===service.id).slice(0,service.confirmed);let target=confirmedRows.find(row=>!row.associate&&normalizeTimeDisplay(row.start)===normalizeTimeDisplay(imported.start))||confirmedRows.find(row=>!row.associate);if(!target)return;Object.assign(target,imported,{serviceId:service.id});});
-  plan.importName=fileName;plan.importedAt=new Date().toISOString();plan.source='screenshot';plan.importKind='screenshot';return plan;
+  rows.forEach(imported=>{const service=plan.services.find(row=>row.id===imported.serviceId),slots=plan.assignments.filter(row=>row.serviceId===service.id);let target=slots.find(row=>!row.associate&&normalizeTimeDisplay(row.start)===normalizeTimeDisplay(imported.start))||slots.find(row=>!row.associate);if(!target){target={id:rosteringId(),...imported};plan.assignments.push(target);}Object.assign(target,imported);});
+  return plan;
 }
 function applyRosteringScreenshotText(text='',fileName='Amazon roster screenshot') {
   const plan=rosteringPlanFromScreenshotText(text,fileName);if(!plan)throw new Error('No Amazon confirmed-service or associate roster rows were recognized');
   const previous=state.rosteringPlans?.[state.rosteringDate];
   plan.paycomEntries=Array.isArray(previous?.paycomEntries)?previous.paycomEntries.map(entry=>({...entry})):[];
   plan.paycomImportName=String(previous?.paycomImportName||'');plan.paycomImportedAt=String(previous?.paycomImportedAt||'');
-  state.rosteringPlans[state.rosteringDate]=plan;state.rosteringOpenServices=Object.fromEntries(plan.services.map(service=>[service.id,true]));syncRosteringHelperShifts(plan);touchRosteringPlan();return plan;
+  state.rosteringPlans[state.rosteringDate]=plan;state.rosteringOpenServices=Object.fromEntries(plan.services.map(service=>[service.id,true]));touchRosteringPlan();return plan;
 }
 function adjustRosteringConfirmed(serviceId='',delta=0) {
   const plan=currentRosteringPlan(),service=plan.services.find(row=>row.id===serviceId);if(!service)return;
@@ -1812,7 +1823,7 @@ function rosteringAssignmentRowHtml(row={},duplicates=new Set()) {
 function rosteringServiceHtml(service={},plan=currentRosteringPlan(),duplicates=new Set()) {
   const rows=rosteringServiceRows(service.id),rostered=rows.filter(row=>row.associate).length,missing=Math.max(0,service.confirmed-rostered),open=Boolean(state.rosteringOpenServices[service.id]),complete=missing===0&&rostered===service.confirmed;
   const paycomFill=service.id==='xl-donations'?'<span class="rostering-manual-note">Manual assignment only</span>':`<button class="btn small" data-action="rostering-fill-paycom-service" data-service-id="${esc(service.id)}">Bulk Import Associates</button>`;
-  return `<article class="rostering-service ${open?'open':''} ${complete?'complete':missing?'needs-drivers':'overstaffed'}" data-rostering-service-card="${esc(service.id)}"><button class="rostering-service-bar" data-action="rostering-toggle-service" data-service-id="${esc(service.id)}" aria-expanded="${open}"><i>${complete?'✓':'!'}</i><b>${open?'−':'+'}</b><strong>${esc(service.name)}</strong><span><em>${service.confirmed}</em> Confirmed</span><span><em>${rostered}</em> Rostered</span>${missing?`<mark>${missing} Missing</mark>`:''}</button><div class="rostering-service-body" ${open?'':'hidden'}><div class="rostering-route-summary"><header><div><span class="eyebrow">CONFIRMED ROUTES</span><h3>Start-time plan</h3></div><div class="rostering-service-actions">${paycomFill}<button class="btn small danger-soft" data-action="rostering-clear-service" data-service-id="${esc(service.id)}">Clear roster</button><button class="btn small danger" data-action="request-delete-rostering-service" data-service-id="${esc(service.id)}">${ICONS.trash} Delete block</button></div></header><div class="rostering-time-head"><span>START TIME</span><b>CONFIRMED</b></div>${rosteringTimeSummary(rows,service.confirmed)}</div><div class="rostering-service-customize"><label><span>Service name</span><input data-rostering-service="${esc(service.id)}" data-rostering-service-field="name" value="${esc(service.name)}"></label><label><span>Type</span><select data-rostering-service="${esc(service.id)}" data-rostering-service-field="kind"><option value="driver" ${service.kind==='driver'?'selected':''}>Driver</option><option value="helper" ${service.kind==='helper'?'selected':''}>Helper</option></select></label><div><span>Confirmed positions</span><p><button data-action="rostering-adjust-confirmed" data-service-id="${esc(service.id)}" data-delta="-1">−</button><b>${service.confirmed}</b><button data-action="rostering-adjust-confirmed" data-service-id="${esc(service.id)}" data-delta="1">+</button></p></div></div><div class="rostering-associate-table"><div class="rostering-associate-head"><span>START TIME</span><span>ASSOCIATE</span><span>ROUTE</span><span>FAIR ROTATION</span><span></span></div><div class="rostering-associate-list">${rows.map(row=>rosteringAssignmentRowHtml(row,duplicates)).join('')}</div><button class="btn small rostering-add-shift" data-action="rostering-add-shift" data-service-id="${esc(service.id)}">+ Add confirmed shift</button></div></div></article>`;
+  return `<article class="rostering-service ${open?'open':''} ${complete?'complete':missing?'needs-drivers':'overstaffed'}" data-rostering-service-card="${esc(service.id)}"><button class="rostering-service-bar" data-action="rostering-toggle-service" data-service-id="${esc(service.id)}" aria-expanded="${open}"><i>${complete?'✓':'!'}</i><b>${open?'−':'+'}</b><strong>${esc(service.name)}</strong><span><em>${service.confirmed}</em> Confirmed</span><span><em>${rostered}</em> Rostered</span>${missing?`<mark>${missing} Missing</mark>`:''}</button><div class="rostering-service-body" ${open?'':'hidden'}><div class="rostering-route-summary"><header><div><span class="eyebrow">CONFIRMED ROUTES</span><h3>Start-time plan</h3>${Number.isInteger(service.screenshotRostered)?`<p>Screenshot: ${service.confirmed} confirmed · ${service.screenshotRostered} rostered. ${rostered} names currently entered${service.screenshotRostered>rostered?' — import the remaining visible rows or enter the missing names.':'.'}</p>`:''}</div><div class="rostering-service-actions">${paycomFill}<button class="btn small danger-soft" data-action="rostering-clear-service" data-service-id="${esc(service.id)}">Clear roster</button><button class="btn small danger" data-action="request-delete-rostering-service" data-service-id="${esc(service.id)}">${ICONS.trash} Delete block</button></div></header><div class="rostering-time-head"><span>START TIME</span><b>CONFIRMED</b></div>${rosteringTimeSummary(rows,service.confirmed)}</div><div class="rostering-service-customize"><label><span>Service name</span><input data-rostering-service="${esc(service.id)}" data-rostering-service-field="name" value="${esc(service.name)}"></label><label><span>Type</span><select data-rostering-service="${esc(service.id)}" data-rostering-service-field="kind"><option value="driver" ${service.kind==='driver'?'selected':''}>Driver</option><option value="helper" ${service.kind==='helper'?'selected':''}>Helper</option></select></label><div><span>Confirmed positions</span><p><button data-action="rostering-adjust-confirmed" data-service-id="${esc(service.id)}" data-delta="-1">−</button><b>${service.confirmed}</b><button data-action="rostering-adjust-confirmed" data-service-id="${esc(service.id)}" data-delta="1">+</button></p></div></div><div class="rostering-associate-table"><div class="rostering-associate-head"><span>START TIME</span><span>ASSOCIATE</span><span>ROUTE</span><span>FAIR ROTATION</span><span></span></div><div class="rostering-associate-list">${rows.map(row=>rosteringAssignmentRowHtml(row,duplicates)).join('')}</div><button class="btn small rostering-add-shift" data-action="rostering-add-shift" data-service-id="${esc(service.id)}">+ Add confirmed shift</button></div></div></article>`;
 }
 function rosteringUnrosteredBackupGroups(plan=currentRosteringPlan()) {
   const assigned=rosteringAssignedNameKeys(plan),ridealongIdentities=rosteringRidealongIdentityKeys(),seen=new Set(),groups={vto2:[],vto4:[],other:[]};
@@ -1832,10 +1843,45 @@ function rosteringBackupBuilderHtml(plan=currentRosteringPlan()) {
 }
 function rosteringBackupEmailText(plan=currentRosteringPlan()) { const groups=rosteringUnrosteredBackupGroups(plan),lines=[`RelayOps unrostered backup list · ${state.rosteringDate}`,'',`VTO 2 · Rescue (${groups.vto2.length})`,...groups.vto2.map(row=>`- ${driverDisplayName(row.name)} · ${row.role}`),'',`VTO 4 · Delivery Associate (${groups.vto4.length})`,...groups.vto4.map(row=>`- ${driverDisplayName(row.name)} · ${row.role}`),'',`Other roles (${groups.other.length})`,...groups.other.map(row=>`- ${driverDisplayName(row.name)} · ${row.role}`)];return lines.join('\n'); }
 async function copyRosteringBackupEmailText() { const ok=await writeClipboardText(rosteringBackupEmailText());toast(ok?'Grouped backup email text copied':'Clipboard access was blocked',ok?'success':'error'); }
+function rosteringEmailRole(role='') {
+  const key=headerKey(role);
+  if(/trainingday[12](?:\D|$)/.test(key))return 'amazon';
+  if(key.includes('orientation'))return 'orientation';
+  if(key.includes('ridealong')||/^(training|trainee|newhire)$/.test(key))return 'ridealong';
+  if(key.includes('swa'))return 'swa';
+  if(key.includes('pilot')||key==='rescue'||key==='rescues')return 'pilot';
+  if(key.includes('training')||key.includes('trainee'))return 'other';
+  if(/secondcloser|2ndcloser|secondclosing|2ndclosing/.test(key))return 'closer2';
+  if(key.includes('closingdispatch')||key.includes('firstcloser'))return 'closer1';
+  if(/secondopening|2ndopening/.test(key))return 'opener2';
+  if(key.includes('openingdispatch'))return 'opener1';
+  if(key.includes('fleetcoordinator'))return 'fleet';
+  if(/^(?:second|2nd)?mid(?:shift)?(?:dispatch(?:er)?)?$/.test(key))return /second|2nd/.test(key)?'mid2':'mid';
+  return 'other';
+}
+function rosteringKnownRidealongTrainer(name='') {
+  return [name,canonicalDriverName(name),driverDisplayName(name)].some(value=>/^(?:michael(?:ray)?plourde|angel(?:[a-z]+)?sanchez)$/.test(headerKey(value)));
+}
+function rosteringServiceEmailCategory(service={}) {
+  const key=headerKey(service.name||service.id||'');
+  if(key.includes('swa'))return 'SWA';
+  if(key.includes('pilot')||key.includes('rescue'))return 'PILOT';
+  if(key.includes('rivian')||key==='riv')return 'RIV';
+  return service.name||'Other';
+}
+function rosteringEmailSpecialNames(kind='',plan=currentRosteringPlan()) {
+  const services=new Map((plan.services||[]).map(service=>[service.id,service])),assigned=rosteringAssignedNameKeys(plan),names=new Map();
+  const add=name=>{if(name&&!rosteringUnavailableToday(name))names.set(driverIdentityKey(name),driverDisplayName(name));};
+  if(kind==='swa'||kind==='pilot')plan.assignments.forEach(row=>{if(rosteringServiceEmailCategory(services.get(row.serviceId)||{})===(kind==='swa'?'SWA':'PILOT'))add(row.associate);});
+  rosteringScheduleEntriesForDate(state.rosteringDate).forEach(entry=>{if(rosteringEmailRole(entry.role)!==kind)return;const key=headerKey(entry.role);if(kind==='pilot'&&/^rescues?$/.test(key)&&!assigned.has(driverIdentityKey(entry.name)))return;add(entry.name);});
+  return [...names.values()];
+}
 function rosteringDispatchAssignments() {
-  const result={opener1:'',opener2:'',fleet:'',mid:'',closer1:'',closer2:''};let midFallback='';
-  rosteringScheduleEntriesForDate(state.rosteringDate).forEach(entry=>{const key=headerKey(entry.role),name=driverDisplayName(entry.name).split(/\s+/)[0]||'';if(!name)return;if(key.includes('firstopeningdispatch'))result.opener1||=name;else if(key.includes('secondopeningdispatch'))result.opener2||=name;else if(key.includes('fleetcoordinator'))result.fleet||=name;else if((key.includes('mid')||key.includes('midshift'))&&key.includes('dispatch'))result.mid||=name;else if(key==='mid'||key==='midshift')midFallback||=name;else if(key.includes('secondcloser')||key.includes('secondclosingdispatch'))result.closer2||=name;else if(key.includes('closingdispatch')||key.includes('firstcloser')||key.includes('firstclosingdispatch'))result.closer1||=name;});
-  result.mid||=midFallback;
+  const result={opener1:'',opener2:'',fleet:'',mid:'',mid2:'',closer1:'',closer2:''},overflow={opener1:'opener2',mid:'mid2',closer1:'closer2'},seen=new Set();
+  const entries=rosteringScheduleEntriesForDate(state.rosteringDate);
+  // Reserve explicitly named second shifts before filling duplicate first shifts.
+  const ordered=[...entries.filter(e=>['opener2','mid2','closer2'].includes(rosteringEmailRole(e.role))),...entries.filter(e=>!['opener2','mid2','closer2'].includes(rosteringEmailRole(e.role)))];
+  ordered.forEach(entry=>{const role=rosteringEmailRole(entry.role),identity=driverIdentityKey(entry.name),name=driverDisplayName(entry.name).split(/\s+/)[0];if(!Object.hasOwn(result,role)||!name||seen.has(identity))return;const slot=!result[role]?role:overflow[role];if(slot&&!result[slot]){result[slot]=name;seen.add(identity);}});
   return result;
 }
 function rosteringEmailHelperRows(plan=currentRosteringPlan()) {
@@ -1843,80 +1889,44 @@ function rosteringEmailHelperRows(plan=currentRosteringPlan()) {
   return plan.assignments.filter(row=>row.associate&&services.get(row.serviceId)?.kind==='helper').map(row=>driverDisplayName(row.associate));
 }
 function rosteringEmailRidealongRows(plan=currentRosteringPlan()) {
-  const helperIdentities=new Set(rosteringEmailHelperRows(plan).map(driverIdentityKey));
-  return rosteringRidealongEntries().filter(entry=>!rosteringUnavailableToday(entry.name)&&!helperIdentities.has(driverIdentityKey(entry.name))).map(entry=>driverDisplayName(entry.name));
+  const helperIdentities=new Set(rosteringEmailHelperRows(plan).map(driverIdentityKey)),trainers=new Set(rosteringTrainerCandidates().map(row=>driverIdentityKey(row.name)));
+  return rosteringRidealongEntries().filter(entry=>!rosteringUnavailableToday(entry.name)&&!helperIdentities.has(driverIdentityKey(entry.name))).map(entry=>{const trainer=state.rosteringTrainingMatches?.[rosteringTrainingKey(entry.name)]?.trainer;return `${driverDisplayName(entry.name)}>${trainer&&trainers.has(driverIdentityKey(trainer))?driverDisplayName(trainer):'Trainer needed'}`;});
 }
 function rosteringAllocatedCounts(plan=currentRosteringPlan()) {
-  const services=new Map((plan.services||[]).map(service=>[service.id,service])),ridealongIdentities=rosteringRidealongIdentityKeys();
-  let rivian=0,helper=0,total=0;plan.assignments.forEach(row=>{if(!row.associate)return;const service=services.get(row.serviceId);if(service?.kind==='helper'){helper++;return;}if(ridealongIdentities.has(driverIdentityKey(row.associate)))return;total++;if(service?.id!=='xl-donations')rivian++;});
-  return {rivian,helper,total};
+  const categories=new Map();let helper=0;
+  (plan.services||[]).forEach(service=>{const count=Math.max(0,Math.trunc(Number(service.confirmed)||0));if(service.kind==='helper'){helper+=count;return;}const category=rosteringServiceEmailCategory(service);categories.set(category,(categories.get(category)||0)+count);});
+  const ordered=[...['SWA','PILOT','RIV'].filter(key=>categories.has(key)),...[...categories.keys()].filter(key=>!['SWA','PILOT','RIV'].includes(key))];
+  const lines=ordered.map(key=>`${categories.get(key)} ${key}`);
+  return {rivian:categories.get('RIV')||0,swa:categories.get('SWA')||0,pilot:categories.get('PILOT')||0,helper,total:[...categories.values()].reduce((a,b)=>a+b,0),lines};
 }
 function rosteringEmailBackupName(row={}) {
   return `${driverDisplayName(row.name)}${driverProfileFlags(row.name).includes('modified-duty')||/modified\s*duty/i.test(row.role||'')?' Mod Duty':''}`;
 }
 function rosteringEmailTemplateText(plan=currentRosteringPlan()) {
-  const dispatch=rosteringDispatchAssignments(),helpers=rosteringEmailHelperRows(plan),ridealongs=rosteringEmailRidealongRows(plan),groups=rosteringUnrosteredBackupGroups(plan),counts=rosteringAllocatedCounts(plan),line='---------------------------------------------------';
-  const names=rows=>rows.map(rosteringEmailBackupName).join('\n')||'';
-  return [
-    `Opener: 1st ${dispatch.opener1||''} /2nd ${dispatch.opener2||''}       Fleet: ${dispatch.fleet||''}`,
-    '',
-    `MidShift: ${dispatch.mid||''}`,
-    '',
-    `1st Closer: ${dispatch.closer1||''}  2nd Closer: ${dispatch.closer2||''}`,
-    '',
-    line,
-    'Helpers:',
-    '',
-    helpers.join('\n'),
-    '',
-    'Ride Alongs:',
-    '',
-    ridealongs.join('\n'),
-    '',
-    line,
-    '',
-    'Back Ups:',
-    '',
-    'VTO (2)',
-    names(groups.vto2),
-    '',
-    'VTO (4)',
-    names(groups.vto4),
-    '',
-    'Unlisted shifts:',
-    ...rosteringUnlistedShiftLines(),
-    '',
-    line,
-    'Allocated:',
-    '',
-    `${counts.rivian} RIV`,
-    `${counts.total} Total`
-  ].join('\n');
+  const d=rosteringDispatchAssignments(),groups=rosteringUnrosteredBackupGroups(plan),counts=rosteringAllocatedCounts(plan),line='---------------------------------------------------';
+  const sections=[['SWA:',rosteringEmailSpecialNames('swa',plan)],['Pilot/Rescues:',rosteringEmailSpecialNames('pilot',plan)],['Ride Alongs:',rosteringEmailRidealongRows(plan)],['Amazon Training:',rosteringEmailSpecialNames('amazon',plan)],['Orientation:',rosteringEmailSpecialNames('orientation',plan)]];
+  const helpers=rosteringEmailHelperRows(plan);if(helpers.length)sections.push(['Helpers:',helpers]);
+  return [`Opener: 1st ${d.opener1} /2nd ${d.opener2}   Fleet: ${d.fleet}`,'',`1st MidShift: ${d.mid}  2nd MidShift: ${d.mid2}`,'',`1st Closer: ${d.closer1}  2nd Closer/Midshift: ${d.closer2}`,'',line,...sections.flatMap(([label,names])=>[label,...names,'']),line,'','Back Ups:','','VTO (2)',...groups.vto2.map(rosteringEmailBackupName),'','VTO (4)',...groups.vto4.map(rosteringEmailBackupName),'','Unlisted shifts:',...rosteringUnlistedShiftLines(),'',line,'Allocated:',...counts.lines,`${counts.total} Total`].join('\n');
 }
 function rosteringUnlistedShiftEntries() {
-  const seen=new Set();
-  return rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>{
-    const role=String(entry.role||''),key=headerKey(role),group=scheduleRoleGroup(role);
-    const special=/training|trainee|newhire|ridealong|modifiedduty/.test(key);
-    if(!special&&(group==='driver'||group==='dispatch'||/^(mid|midshift)$/.test(key)))return false;
-    const identity=JSON.stringify([driverIdentityKey(entry.name),key,entry.start||'',entry.end||'']);
-    if(seen.has(identity))return false;
-    seen.add(identity);return true;
-  }).sort((a,b)=>String(a.role||'').localeCompare(String(b.role||''))||driverDisplayName(a.name).localeCompare(driverDisplayName(b.name)));
+  const seen=new Set();return rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>{
+    if(rosteringEmailRole(entry.role)!=='other'||isDriverHelperOnlyRole(entry.role)||scheduleRoleGroup(entry.role)==='driver')return false;
+    const key=driverIdentityKey(entry.name);if(!key||seen.has(key))return false;seen.add(key);return true;
+  });
 }
 function rosteringUnlistedShiftLines() {
-  return rosteringUnlistedShiftEntries().map(entry=>`${driverDisplayName(entry.name)} · ${entry.role||'Unspecified role'}${entry.start||entry.end?` · ${entry.start||'?'}–${entry.end||'?'}`:''}${rosteringUnavailableToday(entry.name)?' · Unavailable — review status':''}`);
+  return rosteringUnlistedShiftEntries().map(entry=>driverDisplayName(entry.name));
 }
 function rosteringUnlistedShiftsHtml() {
-  const lines=rosteringUnlistedShiftLines();
-  return `<section class="rostering-unlisted-shifts" aria-label="Unlisted shifts"><header><strong>Unlisted shifts</strong><b>${lines.length}</b></header><p>Review every additional role before sending. Training and ride-along shifts are included here with their shift labels; they may also appear in the training summary.</p>${lines.length?`<ul>${lines.map(line=>`<li>${esc(line)}</li>`).join('')}</ul>`:'<p>No additional shifts for this roster date.</p>'}</section>`;
+  const lines=rosteringUnlistedShiftLines();return `<section class="rostering-unlisted-shifts" aria-label="Unlisted shifts"><header><strong>Unlisted shifts</strong><b>${lines.length}</b></header><p>Additional roles not listed in the email's other sections. Review these names before sending.</p>${lines.length?`<ul>${lines.map(name=>`<li>${esc(name)}</li>`).join('')}</ul>`:'<p>No additional shifts for this roster date.</p>'}</section>`;
 }
 function rosteringEmailTemplateHtml(plan=currentRosteringPlan()) {
-  return rosteringEmailTemplateCoreHtml(plan).replace('<div><strong>Allocated:</strong></div>',`<div><strong>Unlisted shifts:</strong></div>${rosteringUnlistedShiftLines().map(line=>`<div>${esc(line)}</div>`).join('')}<div><br></div><div><strong>Allocated:</strong></div>`);
+  return rosteringEmailTemplateCoreHtml(plan);
 }
 function rosteringEmailTemplateCoreHtml(plan=currentRosteringPlan()) {
-  const dispatch=rosteringDispatchAssignments(),helpers=rosteringEmailHelperRows(plan),ridealongs=rosteringEmailRidealongRows(plan),groups=rosteringUnrosteredBackupGroups(plan),counts=rosteringAllocatedCounts(plan),line='---------------------------------------------------',row=value=>`<div>${value||'<br>'}</div>`,names=rows=>rows.map(item=>row(esc(rosteringEmailBackupName(item)))).join('');
-  return `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.45;color:#111">${row(`<strong>Opener:</strong> <strong>1st</strong> ${esc(dispatch.opener1||'')} /<strong>2nd</strong> ${esc(dispatch.opener2||'')} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <strong>Fleet:</strong> ${esc(dispatch.fleet||'')}`)}${row('')}${row(`<strong>MidShift:</strong> ${esc(dispatch.mid||'')}`)}${row('')}${row(`<strong>1st Closer:</strong> ${esc(dispatch.closer1||'')} &nbsp;&nbsp; <strong>2nd Closer:</strong> ${esc(dispatch.closer2||'')}`)}${row('')}${row(line)}${row('<strong>Helpers:</strong>')}${row('')}${helpers.map(name=>row(esc(name))).join('')}${row('')}${row('<strong>Ride Alongs:</strong>')}${row('')}${ridealongs.map(name=>row(esc(name))).join('')}${row('')}${row(line)}${row('')}${row('<strong>Back Ups:</strong>')}${row('')}${row('<strong><u>VTO (2)</u></strong>')}${names(groups.vto2)}${row('')}${row('<strong><u>VTO (4)</u></strong>')}${names(groups.vto4)}${row('')}${row(line)}${row('<strong>Allocated:</strong>')}${row('')}${row(`<strong><em>${counts.rivian} RIV</em></strong>`)}${row(`<strong><em>${counts.total} Total</em></strong>`)}</div>`;
+  let allocated=false;const headings=['SWA:','Pilot/Rescues:','Ride Alongs:','Amazon Training:','Orientation:','Helpers:','Back Ups:','Unlisted shifts:','Allocated:'];
+  const rows=rosteringEmailTemplateText(plan).split('\n').map(line=>{if(line==='Allocated:')allocated=true;let value=esc(line);if(headings.includes(line))value=`<strong>${value}</strong>`;else if(/^VTO \([24]\)$/.test(line))value=`<strong><u>${value}</u></strong>`;else if(allocated&&/^\d+ /.test(line))value=`<strong><em>${value}</em></strong>`;else value=value.replace(/(Opener:|Fleet:|1st MidShift:|2nd MidShift:|1st Closer:|2nd Closer\/Midshift:)/g,'<strong>$1</strong>');return `<div>${value||'<br>'}</div>`;});
+  return `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.45;color:#111">${rows.join('')}</div>`;
 }
 async function copyRosteringEmailTemplateText() {
   const plan=currentRosteringPlan(),ok=await writeClipboardTable(rosteringEmailTemplateText(plan),clipboardHtmlShell(rosteringEmailTemplateHtml(plan)));
@@ -1950,20 +1960,21 @@ function rosteringManualTrainingRows(kind='') {
   return Object.entries(state.rosteringManualTraining||{}).filter(([key,row])=>key.startsWith(`${state.rosteringDate}|`)&&(!kind||row.kind===kind)).map(([key,row])=>({...row,key,name:canonicalDriverName(row.name||''),manual:true,date:row.date||state.rosteringDate,role:row.kind==='trainer'?'Manual Trainer':'Manual Ridealong'})).filter(row=>row.name);
 }
 function rosteringRidealongEntries() {
-  const scheduled=[...new Map(rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>isRidealongRole(entry.role)).map(entry=>[driverIdentityKey(entry.name),{...entry,manual:false}])).values()];
-  const byIdentity=new Map(scheduled.map(entry=>[driverIdentityKey(entry.name),entry]));
-  rosteringManualTrainingRows('ridealong').forEach(row=>{const key=driverIdentityKey(row.name);if(key&&!byIdentity.has(key))byIdentity.set(key,row);});
-  return [...byIdentity.values()].sort((a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'}));
+  const scheduled=rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>rosteringEmailRole(entry.role)==='ridealong'&&!rosteringKnownRidealongTrainer(entry.name));
+  const byIdentity=new Map(scheduled.map(entry=>[driverIdentityKey(entry.name),{...entry,manual:false}]));
+  rosteringManualTrainingRows('ridealong').forEach(row=>{const key=driverIdentityKey(row.name);if(key&&!rosteringKnownRidealongTrainer(row.name)&&!byIdentity.has(key))byIdentity.set(key,row);});
+  return [...byIdentity.values()].sort((a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name)));
 }
 function rosteringRidealongIdentityKeys() { return new Set(rosteringRidealongEntries().map(entry=>driverIdentityKey(entry.name)).filter(Boolean)); }
 function rosteringTrainerUnavailable(name='') {
   return rosteringUnavailableToday(name);
 }
 function rosteringTrainerCandidates() {
-  const scheduled=new Set(rosteringScheduleEntriesForDate(state.rosteringDate).map(entry=>driverIdentityKey(entry.name)));
-  const rows=[...teamDriverRows().filter(driver=>driverHasCapability(driver.name,'trainer')).map(driver=>({name:driver.name,manual:false})),...rosteringManualTrainingRows('trainer')];
-  const byIdentity=new Map();rows.forEach(row=>{const name=canonicalDriverName(row.name),key=driverIdentityKey(name);if(key&&!rosteringTrainerUnavailable(name)&&!byIdentity.has(key))byIdentity.set(key,{...row,name});});
-  return [...byIdentity.values()].sort((a,b)=>Number(scheduled.has(driverIdentityKey(b.name)))-Number(scheduled.has(driverIdentityKey(a.name)))||Number(b.manual)-Number(a.manual)||rosteringStayHomeCount(a.name)-rosteringStayHomeCount(b.name)||a.name.localeCompare(b.name));
+  const entries=rosteringScheduleEntriesForDate(state.rosteringDate),scheduled=new Set(entries.map(entry=>driverIdentityKey(entry.name)));
+  const recommended=entries.filter(entry=>rosteringEmailRole(entry.role)==='ridealong'&&rosteringKnownRidealongTrainer(entry.name)).map(entry=>({name:entry.name,recommended:true,manual:false}));
+  const rows=[...recommended,...teamDriverRows().filter(driver=>driverHasCapability(driver.name,'trainer')).map(driver=>({name:driver.name,manual:false})),...rosteringManualTrainingRows('trainer')];
+  const trainees=rosteringRidealongIdentityKeys(),byIdentity=new Map();rows.forEach(row=>{const name=canonicalDriverName(row.name),key=driverIdentityKey(name);if(key&&!trainees.has(key)&&!rosteringTrainerUnavailable(name)&&!byIdentity.has(key))byIdentity.set(key,{...row,name});});
+  return [...byIdentity.values()].sort((a,b)=>Number(Boolean(b.recommended))-Number(Boolean(a.recommended))||Number(scheduled.has(driverIdentityKey(b.name)))-Number(scheduled.has(driverIdentityKey(a.name)))||Number(b.manual)-Number(a.manual)||a.name.localeCompare(b.name));
 }
 function assignRosteringTrainer(ridealong='',trainer='') {
   const ridealongKey=driverIdentityKey(ridealong),entry=rosteringRidealongEntries().find(row=>driverIdentityKey(row.name)===ridealongKey);if(!entry)return toast('Ridealong shift was not found for this date','error');
@@ -1995,7 +2006,7 @@ function rosteringDriverNotesHtml() {
 }
 function rosteringEmailHandoffHtml(plan=currentRosteringPlan()) {
   const text=rosteringEmailTemplateText(plan),counts=rosteringAllocatedCounts(plan);
-  return `${rosteringUnlistedShiftsHtml()}<section class="card rostering-email-handoff"><header><div><span class="eyebrow">EMAIL HANDOFF</span><h2>Opening roster email</h2><p>Copy this into the route-total email after reviewing Helpers, Ride Alongs, unlisted shifts, backups, and counts.</p></div><button class="btn small primary" data-action="copy-rostering-email-template">${ICONS.copy} Copy formatted text</button></header><div class="rostering-email-preview" aria-label="Formatted opening roster email template">${rosteringEmailTemplateHtml(plan)}</div><textarea class="sr-only" readonly aria-label="Plain opening roster email template">${esc(text)}</textarea><footer><span>${counts.rivian} RIV · ${counts.total} total allocated</span><small>Bold headings and bold-italic totals are preserved when pasted into email.</small></footer></section>`;
+  return `${rosteringUnlistedShiftsHtml()}<section class="card rostering-email-handoff"><header><div><span class="eyebrow">EMAIL HANDOFF</span><h2>Opening roster email</h2><p>Copy this into the route-total email after reviewing Helpers, Ride Alongs, unlisted shifts, backups, and counts.</p></div><button class="btn small primary" data-action="copy-rostering-email-template">${ICONS.copy} Copy formatted text</button></header><div class="rostering-email-preview" aria-label="Formatted opening roster email template">${rosteringEmailTemplateHtml(plan)}</div><textarea class="sr-only" readonly aria-label="Plain opening roster email template">${esc(text)}</textarea><footer><span>${esc(counts.lines.join(' · '))} · ${counts.total} total allocated</span><small>Bold headings and bold-italic totals are preserved when pasted into email.</small></footer></section>`;
 }
 function rosteringHelperShiftsHtml(plan=currentRosteringPlan()) {
   const helpers=rosteringHelperPoolRows(),assigned=rosteringAssignedNameKeys(plan),hasHelperService=plan.services.some(service=>service.kind==='helper');

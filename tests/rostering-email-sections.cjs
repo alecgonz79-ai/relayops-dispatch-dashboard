@@ -1,0 +1,24 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),{createRequire}=require('module');
+const harnessPath=require.resolve('./rostering-workflow.cjs');
+const prefix=fs.readFileSync(harnessPath,'utf8').split('function run()')[0];
+const harness=new Function('require',prefix+'\nreturn harness;')(createRequire(harnessPath));
+const c=harness();
+vm.runInContext(`
+state.rosteringDate='2026-09-28';state.rosteringPlans={};state.driverContacts=[];state.driverProfiles={};state.rosteringTrainingMatches={};state.rosteringManualTraining={};
+const roles=[['Alec','First Opening Dispatch'],['Jade','Opening Dispatch'],['Orlando','Fleet Coordinator'],['Gerardo','Mid Shift'],['Fredy','Midshift'],['Jose','Midshift/Second Closer'],['Michael','Closing Dispatcher'],['Joanthan Ross','Training Day 1'],['Day Two','Training Day 2'],['Orient Person','Orientation'],['Pilot Person','Pilot/Rescues'],['Ahmad Wynne','Ride Along'],['Michael Ray Plourde','Low Performer Ride Along'],['Angel Sanchez','Ride Along'],['Josue','Modified Duty']];
+storeRosteringScheduleEntries(roles.map(([name,role])=>({name,role,date:'9/28/2026',start:'10:30 AM',end:'7:00 PM'})),'fixture');
+const plan=currentRosteringPlan();plan.services=[{id:'swa',name:'SWA',confirmed:1,kind:'driver'},{id:'pilot',name:'Pilot/Rescues',confirmed:1,kind:'driver'},{id:'riv',name:'Standard Parcel Electric - Rivian MEDIUM',confirmed:47,kind:'driver'}];plan.assignments=[{id:'swa1',serviceId:'swa',associate:'Hasen Khiar'}];
+state.rosteringTrainingMatches[rosteringTrainingKey('Ahmad Wynne')]={trainer:'Angel Sanchez'};
+globalThis.result={dispatch:rosteringDispatchAssignments(),text:rosteringEmailTemplateText(plan),html:rosteringEmailTemplateHtml(plan),trainers:rosteringTrainerCandidates(),trainees:rosteringRidealongEntries(),counts:rosteringAllocatedCounts(plan)};
+plan.services.push({id:'new',name:'New Service',confirmed:3,kind:'driver'});globalThis.expanded=rosteringAllocatedCounts(plan);
+globalThis.imported=rosteringPlanFromScreenshotText('SWA 1 Confirmed 1 Rostered\\n10:30 AM Hasen Khiar CX55\\nPilot/Rescues\\nConfirmed: 1 Rostered: 0\\nNew Service Type\\n2 Confirmed 1 Rostered\\n11:00 AM New Driver CX90\\nStandard Parcel Electric - Rivian MEDIUM 47 Confirmed 46 Rostered\\nZero Service 0 Confirmed 0 Rostered','fixture.png');
+`,c);
+const r=c.result;
+assert.equal(r.dispatch.opener2,'Jade');assert.equal(r.dispatch.mid,'Gerardo');assert.equal(r.dispatch.mid2,'Fredy');assert.equal(r.dispatch.closer2,'Jose');assert.equal(r.dispatch.closer1,'Michael');
+assert.equal(r.counts.total,49);assert.equal(r.counts.rivian,47);assert.equal(r.counts.swa,1);assert.equal(r.counts.pilot,1);assert.equal(c.expanded.total,52);
+for(const s of ['1st MidShift: Gerardo  2nd MidShift: Fredy','2nd Closer/Midshift: Jose','SWA:\nHasen Khiar','Pilot/Rescues:\nPilot Person','Ride Alongs:\nAhmad Wynne>Angel Sanchez','Amazon Training:\nJoanthan Ross\nDay Two','Orientation:\nOrient Person','Unlisted shifts:\nJosue','1 SWA\n1 PILOT\n47 RIV\n49 Total'])assert(r.text.includes(s),s);
+assert(!r.text.includes('10:30 AM'));assert(!r.text.includes('Modified Duty'));assert(r.html.includes('Ahmad Wynne&gt;Angel Sanchez'));assert(r.html.includes('<strong><em>49 Total</em></strong>'));
+assert.deepEqual(Array.from(r.trainees,x=>x.name),['Ahmad Wynne']);assert(r.trainers.some(x=>x.name==='Michael Ray Plourde'&&x.recommended));assert(r.trainers.some(x=>x.name==='Angel Sanchez'&&x.recommended));
+const services=c.imported.services;assert.equal(services.length,5);assert.equal(services.find(s=>s.name==='New Service Type').confirmed,2);assert.equal(services.find(s=>s.name==='New Service Type').screenshotRostered,1);assert.equal(services.find(s=>s.name==='Zero Service').confirmed,0);
+assert.equal(c.imported.assignments.filter(r=>r.associate).length,2);assert.equal(services.find(s=>s.name==='Standard Parcel Electric - Rivian MEDIUM').confirmed,47);
+console.log('Roster email sections, two mids, closer, trainer exceptions, dynamic allocations and new screenshot services passed');

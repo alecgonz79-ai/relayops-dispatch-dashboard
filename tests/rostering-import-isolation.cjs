@@ -110,8 +110,8 @@ async function testStation(code) {
   assert(rosterNames.every(name => name.startsWith(code)));
   assert(h.read('currentRosteringPlan().assignments').some(row => row.associate === `${code} Roster Helper` && row.source === 'auto-helper'));
   const email = h.run('rosteringEmailTemplateText()');
-  assert(email.includes(`Helpers:\n\n${code} Roster Helper`));
-  assert(email.includes(`Ride Alongs:\n\n${code} Roster Ridealong`));
+  assert(email.includes(`Helpers:\n${code} Roster Helper`));
+  assert(email.includes(`Ride Alongs:\n${code} Roster Ridealong>Trainer needed`));
   assert(!email.includes('Opening Associate') && !email.includes('Opening Helper'), 'Rostering email cannot borrow Opening imports');
 
   const persistent = h.read('persistentWorkspaceState()');
