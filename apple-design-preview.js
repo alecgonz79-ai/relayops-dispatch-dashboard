@@ -68,7 +68,7 @@
     const buttons = [false, true].map(isApple => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = isApple ? 'Apple design' : 'Original';
+      button.textContent = isApple ? 'V.2' : 'Original';
       button.setAttribute('aria-pressed', String(isApple === enabled));
       button.addEventListener('click', () => {
         clearCardHover();
