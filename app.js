@@ -6137,6 +6137,7 @@ function bindGlobalDocumentControls() {
   document.removeEventListener?.('focusout',handleDriverProfileFocusOut);
   document.removeEventListener?.('contextmenu',handleDriverRouteContextMenu);
   document.removeEventListener?.('keydown',handleOperationalGridArrowNavigation);
+  document.removeEventListener?.('keydown',handleEditModeEscapeKey);
   document.removeEventListener?.('dblclick',handleDashboardTextDoubleClick);
   document.removeEventListener?.('keydown',markOperationalInteraction,true);
   document.removeEventListener?.('pointerdown',markOperationalInteraction,true);
@@ -6162,6 +6163,7 @@ function bindGlobalDocumentControls() {
   document.addEventListener?.('focusout',handleDriverProfileFocusOut);
   document.addEventListener?.('contextmenu',handleDriverRouteContextMenu);
   document.addEventListener?.('keydown',handleOperationalGridArrowNavigation);
+  document.addEventListener?.('keydown',handleEditModeEscapeKey);
   document.addEventListener?.('dblclick',handleDashboardTextDoubleClick);
   document.addEventListener?.('keydown',markOperationalInteraction,true);
   document.addEventListener?.('pointerdown',markOperationalInteraction,true);
@@ -6178,6 +6180,13 @@ let pageNavigationDelegationBound=false;
 function handlePageNavigationClick(event) {
   const el=event.target?.closest?.('[data-page]');
   if(!el||el.hasAttribute?.('data-action')||!document.documentElement?.contains?.(el))return;
+  // The .content wrapper carries data-page as state metadata; it is not a
+  // navigation control. Treating clicks inside page content as navigation
+  // re-runs renderNavigationPage for the current page, whose cached path
+  // (content.replaceChildren) resets every scroll container — including the
+  // Morning Sheet pane — and blurs the active cell editor, which is what
+  // made double-clicking a sheet cell jump the scroll position.
+  if(el.classList?.contains('content'))return;
   go(el.dataset.page);
 }
 function bindPageNavigationControls() {
@@ -7324,6 +7333,32 @@ function handleSheetKeydown(e,el) {
     return moveSheetCell(el,dr,dc);
   }
   if(e.key==='Escape') { e.preventDefault(); el.blur(); }
+}
+// Double-pressing Escape backs out of sheet edit mode entirely (same as the
+// "Finish editing" buttons). A single Escape keeps its existing behavior
+// (blur the active cell); the second press within a short window turns
+// state.editMode off and re-renders. Works from any focus target, so you do
+// not have to hunt for the toggle button.
+let editModeEscapePressedAt=0;
+const EDIT_MODE_ESCAPE_WINDOW_MS=700;
+function handleEditModeEscapeKey(event){
+  if(event?.key!=='Escape')return;
+  if(state.modal)return; // open modals consume their own Escape
+  if(event.target?.closest?.('input,textarea,select'))return; // leave form fields alone
+  if(!state.editMode){editModeEscapePressedAt=0;return;}
+  // An open route context menu or driver suggestion list consumes this Escape instead.
+  if(document.getElementById?.('driver-route-context-menu')||document.querySelector?.('.driver-name-suggestions')){editModeEscapePressedAt=0;return;}
+  const now=Date.now();
+  if(now-editModeEscapePressedAt<=EDIT_MODE_ESCAPE_WINDOW_MS){
+    editModeEscapePressedAt=0;
+    event.preventDefault();
+    document.activeElement?.blur?.();
+    state.editMode=false;
+    render();
+    toast('Edits saved');
+    return;
+  }
+  editModeEscapePressedAt=now;
 }
 const operationalGridEditorSelector=[
   '.morning-template-sheet [data-edit-field]',
