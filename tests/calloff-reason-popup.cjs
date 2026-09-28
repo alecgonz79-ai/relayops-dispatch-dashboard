@@ -1,0 +1,22 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const prefix=fs.readFileSync(require.resolve('./opening-roster-auto-backups.cjs'),'utf8').split('function testAutomaticVtoDestinations')[0];
+const c=new Function('require',prefix.replace('console, Intl,',"location:{hostname:'localhost',search:'',href:'http://localhost:4173/'}, console, Intl,")+'\nreturn appContext();')(require);
+vm.runInContext(`
+state.morningOperationDate='2026-09-27';state.morningRoutes=[];state.callOffDriverKeys={};state.callOffReasons={};
+state.scheduleEntries=[{date:'9/27/2026',name:'Test Backup',role:'Rescue',start:'10:00 AM'}];
+state.scheduleDriverMarks={};state.scheduleBackupRecords={};state.scheduleStayHome={};state.scheduleReductions={};state.scheduleHelpers={};
+markRosterCalledOff('Test Backup','Rescue');
+globalThis.opened={modal:state.modal,count:Object.keys(state.callOffDriverKeys).length};
+confirmRosterCalledOff();globalThis.emptyCount=Object.keys(state.callOffDriverKeys).length;
+state.pendingCalloffReason.reason='Sick';confirmRosterCalledOff();
+globalThis.saved={reason:Object.values(state.callOffReasons)[0],backups:openingPicklistBackupRows().length,calloffs:openingPicklistCallOffRows().length,modal:state.modal};
+markRosterCalledOff('Custom Person','Delivery Associate');state.pendingCalloffReason.reason='__custom';
+document.querySelector=()=>({value:'  Personal appointment  '});confirmRosterCalledOff();
+globalThis.custom=state.callOffReasons[callOffStatusKey('Custom Person')];
+markRosterCalledOff('Canceled Person','Rescue');action('close-modal',{});
+globalThis.canceled={pending:state.pendingCalloffReason,marked:!!state.callOffDriverKeys[callOffStatusKey('Canceled Person')]};
+`,c);
+assert.equal(c.opened.modal,'calloff-reason');assert.equal(c.opened.count,0);assert.equal(c.emptyCount,0);
+assert.equal(c.saved.reason,'Sick');assert.equal(c.saved.backups,0);assert.equal(c.saved.calloffs,1);assert.equal(c.saved.modal,null);
+assert.equal(c.custom,'Personal appointment');assert.equal(c.canceled.pending,null);assert.equal(c.canceled.marked,false);
+console.log('Call-off popup: preset/custom reasons, required choice, backup removal and cancellation passed');

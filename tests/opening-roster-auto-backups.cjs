@@ -139,6 +139,8 @@ function testRestoreIsSingleDestinationAndPicklistActions() {
     moveRosterDriverToVto('Casey Rescue','Rescue','VTO 2');
     globalThis.__picklistActions=openingPicklistRightHtml();
     applyPicklistVtoAction('Casey Rescue','Rescue','calloff');
+    if(state.modal!=='calloff-reason')throw new Error('Call-off must ask for a reason before moving the driver');
+    state.pendingCalloffReason.reason='Sick';confirmRosterCalledOff();
     globalThis.__calledOff=rosterStatusRows(state.callOffDriverKeys,'Called off');
     globalThis.__calledOffHtml=openingRosterScheduleHtml();
   `, context);
