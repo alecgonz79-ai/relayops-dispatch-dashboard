@@ -1624,7 +1624,11 @@ function currentRosteringPlan() {
 }
 function rosteringService(serviceId='') { return currentRosteringPlan().services.find(service=>service.id===serviceId)||null; }
 function rosteringAssignment(assignmentId='') { return currentRosteringPlan().assignments.find(row=>row.id===assignmentId)||null; }
-function rosteringServiceRows(serviceId='') { return currentRosteringPlan().assignments.filter(row=>row.serviceId===serviceId).sort((a,b)=>waveMinutes(a.start)-waveMinutes(b.start)); }
+function rosteringServiceRows(serviceId='') {
+  const trainees=new Set(rosteringScheduleEntriesForDate(state.rosteringDate).filter(rosteringPriorityTrainee).map(entry=>driverIdentityKey(entry.name)));
+  const isTrainee=row=>Boolean(row.associate)&&(trainees.has(driverIdentityKey(row.associate))||rosteringPriorityTrainee({name:row.associate,role:row.role}));
+  return currentRosteringPlan().assignments.filter(row=>row.serviceId===serviceId).sort((a,b)=>Number(isTrainee(a))-Number(isTrainee(b))||waveMinutes(a.start)-waveMinutes(b.start));
+}
 function scheduleEntriesForDate(date=state.morningOperationDate) {
   const entries=Array.isArray(state.scheduleEntries)?state.scheduleEntries:[],exact=entries.filter(entry=>scheduleDateKey(entry.date)===date);
   if(exact.length)return exact;
@@ -1684,16 +1688,20 @@ function rosteringPriorityEntries(entries=[]) {
 function rosteringPaycomCategoryFor(entry={}) {
   const key=headerKey(entry.role),group=scheduleRoleGroup(entry.role);if(isRidealongRole(entry.role))return 'training';if(isDriverHelperOnlyRole(entry.role))return 'helper';if(group==='dispatch'||isNonRosterableOtherShift(entry.role))return 'other';if(key.includes('deliveryassociate'))return 'vto4';if(key.includes('rescue'))return 'vto2';if(key.includes('midshift'))return 'midshift';return 'other';
 }
+function rosteringPriorityTrainee(entry={}) {
+  return headerKey(entry.role).includes('ridealong')&&!rosteringKnownRidealongTrainer(entry.name);
+}
 function rosteringEntryEligibleForRoster(entry={}) {
+  if(rosteringPriorityTrainee(entry))return !rosteringUnavailableToday(entry.name);
   const role=headerKey(entry.role),driverShift=scheduleRoleGroup(entry.role)==='driver',deliveryAssociate=role.includes('deliveryassociate'),fairnessRescue=role.includes('rescue')&&rosteringStayHomeCount(entry.name)>0;
   return driverShift&&!isNonRosterableOtherShift(entry.role)&&(deliveryAssociate||fairnessRescue)&&!rosteringUnavailableToday(entry.name)&&!rosteringRidealongIdentityKeys().has(driverIdentityKey(entry.name));
 }
 function rosteringOrderEntries(entries=[],mode=state.rosteringAutoMode,random=Math.random) {
-  const compare=(a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})||waveMinutes(a.start)-waveMinutes(b.start),rows=[...entries];if(mode==='abc')return rows.sort(compare);
+  const priority=(a,b)=>Number(rosteringPriorityTrainee(b))-Number(rosteringPriorityTrainee(a)),compare=(a,b)=>driverDisplayName(a.name).localeCompare(driverDisplayName(b.name),undefined,{sensitivity:'base'})||waveMinutes(a.start)-waveMinutes(b.start),rows=[...entries];if(mode==='abc')return rows.sort((a,b)=>priority(a,b)||compare(a,b));
   for(let index=rows.length-1;index>0;index--){const swap=Math.max(0,Math.min(index,Math.floor(Number(random())*(index+1))));[rows[index],rows[swap]]=[rows[swap],rows[index]];}
   const alphabetical=[...entries].sort(compare),stillAlphabetical=rows.length>1&&rows.every((row,index)=>driverIdentityKey(row.name)===driverIdentityKey(alphabetical[index]?.name));
   if(stillAlphabetical)[rows[0],rows[1]]=[rows[1],rows[0]];
-  return rows;
+  return rows.sort(priority);
 }
 function rosteringAssignedNameKeys(plan=currentRosteringPlan()) { return new Set(plan.assignments.map(row=>driverIdentityKey(row.associate)).filter(Boolean)); }
 function rosteringDuplicateNameKeys(plan=currentRosteringPlan()) { const counts={};plan.assignments.forEach(row=>{const key=driverIdentityKey(row.associate);if(key)counts[key]=(counts[key]||0)+1;});return new Set(Object.entries(counts).filter(([,count])=>count>1).map(([key])=>key)); }
@@ -1704,7 +1712,7 @@ function addRosteringAssignment(serviceId='',extra={}) {
 }
 function preferredRosteringServices(entry={},onlyServiceId='') {
   const services=currentRosteringPlan().services,helper=isDriverHelperOnlyRole(entry.role),eligible=services.filter(service=>service.id!=='xl-donations'&&(helper?service.kind==='helper':service.kind!=='helper')&&(!onlyServiceId||service.id===onlyServiceId));
-  return eligible.sort((a,b)=>services.indexOf(a)-services.indexOf(b));
+  return eligible.sort((a,b)=>(rosteringPriorityTrainee(entry)?Number(/nursery/i.test(b.name))-Number(/nursery/i.test(a.name)):0)||services.indexOf(a)-services.indexOf(b));
 }
 function addPaycomEntryToRostering(entry={},onlyServiceId='') {
   const plan=currentRosteringPlan(),exact=canonicalDriverName(contactForMorningDriver(entry.name)?.name||entry.name);if(!exact||!rosteringEntryEligibleForRoster(entry)||rosteringAssignedNameKeys(plan).has(driverIdentityKey(exact)))return false;
@@ -1714,7 +1722,7 @@ function addPaycomEntryToRostering(entry={},onlyServiceId='') {
   target.associate=exact;target.start=entry.start||target.start;target.role=entry.role||'';target.source='paycom';touchRosteringPlan();return true;
 }
 function fillRosteringFromPaycom(serviceId='',options={}) {
-  const entries=rosteringScheduleEntriesForDate(state.rosteringDate).filter(rosteringEntryEligibleForRoster);if(!entries.length){if(!options.silent)toast('No eligible PAYCOM drivers are available for this roster date','error');return 0;}
+  const entries=rosteringOrderEntries(rosteringScheduleEntriesForDate(state.rosteringDate).filter(rosteringEntryEligibleForRoster),'abc');if(!entries.length){if(!options.silent)toast('No eligible PAYCOM drivers are available for this roster date','error');return 0;}
   let added=0;entries.forEach(entry=>{if(addPaycomEntryToRostering(entry,serviceId))added++;});
   if(!options.silent){persistRosteringSlice();renderRosteringContent();toast(added?`${added} PAYCOM driver${added===1?'':'s'} added to the roster`:'Every matching PAYCOM driver is already rostered');}
   return added;
@@ -1742,13 +1750,13 @@ function syncRosteringHelperShifts(plan=currentRosteringPlan()) {
   if(added)touchRosteringPlan();return added;
 }
 function autoRosterFromPaycom(options={}) {
-  const plan=currentRosteringPlan(),entries=rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>scheduleRoleGroup(entry.role)==='driver');if(!entries.length){if(!options.silent)toast('Import a PAYCOM schedule for this roster date first','error');return {drivers:0,helpers:0,prioritized:0,remaining:0};}
+  const plan=currentRosteringPlan(),entries=rosteringScheduleEntriesForDate(state.rosteringDate).filter(entry=>scheduleRoleGroup(entry.role)==='driver'||rosteringPriorityTrainee(entry));if(!entries.length){if(!options.silent)toast('Import a PAYCOM schedule for this roster date first','error');return {drivers:0,helpers:0,prioritized:0,remaining:0};}
   plan.assignments.forEach(row=>{if(['paycom','auto-roster','auto-helper'].includes(row.source)){row.associate='';row.role='';row.route='';row.source='template';}});
   const helpers=syncRosteringHelperShifts(plan),locked=rosteringAssignedNameKeys(plan),mode=options.mode||state.rosteringAutoMode||'random',eligible=entries.filter(entry=>!isDriverHelperOnlyRole(entry.role)&&rosteringEntryEligibleForRoster(entry)&&!locked.has(driverIdentityKey(entry.name))),drivers=rosteringOrderEntries(eligible,mode,options.random||Math.random),services=plan.services.filter(service=>service.kind!=='helper'&&service.id!=='xl-donations'),open=services.flatMap(service=>{
     let rows=plan.assignments.filter(row=>row.serviceId===service.id);while(rows.length<service.confirmed){rows.push(addRosteringAssignment(service.id));}
     return rows.slice(0,service.confirmed).filter(row=>!String(row.associate||'').trim()).map(row=>({service,row}));
   });
-  let added=0,prioritized=0;drivers.slice(0,open.length).forEach((entry,index)=>{const target=open[index]?.row;if(!target)return;const exact=canonicalDriverName(contactForMorningDriver(entry.name)?.name||entry.name);target.associate=exact;target.start=entry.start||target.start;target.role=entry.role||'';target.source='auto-roster';if(rosteringStayHomeCount(exact)>0)prioritized++;added++;});
+  let added=0,prioritized=0;drivers.forEach(entry=>{if(!open.length||locked.has(driverIdentityKey(entry.name)))return;const nursery=rosteringPriorityTrainee(entry)?open.findIndex(slot=>/nursery/i.test(slot.service.name)):-1,target=open.splice(nursery>=0?nursery:0,1)[0]?.row;if(!target)return;const exact=canonicalDriverName(contactForMorningDriver(entry.name)?.name||entry.name);if(locked.has(driverIdentityKey(exact)))return;target.associate=exact;locked.add(driverIdentityKey(exact));target.start=entry.start||target.start;target.role=entry.role||'';target.source='auto-roster';if(rosteringPriorityTrainee(entry)||rosteringStayHomeCount(exact)>0)prioritized++;added++;});
   touchRosteringPlan();const result={drivers:added,helpers,prioritized,remaining:Math.max(0,drivers.length-added),mode};
   if(!options.silent){persistRosteringSlice();renderRosteringContent();toast(`${added} route driver${added===1?'':'s'} rostered in ${mode==='abc'?'ABC':'random'} order · ${helpers} helper${helpers===1?'':'s'} added`);}return result;
 }

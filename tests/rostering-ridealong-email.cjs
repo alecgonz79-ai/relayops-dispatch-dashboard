@@ -106,7 +106,7 @@ function run() {
   const result = context.__result;
   assert(result.rawCounts.paycom === 3, 'Native PAYCOM report rows containing Ride Along/RIDE-ALONG must be read without losing the duplicate source row');
   assert(result.rawCounts.role === 2 && result.rawCounts.title === 1 && result.rawCounts.shift === 3, 'Shift, Role, and Title exports must all recognize their role column');
-  assert(result.variants.every(row=>row.group==='training'&&row.category==='training'&&!row.helper&&!row.eligible), 'Case, spacing, hyphen, compact, and embedded Ride Along role values must classify only as Training');
+  assert(result.variants.every(row=>row.group==='training'&&row.category==='training'&&!row.helper&&row.eligible), 'Ride Along variants remain Training and are eligible for priority driver positions');
 
   const expected = [
     ['Jordan Hyphen', '2026-09-06', '10:35 AM', '8:35 PM'],
@@ -120,8 +120,8 @@ function run() {
   assert(result.ridealongs.every(row=>/ride\s*-?\s*along/i.test(row.role)||/ridealong/i.test(row.role)), 'Every case, spacing, hyphen, and embedded Ride Along role variant must classify as training');
 
   assert(result.helpers.join(',') === 'Hayden Helper', 'Ride-along shifts must not enter the Helper box');
-  assert(result.autoResult.drivers === 1 && result.autoResult.helpers === 1, 'Auto Roster must place only the normal driver and helper, not ride-along shifts');
-  assert(!result.assigned.some(row=>result.ridealongs.some(ridealong=>ridealong.name===row.name)), 'Ride-along shifts must not occupy normal driver or Helper service positions');
+  assert(result.autoResult.drivers === 6 && result.autoResult.helpers === 1, 'Auto Roster must place five trainees, one regular driver, and one helper');
+  assert(result.ridealongs.every(trainee=>result.assigned.some(row=>row.name===trainee.name&&row.service==='driver')), 'Trainees occupy driver positions while remaining in Training matches');
   assert(!result.backupNames.includes('Sam Split Role'), 'A person with both Ride Along and Delivery Associate rows must not leak into a backup group');
   assert((result.paycomHtml.match(/data-rostering-paycom-category="training"/g)||[]).length === 5, 'PAYCOM Rostering must expose each unique Ride Along in the separate Training category');
   assert(result.pageHtml.includes('HELPER SHIFTS') && result.pageHtml.includes('RIDEALONGS / TRAINING'), 'Rostering must render distinct Helper and Ride Along sections');
