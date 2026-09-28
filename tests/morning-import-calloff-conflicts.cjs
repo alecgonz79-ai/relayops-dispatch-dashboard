@@ -12,6 +12,9 @@ state.morningRoutes=[];state.scheduleDriverMarks={};state.scheduleBackupRecords=
 globalThis.results={match:morningCalloffConflict('  ALEX DRIVER  '),paired:morningCalloffConflict('Other Person + Alex Driver'),old:morningCalloffConflict('Old Driver'),empty:morningCalloffConflict(''),other:morningCalloffConflict('Alex Other'),backups:openingPicklistBackupRows(),available:currentBackupDriverRows(),html:picklistVtoDriverCell('vto4',0,null,'Alex Driver')};
 state.morningRoutes=[{dsp:'LLOL',route:'CX1',driver:'Alex Driver'}];
 results.routedBackups=openingPicklistBackupRows();
+state.openingPicklistBackupOverrides={'vto2:0':'Alex Driver','vto4:0':'Alex Driver'};
+results.html=openingPicklistRightHtml();
+results.calloffs=openingPicklistCallOffRows();
 importPreflight=()=>({ready:true});morningImportCandidates=()=>[{row:['LLOL','CX1','Alex Driver','10:00 AM'],route:'CX1'}];
 state.importedFile={name:'Morning.csv',headers:['DSP','Route','Driver','Wave'],rows:[['LLOL','CX1','Alex Driver','10:00 AM']]};
 applyImport();results.afterImport=morningCalloffConflict(state.morningRoutes[0].driver);
@@ -20,9 +23,10 @@ state.callOffDriverKeys={};results.otherStation=morningCalloffConflict('Alex Dri
 const r=context.results;
 assert(r.match&&r.paired&&!r.old&&!r.empty&&!r.other&&!r.otherStation);
 assert(r.afterImport,'Call-off recorded before import must survive route creation');
-assert.equal(r.backups.length,1);assert(r.backups[0].calloffConflict);
+assert.equal(r.backups.length,0);
 assert.equal(r.available.length,0);assert.equal(r.routedBackups.length,0);
-assert(r.html.includes('calloff-conflict-cell')&&r.html.includes('CALLED OFF'));
+assert(!/data-picklist-backup="[^"]+"[^>]*value="Alex Driver"/.test(r.html),'Manual overrides cannot restore called-off backups');
+assert.equal(r.calloffs.length,1);assert.equal(r.calloffs[0].name,'Alex Driver');
 assert(!r.html.includes('open-vto-route-swap'));
 const source=fs.readFileSync(require.resolve('../app.js'),'utf8');
 const modal=source.split('const source=`<div class="drop-zone')[1].split('function ')[0];
