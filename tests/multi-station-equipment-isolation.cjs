@@ -189,7 +189,7 @@ async function main() {
     const html = context.__devicePage;
     assert(html.includes('role="tablist"') && html.includes('aria-label="Station workspace"'), 'Device and Portable page is missing its accessible station tablist');
     assert((html.match(/role="tab"/g) || []).length === 2, 'Device and Portable page must expose exactly the DJT6 and DUR6 tabs');
-    assert(html.includes('data-station="DJT6"') && html.includes('data-station="DUR6"'), 'Device and Portable page is missing a station choice');
+    assert(html.includes('data-station="DJT6"') && html.includes('data-station="DUR9"'), 'Device and Portable page is missing a station choice');
     assert(html.includes('role="tabpanel"') && html.includes('aria-labelledby="station-tab-djt6"'), 'Device and Portable content is not associated with its selected station tab');
     assert(html.includes('data-opening-station="djt6"') && html.includes('Working in DJT6 · Home station'), 'DJT6 Device and Portable page does not show a clear active-station identity');
   });
@@ -211,7 +211,7 @@ async function main() {
     assert(blank.removed.length === 0, 'DUR6 inherited DJT6 removed-vehicle choices');
     assert(Object.keys(blank.issues).length === 0, 'DUR6 inherited DJT6 device/portable issues');
     assert(!blank.endpoint && blank.receipt === null, 'DUR6 fell back to the DJT6 Google connector or receipt');
-    assert(context.__dur6DevicePage.includes('data-opening-station="dur6"') && context.__dur6DevicePage.includes('Working in DUR6 · Temecula'), 'DUR6 Device and Portable page does not clearly identify Temecula');
+    assert(context.__dur6DevicePage.includes('data-opening-station="dur6"') && context.__dur6DevicePage.includes('Working in DUR9 · Temecula'), 'DUR6 Device and Portable page does not clearly identify Temecula');
     assert(context.__dur6DevicePage.includes('aria-labelledby="station-tab-dur6"'), 'DUR6 Device content is not associated with the DUR6 tab');
   });
 

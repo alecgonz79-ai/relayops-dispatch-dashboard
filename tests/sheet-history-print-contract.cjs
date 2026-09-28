@@ -129,7 +129,7 @@ function testStationPicklistPrintVisibilityContract() {
     const wrapper = html.indexOf('<section id="station-workspace-panel" class="station-workspace-panel"');
     const article = html.indexOf('<article class="card opening-picklist-print">');
     assert(wrapper >= 0 && article > wrapper && html.lastIndexOf('</section>') > article, `${station}: exercise the real station-wrapped Picklist, not a legacy direct-child fixture`);
-    assert(html.includes(`${station} Opening Picklist`) && html.includes('class="opening-picklist-sheet"'), `${station}: the print wrapper must contain the selected station's sheet`);
+    assert(html.includes(`${station==='DUR6'?'DUR9':station} Opening Picklist`) && html.includes('class="opening-picklist-sheet"'), `${station}: the print wrapper must contain the selected station's sheet`);
   }
 }
 

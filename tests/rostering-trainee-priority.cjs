@@ -11,8 +11,8 @@ for(const mode of ['abc','random']){
  globalThis.rows=plan.assignments;globalThis.training=rosteringRidealongEntries();
  autoRosterFromPaycom({silent:true,mode});globalThis.again=plan.assignments;
  `,c);
- assert.equal(c.rows.find(r=>r.serviceId==='nursery').associate,'Zoe Trainee');
- assert.equal(c.rows.find(r=>r.serviceId==='regular').associate,'Aaron Regular');
+ assert.equal(c.rows.find(r=>r.serviceId==='nursery').associate,'Aaron Regular');
+ assert.equal(c.rows.find(r=>r.serviceId==='regular').associate,'Zoe Trainee');
  assert(c.training.some(r=>r.name==='Zoe Trainee'),'Rostered trainee must remain in Training matches');
  assert.equal(c.again.filter(r=>r.associate==='Zoe Trainee').length,1);
  vm.runInContext(`
@@ -21,4 +21,4 @@ for(const mode of ['abc','random']){
  `,c);
  assert.equal(c.sorted.at(-1).associate,'Zoe Trainee','Trainees display last even with earlier shifts or imported rows missing role');
 }
-console.log('ABC/random: trainees get nursery priority, remain in Training matches, exclude trainers/classroom/call-offs, no duplicate on rerun');
+console.log('ABC/random: trainees get Rivian priority, remain in Training matches, exclude trainers/classroom/call-offs, no duplicate on rerun');

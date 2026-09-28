@@ -223,7 +223,7 @@ async function main() {
   assert(vm.runInContext('MULTI_STATION_PREVIEW', context) === true, 'Explicit localhost preview gate did not activate');
   assert(vm.runInContext('activeMorningStationCode()', context) === 'DJT6', 'DJT6 should remain the default station');
   const stationTabs = vm.runInContext('stationWorkspaceTabs()', context);
-  assert(stationTabs.includes('role="tablist"') && stationTabs.includes('role="tab"') && stationTabs.includes('data-station="DJT6"') && stationTabs.includes('data-station="DUR6"'), 'Local preview must render accessible DJT6 and DUR6 station tabs');
+  assert(stationTabs.includes('role="tablist"') && stationTabs.includes('role="tab"') && stationTabs.includes('data-station="DJT6"') && stationTabs.includes('data-station="DUR9"'), 'Local preview must render accessible DJT6 and DUR6 station tabs');
   const djt6Contract = vm.runInContext(`({
     count:activeMorningWaveCount(),
     anchors:morningBlankWaveAnchors().length,

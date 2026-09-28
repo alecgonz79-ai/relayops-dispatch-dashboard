@@ -31,10 +31,10 @@ function load(code='DUR6',{seed={},error=''}={}) {
   assert.equal(dur6.run('state.stationCode'),'DUR6');assert.equal(dur6.run('activeMorningWaveCount()'),3);
   for(const expression of ['state.morningRoutes.length','state.driverContacts.length','rivianFleet.length','state.vanParking.length','state.inventoryItems.length'])assert.equal(dur6.run(expression),0,expression);
   assert.equal(dur6.run('state.equipmentImport'),null);assert.equal(dur6.run('state.morningSheetsEndpoint'),'');
-  assert(dur6.run('sidebarStationSelectorHtml()').indexOf('data-station="DJT6"')<dur6.run('sidebarStationSelectorHtml()').indexOf('data-station="DUR6"'));
+  assert(dur6.run('sidebarStationSelectorHtml()').indexOf('data-station="DJT6"')<dur6.run('sidebarStationSelectorHtml()').indexOf('data-station="DUR9"'));
   assert(dur6.run('stationWorkspaceTabs()').includes('Separate shared workspace'));
-  assert(dur6.run('livePage()').includes('DUR6 Device &amp; Portable Sheet'));
-  assert(dur6.run('sharedDashboardUrl()').includes('station=DUR6'));
+  assert(dur6.run('livePage()').includes('DUR9 Device &amp; Portable Sheet'));
+  assert(dur6.run('sharedDashboardUrl()').includes('station=DUR9'));
   assert.equal(dur6.run('hasOwnerAdminAccess()'),false,'Production retains Admin PIN');
   assert.throws(()=>dur6.run("state.stationCode='DJT6'"),/cannot change/);
   for(const method of ['applySharedWorkspaceState','applyPersistentWorkspaceState'])assert.throws(()=>dur6.run(`${method}({stationCode:'DJT6',morningSheetsEndpoint:'bad',routes:[{route:'WRONG'}]})`),/Blocked DJT6/);

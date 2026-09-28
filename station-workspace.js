@@ -11,8 +11,9 @@
     const host=String(location.hostname||'').toLowerCase();
     const local=location.protocol==='file:'||['localhost','127.0.0.1','::1','[::1]'].includes(host);
     preview=local&&params.get('multiStationPreview')==='1';
-    const requested=params.has('station')?String(params.get('station')).trim().toUpperCase():'DJT6';
-    if(!codes.includes(requested)||params.getAll('station').length>1)throw new Error('Unknown station link. Open the dashboard using DJT6 or DUR6. No shared data has been loaded.');
+    const requestedLabel=params.has('station')?String(params.get('station')).trim().toUpperCase():'DJT6';
+    const requested=requestedLabel==='DUR9'?'DUR6':requestedLabel;
+    if(!codes.includes(requested)||params.getAll('station').length>1)throw new Error('Unknown station link. Open the dashboard using DJT6 or DUR9. No shared data has been loaded.');
     code=requested;
   }catch(problem){error=problem.message||'The station link could not be read safely.';}
   const enabled=preview||original.multiStationEnabled===true;
@@ -20,9 +21,9 @@
   if(!error&&!preview){
     if(enabled){
       const first=String(stations.DJT6.stationId||''),second=String(stations.DUR6.stationId||'');
-      if(!uuid.test(first)||!uuid.test(second)||first.toLowerCase()===second.toLowerCase())error='Station setup is incomplete. Shared operations are paused to prevent mixing DJT6 and DUR6.';
+      if(!uuid.test(first)||!uuid.test(second)||first.toLowerCase()===second.toLowerCase())error='Station setup is incomplete. Shared operations are paused to prevent mixing DJT6 and DUR9.';
       else stationId=String(stations[code].stationId);
-    }else if(code!=='DJT6')error='DUR6 is not enabled in this dashboard version. No DJT6 data has been opened.';
+    }else if(code!=='DJT6')error='DUR9 is not enabled in this dashboard version. No DJT6 data has been opened.';
     else stationId=String(original.stationId||'');
   }
   // Opening an exported file must never connect to the production database.
