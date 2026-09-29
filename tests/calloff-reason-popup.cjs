@@ -20,3 +20,12 @@ assert.equal(c.opened.modal,'calloff-reason');assert.equal(c.opened.count,0);ass
 assert.equal(c.saved.reason,'Sick');assert.equal(c.saved.backups,0);assert.equal(c.saved.calloffs,1);assert.equal(c.saved.modal,null);
 assert.equal(c.custom,'Personal appointment');assert.equal(c.canceled.pending,null);assert.equal(c.canceled.marked,false);
 console.log('Call-off popup: preset/custom reasons, required choice, backup removal and cancellation passed');
+vm.runInContext(`
+applyPicklistVtoAction('No Show Backup','Rescue','ncns');
+globalThis.noShowDraft={reason:state.pendingCalloffReason.reason,marked:!!state.callOffDriverKeys[callOffStatusKey('No Show Backup')]};
+confirmRosterCalledOff();
+globalThis.noShowSaved=state.callOffReasons[callOffStatusKey('No Show Backup')];
+`,c);
+assert.equal(c.noShowDraft.reason,'No Call No Show');assert.equal(c.noShowDraft.marked,false);
+assert.equal(c.noShowSaved,'No Call No Show');
+console.log('No Call No Show action preselects its reason and requires confirmation.');

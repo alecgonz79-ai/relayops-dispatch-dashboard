@@ -1571,7 +1571,7 @@ function picklistVtoDriverCell(group='',index=0,row=null,value='') {
   if(!name)return input;
   const action=(target,text,tone='')=>`<button type="button" class="${esc(tone)}" data-action="picklist-vto-action" data-vto-target="${esc(target)}" data-operation-date="${esc(state.morningOperationDate)}" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}">${esc(text)}</button>`;
   const swap=`<button type="button" class="swap-route" data-action="open-vto-route-swap" data-driver-name="${esc(name)}" data-driver-role="${esc(role)}" data-vto-label="${esc(label)}">Swap To Route</button>`;
-  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}" aria-haspopup="menu" aria-expanded="false">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('duplicate-name','Match with driver name on route','duplicate-name')}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('second-mid','2nd MID','adhoc')}${action('adhoc','Adhoc','adhoc')}${action('remove','Remove Driver','remove-driver')}</div></div></div>`;
+  return `<div class="picklist-vto-driver ${group==='vto2'?'vto-2':'vto-4'}" tabindex="0" data-vto-driver-name="${esc(name)}" aria-haspopup="menu" aria-expanded="false">${input}<span class="picklist-vto-status">${esc(label)}</span><div class="picklist-vto-actions" role="group" aria-label="Roster actions for ${esc(name)}"><header><strong>${esc(name)}</strong><small>Currently ${esc(label)} · choose where this driver belongs</small></header><div>${swap}${action('duplicate-name','Match with driver name on route','duplicate-name')}${action('return','Return to scheduled','return')}${action('calloff','Called off','called-off')}${action('ncns','No Call No Show','called-off')}${action('reduction','Reduction','reduction')}${action('stay-home','Told to stay home','stay-home')}${group==='vto2'?action('vto4','Move to VTO 4','vto-4'):action('vto2','Move to VTO 2','vto-2')}${canBecomeHelperRole(role)?action('helper','Helper','helper'):''}${action('second-mid','2nd MID','adhoc')}${action('adhoc','Adhoc','adhoc')}${action('remove','Remove Driver','remove-driver')}</div></div></div>`;
 }
 function openingPicklistCallOffRows() {
   return Object.entries(state.callOffDriverKeys||{}).filter(([key])=>key.startsWith(`${state.morningOperationDate}|`)).map(([key,value])=>({key,name:value.name||'',reason:state.callOffReasons?.[key]||'',route:value.route||''})).sort((a,b)=>a.name.localeCompare(b.name));
@@ -1639,12 +1639,12 @@ function rosteringScheduleEntriesForDate(date=state.rosteringDate) {
   // Planning imports belong to this station's date-scoped roster, never to
   // Opening's live PAYCOM schedule (which drives backups and helper lists).
   const entries=state.rosteringPlans?.[date]?.paycomEntries;
-  return Array.isArray(entries)?entries.filter(entry=>entry&&scheduleEntryMatchesStation(entry)&&scheduleDateKey(entry.date)===date):[];
+  return Array.isArray(entries)?entries.filter(entry=>entry&&rosteringScheduleEntryMatchesStation(entry)&&scheduleDateKey(entry.date)===date):[];
 }
 function storeRosteringScheduleEntries(entries=[],importName='') {
   const selectedDate=state.rosteringDate||defaultOperationDate(),byDate=new Map(),importedAt=new Date().toISOString();
   (Array.isArray(entries)?entries:[]).forEach(entry=>{
-    if(!entry||typeof entry!=='object')return;
+    if(!entry||typeof entry!=='object'||!rosteringScheduleEntryMatchesStation(entry))return;
     const date=scheduleDateKey(entry.date)||selectedDate;
     if(!byDate.has(date))byDate.set(date,[]);
     byDate.get(date).push({...entry,date});
@@ -2547,7 +2547,7 @@ function driverCapabilityButtonsHtml(name='') {
 }
 function driverKnownNamesHtml(name='') {
   const profile=driverProfileEntry(name)?.profile,canonical=nameKey(profile?.canonical||name),known=[...new Set([profile?.nickname,...(profile?.names||[])].map(value=>String(value||'').trim()).filter(value=>value&&nameKey(value)!==canonical))];
-  return known.length?`<div class="driver-known-names"><span>Linked names</span><strong>${known.map(esc).join(' · ')}</strong></div>`:'';
+  return `<div class="driver-known-names"><div><span>Linked names</span><button type="button" data-action="open-driver-alias" data-driver-name="${esc(profile?.canonical||name)}" aria-label="Edit linked names for ${esc(profile?.canonical||name)}" title="Edit linked names">${ICONS.edit}<b>Edit</b></button></div><strong class="${known.length?'':'empty'}">${known.length?known.map(esc).join(' · '):'No linked names yet'}</strong></div>`;
 }
 
 function teamDriverMetrics(drivers=[]) {
@@ -4184,7 +4184,7 @@ function modal() {
   }
   if (state.modal === 'driver-alias' && state.pendingDriverAlias) {
     const pending=state.pendingDriverAlias,suggestion=suggestedDriverAlias(pending.canonical);
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal driver-alias-modal" role="dialog" aria-modal="true" aria-labelledby="driver-alias-title"><div class="modal-head"><div><span class="eyebrow">DRIVER PROFILE</span><h2 id="driver-alias-title">Identity and preferred vans</h2><p>${esc(pending.canonical)} remains the permanent driver identity even after an updated Amazon team import.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="driver-alias-field"><span>Nickname / shortened display name</span><input id="driver-alias-display" value="${esc(pending.display)}" placeholder="${esc(suggestion)}" maxlength="28" autofocus><small>Suggested: ${esc(suggestion)} · This is what Morning Sheet, Picklist, and Rostering display.</small></label><label class="driver-alias-field"><span>Other known names</span><textarea id="driver-alias-known-names" rows="3" placeholder="Separate previous names or nicknames with commas">${esc((pending.knownNames||[]).join(', '))}</textarea><small>Every saved variation resolves to the same phone, history, Whiparound record, and driver profile.</small></label><label class="driver-alias-field"><span>Preferred EV(s) / van(s)</span><input id="driver-preferred-evs" value="${esc((pending.preferredEvs||[]).map(value=>/^\d+$/.test(value)?`EV${value}`:value).join(', '))}" placeholder="EV12, EV31, F33"><small>First choice first. Automatic assignment uses a preference only when Fleet Health verifies that van is active, operational, issue-free, and sufficiently charged.</small></label><div class="alias-preview"><span>Dashboard preview</span><strong>${esc(pending.display||pending.canonical)}</strong><small>Permanent identity: ${esc(pending.canonical)}${pending.preferredEvs?.length?` · Preferred: ${esc(pending.preferredEvs.map(value=>/^\d+$/.test(value)?`EV${value}`:value).join(', '))}`:''}</small></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn" data-action="clear-driver-alias">Use full name</button><button class="btn primary" data-action="save-driver-alias">Save driver profile</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal driver-alias-modal" role="dialog" aria-modal="true" aria-labelledby="driver-alias-title"><div class="modal-head"><div><span class="eyebrow">DRIVER PROFILE</span><h2 id="driver-alias-title">Edit linked names</h2><p>${esc(pending.canonical)} remains the permanent driver identity even after an updated Amazon team import.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="driver-alias-field"><span>Nickname / shortened display name</span><input id="driver-alias-display" value="${esc(pending.display)}" placeholder="${esc(suggestion)}" maxlength="28" autofocus><small>Suggested: ${esc(suggestion)} · This is what Morning Sheet, Picklist, and Rostering display.</small></label><label class="driver-alias-field"><span>Linked names</span><textarea id="driver-alias-known-names" rows="3" placeholder="Separate previous names or nicknames with commas">${esc((pending.knownNames||[]).join(', '))}</textarea><small>Add or remove name variations here. Every saved name resolves to the same phone, history, Whiparound record, and driver profile.</small></label><label class="driver-alias-field"><span>Preferred EV(s) / van(s)</span><input id="driver-preferred-evs" value="${esc((pending.preferredEvs||[]).map(value=>/^\d+$/.test(value)?`EV${value}`:value).join(', '))}" placeholder="EV12, EV31, F33"><small>First choice first. Automatic assignment uses a preference only when Fleet Health verifies that van is active, operational, issue-free, and sufficiently charged.</small></label><div class="alias-preview"><span>Dashboard preview</span><strong>${esc(pending.display||pending.canonical)}</strong><small>Permanent identity: ${esc(pending.canonical)}${pending.preferredEvs?.length?` · Preferred: ${esc(pending.preferredEvs.map(value=>/^\d+$/.test(value)?`EV${value}`:value).join(', '))}`:''}</small></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn" data-action="clear-driver-alias">Use full name</button><button class="btn" data-action="remove-driver-linked-names">Remove all linked names</button><button class="btn primary" data-action="save-driver-alias">Save linked names</button></div></div></div></div>`;
   }
   if (state.modal === 'morning-vehicle-issue' && state.pendingMorningIssue) {
     const pending=state.pendingMorningIssue,issue=vehicleIssueForEquipmentId(pending.equipment),records=issue?.reported?.active||[],acknowledged=morningIssueAcknowledged(pending.route,issue?.reported);
@@ -4835,13 +4835,13 @@ function applyRosterDestinationAction(target='') {
   }
   render();return false;
 }
-const CALLOFF_REASON_PRESETS=['Sick','Sick, no sitter','Family emergency','Personal','Car trouble','Doctor appointment','Childcare','Bereavement','Injured','No call no show','No Reason'];
-function markRosterCalledOff(name='',role='') {
+const CALLOFF_REASON_PRESETS=['Sick','Sick, no sitter','Family emergency','Personal','Car trouble','Doctor appointment','Childcare','Bereavement','Injured','No Call No Show','No Reason'];
+function markRosterCalledOff(name='',role='',reason='') {
   const exactName=contactForMorningDriver(name)?.name||name;
   if(!exactName)return false;
   // Ask for a reason first — the popup collects a preset or custom reason,
   // then confirmRosterCalledOff finishes the roster move.
-  state.pendingCalloffReason={name:exactName,role:role||'',reason:''};
+  state.pendingCalloffReason={name:exactName,role:role||'',reason};
   state.modal='calloff-reason';
   render();return true;
 }
@@ -4864,6 +4864,7 @@ function applyPicklistVtoAction(name='',role='',target='',operationDate=state.mo
   if(!exactName)return false;
   if(target==='return')return restoreRosterStatus(exactName,'backup');
   if(target==='remove')return removeBackupDriver(exactName);
+  if(target==='ncns')return markRosterCalledOff(exactName,role,'No Call No Show');
   if(target==='calloff')return markRosterCalledOff(exactName,role);
   if(target==='reduction')return addRosterReduction(exactName,role);
   if(target==='stay-home')return markPaycomStayHome(exactName,role);
@@ -5176,7 +5177,7 @@ function openDriverRouteContextMenu(event,source,{hover=false}={}) {
   const adhocSwap=isExplicitAdhocMorningRoute(route)?button('swap-route-da','Swap with DA on Route','swap-da','Exchange this Adhoc driver with a regular route DA'):'';
   const cxSwap=isCxMorningRoute(route)&&!isExplicitAdhocMorningRoute(route)?button('swap-cx','Swap to another CX','swap-da','Exchange the primary drivers between two CX routes'):'';
   const flags=driverFlagSummary(route.driver),notes=flags.length?`<div class="driver-route-context-notes">${flags.map(flag=>`<span>${esc(flag)}</span>`).join('')}</div>`:'';
-  menu.innerHTML=`<header><div><span>DRIVER ACTIONS</span><strong>${esc(route.route)} · ${esc(waveNameForTime(route.wave))}</strong></div><button type="button" class="driver-route-context-close" aria-label="Close route actions">×</button></header>${notes}${personPicker}<div class="driver-route-context-actions">${cxSwap}${adhocSwap}${button('calloff','Call off & swap','calloff','Choose a driver from the backup list')}${button('swap-vto','Put VTO driver on route','swap','One-step VTO swap')}${button('reduction','Move to Reductions','reduction','Leave route visibly unassigned')}${button('vto2','Move to VTO 2','vto2','Rescue backup')}${button('vto4','Move to VTO 4','vto4','Delivery Associate backup')}${button('stay-home','Told To Stay Home','stay-home','Remove from route')}${button('trainer','Add a trainer','trainer','Driver + Trainer')}</div><footer>Route, staging, pad, van, counts, and Planned RTS stay in place. Alt + ↓ opens these actions from a focused name.</footer>`;
+  menu.innerHTML=`<header><div><span>DRIVER ACTIONS</span><strong>${esc(route.route)} · ${esc(waveNameForTime(route.wave))}</strong></div><button type="button" class="driver-route-context-close" aria-label="Close route actions">×</button></header>${notes}${personPicker}<div class="driver-route-context-actions">${cxSwap}${adhocSwap}${button('calloff','Call off & swap','calloff','Choose a driver from the backup list')}${button('ncns','No Call No Show','calloff','Confirm a no-show reason')}${button('swap-vto','Put VTO driver on route','swap','One-step VTO swap')}${button('reduction','Move to Reductions','reduction','Leave route visibly unassigned')}${button('vto2','Move to VTO 2','vto2','Rescue backup')}${button('vto4','Move to VTO 4','vto4','Delivery Associate backup')}${button('stay-home','Told To Stay Home','stay-home','Remove from route')}${button('trainer','Add a trainer','trainer','Driver + Trainer')}</div><footer>Route, staging, pad, van, counts, and Planned RTS stay in place. Alt + ↓ opens these actions from a focused name.</footer>`;
   document.body?.appendChild?.(menu);menu.querySelector?.('.driver-route-context-close')?.addEventListener?.('click',closeDriverRouteContextMenu);bindActionControls(menu);
   menu.addEventListener?.('pointerenter',()=>clearTimeout(driverRouteContextCloseTimer));menu.addEventListener?.('pointerleave',scheduleDriverRouteContextClose);menu.addEventListener?.('focusout',event=>{if(!menu.contains?.(event.relatedTarget))scheduleDriverRouteContextClose();});
   const viewportWidth=window.innerWidth||document.documentElement?.clientWidth||1024,viewportHeight=window.innerHeight||document.documentElement?.clientHeight||768,width=Math.min(360,Math.max(286,menu.offsetWidth||330)),height=Math.min(viewportHeight-16,menu.offsetHeight||430),rect=source.getBoundingClientRect?.()||{left:8,top:8,bottom:8};
@@ -5238,6 +5239,7 @@ function applyDriverRouteContextAction(target='',el=null) {
   const role=routeContextDriverRole(name);
   if(target==='swap-cx')return openCxRouteSwap(routeUid,name);
   if(target==='swap-route-da')return openAdhocRouteSwap(routeUid,name);
+  if(target==='ncns')return markRosterCalledOff(name,'','No Call No Show');
   if(target==='calloff')return openRosterSwap(route.route,name,'calloff',driverDisplayName(name));
   if(target==='swap-vto')return openRouteVtoSwap(routeUid,name);
   if(target==='reduction')return addRosterReduction(name,role,route.route,route.wave);
@@ -7885,6 +7887,11 @@ function action(name,el) {
   if (name==='unmatch-helper') return unmatchHelper(el.dataset.driverName||'');
   if (name==='open-driver-alias') return openDriverAlias(el.dataset.driverName||'');
   if (name==='save-driver-alias') return saveDriverAlias();
+  if (name==='remove-driver-linked-names') {
+    const display=document.getElementById('driver-alias-display'),known=document.getElementById('driver-alias-known-names');
+    if(display)display.value='';if(known)known.value='';
+    return toast('Linked names cleared in this draft. Press Save linked names to confirm.');
+  }
   if (name==='clear-driver-alias') { const input=document.getElementById('driver-alias-display');if(input)input.value='';return saveDriverAlias(); }
   if (name==='mark-paycom-stay-home') return markPaycomStayHome(el.dataset.driverName||'',el.dataset.driverRole||'');
   if (name==='add-roster-reduction') return addRosterReduction(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.driverRoute||'',el.dataset.driverStart||'');
@@ -8637,7 +8644,7 @@ function scheduleEntriesFromPaycomReportRows(rows=[],options={}) {
   rows.slice(header+1).forEach(row=>{
     const rawName=String(row[0]||'').trim(),details=String(row.slice(1).find(Boolean)||'').replace(/\r/g,'').trim();
     const times=details.match(/(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
-    if(!times){const groupStation=paycomStationCode(rawName);if(groupStation)sourceStation=groupStation;return;}
+    if(!times){const groupStation=paycomStationCode(rawName);if(groupStation)sourceStation=groupStation;else if(rawName&&!details)sourceStation='';return;}
     if(!rawName)return;
     const name=normalizeScheduleEmployeeName(rawName),role=normalizeScheduleRole(details.slice(0,times.index).replace(/^"|"$/g,'').trim());
     if(!name||!role)return;
@@ -8647,11 +8654,16 @@ function scheduleEntriesFromPaycomReportRows(rows=[],options={}) {
   function rowDate(row){for(const cell of row.slice(1)){const parsed=paycomReportDate(cell,fallbackYear);if(parsed)return parsed;}return '';}
 }
 function normalizeScheduleRole(value='') { return String(value||'').replace(/res(?:cue|uce|ceus?)/ig,'Rescue').replace(/\s+/g,' ').trim(); }
-function paycomStationCode(value='') { const match=String(value).match(/\b(DJT6|DUR9|DUR9)\b/i);return match?(match[1].toUpperCase()==='DUR6'?'DUR9':match[1].toUpperCase()):''; }
+function paycomStationCode(value='') { const match=String(value).match(/\b(DJT6|DUR6|DUR9)\b/i);return match?(match[1].toUpperCase()==='DUR6'?'DUR9':match[1].toUpperCase()):''; }
 function stationDisplayCode(code=activeMorningStationCode()) { return code==='DUR6'?'DUR9':code; }
 function stationDisplayText(value='') { return String(value).replace(/\bDUR6\b/g,'DUR9'); }
 function scheduleEntryMatchesStation(entry={}) { const station=paycomStationCode(entry.sourceStation||entry.role);return !station||station===stationDisplayCode(); }
 function rosteringTraineeService(service={}) { return service.kind!=='helper'&&/rivian/i.test(service.name||'')&&!/\b(swa|recycle|donations|pilot|rescue)\b/i.test(service.name||''); }
+function rosteringScheduleEntryMatchesStation(entry={}) {
+  const active=stationDisplayCode(),stations=[entry.sourceStation,entry.role].flatMap(value=>String(value||'').match(/\b(?:DJT6|DUR6|DUR9)\b/gi)||[]).map(paycomStationCode);
+  // DUR9 never guesses ownership for an unlabeled shift.
+  return stations.length?stations.every(station=>station===active):active!=='DUR9';
+}
 function scheduleEntriesFromText(text='') {
   if(/<table\b/i.test(String(text||''))) {
     const paycom=scheduleEntriesFromPaycomReportRows(htmlTableRows(text));
@@ -8723,13 +8735,14 @@ function openDriverAlias(name='') {
 function saveDriverAlias() {
   const pending=state.pendingDriverAlias,display=String(document.getElementById('driver-alias-display')?.value||'').replace(/[+|&]/g,' ').replace(/\s+/g,' ').trim(),knownNames=String(document.getElementById('driver-alias-known-names')?.value||'').split(/[,\n;]/).map(value=>value.replace(/[+|&]/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean),preferredEvs=normalizePreferredVehicleIds(document.getElementById('driver-preferred-evs')?.value||pending?.preferredEvs||[]);
   if(!pending?.canonical)return toast('Driver identity was not found','error');
-  const contact=driverContactForName(pending.canonical)||{name:pending.canonical},entry=ensureDriverProfile(contact),canonical=entry?.profile?.canonical||pending.canonical,key=nameKey(canonical),aliases=[...new Set([...(entry?.profile?.names||[]),entry?.profile?.nickname,...(pending.knownNames||[]),...knownNames,display,canonical].filter(Boolean))],collision=driverIdentityCollision([display,...aliases],entry?.key||'');
+  const contact=driverContactForName(pending.canonical)||{name:pending.canonical},entry=ensureDriverProfile(contact),canonical=entry?.profile?.canonical||pending.canonical,key=nameKey(canonical),previousNames=driverProfileIdentityNames(entry?.profile||{}),aliases=[...new Set([canonical,display,...knownNames].filter(Boolean))],collision=driverIdentityCollision(aliases,entry?.key||'');
   if(collision)return toast(`“${display||collision.value}” is already linked to ${collision.profile.canonical}. Use a different nickname.`, 'error');
   if(entry){entry.profile.nickname=display&&nameKey(display)!==key?display:'';entry.profile.names=aliases;entry.profile.preferredEvs=preferredEvs;entry.profile.updatedAt=new Date().toISOString();}
+  previousNames.forEach(alias=>{const aliasKey=nameKey(alias),record=state.driverNameAliases?.[aliasKey],owner=typeof record==='string'?canonical:record?.canonical;if(aliasKey!==key&&(!record||nameKey(owner)===key))delete state.driverNameAliases[aliasKey];});
   if(!display||nameKey(display)===key)delete state.driverNameAliases[key];
   else state.driverNameAliases[key]={canonical,display,aliases};
   aliases.forEach(alias=>{if(nameKey(alias)!==key)state.driverNameAliases[nameKey(alias)]={canonical,display:display||canonical,aliases};});
-  state.pendingDriverAlias=null;state.modal=null;persist();render();toast(`${display&&nameKey(display)!==key?`${pending.canonical} will display as ${display}`:`${pending.canonical} uses the full name`}${preferredEvs.length?` · ${preferredEvs.length} preferred van${preferredEvs.length===1?'':'s'} saved`:''}`);
+  invalidateDriverDirectoryCaches();state.pendingDriverAlias=null;state.modal=null;persist();render();toast(`${display&&nameKey(display)!==key?`${pending.canonical} will display as ${display}`:`${pending.canonical} uses the full name`} · ${knownNames.length} linked name${knownNames.length===1?'':'s'} saved${preferredEvs.length?` · ${preferredEvs.length} preferred van${preferredEvs.length===1?'':'s'} saved`:''}`);
 }
 function helperMorningRouteFor(name='') { return (state.morningRoutes||[]).find(row=>row.helperAssignmentKey===scheduleHelperKey(name)&&/helper/i.test(`${row.service||''} ${row.wave||''}`)); }
 function removeHelperFromMatchedDriver(name='') {
@@ -8867,7 +8880,7 @@ async function readFiles(files) {
     if(purposeAtStart==='schedule') {
       let entries=parsed.flatMap(file=>file.rows?.length?scheduleEntriesFromRows(file.rows,{fileName:file.name}):scheduleEntriesFromText(file.text||''));
       if(!entries.length)throw new Error('no schedule shifts');
-      entries=entries.filter(scheduleEntryMatchesStation);
+      entries=entries.filter(scheduleDestinationAtStart==='rostering'?rosteringScheduleEntryMatchesStation:scheduleEntryMatchesStation);
       if(!entries.length)throw new Error(`No PAYCOM shifts match ${stationDisplayCode()}. No schedule was changed.`);
       const destination=scheduleDestinationAtStart,importName=parsed.map(file=>file.name).join(' + ');
       let entryDate=alignScheduleImportDate(entries,destination);

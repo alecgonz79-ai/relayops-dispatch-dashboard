@@ -76,7 +76,7 @@ assert(context.__picklistSections.find(section=>section.label==='WAVE 1')?.route
 assert(context.__aliceProfileAfterImport.canonical==='Alice A. Driver'&&context.__aliceProfileAfterImport.preferredEvs.join(',')==='3,2','Preferred EV order must survive a same-TransporterID team reimport');
 assert(Object.values(context.__savedProfiles).some(profile=>profile.transporterId==='A1'&&profile.preferredEvs.join(',')==='3,2'),'Preferred EVs must persist in local workspace state');
 assert(Object.values(context.__sharedProfiles).some(profile=>profile.transporterId==='A1'&&profile.preferredEvs.join(',')==='3,2'),'Preferred EVs must be included in shared workspace state');
-assert(context.__profileModal.includes('Preferred EV(s) / van(s)')&&context.__profileModal.includes('EV3, EV2')&&context.__profileModal.includes('Save driver profile'),'Driver profile editor must expose ordered preferred EVs and its safety explanation');
+assert(context.__profileModal.includes('Preferred EV(s) / van(s)')&&context.__profileModal.includes('EV3, EV2')&&context.__profileModal.includes('Save linked names'),'Driver profile editor must expose ordered preferred EVs and its safety explanation');
 assert(context.__teamHtml.includes('Preferred vans')&&context.__teamHtml.includes('EV3 · EV2'),'Driver cards must show saved preferred vans to dispatchers');
 assert(context.__assigned.map(row=>row.ev).join(',')==='3,1,5','Automatic assignment must honor safe preferences, skip grounded/low preferences, and keep vans unique');
 assert(context.__assigned.map(row=>`${row.deviceName}/${row.portable}`).join(',')==='D3/P3,D1/P1,D5/P5','Preferred assignment must still match device/portable by assigned van');

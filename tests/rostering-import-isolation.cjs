@@ -80,13 +80,13 @@ function seedOpening(h) {
 
 function parsedFile(entries, name = 'Paycom-shifts.csv') {
   return {name, parsed: {name, rows: [
-    ['Date', 'Name', 'Role', 'Start', 'End'],
-    ...entries.map(row => [row.date || '', row.name, row.role || 'Delivery Associate', row.start || '11:15 AM', '9:15 PM'])
+    ['Date', 'Name', 'Role', 'Start', 'End', 'Station'],
+    ...entries.map(row => [row.date || '', row.name, row.role || 'Delivery Associate', row.start || '11:15 AM', '9:15 PM', row.sourceStation])
   ]}};
 }
 
 async function importSchedule(h, destination, entries, name) {
-  h.context.inputFiles = [parsedFile(entries, name)];
+  h.context.inputFiles = [parsedFile(entries.map(row=>({...row,sourceStation:h.run('displayedStationCode()')})), name)];
   h.context.destination = destination;
   h.run("state.importPurpose='schedule';state.scheduleImportDestination=destination;state.page=destination;notices=[];");
   await h.run('readFiles(inputFiles)');
