@@ -1770,7 +1770,7 @@ function rosteringScreenshotAssociate(line='') {
   return canonicalDriverName(clean.replace(/\s+/g,' '));
 }
 function rosteringPlanFromScreenshotText(text='',fileName='Amazon roster screenshot') {
-  const lines=String(text||'').replace(/\r/g,'').split('\n').map(line=>line.replace(/[✓✔]/g,'').replace(/^[\s+●○•·!]+/,'').replace(/\s+/g,' ').trim()).filter(Boolean),services=[],rows=[];let active=null,pendingTime='',lastRow=null;
+  const lines=String(text||'').replace(/\r/g,'').split('\n').map(line=>line.replace(/[✓✔]/g,'').replace(/^[\s+●○•·!]+/,'').replace(/^[vVyY|]+\s*\+\s*(?=Standard Parcel|SWA|Nursery Route|DSP Initiated Work|Pilot|Rescue)/i,'').replace(/\s+/g,' ').trim()).filter(Boolean),services=[],rows=[];let active=null,pendingTime='',lastRow=null;
   const metric=(text,label)=>{const match=text.match(new RegExp(`(?:\\b(\\d+)\\s*${label}\\b|\\b${label}\\s*:?\\s*(\\d+)\\b)`,'i'));return match?Number(match[1]??match[2]):null;};
   const isCount=line=>/^(?:\d+\s*(?:Confirmed|Rostered)|(?:Confirmed|Rostered)\s*:?\s*\d+)/i.test(line);
   const isHeader=(line,index)=>{
@@ -8416,7 +8416,7 @@ async function parseUploadedFile(file,purpose=state.importPurpose,shouldContinue
 async function readImageContent(file,purpose=state.importPurpose,shouldContinue=null) {
   const current=()=>typeof shouldContinue!=='function'||shouldContinue();
   try {
-    if(purpose!=='equipment'&&typeof TextDetector!=='undefined'&&typeof createImageBitmap!=='undefined') {
+    if(!['equipment','rostering-screenshot','schedule'].includes(purpose)&&typeof TextDetector!=='undefined'&&typeof createImageBitmap!=='undefined') {
       const detector=new TextDetector();
       const bitmap=await createImageBitmap(file);
       if(!current()){bitmap.close?.();throw new Error('This import was closed or replaced.');}
@@ -8428,18 +8428,29 @@ async function readImageContent(file,purpose=state.importPurpose,shouldContinue=
     }
   } catch {}
   if(!current())throw new Error('This import was closed or replaced.');
-  return readImageWithOcr(file,shouldContinue);
+  return readImageWithOcr(file,shouldContinue,purpose);
 }
-async function equipmentOcrCanvas(file,shouldContinue=null) {
+async function equipmentOcrCanvas(file,shouldContinue=null,purpose='equipment') {
   if(typeof createImageBitmap==='undefined')return file;
   const current=()=>typeof shouldContinue!=='function'||shouldContinue(),bitmap=await createImageBitmap(file);
   if(!current()){bitmap.close?.();throw new Error('This import was closed or replaced.');}
-  const maxPixels=10000000,baseScale=Math.min(3,Math.max(1,1800/Math.max(1,bitmap.width))),pixelScale=Math.sqrt(maxPixels/Math.max(1,bitmap.width*bitmap.height)),scale=Math.max(.25,Math.min(baseScale,pixelScale));
+  const maxPixels=10000000,baseScale=Math.min(3,Math.max(['rostering-screenshot','schedule'].includes(purpose)?2:1,1800/Math.max(1,bitmap.width))),pixelScale=Math.sqrt(maxPixels/Math.max(1,bitmap.width*bitmap.height)),scale=Math.max(.25,Math.min(baseScale,pixelScale));
   const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
   const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
   bitmap.close?.();
   const image=ctx.getImageData(0,0,canvas.width,canvas.height), data=image.data;
   for(let i=0;i<data.length;i+=4){const gray=.299*data[i]+.587*data[i+1]+.114*data[i+2],value=Math.max(0,Math.min(255,(gray-128)*1.35+128));data[i]=value;data[i+1]=value;data[i+2]=value;}
+  // Collapsed Amazon service bars can be only a few pixels high. The
+  // equipment grid cleanup erases their borders and can make OCR miss the
+  // whole bar. Preserve roster pixels and add white space around the crop.
+  if(['rostering-screenshot','schedule'].includes(purpose)){
+    ctx.putImageData(image,0,0);
+    const padded=document.createElement('canvas'),margin=24;
+    padded.width=canvas.width+margin*2;padded.height=canvas.height+margin*2;
+    const paddedContext=padded.getContext('2d');paddedContext.fillStyle='#fff';
+    paddedContext.fillRect(0,0,padded.width,padded.height);paddedContext.drawImage(canvas,margin,margin);
+    return padded;
+  }
   const horizontal=[],vertical=[];
   for(let y=0;y<canvas.height;y++){let dark=0;for(let x=0;x<canvas.width;x++)if(data[(y*canvas.width+x)*4]<70)dark++;if(dark>canvas.width*.55)horizontal.push(y);}
   for(let x=0;x<canvas.width;x++){let dark=0;for(let y=0;y<canvas.height;y++)if(data[(y*canvas.width+x)*4]<70)dark++;if(dark>canvas.height*.55)vertical.push(x);}
@@ -8503,12 +8514,12 @@ function equipmentRowsFromOcrTsv(tsv='',imageWidth=0,imageCanvas=null) {
   }).filter(row=>row.some(Boolean));
   return isDouble?rows:repairSequentialEquipmentRows(rows);
 }
-async function readImageWithOcr(file,shouldContinue=null) {
+async function readImageWithOcr(file,shouldContinue=null,purpose='equipment') {
   let worker=null;
   const current=()=>typeof shouldContinue!=='function'||shouldContinue();
   try {
     if(!window.Tesseract?.createWorker)return {text:'',rows:[]};
-    const image=await equipmentOcrCanvas(file,shouldContinue);
+    const image=await equipmentOcrCanvas(file,shouldContinue,purpose);
     if(!current())throw new Error('This import was closed or replaced.');
     worker=await window.Tesseract.createWorker('eng',1,{logger:message=>{
       if(!current())return;
@@ -8526,7 +8537,7 @@ async function readImageWithOcr(file,shouldContinue=null) {
     const result=await worker.recognize(image,{}, {text:true,tsv:true});
     if(!current())throw new Error('This import was closed or replaced.');
     const text=String(result?.data?.text||'').replace(/\f/g,'\n').trim();
-    return {text,rows:equipmentRowsFromOcrTsv(result?.data?.tsv||'',image.width||0,image)};
+    return {text,rows:['rostering-screenshot','schedule'].includes(purpose)?[]:equipmentRowsFromOcrTsv(result?.data?.tsv||'',image.width||0,image)};
   } catch(error) {
     console.warn('VAN/DEV/PORT OCR failed',error);
     return {text:'',rows:[]};
@@ -8663,6 +8674,29 @@ function rosteringScheduleEntryMatchesStation(entry={}) {
   const active=stationDisplayCode(),stations=[entry.sourceStation,entry.role].flatMap(value=>String(value||'').match(/\b(?:DJT6|DUR6|DUR9)\b/gi)||[]).map(paycomStationCode);
   // DUR9 never guesses ownership for an unlabeled shift.
   return stations.length?stations.every(station=>station===active):active!=='DUR9';
+}
+// A cropped schedule card has no station or date header. Import it only from
+// Rostering, using the station/date selected when the read began. Full reports
+// still require their explicit station labels.
+function rosteringScheduleCardsFromText(text='',date=state.rosteringDate,station=stationDisplayCode()) {
+  const lines=String(text||'').replace(/[–—]/g,'-').split(/\r?\n/).map(line=>line.replace(/\s+/g,' ').trim()).filter(Boolean);
+  if(!lines.length||lines.length%2)return [];
+  const entries=[];
+  for(let i=0;i<lines.length;i+=2){
+    const name=lines[i],details=lines[i+1].match(/^(Ride Along|Delivery Associate|Driver Helper|Rescue|Training|Trainee)\s*[·•.\-]\s*(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)$/i);
+    if(!/^[A-Za-z][A-Za-z .,'’-]{2,80}$/.test(name)||!details)return [];
+    const validTime=value=>/^(?:0?[1-9]|1[0-2]):[0-5]\d\s*[AP]M$/i.test(value);
+    if(!validTime(details[2])||!validTime(details[3]))return [];
+    entries.push({name:normalizeScheduleEmployeeName(name),role:normalizeScheduleRole(details[1]),start:normalizeTimeDisplay(details[2]),end:normalizeTimeDisplay(details[3]),date,sourceStation:station});
+  }
+  return entries;
+}
+function importRosteringScheduleCards(entries=[],importName='') {
+  const current=rosteringScheduleEntriesForDate(),byName=new Map(current.map(entry=>[driverIdentityKey(entry.name),entry]));
+  entries.forEach(entry=>byName.set(driverIdentityKey(entry.name),entry));
+  storeRosteringScheduleEntries([...byName.values()],importName);
+  state.scheduleImportDestination='';state.importPurpose='morning';state.page='rostering';persist();render();
+  toast(`${entries.length} schedule card${entries.length===1?'':'s'} added to ${stationDisplayCode()} Rostering · ${formatShortOperationDate(state.rosteringDate)}`);
 }
 function scheduleEntriesFromText(text='') {
   if(/<table\b/i.test(String(text||''))) {
@@ -8876,6 +8910,10 @@ async function readFiles(files) {
       const applied=applyWhiparoundChecksToMorning(dates[0]);
       state.importPurpose='morning';state.page='inbox';persist();render();
       return toast(`${records.length} DVIR rows read · ${applied.pre} Pre-Trip and ${applied.post} Post-Trip Morning Sheet checks updated`);
+    }
+    if(isRosteringRead&&parsed.length&&parsed.every(file=>file.kind==='image')) {
+      const cards=parsed.map(file=>rosteringScheduleCardsFromText(file.text||'',rosteringDateAtStart,stationDisplayCode(stationAtStart)));
+      if(cards.every(entries=>entries.length))return importRosteringScheduleCards(cards.flat(),parsed.map(file=>file.name).join(' + '));
     }
     if(purposeAtStart==='schedule') {
       let entries=parsed.flatMap(file=>file.rows?.length?scheduleEntriesFromRows(file.rows,{fileName:file.name}):scheduleEntriesFromText(file.text||''));
