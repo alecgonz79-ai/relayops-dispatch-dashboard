@@ -29,7 +29,9 @@ function load(code='DUR6',{seed={},error=''}={}) {
   const dur6=load('DUR6',{seed:legacy});
   assert.equal(dur6.run('MULTI_STATION_ENABLED'),true);assert.equal(dur6.run('MULTI_STATION_PREVIEW'),false);
   assert.equal(dur6.run('state.stationCode'),'DUR6');assert.equal(dur6.run('activeMorningWaveCount()'),3);
-  for(const expression of ['state.morningRoutes.length','state.driverContacts.length','rivianFleet.length','state.vanParking.length','state.inventoryItems.length'])assert.equal(dur6.run(expression),0,expression);
+  for(const expression of ['state.morningRoutes.length','state.driverContacts.length','state.vanParking.length','state.inventoryItems.length'])assert.equal(dur6.run(expression),0,expression);
+  assert.equal(dur6.run('rivianFleet.length'),6);
+  assert.equal(dur6.run('dailyFleetHealthLoaded()'),false);
   assert.equal(dur6.run('state.equipmentImport'),null);assert.equal(dur6.run('state.morningSheetsEndpoint'),'');
   assert(dur6.run('sidebarStationSelectorHtml()').indexOf('data-station="DJT6"')<dur6.run('sidebarStationSelectorHtml()').indexOf('data-station="DUR9"'));
   assert(dur6.run('stationWorkspaceTabs()').includes('Separate shared workspace'));

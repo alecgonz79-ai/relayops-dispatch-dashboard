@@ -257,7 +257,8 @@ while (rivianFleet.length < 58) {
   });
 }
 // DJT6's historical fixture must never seed the new station's fleet.
-if(MULTI_STATION_ENABLED&&!MULTI_STATION_PREVIEW&&activeMorningStationCode()==='DUR6')rivianFleet.length=0;
+const DUR9_VEHICLE_CATALOG=[{"name":"Van-2","vin":"7FCEHEB20TN052658","serviceType":"Standard Parcel Electric - Rivian MEDIUM","make":"Rivian","model":"EDV 700"},{"name":"Van-1","vin":"7FCEHEB20TN053020","serviceType":"Standard Parcel Electric - Rivian MEDIUM","make":"Rivian","model":"EDV 700"},{"name":"Van-5","vin":"7FCEHEB28TN052472","serviceType":"Standard Parcel Electric - Rivian MEDIUM","make":"Rivian","model":"EDV 700"},{"name":"Van-4","vin":"7FCEHEB2XTN052327","serviceType":"Standard Parcel Electric - Rivian MEDIUM","make":"Rivian","model":"EDV 700"},{"name":"Van-3","vin":"7FCEHEB27TN052625","serviceType":"Standard Parcel Electric - Rivian MEDIUM","make":"Rivian","model":"EDV 700"},{"name":"Van-62","vin":"3C6LRVDG7NE128538","serviceType":"Standard Parcel - Extra Large Van - US","make":"Ram","model":"ProMaster"}];
+if(MULTI_STATION_ENABLED&&activeMorningStationCode()==='DUR6')rivianFleet.splice(0,rivianFleet.length,...dur9InventoryVehicles());
 const demoRivianFleet = rivianFleet.map(v=>({...v}));
 
 const morningSeed = [
@@ -2321,13 +2322,18 @@ function morningWaveGroup(section,sectionIndex=0) {
   return `${body}${timeRow}${separators}`;
 }
 
+// Inventory only: do not treat the supplied vehicle list as live daily health.
+
+function dur9InventoryVehicles() { return DUR9_VEHICLE_CATALOG.map(vehicle=>({...vehicle,battery:null,miles:null,active:'Unknown',operational:'Unknown',status:'Awaiting Fleet Health',source:'DUR9 vehicle inventory',hasActive:false,hasOperational:false,hasBattery:false,hasName:true})); }
 function deviceSheetDetails() {
   return state.equipmentImport?.details||{};
 }
 function deviceSheetBaseIds(section='') {
   const removed=new Set((state.removedDeviceVehicleIds||[]).map(normalizeEquipmentId));
-  const base=section==='ev'?Array.from({length:58},(_,i)=>`EV${i+1}`):section==='gas'?[...gasVehicleIds]:section==='helper'?['H1','H2','H3','H4']:[];
-  return base.filter(label=>!removed.has(normalizeEquipmentId(label)));
+  const stationFleet=MULTI_STATION_ENABLED&&activeMorningStationCode()==='DUR6'?[...dur9InventoryVehicles(),...rivianFleet].map(fleetEquipmentIdentity).filter(Boolean):null;
+  const base=stationFleet&&section!=='helper'?stationFleet.filter(v=>v.section===section).map(v=>v.label):section==='ev'?Array.from({length:58},(_,i)=>`EV${i+1}`):section==='gas'?[...gasVehicleIds]:section==='helper'?['H1','H2','H3','H4']:[];
+  const customKeys=new Set((stationFleet?deviceSheetCustomRows(section):[]).map(row=>normalizeEquipmentId(row.label)));
+  return [...new Set(base)].filter(label=>!removed.has(normalizeEquipmentId(label))&&!customKeys.has(normalizeEquipmentId(label)));
 }
 function deviceSheetCustomRows(section='') {
   return Array.isArray(state.deviceCustomRows?.[section])?state.deviceCustomRows[section]:[];
@@ -2344,6 +2350,7 @@ function sortDeviceCustomRows(section='') {
   if(Array.isArray(state.deviceCustomRows?.[section]))state.deviceCustomRows[section].sort(deviceVehicleLabelCompare);
 }
 function fleetEquipmentIdentity(vehicle={}) {
+  if(MULTI_STATION_ENABLED&&activeMorningStationCode()==='DUR6'){const label=String(state.fleetNameOverrides?.[cleanVin(vehicle.vin)]||vehicle.name||'').trim();return label?{section:isGasFleetVehicle(vehicle)?'gas':'ev',label}:null;}
   const vin=String(vehicle.vin||'').toUpperCase(),cleanedVin=cleanVin(vin),name=String(FIXED_FLEET_NAMES[cleanedVin]||state.fleetNameOverrides?.[cleanedVin]||vehicle.name||'').trim(),upper=name.toUpperCase();
   const gasVinType=vin.startsWith('1FTYR3')?'F':vin.startsWith('3C6LRV')?'R':'';
   if(gasVinType){
@@ -2515,7 +2522,7 @@ function livePage() {
   const content=`${contextBar(`<span class="status">${stationScoped?`${stationDisplayCode(station)} · `:''}${filled} assignments saved</span><span class="status ${activeEquipmentIssueCount()?'warn':''}">${activeEquipmentIssueCount()} equipment issues</span>`)}
   <section class="device-sheet-intro card" data-equipment-station="${stationDisplayCode(station)}"><div><span class="eyebrow">${stationScoped?`${stationDisplayCode(station)} · `:''}TODAY’S EQUIPMENT</span><h2>${esc(introTitle)}</h2><p>${esc(introCopy)}</p></div><div class="device-sheet-steps"><span><b>1</b>Type numbers</span><span><b>2</b>Check the EV</span><span><b>3</b>${stationScoped?`Send to ${stationDisplayCode(station)}`:'Send to Morning Sheet'}</span></div><button class="btn primary device-sheet-send" data-action="device-sheet-to-morning">${esc(sendLabel)} ${ICONS.chevron}</button></section>
   <section class="device-sheet-summary"><span><b>${filled}</b>van rows filled</span><span><b>${assigned}</b>Morning Sheet drivers currently matched</span><span><b>${state.morningRoutes.filter(route=>route.ev).length}</b>drivers have a van assigned</span></section>
-  <section class="device-sheet-layout"><div>${deviceSheetTable('Electric vehicles','EV1 through EV58 plus Fleet Health and manual additions','ev')}</div><aside>${deviceSheetTable('Gas vehicles','Ford, Ram and rental vans from Fleet Health plus manual additions','gas')}${deviceSheetTable('Helper bags','Use H1–H4 or add another helper bag','helper')}</aside></section>
+  <section class="device-sheet-layout"><div>${deviceSheetTable('Electric vehicles',activeMorningStationCode()==='DUR6'?'DUR9 vehicle list plus Fleet Health and manual additions':'EV1 through EV58 plus Fleet Health and manual additions','ev')}</div><aside>${deviceSheetTable('Gas vehicles','Ford, Ram and rental vans from Fleet Health plus manual additions','gas')}${deviceSheetTable('Helper bags','Use H1–H4 or add another helper bag','helper')}</aside></section>
   <div class="device-sheet-sticky-action"><div><strong>${stationScoped?`Ready to match ${stationDisplayCode(station)} equipment?`:'Ready to match equipment?'}</strong><span>The EV/VAN number is the match key. ${stationScoped?`${stationDisplayCode(station)} `:''}driver names and routes stay unchanged.</span></div><button class="btn primary" data-action="device-sheet-to-morning">${esc(sendLabel)}</button></div>`;
   return stationWorkspacePage(content,'equipment');
 }
@@ -3484,10 +3491,10 @@ function batteryLabel(percent=null) {
 }
 function isGasFleetVehicle(vehicle={}) {
   const vin=String(vehicle.vin||'').toUpperCase();
-  return /\b(?:FORD|RAM|RENTAL)\b/i.test(String(vehicle.name||''))||vin.startsWith('1FTYR3')||vin.startsWith('3C6LRV');
+  return /\b(?:FORD|RAM|RENTAL)\b/i.test([vehicle.name,vehicle.make,vehicle.model,vehicle.serviceType].filter(Boolean).join(' '))||vin.startsWith('1FTYR3')||vin.startsWith('3C6LRV');
 }
 function isElectricFleetVehicle(vehicle={}) {
-  return !isGasFleetVehicle(vehicle)&&(/\b(?:EV\s*\d+|EDV|RIVIAN)\b/i.test(String(vehicle.name||''))||/fleetos|rivian/i.test(String(vehicle.source||''))||Boolean(vehicle.hasBattery));
+  return !isGasFleetVehicle(vehicle)&&(/\b(?:EV\s*\d+|EDV|RIVIAN)\b/i.test([vehicle.name,vehicle.make,vehicle.model,vehicle.serviceType].filter(Boolean).join(' '))||/fleetos|rivian/i.test(String(vehicle.source||''))||Boolean(vehicle.hasBattery));
 }
 function isFleetLowBattery(vehicle={}) {
   const battery=knownBatteryPercent(vehicle?.battery);
