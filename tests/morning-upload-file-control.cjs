@@ -147,9 +147,10 @@ function snapshot(expression, key) {
   assert(vm.runInContext(`importPreflight().ready && importPreflight().included===1 && importPreflight().excluded===1 && importPreflight().matched===1`, context), 'Two-file preflight must keep LLOL, exclude the other DSP, and prove the CX match');
   vm.runInContext(`action('apply-import',{});`, context);
   routes = snapshot(`state.morningRoutes`, '__multiRoutes');
-  assert(routes.length === 1 && routes[0].route === 'CX601', 'Applying DAYOFOPSPLAN + ROUTE_DJT6 must create the matched Morning Sheet route');
-  assert(routes[0].driver === 'Lorenzo Route Name' && routes[0].stops === 183, 'ROUTE_DJT6 values must win for the matched driver and stop count');
-  assert(routes[0].wave === '11:20 AM' && routes[0].staging === 'STG.P.1' && routes[0].packages === 330, 'DAYOFOPSPLAN values must supply wave, staging, and packages');
+  assert(routes.length === 2 && routes.some(row=>row.route === 'CX501'), 'Later imports must retain previously dispatched routes absent from the new plan');
+  const added=routes.find(row=>row.route==='CX601');
+  assert(added.driver === 'Lorenzo Route Name' && added.stops === 183, 'ROUTE_DJT6 values must supply the new route driver and stop count');
+  assert(added.wave === '11:20 AM' && added.staging === 'STG.P.1' && added.packages === 330, 'DAYOFOPSPLAN values must supply wave, staging, and packages');
 
   console.log('Morning Sheet file-control upload contract passed (single + multiple files, stale purpose/accept reset, and apply)');
 })().catch(error => {

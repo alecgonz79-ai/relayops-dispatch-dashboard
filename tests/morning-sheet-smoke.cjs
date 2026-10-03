@@ -40,6 +40,7 @@ const checks = `
   const expectedWaves = ['11:15 AM','11:20 AM','11:25 AM','11:40 AM','11:45 AM'];
   if (JSON.stringify(morningWaveList()) !== JSON.stringify(expectedWaves)) throw new Error('Wave sort failed');
   if (expectedWaves.some(padForWave)) throw new Error('Morning pads must stay blank until a dispatcher enters them');
+  state.morningRoutes = []; // Test a fresh import; repeat-import preservation has its own regression test.
   state.importedFile = {
     name: 'day.csv',
     headers: ['DSP','Route Code','Wave','Staging Location','Num Zones','Num Packages'],
@@ -533,6 +534,7 @@ const checks = `
     ['CX901','Taylor Driver|Helper Name','177','12:05pm']
   ]);
   if (details.CX901.driver !== 'Taylor Driver' || details.CX901.stops !== 177 || details.CX901.plannedDeparture !== '12:05 PM' || details.CX901.plannedRts) throw new Error('ROUTE_DJT6 detail parsing failed or confused departure time with Planned RTS');
+  state.morningRoutes=[]; // Independent fresh-file merge scenario.
   state.importedFile = {
     name: 'DAYOFOPSPLAN.xlsx + ROUTE_DJT6.xlsx', kind: 'plan', routeDetails: details, routeDetailsCount: 1,
     headers: ['DSP','Route Code','Wave','Staging Location','Num Zones','Num Packages'],

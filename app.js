@@ -4019,6 +4019,20 @@ function morningPlanHeaderIndex(rows=[]) {
     ['wave','wavetime','starttime','planneddeparturetime','planneddeparttime','departuretime']
   ]);
 }
+function normalizeHeaderlessMorningPlan(file={}) {
+  const rows=(file.rows||[]).filter(row=>row.some(value=>String(value??'').trim()));
+  if(morningPlanHeaderIndex(rows)>=0||!rows.length)return file;
+  // Slack's nine-column DOOP extract sometimes omits the header entirely.
+  // Require every row to match that exact layout; never guess arbitrary files.
+  const valid=rows.every(row=>row.length===9&&/^[A-Z0-9]{2,8}$/i.test(String(row[0]||'').trim())
+    &&/^(?:CX|AX)\d+$/i.test(String(row[1]||'').trim())
+    &&/standard parcel|nursery|swa|dsp initiated/i.test(String(row[2]||''))
+    &&/\d{1,2}:\d{2}/.test(normalizeMorningWaveTime(row[3]))
+    &&/^STG\./i.test(String(row[4]||''))
+    &&row.slice(5,9).every(value=>String(value??'').trim()!==''&&Number.isFinite(Number(value))&&Number(value)>=0));
+  if(!valid)return file;
+  return {...file,headerlessPlan:true,rows:[['DSP','Route Code','Service Type','Wave','Staging Location','Route Duration','Num Zones','Num Packages','Num Commercial Pkgs'],...rows]};
+}
 function morningImportDspMatches(value='') {
   const candidate=headerKey(value),code=headerKey(state.dspCode),organization=headerKey(state.organizationName);
   if(!candidate)return false;
@@ -4092,7 +4106,9 @@ function importPreflight(file=state.importedFile) {
       {label:`${displayedStationCode()} wave capacity`,ok:stationWaveReady,detail:activeMorningStationCode()==='DUR6'?`${stationWaveCount} populated regular wave${stationWaveCount===1?'':'s'} found${stationMissingWaveCount?` · ${stationMissingWaveCount} regular route${stationMissingWaveCount===1?' is':'s are'} missing a wave time`:''} · DUR9 accepts one through three`:'DJT6 keeps its existing six-wave layout'},
       {label:'All Service Types included',ok:true,detail:'Standard, Nursery, Helper, XL, Donation, and other DSP route services stay in the import'},
       {label:'CX route matching',ok:matched>0||!detailKeys.size,detail:detailKeys.size?`${matched} of ${routeKeys.size} plan CX route${routeKeys.size===1?'':'s'} matched ${routeFileLabel} details`:`No ${routeFileLabel} details uploaded — names/stops use the plan file or stay reviewable`},
-      {label:'Template output',ok:ready,detail:ready?'Creates the A–M numbered Morning Sheet rows':'Fix the missing items before creating the sheet'}
+      {label:'AX adhocs',ok:true,detail:`${candidates.filter(item=>/^AX\d+$/i.test(item.route)).length} AX routes go to the Adhocs section, not regular waves`},
+      {label:'Same-day refresh',ok:true,detail:'Adds new routes and refreshes counts. Existing driver edits, equipment, checks, pads and actual times are kept; absent routes are not deleted.'},
+      {label:'Template output',ok:ready,detail:ready?'Creates or updates this station’s Morning Sheet and Picklist':'Fix the missing items before creating the sheet'}
     ]
   };
 }
@@ -8161,7 +8177,8 @@ function routeDetailsFromRows(rows) {
   const headers=rows[header].map(headerKey), index=(...names)=>headers.findIndex(h=>names.map(headerKey).includes(h));
   const routeIx=index('route','routecode','routeid','cx','cxnumber','cxroute','blockid','routeidentifier'), driverIx=index('driver','drivername','transportername','transporter','employeename','daname','associatename','name','deliveryassociate','associate'), firstIx=index('firstname','driverfirstname'), lastIx=index('lastname','driverlastname'), stopsIx=index('stops','stopcount','plannedstops','stopsplanned','numstops','totalstops','allstops'), plannedIx=index('planneddeparturetime','planneddeparttime','departuretime','plannedstarttime');
   const details={};
-  rows.slice(header+1).forEach(row=>{const route=String(row[routeIx]||'').trim().toUpperCase();if(!route)return;const combined=[row[firstIx],row[lastIx]].filter(Boolean).join(' ').trim();const stops=Number(row[stopsIx]);const plannedDeparture=plannedIx>=0?normalizeTimeDisplay(row[plannedIx]):'';details[route]={driver:firstDriverName(row[driverIx]||combined||''),stops:Number.isFinite(stops)?stops:null,plannedDeparture};});
+  const dspIx=index('dsp','dspcode','company'),packagesIx=index('packages','packagecount','numpackages','totalpackages','totaldeliveries'),serviceIx=index('servicetype','deliveryservicetype','service'),completeIx=index('stopscomplete'),progressIx=index('routeprogress');
+  rows.slice(header+1).forEach(row=>{const route=String(row[routeIx]||'').trim().toUpperCase();if(!route||dspIx>=0&&!morningImportDspMatches(row[dspIx]))return;const combined=[row[firstIx],row[lastIx]].filter(Boolean).join(' ').trim();const stops=itineraryRouteCount(row[stopsIx]);const plannedDeparture=plannedIx>=0?normalizeMorningWaveTime(row[plannedIx]):'';details[route]={driver:firstDriverName(row[driverIx]||combined||''),stops,plannedDeparture,packages:itineraryRouteCount(row[packagesIx]),service:String(row[serviceIx]||''),stopsComplete:itineraryRouteCount(row[completeIx]),routeProgress:String(row[progressIx]||'')};});
   return details;
 }
 function normalizeCxRoute(value='') {
@@ -8228,7 +8245,7 @@ function stopActiveEquipmentOcr() {
 function morningImportRawFileRole(file={}) {
   const key=headerKey(file.name||'');
   if(key.includes('dayofopsplan'))return 'plan';
-  if(/routes?(?:djt6|dur6)/.test(key))return 'routes';
+  if(/routes?(?:djt6|dur6|dur9)/.test(key))return 'routes';
   return `file:${key}`;
 }
 function mergePendingMorningImportFiles(files=[]) {
@@ -8255,7 +8272,7 @@ function resetMorningImportBatch() {
 function morningParsedFileRole(file={}) {
   const key=headerKey(file.name||''),rows=Array.isArray(file.rows)?file.rows:[];
   if(key.includes('dayofopsplan'))return 'plan';
-  if(/routes?(?:djt6|dur6)/.test(key))return 'routes';
+  if(/routes?(?:djt6|dur6|dur9)/.test(key))return 'routes';
   const planHeader=morningPlanHeaderIndex(rows);
   if(planHeader>=0) {
     const headers=(rows[planHeader]||[]).map(headerKey);
@@ -8879,6 +8896,10 @@ async function readFiles(files) {
   }
   try {
     if(['morning','itinerary-rts','equipment','fleet','parking'].includes(purposeAtStart))incomingFiles.forEach(assertOpeningStationFile);
+    if(isMorningRead)incomingFiles.forEach(file=>{
+      const date=String(file.name||'').match(/(20\d{2}-\d{2}-\d{2})/);
+      if(date&&date[1]!==operationDateAtStart)throw new Error(`This export is dated ${date[1]}, not ${operationDateAtStart}. Choose the matching operation date before importing.`);
+    });
     if(purposeAtStart==='fleet'&&state.fleetImportSourceHint==='amazon') {
       const invalid=selectedFiles.find(file=>!/^VehiclesData.*\.xlsx$/i.test(String(file.name||'')));
       if(invalid)throw new Error('Amazon Fleet Import only accepts VehiclesData… .xlsx files');
@@ -9004,7 +9025,9 @@ async function readFiles(files) {
       state.modal=null;state.page='morning';state.importPurpose='morning';persist();render();
       return toast(`${matched} Planned return to station times filled automatically${flagged?` · ${flagged} flagged for review`:''}`);
     }
-    const newestFirst=[...parsed].reverse();
+    const newestFirst=[...parsed].reverse().map(normalizeHeaderlessMorningPlan);
+    const unknown=newestFirst.find(file=>morningParsedFileRole(file)==='unknown');
+    if(unknown)throw new Error(`${unknown.name} has no recognized plan or route columns. No file in this selection was applied.`);
     const plan=newestFirst.find(file=>morningParsedFileRole(file)==='plan');
     const routeFile=newestFirst.find(file=>file!==plan&&morningParsedFileRole(file)==='routes');
     const details=routeFile?routeDetailsFromRows(routeFile.rows):{};
@@ -9013,6 +9036,24 @@ async function readFiles(files) {
     const planHeader=plan?morningPlanHeaderIndex(plan.rows):findImportHeader(primary.rows,[['route','routecode','routeid','cx','cxnumber','cxroute','blockid']]);
     const rows=primary.rows.slice(Math.max(0,planHeader));
     state.importedFile={name:parsed.map(f=>f.name).join(' + '),headers:rows[0],rows:rows.slice(1),kind:purposeAtStart==='rts'?'rts':(plan?'plan':'details'),routeDetails:details,routeDetailsCount:Object.keys(details).length};
+    const f=state.importedFile;
+    f.stationCode=stationAtStart;f.operationDate=operationDateAtStart;
+    if(routeFile&&morningPlanHeaderIndex(routeFile.rows)>=0) {
+      // A same-day Cortex export can start a sheet, including after departure.
+      // Keep the plan as the source of staging; append new Cortex routes (AX included).
+      if(!plan){f.kind='plan';}
+      else {
+        const ix=importColumnIndexes(f),known=new Set(morningImportCandidates(f).map(item=>item.route));
+        for(const [route,detail] of Object.entries(details)) {
+          if(known.has(route)||!/^(?:CX|AX)\d+$/i.test(route))continue;
+          const row=Array(f.headers.length).fill('');
+          const put=(column,value)=>{if(column>=0)row[column]=value;};
+          put(ix.dsp,state.dspCode);put(ix.route,route);put(ix.driver,detail.driver);put(ix.service,detail.service||(/^AX/i.test(route)?'Adhoc':'Standard Parcel'));
+          put(ix.wave,detail.plannedDeparture||'Wave pending');put(ix.staging,'');put(ix.stops,detail.stops??'');put(ix.packages,detail.packages??'');
+          f.rows.push(row);known.add(route);
+        }
+      }
+    }
     if(state.modal==='import')renderLightweightModal();else render();
     toast(`${parsed.length} file${parsed.length===1?'':'s'} ready · CX routes will be matched automatically`);
   } catch(error) {
@@ -9559,6 +9600,7 @@ async function parseXlsxArrayBuffer(buffer,fileName='',purpose=state.importPurpo
 
 function applyImport() {
   const f=state.importedFile;if(!f)return;
+  if(f.stationCode&&f.stationCode!==activeMorningStationCode()||f.operationDate&&f.operationDate!==state.morningOperationDate)return toast('Station or date changed. Upload the files again in the correct workspace.','error');
   const proof=importPreflight(f);
   if(proof&&!proof.ready) {
     state.modal='import';
@@ -9576,7 +9618,9 @@ function applyImport() {
   if(ix.wave>=0) {
     const candidates=morningImportCandidates(f);
     const excluded=f.rows.length-candidates.length;
-    // A same-day re-import may replace every route row. Preserve only pad
+    const priorRoutes=(state.morningRoutes||[]).filter(row=>!row._blank&&!row._waveAnchor);
+    const priorByRoute=new Map(priorRoutes.filter(row=>!row.stationCode||row.stationCode===activeMorningStationCode()).map(row=>[normalizeCxRoute(row.route),row]));
+    // A same-day re-import preserves dispatch work and merges by route code.
     // values that a dispatcher explicitly entered; automatic defaults remain
     // blank in the rebuilt sheet.
     rememberManualMorningPads();
@@ -9584,7 +9628,7 @@ function applyImport() {
     // Remove stale manual footer overrides so the visible Wave rows, footer
     // labels, screenshot, and Google connector all use the same six times.
     state.morningWaveTimeOverrides=state.morningWaveTimeOverrides&&typeof state.morningWaveTimeOverrides==='object'?state.morningWaveTimeOverrides:{};
-    for(let waveIndex=1;waveIndex<=activeMorningWaveCount();waveIndex++)delete state.morningWaveTimeOverrides[morningWaveOverrideKey(`WAVE ${waveIndex}`)];
+    if(!priorRoutes.length)for(let waveIndex=1;waveIndex<=activeMorningWaveCount();waveIndex++)delete state.morningWaveTimeOverrides[morningWaveOverrideKey(`WAVE ${waveIndex}`)];
     state.morningRoutes=candidates.map(({row:r,route},i)=>{
       const detail=f.routeDetails?.[route];
       const packages=Number(r[ix.packages])||0, zones=Number(r[ix.zones])||0;
@@ -9592,7 +9636,22 @@ function applyImport() {
       const wave=normalizeMorningWaveTime(r[ix.wave])||'Wave pending', plannedRts=detail?.plannedRts||'', duration=Number(r[ix.duration])||0;
       return {stationCode:activeMorningStationCode(),dsp:state.dspCode,driver:firstDriverName(detail?.driver||(ix.driver>=0&&r[ix.driver])||'Unassigned driver'),route,service:(ix.service>=0&&r[ix.service])||'Standard Parcel',wave,staging:ix.staging>=0?(r[ix.staging]||'—'):'—',duration,zones,packages,commercial:Number(r[ix.commercial])||0,stops:detail?.stops!==null&&detail?.stops!==undefined?detail.stops:(Number.isFinite(importedStops)?importedStops:0),eta:'—',bags:Math.max(1,Math.round(packages/13)),overflow:Math.max(0,Math.round(packages/24)),parking:'',ev:'',deviceName:'',portable:'',preDvic:false,preWhip:false,postDvic:false,postWhip:false,rescued:false,packageReturns:'',endTime:'',rtsTime:'',plannedRts,plannedRtsIssue:isIrregularPlannedRts(plannedRts,wave,duration),clockOutTime:'',checkedIn:false,vanReady:false,deviceReady:false,portableReady:false,loadReady:false};
     }).sort((a,b)=>waveMinutes(a.wave)-waveMinutes(b.wave)||routeCompare(a.route,b.route)||a.staging.localeCompare(b.staging,undefined,{numeric:true}));
-    state.routes=state.morningRoutes.map((r,i)=>({stationCode:activeMorningStationCode(),route:r.route,driver:r.driver,id:`${activeMorningStationCode()}-DA-${1100+i}`,wave:r.wave,staging:r.staging,van:'Unassigned',device:'Unassigned',stops:r.stops,packages:r.packages,progress:0,delta:0,status:r.driver==='Unassigned driver'?'Needs review':'Assigned',rescue:'—'}));
+    state.morningRoutes=state.morningRoutes.map(incoming=>{
+      const previous=priorByRoute.get(normalizeCxRoute(incoming.route)),detail=f.routeDetails?.[incoming.route];
+      // Existing names (including intentional blanks), equipment, status checks,
+      // actual times, pads and manual edits win. Never undo a dispatcher swap.
+      const route=previous?{...incoming,...previous}:incoming;
+      route.stationCode=activeMorningStationCode();
+      if(previous?.driver==='Unassigned driver')route.driver=incoming.driver;
+      if(previous&&(!previous.staging||previous.staging==='—'))route.staging=incoming.staging;
+      if(previous) {route.stops=incoming.stops;route.packages=incoming.packages;}
+      if(detail){route.cortexStopsComplete=detail.stopsComplete;route.cortexRouteProgress=detail.routeProgress;route.cortexSnapshotAt=new Date().toISOString();}
+      return route;
+    });
+    const importedKeys=new Set(state.morningRoutes.map(row=>normalizeCxRoute(row.route)));
+    state.morningRoutes.push(...priorRoutes.filter(row=>(!row.stationCode||row.stationCode===activeMorningStationCode())&&!importedKeys.has(normalizeCxRoute(row.route))));
+    const priorDispatch=new Map((state.routes||[]).map(row=>[normalizeCxRoute(row.route),row]));
+    state.routes=state.morningRoutes.map((r,i)=>{const detail=f.routeDetails?.[r.route],old=priorDispatch.get(normalizeCxRoute(r.route));return {...old,stationCode:activeMorningStationCode(),route:r.route,driver:r.driver,id:old?.id||`${activeMorningStationCode()}-DA-${1100+i}`,wave:r.wave,staging:r.staging,van:r.ev||old?.van||'Unassigned',device:r.deviceName||old?.device||'Unassigned',stops:r.stops,packages:r.packages,progress:detail?.stopsComplete!=null&&r.stops>0?Math.round(100*detail.stopsComplete/r.stops):old?.progress||0,delta:old?.delta||0,status:detail?.routeProgress||old?.status||(r.driver==='Unassigned driver'?'Needs review':'Assigned'),rescue:old?.rescue||'—'};});
     const importedWaves=[...new Set(state.morningRoutes.filter(row=>!isExplicitAdhocMorningRoute(row)&&!isExplicitHelperMorningRoute(row)).map(row=>row.wave).filter(Boolean))];state.openingPicklistWaveSlots=Math.min(activeMorningWaveCount(),importedWaves.length);state.openingPicklistShowAdhoc=true;
     state.lastImportExcluded=excluded;state.lastMorningImportFingerprint=`${displayedStationCode()}|${state.morningOperationDate}|${Date.now()}|${String(f.name||'morning-files').slice(0,120)}`;resetMorningImportBatch();state.modal=null;state.page='morning';state.morningFilters={wave:'all',staging:'all',pad:'all'};state.rosterPublished=false;persist();render();return toast(`${state.morningRoutes.length} ${state.dspCode} routes loaded into ${displayedStationCode()} · ${excluded} other-DSP or non-route rows skipped`);
   }
