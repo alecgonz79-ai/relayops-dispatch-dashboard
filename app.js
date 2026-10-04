@@ -1164,9 +1164,9 @@ function routeMissingHelper(route={}) {
 function routeDriverDisplayValue(route={}) {
   if(!route||route._blank)return '';
   const names=morningDriverNames(route.driver),helperService=/helper/i.test(`${route.service||''} ${route.wave||''}`);
-  let displayed=names.map(driverDisplayName);
-  if(helperService&&displayed.length===1&&displayed[0].length>18)displayed=[compactDriverName(names[0])];
-  if(displayed.join(' + ').length>30)displayed=displayed.map((name,index)=>index===0?name:compactDriverName(names[index]));
+  // Dispatch sheets retain the names supplied by imports or explicit edits.
+  // Linked nicknames remain useful for identity matching, not sheet display.
+  let displayed=[...names];
   if(routeMissingPrimary(route))displayed.unshift('?');
   if(routeMissingHelper(route)){
     if(helperService&&!displayed.length)displayed=['?'];
@@ -4207,7 +4207,7 @@ function modal() {
   }
   if (state.modal === 'driver-alias' && state.pendingDriverAlias) {
     const pending=state.pendingDriverAlias,suggestion=suggestedDriverAlias(pending.canonical);
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal driver-alias-modal" role="dialog" aria-modal="true" aria-labelledby="driver-alias-title"><div class="modal-head"><div><span class="eyebrow">DRIVER PROFILE</span><h2 id="driver-alias-title">Edit linked names</h2><p>${esc(pending.canonical)} remains the permanent driver identity even after an updated Amazon team import.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="driver-alias-field"><span>Nickname / shortened display name</span><input id="driver-alias-display" value="${esc(pending.display)}" placeholder="${esc(suggestion)}" maxlength="28" autofocus><small>Suggested: ${esc(suggestion)} · This is what Morning Sheet, Picklist, and Rostering display.</small></label><label class="driver-alias-field"><span>Linked names</span><textarea id="driver-alias-known-names" rows="3" placeholder="Separate previous names or nicknames with commas">${esc((pending.knownNames||[]).join(', '))}</textarea><small>Add or remove name variations here. Every saved name resolves to the same phone, history, Whiparound record, and driver profile.</small></label><label class="driver-alias-field"><span>Preferred EV(s) / van(s)</span><input id="driver-preferred-evs" value="${esc((pending.preferredEvs||[]).map(value=>/^\d+$/.test(value)?`EV${value}`:value).join(', '))}" placeholder="EV12, EV31, F33"><small>First choice first. Automatic assignment uses a preference only when Fleet Health verifies that van is active, operational, issue-free, and sufficiently charged.</small></label><div class="alias-preview"><span>Dashboard preview</span><strong>${esc(pending.display||pending.canonical)}</strong><small>Permanent identity: ${esc(pending.canonical)}${pending.preferredEvs?.length?` · Preferred: ${esc(pending.preferredEvs.map(value=>/^\d+$/.test(value)?`EV${value}`:value).join(', '))}`:''}</small></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn" data-action="clear-driver-alias">Use full name</button><button class="btn" data-action="remove-driver-linked-names">Remove all linked names</button><button class="btn primary" data-action="save-driver-alias">Save linked names</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal driver-alias-modal" role="dialog" aria-modal="true" aria-labelledby="driver-alias-title"><div class="modal-head"><div><span class="eyebrow">DRIVER PROFILE</span><h2 id="driver-alias-title">Edit linked names</h2><p>${esc(pending.canonical)} remains the permanent driver identity even after an updated Amazon team import.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="driver-alias-field"><span>Nickname / shortened display name</span><input id="driver-alias-display" value="${esc(pending.display)}" placeholder="${esc(suggestion)}" maxlength="28" autofocus><small>Suggested: ${esc(suggestion)} · Used in driver profiles and Rostering. Morning Sheet and Picklist retain full imported names.</small></label><label class="driver-alias-field"><span>Linked names</span><textarea id="driver-alias-known-names" rows="3" placeholder="Separate previous names or nicknames with commas">${esc((pending.knownNames||[]).join(', '))}</textarea><small>Add or remove name variations here. Every saved name resolves to the same phone, history, Whiparound record, and driver profile.</small></label><label class="driver-alias-field"><span>Preferred EV(s) / van(s)</span><input id="driver-preferred-evs" value="${esc((pending.preferredEvs||[]).map(value=>/^\d+$/.test(value)?`EV${value}`:value).join(', '))}" placeholder="EV12, EV31, F33"><small>First choice first. Automatic assignment uses a preference only when Fleet Health verifies that van is active, operational, issue-free, and sufficiently charged.</small></label><div class="alias-preview"><span>Dashboard preview</span><strong>${esc(pending.display||pending.canonical)}</strong><small>Permanent identity: ${esc(pending.canonical)}${pending.preferredEvs?.length?` · Preferred: ${esc(pending.preferredEvs.map(value=>/^\d+$/.test(value)?`EV${value}`:value).join(', '))}`:''}</small></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn" data-action="clear-driver-alias">Use full name</button><button class="btn" data-action="remove-driver-linked-names">Remove all linked names</button><button class="btn primary" data-action="save-driver-alias">Save linked names</button></div></div></div></div>`;
   }
   if (state.modal === 'morning-vehicle-issue' && state.pendingMorningIssue) {
     const pending=state.pendingMorningIssue,issue=vehicleIssueForEquipmentId(pending.equipment),records=issue?.reported?.active||[],acknowledged=morningIssueAcknowledged(pending.route,issue?.reported);
@@ -5276,7 +5276,7 @@ function startOpeningPicklistCellEdit(source) {
   const key=source.dataset.picklistCell;if(!key)return;
   state.editMode=true;state.copyMode=false;render();
   const target=[...document.querySelectorAll('[data-picklist-edit]')].find(cell=>cell.dataset.picklistCell===key);if(!target)return;
-  if(target.dataset.picklistField==='driver'){const route=morningRouteByUid(target.dataset.picklistRouteUid)||(Number(target.dataset.picklistRouteIndex)>=0?state.morningRoutes[Number(target.dataset.picklistRouteIndex)]:null);if(route)target.textContent=driverDisplayValue(route.driver||'');}
+  if(target.dataset.picklistField==='driver'){const route=morningRouteByUid(target.dataset.picklistRouteUid)||(Number(target.dataset.picklistRouteIndex)>=0?state.morningRoutes[Number(target.dataset.picklistRouteIndex)]:null);if(route)target.textContent=routeDriverDisplayValue(route);}
   target.dataset.picklistOriginal=picklistEditableCellValue(target);
   focusOperationalGridEditor(target);
 }
@@ -6990,7 +6990,7 @@ function startMorningCellEdit(source) {
   render();
   const target=[...document.querySelectorAll('.morning-template-sheet [data-edit-field]')].find(cell=>cell.dataset.editField===field&&(field==='waveTime'?cell.dataset.editSection===section:field==='padOverride'?(section?cell.dataset.editSection===section:cell.dataset.editWave===wave):uid?cell.dataset.editUid===uid:cell.dataset.editRoute===route));
   if(!target)return;
-  if(field==='driver'){const morningRoute=morningRouteByUid(uid)||state.morningRoutes.find(row=>row.route===route);if(morningRoute)target.textContent=driverDisplayValue(morningRoute.driver||'');}
+  if(field==='driver'){const morningRoute=morningRouteByUid(uid)||state.morningRoutes.find(row=>row.route===route);if(morningRoute)target.textContent=routeDriverDisplayValue(morningRoute);}
   focusSheetCell(target);
   if(field==='driver')showDriverNameSuggestions(target);
 }
@@ -9643,6 +9643,7 @@ function applyImport() {
       const route=previous?{...incoming,...previous}:incoming;
       route.stationCode=activeMorningStationCode();
       if(previous?.driver==='Unassigned driver')route.driver=incoming.driver;
+      if(previous&&morningDriverNames(previous.driver).length===1&&driverIdentityKey(previous.driver)===driverIdentityKey(incoming.driver))route.driver=incoming.driver;
       if(previous&&(!previous.staging||previous.staging==='—'))route.staging=incoming.staging;
       if(previous) {route.stops=incoming.stops;route.packages=incoming.packages;}
       if(detail){route.cortexStopsComplete=detail.stopsComplete;route.cortexRouteProgress=detail.routeProgress;route.cortexSnapshotAt=new Date().toISOString();}

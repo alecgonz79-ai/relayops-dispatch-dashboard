@@ -25,6 +25,9 @@ async function load(station,files){
     assert.equal(run('importPreflight().ready'),true);
     run('applyImport()');
     assert.equal(run('state.morningRoutes.length'),3);
+    run(`state.driverNameAliases={'original driver':{canonical:'Original Driver',display:'Orig',aliases:['Original Driver','Orig']}};invalidateDriverDirectoryCaches();`);
+    assert.equal(run(`routeDriverDisplayValue(state.morningRoutes.find(r=>r.route==='CX115'))`),'Original Driver','imported full name overrides nickname on sheets');
+    assert.equal(run(`routeDriverDisplayValue({driver:'Original Driver + Very Long Helper Full Name',service:'Helper'})`),'Original Driver + Very Long Helper Full Name','long helper names are not shortened');
     assert.equal(run(`morningSections(state.morningRoutes).find(s=>s.label.includes('ADHOC')).rows[0].route`),'AX25');
     assert.equal(run(`state.routes.find(r=>r.route==='AX25').progress`),50);
     run(`Object.assign(state.morningRoutes[0],{driver:'Dispatcher Swap',ev:'62',deviceName:'9',portable:'P',preDvic:true,endTime:'5:00 PM',padOverride:'PAD-A'});state.morningRoutes.push({route:'AX99',wave:'ADHOC',driver:'Manual',stationCode:station});`);
