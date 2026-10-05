@@ -2,11 +2,12 @@ const fs = require('fs');
 const vm = require('vm');
 const assert = require('node:assert/strict');
 const source = fs.readFileSync(require.resolve('../app.js'), 'utf8');
-const drawing = source.slice(source.indexOf('function drawPicklistEquipmentValue('), source.indexOf('function previewWaveScreenshot('));
+const sharedStart=source.indexOf('function routeSharedEquipmentValue(');
+const drawing = source.slice(sharedStart,source.indexOf('\nfunction ',sharedStart+1))+'\n'+source.slice(source.indexOf('function drawPicklistEquipmentValue('), source.indexOf('function previewWaveScreenshot('));
 const rows = [
   {driver:'Sample Driver A',route:'CX101',staging:'STG.V.1',ev:'10',deviceName:'33',portable:'X'},
   {driver:'Sample Driver B',route:'CX102',staging:'STG.V.2',ev:'R54',deviceName:'24/7',portable:'-'},
-  {driver:'Sample Driver C',route:'CX103',staging:'STG.V.3',ev:'38',deviceName:'13/78',portable:'92'},
+  {driver:'Sample Driver C',route:'CX103',staging:'STG.V.3',ev:'38',helperBag:'H8',deviceName:'13',portable:'92'},
   {driver:'Sample Driver D',route:'CX104',staging:'STG.V.4',ev:'',deviceName:'',portable:''}
 ];
 const fixture = `const rows=${JSON.stringify(rows)};
@@ -16,6 +17,8 @@ function displayedStationCode(){return station;}
 function openingPicklistDateText(){return '9/14/2026';}
 function openingPicklistTime(){return '11:00 (4)';}
 function routeEquipmentValue(row){return row.ev;}
+function normalizeEquipmentId(value){return String(value||'');}
+function deviceSheetDetails(){return {H8:{device:'78',portable:'93'}};}
 function openingPicklistSections(){return [{label:'WAVE 1',pad:'B',hasTime:true,rows}];}`;
 
 // Optional isolated visual proof. Uses only synthetic rows and the real canvas
@@ -38,7 +41,7 @@ if (process.argv.includes('--preview')) {
     assert.equal(context.before,context.after,'Export must not mutate assignments');
     assert.equal(context.result,'data:image/jpeg;base64,proof');
     assert.equal(canvas.width,1470);
-    for(const value of ['10','R54','38','33','24/7','13/78','X','-','92'])assert(text.some(call=>call[0]===value),`${code}: preserve ${value}`);
+    for(const value of ['10','R54','38','33','24 / 7','13 / 78','X','-','92 / 93'])assert(text.some(call=>call[0]===value),`${code}: preserve ${value}`);
     assert.equal(shapes.filter(call=>call[0]==='arc').length,6,'Two van wheels for each nonblank van');
     assert.equal(shapes.filter(call=>call[0]==='fill').length,3,'Lightning for a letter, dash and number; no icon in blank cells');
     assert(text.some(call=>call[0].includes(`${code} Opening Picklist`)));

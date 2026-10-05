@@ -15,6 +15,12 @@ async function load(station,files){
   await run('readFiles(files)');
 }
 (async()=>{
+  assert.equal(run(`deviceSheetBaseIds('helper').join(',')`),'H1,H2,H3,H4,H5,H6,H7,H8');
+  run(`state.equipmentImport={details:{H8:{device:'63',portable:'P8'}}};state.morningRoutes=[];`);
+  assert.equal(run(`routeSharedEquipmentValue({deviceName:'12',helperBag:'H8'},'deviceName')`),'12 / 63');
+  assert.equal(run(`routeSharedEquipmentValue({portable:'P2',helperBag:'H8'},'portable')`),'P2 / P8');
+  assert.equal(run(`routeSharedEquipmentValue({deviceName:'12'},'deviceName')`),'12');
+  assert.equal(run(`routeSharedEquipmentValue({deviceName:'12 / 63',helperBag:'H8'},'deviceName')`),'12 / 63');
   for(const station of ['DJT6','DUR6']){
     const label=station==='DUR6'?'DUR9':station;
     const routes={name:`Routes_${label}_2026-10-03.xlsx`,rows:[headers,route('CX115','Original Driver'),route('CX116','Trainee'),route('AX25','Adhoc Driver'),route('AX26','Other DSP','OTHER')]};
