@@ -82,6 +82,33 @@ async function run() {
   assert(context.isGasFleetVehicle(representativeAmazon[1]) && context.fleetEquipmentIdentity(representativeAmazon[1]).label === 'F33', '1FTYR3 gas VIN must classify as F33');
   assert(context.isGasFleetVehicle(representativeAmazon[2]) && context.fleetEquipmentIdentity(representativeAmazon[2]).label === 'R54', '3C6LRV gas VIN must classify as R54');
   assert(representativeFleetos[0].battery === 70 && representativeFleetos[0].miles === 109 && representativeFleetos[0].status === 'Ready to Charge', 'FleetOS Distance to Empty, State of Charge, and Charging Status must map correctly');
+  for(const vehicleState of ['Parked','Charging','Driving','Ready']) {
+    const telemetry=context.fleetDetailsFromRows([
+      ['VIN','Name','Vehicle State','State of Charge','Distance to Empty'],
+      [representativeAmazon[2].vin,'Telemetry name',vehicleState,'90%','140 mi']
+    ],'FleetOS tracker')[0];
+    assert(!telemetry.hasOperational,'FleetOS Vehicle State must not prove dispatch clearance');
+    for(const rows of [[representativeAmazon[2],telemetry],[telemetry,representativeAmazon[2]]]) {
+      const merged=context.mergeFleetVehicles(rows)[0];
+      assert(merged.operational==='Grounded'&&merged.active==='Active'&&merged.battery===90,'Amazon status must survive either upload order while FleetOS updates battery');
+    }
+    const legacy={...telemetry,operational:'Operational',hasOperational:true};
+    assert(context.mergeFleetVehicles([representativeAmazon[2],legacy])[0].operational==='Grounded','Previously saved incorrect FleetOS status must not overwrite Amazon');
+  }
+  const attached='/Users/alecgonzo/Downloads/VehiclesData (5).xlsx';
+  if(fs.existsSync(attached)) {
+    const parsed=await context.parseUploadedFile(fileObject(attached));
+    const vehicles=context.fleetDetailsFromRows(parsed.rows,'Amazon fleet list');
+    assert(vehicles.length===72&&vehicles.filter(v=>v.operational==='Grounded').length===3,'Attached Amazon file must retain all 72 statuses including 3 grounded');
+    const telemetryPath='/Users/alecgonzo/Downloads/Vehicle_List (2).csv';
+    if(fs.existsSync(telemetryPath)) {
+      const tracker=await context.parseUploadedFile(fileObject(telemetryPath));
+      const telemetry=context.fleetDetailsFromRows(tracker.rows,'FleetOS tracker');
+      const combined=new Map(context.mergeFleetVehicles([...vehicles,...telemetry]).map(v=>[v.vin,v]));
+      assert(vehicles.every(v=>combined.get(v.vin)?.operational===v.operational),'Actual October fleet exports must preserve every Amazon operational status after merging');
+    }
+    console.log('Attached VehiclesData verified: 69 operational, 3 grounded');
+  }
 
   if (!amazonPaths.length || !fleetosPaths.length) {
     console.log('Fleet corpus headers passed; local VehiclesData/Vehicle_List files were not present for extended checks');

@@ -9189,7 +9189,8 @@ function fleetDetailsFromRows(rows=[],sourceName='Fleet export') {
     // it describes charging/connection state and must never prove that a van
     // is active or operational for dispatch.
     const active=explicitActive||(amazonOnly?genericStatus:'');
-    const operational=explicitOperational;
+    // FleetOS Vehicle State is telemetry (Parked/Charging), not dispatch clearance.
+    const operational=sourceKeys.includes('amazon')?explicitOperational:firstExisting(row,headers,['operational','operation status','operational state','operational status','grounded','grounding status','service status','maintenance status']);
     const serviceType=firstExisting(row,headers,['service type','servicetype','vehicle type','vehicletype','vehicle class','vehicleclass','asset type','assettype']);
     const battery=firstExisting(row,headers,['battery','battery %','battery percent','batterypercentage','battery percentage','soc','soc %','socpercent','state of charge','stateofcharge','state of charge %','stateofchargepercent','charge','charge %','charge percent','chargepercent']);
     const miles=firstExisting(row,headers,['range','range mi','rangemi','range miles','rangemiles','distance to empty','distancetoempty','estimated range','estimatedrange','estimated range mi','estimatedrangemi','estimated range miles','estimatedrangemiles','estimated range (mi)','remaining range','remainingrange','remaining range mi','remainingrangemi','remaining range miles','remainingrangemiles','remaining miles','remainingmiles','miles remaining','milesremaining']);
@@ -9273,6 +9274,11 @@ function mergeFleetVehicles(imports=[]) {
     if(!item.hasPlate&&current.plate) next.plate=current.plate;
     if(!item.hasActive&&current.active) next.active=current.active;
     if(!item.hasOperational&&current.operational) next.operational=current.operational;
+    // Older saved FleetOS rows may incorrectly claim status provenance.
+    // Never let telemetry replace Amazon's dispatch eligibility fields.
+    if(currentHasAmazon&&!itemHasAmazon){
+      next.active=current.active;next.operational=current.operational;
+    }
     if(!item.hasServiceType&&current.serviceType) next.serviceType=current.serviceType;
     if(!item.hasBattery&&current.battery!==undefined) next.battery=current.battery;
     if(!item.hasMiles&&current.miles!==undefined) next.miles=current.miles;

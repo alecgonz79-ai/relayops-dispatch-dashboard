@@ -1,20 +1,20 @@
-const CACHE='relayops-helper-bags-v145';
+const CACHE='relayops-fleet-status-v146';
 const CORE=[
   './',
   './index.html',
-  './apple-design-preview.js?v=20261005-helper-bags-r1',
-  './apple-scroll-cards.js?v=20261005-helper-bags-r1',
+  './apple-design-preview.js?v=20261007-fleet-status-r1',
+  './apple-scroll-cards.js?v=20261007-fleet-status-r1',
   './apple-design-preview.css?v=20260914-solid-pastels-r1',
   './apple-scroll-cards.css?v=20260920-weather-r1',
-  './styles.css?v=20261005-helper-bags-r1',
+  './styles.css?v=20261007-fleet-status-r1',
   './macos-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-preview.css?v=20260725-tahoe-published-r1',
   './tahoe-midnight-preview.css?v=20260726-fleet-warning-r1',
-  './app.js?v=20261005-helper-bags-r1',
-  './dur6-google-transfer.js?v=20261005-helper-bags-r1',
+  './app.js?v=20261007-fleet-status-r1',
+  './dur6-google-transfer.js?v=20261007-fleet-status-r1',
   './morning-import-worker.js?v=20260907-rostering-import-isolation-r1',
   './supabase/config.js?v=20260907-rostering-import-isolation-r1',
-  './station-workspace.js?v=20261005-helper-bags-r1',
+  './station-workspace.js?v=20261007-fleet-status-r1',
   './cloud-sync.js?v=20260907-rostering-import-isolation-r1',
   './vendor/jszip.min.js',
   './assets/rivian-prime-van.png'
