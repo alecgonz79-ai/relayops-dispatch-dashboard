@@ -584,6 +584,7 @@ let state = {
   driverContacts: JSON.parse(localStorage.getItem('relayops_driver_contacts') || 'null') || [],
   driverContactsLastImport: localStorage.getItem('relayops_driver_contacts_last_import') || '',
   driverNameAliases: JSON.parse(localStorage.getItem('relayops_driver_name_aliases') || 'null') || {},
+  driverLinkedNamesDate: localStorage.getItem('relayops_driver_linked_names_date') || defaultOperationDate(),
   driverProfiles: normalizeDriverProfiles(JSON.parse(localStorage.getItem('relayops_driver_profiles') || 'null') || {}),
   pendingDriverFlags: null,
   pendingDriverAlias: null,
@@ -2610,7 +2611,7 @@ function teamPage() {
   const drivers=teamDriverRows(), contacts=state.driverContacts||[],metrics=teamDriverMetrics(drivers);
   const onRouteNames=new Set(filteredMorningRows().map(r=>nameKey(r.driver)).filter(Boolean));
   const recognizedDrivers=drivers.filter(d=>onRouteNames.has(nameKey(d.name))).length;
-  return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar team-toolbar"><div class="toolbar-left"><label class="team-name-search">${ICONS.search}<input type="search" data-team-search autocomplete="off" placeholder="Search driver names" aria-label="Search Drivers and Team by name"><button type="button" data-action="clear-team-search" aria-label="Clear driver search">×</button></label><span class="filter-note" data-team-search-count>${drivers.length} drivers</span><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import Drivers CSV / Excel / PDF</button><button class="btn lime" data-action="add-delivery-associate">${ICONS.plus} Add Delivery Associate</button></div></div>
+  return `${contextBar(`<a class="btn small ghost" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Open Amazon Workforce</a>`)}<div class="toolbar team-toolbar"><div class="toolbar-left"><label class="team-name-search">${ICONS.search}<input type="search" data-team-search autocomplete="off" placeholder="Search driver names" aria-label="Search Drivers and Team by name"><button type="button" data-action="clear-team-search" aria-label="Clear driver search">×</button></label><span class="filter-note" data-team-search-count>${drivers.length} drivers</span><span class="filter-note">${contacts.length} imported phone contact${contacts.length===1?'':'s'}${state.driverContactsLastImport?` · last import ${esc(state.driverContactsLastImport)}`:''}</span></div><div class="toolbar-right"><button class="btn" data-action="reset-linked-names">Reset Linked names</button><a class="btn" href="${AMAZON_WORKFORCE_ASSOCIATES_URL}" target="_blank" rel="noopener">${ICONS.link} Amazon Workforce</a><button class="btn primary" data-action="driver-import">${ICONS.upload} Import Drivers CSV / Excel / PDF</button><button class="btn lime" data-action="add-delivery-associate">${ICONS.plus} Add Delivery Associate</button></div></div>
   <section class="driver-team-setup-grid" aria-label="Driver directory setup">
     <article class="driver-workforce-import driver-setup-card card"><div class="driver-setup-icon" aria-hidden="true">${ICONS.users}</div><div class="driver-setup-copy"><span class="driver-setup-kicker">Team directory</span><strong>Driver & phone import</strong><p>Drop in an AssociateData CSV, Excel workbook (.xlsx), or text-based PDF. RelayOps matches Name with Personal Phone and keeps Position, Transporter ID, and Active status when those fields are available.</p><small class="driver-privacy-note">${ICONS.check}<span>Contacts are never embedded in the public website. Signed-in dispatchers share them only through the protected station workspace; signed-out use stays in this browser.</span></small></div><div class="driver-setup-actions"><button class="btn primary" data-action="driver-import">${ICONS.upload}<span>Choose CSV or Excel / PDF</span></button><button class="btn" data-action="add-delivery-associate">${ICONS.plus}<span>Add one manually</span></button></div></article>
     <article class="driver-message-readiness driver-setup-card card"><div class="driver-setup-icon" aria-hidden="true">${ICONS.phone}</div><div class="driver-setup-copy"><span class="driver-setup-kicker">Morning Sheet match</span><strong>Future text reminder prep</strong><p>After the Morning Sheet is finalized, RelayOps can identify on-route drivers by the visible Morning Sheet names. Texting will need a secure SMS connector and driver opt-in before it sends anything.</p><span class="driver-readiness-status"><i></i>${recognizedDrivers?'Names matched and ready for review':'Waiting for finalized routes'}</span></div><div class="driver-readiness-metric"><b>${recognizedDrivers}</b><span>matched</span><small>current team cards recognized on the Morning Sheet</small></div></article>
@@ -4289,7 +4290,7 @@ function modal() {
   }
   if (state.modal === 'route-trainer' && state.pendingRouteTrainer) {
     const pending=state.pendingRouteTrainer,route=morningRouteByUid(pending.routeUid),candidates=routeTrainerCandidates(route),size=Math.min(10,Math.max(4,candidates.length));
-    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal route-trainer-modal" role="dialog" aria-modal="true" aria-labelledby="route-trainer-title"><div class="modal-head"><div><span class="eyebrow">ROUTE TRAINER</span><h2 id="route-trainer-title">Add a trainer to ${esc(route?.route||'this route')}</h2><p>The route keeps its CX, staging, pad, van, counts, and Planned RTS. The trainer appears beside the driver everywhere.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="route-trainer-picker"><span>Trainer</span><select id="route-trainer-name" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.name)}" ${index===0?'selected':''}>${esc(driverDisplayName(row.name))}${row.trainer?' · Trainer':''}${row.role?` · ${esc(row.role)}`:''}</option>`).join('')}</select></label><label class="driver-alias-field"><span>Short display name <small>optional</small></span><input id="route-trainer-display" placeholder="${esc(candidates[0]?suggestedDriverAlias(candidates[0].name):'First L.')}" maxlength="28"><small>The exact Drivers & Team identity stays linked for Whiparound, texting, and history.</small></label>${candidates.length?'':`<div class="private-contact-note danger"><b>No available Drivers & Team names</b><span>Import the driver or add them in Drivers & Team, then try again.</span></div>`}<div class="private-contact-note"><b>One shared assignment</b><span>RelayOps removes the selected trainer from VTO, Reductions, Called Off, Told To Stay Home, or Helper boxes before adding them to this route.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-route-trainer" ${candidates.length?'':'disabled'}>Add trainer</button></div></div></div></div>`;
+    return `<div class="modal-backdrop" data-action="close-modal"><div class="modal route-trainer-modal" role="dialog" aria-modal="true" aria-labelledby="route-trainer-title"><div class="modal-head"><div><span class="eyebrow">ROUTE TRAINER</span><h2 id="route-trainer-title">Add a trainer to ${esc(route?.route||'this route')}</h2><p>The route keeps its CX, staging, pad, van, counts, and Planned RTS. The trainer appears beside the driver everywhere.</p></div><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div><div class="modal-body"><label class="route-trainer-picker"><span>Trainer</span><select id="route-trainer-name" size="${size}">${candidates.map((row,index)=>`<option value="${esc(row.name)}" ${index===0?'selected':''}>${esc(row.name)}${row.trainer?' · Trainer':''}${driverHasCapability(row.name,'helper-driver')?' · Helper':''}${row.role?` · ${esc(row.role)}`:''}</option>`).join('')}</select></label><label class="driver-alias-field"><span>Search Trainers / Helpers</span><input id="route-trainer-search" type="search" placeholder="Search name, trainer, or helper" autocomplete="off"><small>Choose an existing driver above. Full names stay linked to their records.</small></label>${candidates.length?'':`<div class="private-contact-note danger"><b>No available Drivers & Team names</b><span>Import the driver or add them in Drivers & Team, then try again.</span></div>`}<div class="private-contact-note"><b>One shared assignment</b><span>RelayOps removes the selected trainer from VTO, Reductions, Called Off, Told To Stay Home, or Helper boxes before adding them to this route.</span></div><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="apply-route-trainer" ${candidates.length?'':'disabled'}>Add trainer</button></div></div></div></div>`;
   }
   if (state.modal === 'route-vto-swap' && state.pendingRouteVtoSwap) {
     const pending=state.pendingRouteVtoSwap,route=morningRouteByUid(pending.routeUid),backups=currentBackupDriverRows(),size=Math.min(10,Math.max(4,backups.length));
@@ -5233,14 +5234,36 @@ function openRouteTrainer(routeUid='') {
   const route=morningRouteByUid(routeUid);if(!route)return toast('That route is no longer available','error');
   state.pendingRouteTrainer={routeUid};return openLightweightModal('route-trainer');
 }
+function bindTrainerSearch(root=document) {
+  const input=root.querySelector?.('#route-trainer-search'),select=root.querySelector?.('#route-trainer-name');
+  if(!input||!select||input.dataset.bound)return;
+  input.dataset.bound='true';
+  const options=[...select.options].map(option=>({value:option.value,text:option.textContent}));
+  input.addEventListener('input',()=>{
+    const selected=select.value,query=nameKey(input.value);
+    const matches=options.filter(option=>nameKey(option.text).includes(query));
+    select.innerHTML=matches.map(option=>`<option value="${esc(option.value)}">${esc(option.text)}</option>`).join('');
+    select.value=matches.some(option=>option.value===selected)?selected:matches[0]?.value||'';
+    const button=root.querySelector?.('[data-action="apply-route-trainer"]');if(button)button.disabled=!matches.length;
+  });
+}
+function resetLinkedDriverNames() {
+  state.driverLinkedNamesDate=defaultOperationDate();
+  state.driverNameAliases={};
+  for(const profile of Object.values(state.driverProfiles||{})){
+    profile.nickname='';delete profile.display;profile.names=[profile.canonical].filter(Boolean);delete profile.aliases;
+    profile.updatedAt=new Date().toISOString();
+  }
+  invalidateDriverDirectoryCaches();
+}
+function expireLinkedDriverNames() {
+  if(state.driverLinkedNamesDate&&state.driverLinkedNamesDate<defaultOperationDate())resetLinkedDriverNames();
+  state.driverLinkedNamesDate=defaultOperationDate();
+}
 function applyRouteTrainer() {
   const pending=state.pendingRouteTrainer,route=morningRouteByUid(pending?.routeUid||''),selected=document.getElementById('route-trainer-name')?.value||'';if(!route||!selected)return toast('Choose an available trainer','error');
-  const exact=canonicalDriverName(selected),display=String(document.getElementById('route-trainer-display')?.value||'').replace(/[+|&]/g,' ').replace(/\s+/g,' ').trim();
+  const exact=canonicalDriverName(selected);
   if((state.morningRoutes||[]).some(row=>row!==route&&morningDriverNames(row.driver).some(name=>driverIdentityKey(name)===driverIdentityKey(exact))))return toast(`${driverDisplayName(exact)} is already assigned to another route`,'error');
-  if(display&&nameKey(display)!==nameKey(exact)){
-    const profile=ensureDriverProfile(driverContactForName(exact)||{name:exact}),collision=driverIdentityCollision([display],profile?.key||'');if(collision)return toast(`“${display}” is already linked to ${collision.profile.canonical}`,'error');
-    if(profile){profile.profile.nickname=display;profile.profile.updatedAt=new Date().toISOString();}state.driverNameAliases[nameKey(exact)]={canonical:exact,display,aliases:profile?.profile?.names||[exact]};
-  }
   reconcileDailyRosterFlags(exact,'on-route');const people=morningDriverNames(route.driver);if(!people.some(name=>driverIdentityKey(name)===driverIdentityKey(exact)))people.push(exact);
   protectRouteOperationalData(route,()=>{route.driver=people.join(' + ');route.trainerNames=[...new Set([...(route.trainerNames||[]),exact])];});
   state.pendingRouteTrainer=null;state.modal=null;persist();render();toast(`${driverDisplayName(exact)} added as trainer on ${route.route}`);return true;
@@ -5574,6 +5597,7 @@ function loadSharedOperationDate(date='',message='',options={}) {
   return changed;
 }
 function rolloverOperationDateIfNeeded(trigger='timer',now=new Date()) {
+  if(state.driverLinkedNamesDate<defaultOperationDate(now)){resetLinkedDriverNames();persistWithoutCloud();}
   const today=defaultOperationDate(now),previousObserved=lastObservedOperationDate;
   if(today===previousObserved)return false;
   lastObservedOperationDate=today;
@@ -5781,6 +5805,7 @@ function bindUploadDropZone(root=document) {
 }
 function bindLightweightModal(backdrop) {
   if(!backdrop)return;
+  bindTrainerSearch(backdrop);
   bindActionControls(backdrop);
   bindUploadDropZone(backdrop);
   const vtoRouteSearch=backdrop.querySelector?.('#vto-route-swap-search');if(vtoRouteSearch)vtoRouteSearch.addEventListener('input',()=>filterVtoRouteSwapOptions(vtoRouteSearch));
@@ -6263,6 +6288,7 @@ function bindNavigationTopbar(root=null) {
   const search=root.querySelector?.('#global-search');if(search)search.addEventListener('input',event=>{state.search=event.target.value;updateGlobalSearchResults();});
 }
 function bind() {
+  bindTrainerSearch(document);
   bindGlobalDocumentControls();
   const stationTabs=[...document.querySelectorAll?.('[data-opening-station-tab="true"]')||[]];
   stationTabs.forEach((tab,index)=>tab.addEventListener('keydown',event=>{
@@ -7893,7 +7919,17 @@ function action(name,el) {
   if (name==='open-rostering-training-add') return openRosteringTrainingAdd(el.dataset.trainingKind||'ridealong');
   if (name==='save-rostering-training-add') return saveRosteringTrainingAdd();
   if (name==='remove-rostering-manual-training') return removeRosteringManualTraining(el.dataset.manualTrainingKey||'');
-  if (name==='toggle-driver-card') { const key=driverIdentityKey(el.dataset.driverName||'');state.expandedDriverKey=state.expandedDriverKey===key?'':key;return render(); }
+  if (name==='reset-linked-names') {
+    if(!window.confirm('Reset all linked names and nicknames for this station? Driver names, contacts, tags, and history will be kept.'))return;
+    resetLinkedDriverNames();persist();render();return toast('Linked names and nicknames reset');
+  }
+  if (name==='toggle-driver-card') {
+    const key=driverIdentityKey(el.dataset.driverName||'');state.expandedDriverKey=state.expandedDriverKey===key?'':key;render();
+    if(state.expandedDriverKey)requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      const card=[...document.querySelectorAll('[data-driver-card-toggle]')].find(row=>driverIdentityKey(row.dataset.driverName||'')===key);
+      card?.scrollIntoView({block:'start',behavior:'auto'});
+    }));return;
+  }
   if (name==='rostering-use-trainer-suggestion') return assignRosteringTrainer(el.dataset.ridealongName||'',el.dataset.trainerName||'');
   if (name==='rostering-swap-trainer') return clearRosteringTrainerMatch(el.dataset.ridealongName||'');
   if (name==='open-roster-destination-actions') return openRosterDestinationActions(el.dataset.driverName||'',el.dataset.driverRole||'',el.dataset.rosterDestination||'',el.dataset.driverRoute||'',el.dataset.driverStart||'',el.dataset.rosterAutomatic||'');
@@ -11850,6 +11886,7 @@ const localStorage={setItem(key,value){
 }};
 localStorage.setItem('relayops_achat_messages',JSON.stringify(state.aChatMessages||[]));
 localStorage.setItem('relayops_driver_name_aliases',JSON.stringify(state.driverNameAliases||{}));
+  localStorage.setItem('relayops_driver_linked_names_date',state.driverLinkedNamesDate||defaultOperationDate());
 localStorage.setItem('relayops_driver_profiles',JSON.stringify(normalizeDriverProfiles(state.driverProfiles||{})));
 localStorage.setItem('relayops_rostering_training_matches',JSON.stringify(state.rosteringTrainingMatches||{}));
 localStorage.setItem('relayops_rostering_manual_training',JSON.stringify(state.rosteringManualTraining||{}));
@@ -11952,11 +11989,12 @@ function sharedWorkspaceState() {
   };
 }
 function persistentWorkspaceState() {
+  expireLinkedDriverNames();
   return {
     schemaVersion:2,organizationName:state.organizationName,stationCode:state.stationCode,dspCode:state.dspCode,
     fleetNameOverrides:state.fleetNameOverrides,fleetIssues:state.fleetIssues,equipmentIssues:state.equipmentIssues,
     vanParkingLayout:parkingLayoutSnapshot(state.vanParking),
-    driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),scheduleStayHomeHistory:state.scheduleStayHomeHistory,rosteringPlans:state.rosteringPlans,rosteringHelperPool:state.rosteringHelperPool,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,
+    driverContacts:state.driverContacts,driverContactsLastImport:state.driverContactsLastImport,removedDriverKeys:state.removedDriverKeys,driverNameAliases:state.driverNameAliases,driverLinkedNamesDate:state.driverLinkedNamesDate,driverProfiles:normalizeDriverProfiles(state.driverProfiles||{}),scheduleStayHomeHistory:state.scheduleStayHomeHistory,rosteringPlans:state.rosteringPlans,rosteringHelperPool:state.rosteringHelperPool,rosteringTrainingMatches:state.rosteringTrainingMatches,rosteringManualTraining:state.rosteringManualTraining,
     whiparoundComplianceHistory:state.whiparoundComplianceHistory,whiparoundReminderTemplates:state.whiparoundReminderTemplates,messageQueueTemplate:state.messageQueueTemplate,
     inventoryItems:state.inventoryItems,inventoryLog:state.inventoryLog,coachingQueue:normalizeCoachingQueue(state.coachingQueue),coachingTemplate:state.coachingTemplate,
     morningSheetsEndpoint:state.morningSheetsEndpoint,slackReportRoomUrl:state.slackReportRoomUrl,chargerReports:normalizeChargerReports(state.chargerReports||[])
@@ -11994,6 +12032,7 @@ function applySharedWorkspaceState(payload={}) {
   state.removedDeviceVehicleIds=Array.isArray(state.removedDeviceVehicleIds)?[...new Set(state.removedDeviceVehicleIds.map(normalizeEquipmentId).filter(Boolean))]:[];
   state.sheetHistory=state.sheetHistory&&Array.isArray(state.sheetHistory.past)&&Array.isArray(state.sheetHistory.future)?state.sheetHistory:{past:[],future:[]};
   state.driverNameAliases=state.driverNameAliases&&typeof state.driverNameAliases==='object'?state.driverNameAliases:{};
+  expireLinkedDriverNames();
   state.driverProfiles=normalizeDriverProfiles(state.driverProfiles||{});(state.driverContacts||[]).forEach(contact=>ensureDriverProfile(contact));
   state.rosteringTrainingMatches=state.rosteringTrainingMatches&&typeof state.rosteringTrainingMatches==='object'?state.rosteringTrainingMatches:{};
   state.rosteringManualTraining=state.rosteringManualTraining&&typeof state.rosteringManualTraining==='object'?state.rosteringManualTraining:{};
@@ -12035,8 +12074,9 @@ function applyPersistentWorkspaceState(payload={}) {
   assertWorkspaceStationIdentity(payload);
   const persistedParkingLayout=payload.vanParkingLayout||payload.vanParking;
   const parkingChargerMovePlan=lowerParkingChargerMovePlan(persistedParkingLayout);
-  const allowed=['organizationName','stationCode','dspCode','fleetNameOverrides','fleetIssues','equipmentIssues','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverProfiles','scheduleStayHomeHistory','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','whiparoundComplianceHistory','whiparoundReminderTemplates','messageQueueTemplate','inventoryItems','inventoryLog','coachingQueue','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
+  const allowed=['organizationName','stationCode','dspCode','fleetNameOverrides','fleetIssues','equipmentIssues','driverContacts','driverContactsLastImport','removedDriverKeys','driverNameAliases','driverLinkedNamesDate','driverProfiles','scheduleStayHomeHistory','rosteringPlans','rosteringHelperPool','rosteringTrainingMatches','rosteringManualTraining','whiparoundComplianceHistory','whiparoundReminderTemplates','messageQueueTemplate','inventoryItems','inventoryLog','coachingQueue','coachingTemplate','morningSheetsEndpoint','slackReportRoomUrl','chargerReports'];
   allowed.forEach(key=>{if((key!=='stationCode'||!MULTI_STATION_ENABLED)&&Object.prototype.hasOwnProperty.call(payload,key))state[key]=payload[key];});
+  expireLinkedDriverNames();
   if(Array.isArray(persistedParkingLayout))state.vanParking=mergeParkingLayout(persistedParkingLayout,state.vanParking);
   else state.vanParking=normalizeVanParkingLayout(state.vanParking);
   if(parkingChargerMovePlan.length){const migrated=migrateLowerParkingChargerRows(state.parkingChargerStatus,state.chargerReports,parkingChargerMovePlan);state.parkingChargerStatus=migrated.status;state.chargerReports=migrated.reports;}
